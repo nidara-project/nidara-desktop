@@ -37,7 +37,8 @@ This is only the frozen boot floor, not new TS/Rust parity work.
 
 ## Pending capabilities
 
-- B2.2: CC details (Wi-Fi/device lists etc.), screenshot/recording controls.
+- B2.2 details and capture controls are implemented by #1015; installed physical-session
+  acceptance and hardware validation remain pending.
 - B2.3: CC edit mode, remaining widgets (battery, clipboard, CPU/memory, Ethernet, VPN).
 - B3 and later: Notification Center and the other unported shell panels. In particular
   NC, Prism, agent, overview and bar-overlay shortcuts may return Unavailable;

@@ -13,6 +13,9 @@
 //! What a tile does here: the toggles toggle (Appearance, Night Light, Focus, Bluetooth),
 //! the sliders move (volume, brightness), the player plays. A tile whose action is its
 //! detail panel (Wi-Fi's body, screenshot, recording) opens it in B2.2.
+#[path = "ccdetail.rs"]
+pub mod detail;
+
 use crate::cclayout::{self as layout, Size, Tile};
 use crate::popup::Look;
 use crate::status::Status;
@@ -55,6 +58,8 @@ const THUMB: f64 = 9.;
 /// What a click can land on.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub enum Target {
+    Detail(u64),
+    OpenDetail(&'static str),
     /// The whole tile: a toggle that is only a toggle.
     Tile(&'static str),
     /// A capsule's badge: the quick toggle of a tile whose body opens its detail.
@@ -68,6 +73,8 @@ pub enum Target {
 /// What the Control Center asks a service to do.
 #[derive(Clone, Debug, PartialEq)]
 pub enum Act {
+    OpenDetail(&'static str),
+    Detail(detail::Action),
     Dark(bool),
     Night(bool),
     Dnd(bool),
@@ -102,8 +109,13 @@ struct Drag {
 
 pub struct Cc {
     tiles: Vec<Placed>,
+    pub detail: Option<detail::Detail>,
+    pub detail_height: f64,
+    detail_generation: u64,
+    detail_drag: Option<u64>,
     panel: [f64; 4],
     hover: Option<Target>,
+    keyboard_focus: Option<Target>,
     drag: Option<Drag>,
     icons: Option<nk_icons::Icons>,
     glyphs: HashMap<(&'static str, u32), Option<Arc<nk_icons::Icon>>>,
@@ -121,8 +133,13 @@ impl Cc {
     pub fn new() -> Self {
         Self {
             tiles: vec![],
+            detail: None,
+            detail_height: 1080.,
+            detail_generation: 0,
+            detail_drag: None,
             panel: [0.; 4],
             hover: None,
+            keyboard_focus: None,
             drag: None,
             icons: nk_icons::Icons::new("", &[], &crate::paths::icon_reference())
                 .map_err(|e| eprintln!("nidara-shell: no icons for the Control Center: {e}"))
@@ -150,6 +167,11 @@ impl Cc {
                 }
             })
             .collect();
+        if let Some(detail) = &mut self.detail {
+            detail.max_height = self.detail_height;
+            detail.refresh(status, panel);
+            self.panel = detail.panel;
+        }
         if self
             .drag
             .is_some_and(|d| !self.tiles.iter().any(|p| p.tile.id == d.id))
@@ -158,6 +180,115 @@ impl Cc {
         }
     }
 
+    pub fn open_detail(&mut self, page: &'static str, status: &Status) {
+        self.detail_generation += 1;
+        let mut detail = detail::Detail::new(page, self.detail_generation);
+        detail.max_height = self.detail_height;
+        detail.refresh(status, self.panel);
+        self.panel = detail.panel;
+        self.detail = Some(detail);
+        self.drag = None;
+    }
+    pub fn view_id(&self) -> u64 {
+        self.detail_generation
+    }
+    pub fn back(&mut self) -> bool {
+        self.detail_drag = None;
+        let detail = self.detail.take();
+        if let Some(detail) = detail {
+            self.detail_generation += 1;
+            self.keyboard_focus = Some(Target::OpenDetail(detail.page));
+            true
+        } else {
+            false
+        }
+    }
+    pub fn focus(&mut self, target: Target) {
+        if let Target::Detail(id) = target {
+            if let Some(d) = &mut self.detail {
+                d.focus_row(id);
+                if d.rows
+                    .iter()
+                    .any(|r| r.id == id && matches!(r.action, Some(detail::Action::SecretFocus(_))))
+                {
+                    let _ = d.action(id, None);
+                }
+            }
+        } else {
+            self.keyboard_focus = Some(target);
+        }
+    }
+    pub fn key(&mut self, key: &nk_wayland::Key, status: &Status) -> Option<Act> {
+        if let Some(d) = &mut self.detail {
+            return d.key(key).map(Act::Detail);
+        }
+        let choices: Vec<_> = self
+            .nodes(0, status, None)
+            .into_iter()
+            .filter(|(n, _)| !n.actions.is_empty())
+            .map(|(_, t)| t)
+            .collect();
+        if choices.is_empty() {
+            return None;
+        }
+        if [0xff09, 0xfe20].contains(&key.sym) {
+            let current = self
+                .keyboard_focus
+                .and_then(|f| choices.iter().position(|t| *t == f));
+            let index = match current {
+                Some(i) if key.shift || key.sym == 0xfe20 => {
+                    (i + choices.len() - 1) % choices.len()
+                }
+                Some(i) => (i + 1) % choices.len(),
+                None => 0,
+            };
+            self.keyboard_focus = Some(choices[index]);
+            return None;
+        }
+        let target = self.keyboard_focus?;
+        if let Target::Slider(id) = target
+            && [0xff51, 0xff53, 0xff52, 0xff54].contains(&key.sym)
+        {
+            return set_value(
+                id,
+                (self.shown(id, status)
+                    + if [0xff51, 0xff54].contains(&key.sym) {
+                        -0.05
+                    } else {
+                        0.05
+                    })
+                .clamp(0., 1.),
+                status,
+            );
+        }
+        if [0xff0d, 0x20].contains(&key.sym) {
+            return self.action(target, status, None);
+        }
+        None
+    }
+    pub fn action(&mut self, target: Target, status: &Status, value: Option<f64>) -> Option<Act> {
+        match target {
+            Target::Detail(id) => self.detail.as_mut()?.action(id, value).map(Act::Detail),
+            other => act_of(other, status),
+        }
+    }
+    pub fn scroll_detail(&mut self, delta: f64) -> bool {
+        let Some(d) = &mut self.detail else {
+            return false;
+        };
+        d.scroll(delta);
+        true
+    }
+    pub fn detail_at(&self, p: (f64, f64)) -> Option<&'static str> {
+        if let Some(d) = &self.detail {
+            return Some(d.page);
+        }
+        self.tiles
+            .iter()
+            .find(|t| inside(t.rect, p))
+            .map(|t| t.tile.id)
+            .filter(|id| has_detail(id))
+    }
     pub fn panel(&self) -> [f64; 4] {
         self.panel
     }
@@ -173,6 +304,9 @@ impl Cc {
 
     /// What is under `p`, when it does something.
     pub fn target_at(&self, p: (f64, f64)) -> Option<Target> {
+        if let Some(d) = &self.detail {
+            return d.target(p).map(Target::Detail);
+        }
         let placed = self.tiles.iter().find(|t| inside(t.rect, p))?;
         targets(placed)
             .into_iter()
@@ -182,6 +316,16 @@ impl Cc {
 
     /// The pointer moved: the hover, and a held slider's value.
     pub fn motion(&mut self, p: (f64, f64), status: &Status) -> (bool, Option<Act>) {
+        if let Some(detail) = &mut self.detail {
+            let hover = detail.target(p);
+            let changed = detail.hover != hover;
+            detail.hover = hover;
+            let act = self
+                .detail_drag
+                .and_then(|id| detail.pointer_action(id, p))
+                .map(Act::Detail);
+            return (changed || self.detail_drag.is_some(), act);
+        }
         if let Some(d) = self.drag {
             let act = self.slide(d.id, p, status);
             return (true, act);
@@ -193,6 +337,9 @@ impl Cc {
     }
 
     pub fn leave(&mut self) -> bool {
+        if let Some(d) = &mut self.detail {
+            return d.hover.take().is_some();
+        }
         self.hover.take().is_some()
     }
 
@@ -200,6 +347,13 @@ impl Cc {
     pub fn press(&mut self, p: (f64, f64), status: &Status) -> Option<Act> {
         let target = self.target_at(p)?;
         match target {
+            Target::Detail(id) => {
+                let d = self.detail.as_mut()?;
+                if d.rows.iter().any(|r| r.id == id && r.value.is_some()) {
+                    self.detail_drag = Some(id);
+                }
+                d.pointer_action(id, p).map(Act::Detail)
+            }
             Target::Slider(id) => {
                 self.drag = Some(Drag {
                     id,
@@ -212,7 +366,10 @@ impl Cc {
     }
 
     pub fn release(&mut self) -> bool {
-        self.drag.take().is_some()
+        if let Some(d) = &mut self.detail {
+            d.held = None;
+        }
+        self.detail_drag.take().is_some() | self.drag.take().is_some()
     }
 
     /// The slider's value under `p`, asked of its service.
@@ -240,6 +397,30 @@ impl Cc {
         tokens: &serde_json::Value,
         reduce_transparency: bool,
     ) -> (Vec<Group>, Vec<Veil>) {
+        if let Some(d) = &self.detail {
+            let pane = Pane {
+                x: d.panel[0],
+                y: d.panel[1],
+                width: d.panel[2],
+                height: d.panel[3],
+                radius: SQUARE_RADIUS,
+                exponent: 2.,
+                pointer: None,
+            };
+            let groups =
+                crate::material::piece(tokens, "controlCenter", true, reduce_transparency, pane)
+                    .map(|m| Group {
+                        tone: m.tone,
+                        shadow: m.shadow,
+                        shapes: vec![pane],
+                    })
+                    .into_iter()
+                    .collect();
+            return (
+                groups,
+                self.veil(tokens, reduce_transparency).into_iter().collect(),
+            );
+        }
         let groups = self
             .tiles
             .iter()
@@ -298,6 +479,17 @@ impl Cc {
             .map(|t| t.rect[1] + t.rect[3])
             .fold(f64::MIN, f64::max)
             - inset;
+        let (x0, y0, x1, y1) = if self.detail.is_some() {
+            let p = self.panel;
+            (
+                p[0] + inset,
+                p[1] + inset,
+                p[0] + p[2] - inset,
+                p[1] + p[3] - inset,
+            )
+        } else {
+            (x0, y0, x1, y1)
+        };
         (x1 > x0 && y1 > y0 && n("strength")? > 0.).then(|| Veil {
             x: x0,
             y: y0,
@@ -312,6 +504,9 @@ impl Cc {
     /// The washes over the glass: badges at rest, what is on, the hover. Every id is
     /// declared every time, so a change eases.
     pub fn states(&self, status: &Status) -> Vec<StateRegion> {
+        if let Some(d) = &self.detail {
+            return d.states();
+        }
         let mut out = vec![];
         for (i, p) in self.tiles.iter().enumerate() {
             let base = 1000 + i as u32 * 8;
@@ -332,7 +527,9 @@ impl Cc {
             };
             // The tile: white when a 1×1 toggle is on; else the hover of a whole-tile one.
             let whole = p.tile.size == Size::Single && toggles(id);
-            let tile_hover = self.hover == Some(Target::Tile(id));
+            let tile_hover = self.hover == Some(Target::Tile(id))
+                || self.keyboard_focus == Some(Target::Tile(id))
+                || self.keyboard_focus == Some(Target::OpenDetail(id));
             let a = if whole && on {
                 1.
             } else if tile_hover {
@@ -345,13 +542,14 @@ impl Cc {
             if let Some(b) = badge(p) {
                 let a = if on && has_state(id) { 1. } else { SURFACE };
                 out.push(wash(1, b, BADGE / 2., a));
-                let lit = self.hover == Some(Target::Badge(id));
+                let lit = self.hover == Some(Target::Badge(id))
+                    || self.keyboard_focus == Some(Target::Badge(id));
                 out.push(wash(2, b, BADGE / 2., if lit { HOVER } else { 0. }));
             }
             // The player's buttons.
             for (n, (t, b)) in targets(p).into_iter().enumerate() {
                 if matches!(t, Target::Previous | Target::PlayPause | Target::Next) {
-                    let lit = self.hover == Some(t);
+                    let lit = self.hover == Some(t) || self.keyboard_focus == Some(t);
                     out.push(wash(
                         3 + n as u32,
                         b,
@@ -402,6 +600,9 @@ impl Cc {
         status: &Status,
         fallback: Option<Color>,
     ) -> nk_wayland::Result<()> {
+        if let Some(d) = &self.detail {
+            return d.paint(c, look, fallback);
+        }
         let accent = look.styles.palette.accent;
         if let Some(base) = fallback {
             for p in self.tiles.clone() {
@@ -652,6 +853,9 @@ impl Cc {
         status: &Status,
         look: Option<&Look>,
     ) -> Vec<(nk_a11y::Node, Target)> {
+        if let Some(d) = &self.detail {
+            return d.nodes(first, look);
+        }
         use nk_a11y::{Action, Bounds, Node, Role, ValueInfo};
         let text = |k: &'static str| {
             look.map_or(k.to_string(), |l| l.text_of(&crate::menu::Label::Key(k)))
@@ -659,10 +863,18 @@ impl Cc {
         let mut out = vec![];
         for (i, p) in self.tiles.iter().enumerate() {
             let id = p.tile.id;
-            let nid = first + i as nk_a11y::NodeId;
+            let semantic = layout::REGISTRY
+                .iter()
+                .position(|meta| meta.id == id)
+                .unwrap_or(i);
+            let nid = first + semantic as nk_a11y::NodeId * 8;
             let (title, sub) =
                 look.map_or((id.to_string(), String::new()), |l| texts(id, status, l));
-            let target = targets(p).first().map_or(Target::Tile(id), |(t, _)| *t);
+            let target = if id == "media" {
+                Target::OpenDetail(id)
+            } else {
+                targets(p).first().map_or(Target::Tile(id), |(t, _)| *t)
+            };
             let mut node = match target {
                 Target::Slider(_) => {
                     let v = self.shown(id, status);
@@ -697,7 +909,7 @@ impl Cc {
                 _ => {
                     let mut n = Node::new(nid, Role::Button, &title);
                     n.description = sub;
-                    n.states.disabled = true;
+                    n.actions = vec![Action::Activate];
                     n
                 }
             };
@@ -707,7 +919,69 @@ impl Cc {
                 width: p.rect[2],
                 height: p.rect[3],
             };
+            node.id += match node.role {
+                Role::ToggleButton => 1,
+                Role::Slider => 2,
+                _ => 0,
+            };
+            node.states.focused = self.keyboard_focus == Some(target);
+            if !node.actions.is_empty() && !node.actions.contains(&Action::Focus) {
+                node.actions.push(Action::Focus);
+            }
             out.push((node, target));
+            if id == "media" {
+                for (j, (target, bounds)) in targets(p)
+                    .into_iter()
+                    .filter(|(t, _)| {
+                        matches!(t, Target::Previous | Target::PlayPause | Target::Next)
+                    })
+                    .enumerate()
+                {
+                    let key = match target {
+                        Target::Previous => "cc.detail.previous",
+                        Target::Next => "cc.detail.next",
+                        _ => "cc.detail.play-pause",
+                    };
+                    let mut control = Node::new(
+                        first + 2000 + semantic as u64 * 4 + j as u64,
+                        Role::Button,
+                        text(key),
+                    );
+                    let media = status.media.as_ref();
+                    let enabled = media.is_some_and(|m| match target {
+                        Target::Previous => m.can_previous,
+                        Target::Next => m.can_next,
+                        _ => m.can_control,
+                    });
+                    control.bounds = Bounds {
+                        x: bounds[0],
+                        y: bounds[1],
+                        width: bounds[2],
+                        height: bounds[3],
+                    };
+                    control.states.disabled = !enabled;
+                    control.states.focused = self.keyboard_focus == Some(target);
+                    if enabled {
+                        control.actions = vec![Action::Activate, Action::Focus];
+                    }
+                    out.push((control, target));
+                }
+            }
+            if has_detail(id) && target != Target::OpenDetail(id) {
+                let mut detail = Node::new(
+                    first + 1000 + semantic as u64 * 8,
+                    Role::Button,
+                    format!("{} · {}", text(name_key(id)), text("cc.detail.open")),
+                );
+                detail.bounds = Bounds {
+                    x: p.rect[0],
+                    y: p.rect[1],
+                    width: p.rect[2],
+                    height: p.rect[3],
+                };
+                detail.actions = vec![Action::Activate];
+                out.push((detail, Target::OpenDetail(id)));
+            }
         }
         out
     }
@@ -745,6 +1019,7 @@ pub fn active(id: &str, s: &Status) -> bool {
         "dark_mode" => s.dark,
         "night_light" => s.night.is_some_and(|n| n.enabled),
         "focus" => s.dnd,
+        "screenrecord" => s.capture.running,
         _ => false,
     }
 }
@@ -761,6 +1036,8 @@ fn toggles(id: &str) -> bool {
 
 pub fn act_of(t: Target, s: &Status) -> Option<Act> {
     let id = match t {
+        Target::OpenDetail(id) => return Some(Act::OpenDetail(id)),
+        Target::Detail(_) => return None,
         Target::Tile(id) | Target::Badge(id) => id,
         Target::Previous => return Some(Act::Media("SelectedPrevious")),
         Target::PlayPause => return Some(Act::Media("SelectedPlayPause")),
@@ -778,8 +1055,23 @@ pub fn act_of(t: Target, s: &Status) -> Option<Act> {
                 powered: !b.powered,
             }
         }
+        id if has_detail(id) => Act::OpenDetail(id),
         _ => return None,
     })
+}
+
+fn has_detail(id: &str) -> bool {
+    matches!(
+        id,
+        "wifi"
+            | "bt"
+            | "volume"
+            | "media"
+            | "brightness"
+            | "night_light"
+            | "screenshot"
+            | "screenrecord"
+    )
 }
 
 fn value_of(id: &str, s: &Status) -> f64 {
@@ -850,7 +1142,7 @@ fn slider_parts(_look: &mut Look, p: &Placed) -> SliderParts {
 /// What a tile's clicks land on, and where.
 fn targets(p: &Placed) -> Vec<(Target, [f64; 4])> {
     let (id, size, r) = (p.tile.id, p.tile.size, p.rect);
-    match (id, size) {
+    let mut out = match (id, size) {
         ("volume" | "brightness", Size::FullWidth) => {
             let t = slider_track(r, VALUE_W);
             vec![(Target::Slider(id), [t[0], r[1], t[2], r[3]])]
@@ -879,7 +1171,11 @@ fn targets(p: &Placed) -> Vec<(Target, [f64; 4])> {
         ("dark_mode" | "focus", _) => vec![(Target::Tile(id), r)],
         ("night_light" | "bt", _) => badge(p).map_or(vec![], |b| vec![(Target::Badge(id), b)]),
         _ => vec![],
+    };
+    if has_detail(id) {
+        out.push((Target::OpenDetail(id), r));
     }
+    out
 }
 
 /// A 2×2 player's parts: the cover, the title's box, the artist's top, the controls'
@@ -1193,39 +1489,80 @@ fn rect(r: [f64; 4]) -> Rect {
 
 /// The writes, on a thread of their own: a slider's drag is a burst, and only its latest
 /// value of each kind is sent.
-pub struct Writer(std::sync::mpsc::Sender<Act>);
+pub struct Writer {
+    jobs: std::sync::mpsc::Sender<(u64, Act)>,
+    pub replies: std::sync::mpsc::Receiver<(u64, Result<(), String>)>,
+}
 
 impl Writer {
-    pub fn new(conn: zbus::blocking::Connection) -> Self {
-        let (tx, rx) = std::sync::mpsc::channel::<Act>();
+    pub fn new(conn: zbus::blocking::Connection, waker: nk_wayland::Waker) -> Self {
+        let (tx, rx) = std::sync::mpsc::channel::<(u64, Act)>();
+        let (results, replies) = std::sync::mpsc::channel();
+        let connecting = std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false));
         let _ = std::thread::Builder::new()
             .name("cc-writes".into())
             .spawn(move || {
                 while let Ok(first) = rx.recv() {
                     let mut batch = vec![first];
                     batch.extend(rx.try_iter());
-                    // The latest volume and the latest brightness; every other act in order.
-                    let last_volume = batch.iter().rposition(|a| matches!(a, Act::Volume(_)));
-                    let last_light = batch
+                    let key = |act: &Act| match act {
+                        Act::Volume(_) => Some("default-volume".to_owned()),
+                        Act::Brightness { device, epoch, .. } => {
+                            Some(format!("brightness:{device}:{epoch}"))
+                        }
+                        Act::Detail(action) => action.coalescing_key(),
+                        _ => None,
+                    };
+                    let last: HashMap<String, usize> = batch
                         .iter()
-                        .rposition(|a| matches!(a, Act::Brightness { .. }));
-                    for (i, act) in batch.into_iter().enumerate() {
-                        let stale = match act {
-                            Act::Volume(_) => Some(i) != last_volume,
-                            Act::Brightness { .. } => Some(i) != last_light,
-                            _ => false,
-                        };
-                        if !stale && let Err(e) = write(&conn, &act) {
-                            eprintln!("nidara-shell: the Control Center's {act:?}: {e}");
+                        .enumerate()
+                        .filter_map(|(i, (_, act))| key(act).map(|key| (key, i)))
+                        .collect();
+                    for (i, (version, act)) in batch.into_iter().enumerate() {
+                        let stale = key(&act).is_some_and(|key| last.get(&key) != Some(&i));
+                        if !stale {
+                            // Connecting may await a password; never block the reply/control lane.
+                            if matches!(&act,Act::Detail(action) if action.connects()) {
+                                if connecting.swap(true, std::sync::atomic::Ordering::AcqRel) {
+                                    let _ = results
+                                        .send((version, Err("network connection pending".into())));
+                                    let _ = waker.wake();
+                                    continue;
+                                }
+                                let connecting = connecting.clone();
+                                let (results, waker) = (results.clone(), waker.clone());
+                                let _ = std::thread::Builder::new()
+                                    .name("cc-connect".into())
+                                    .spawn(move || {
+                                        let result = zbus::blocking::connection::Builder::session()
+                                            .map_err(|e| e.to_string())
+                                            .and_then(|builder| {
+                                                builder
+                                                    .method_timeout(std::time::Duration::from_secs(
+                                                        180,
+                                                    ))
+                                                    .build()
+                                                    .map_err(|e| e.to_string())
+                                            })
+                                            .and_then(|connection| write(&connection, &act));
+                                        connecting
+                                            .store(false, std::sync::atomic::Ordering::Release);
+                                        let _ = results.send((version, result));
+                                        let _ = waker.wake();
+                                    });
+                            } else {
+                                let _ = results.send((version, write(&conn, &act)));
+                                let _ = waker.wake();
+                            }
                         }
                     }
                 }
             });
-        Self(tx)
+        Self { jobs: tx, replies }
     }
 
-    pub fn send(&self, act: Act) {
-        let _ = self.0.send(act);
+    pub fn send(&self, version: u64, act: Act) {
+        let _ = self.jobs.send((version, act));
     }
 }
 
@@ -1233,6 +1570,8 @@ fn write(conn: &zbus::blocking::Connection, act: &Act) -> Result<(), String> {
     use zbus::zvariant::{ObjectPath, OwnedObjectPath};
     const SESSION: &str = crate::status::SESSION;
     match act {
+        Act::OpenDetail(_) => Ok(()),
+        Act::Detail(action) => detail::write(conn, action),
         Act::Dark(on) => crate::prefs::apply(
             conn,
             "appearance.darkMode",
@@ -1330,6 +1669,35 @@ mod tests {
     }
 
     #[test]
+    fn semantic_ids_survive_hardware_arrival_and_a_slider_becoming_a_detail_button() {
+        use nk_a11y::{Node, Role, Tree};
+        let mut cc = Cc::new();
+        let mut status = status();
+        let mut stored = layout::Stored::default();
+        let mut snapshot = nk_a11y::Snapshot::default();
+        for step in 0..3 {
+            if step == 1 {
+                status.bluetooth = Some(crate::status::Bluetooth {
+                    adapter: "/adapter/1".into(),
+                    powered: true,
+                });
+            }
+            if step == 2 {
+                stored.sizes.insert("volume".into(), "1x1".into());
+            }
+            cc.place(900., 36., &status, &stored);
+            let mut root = Node::new(1, Role::Panel, "Control Center");
+            let mut nodes = std::collections::BTreeMap::new();
+            for (node, _) in cc.nodes(100, &status, None) {
+                root.children.push(node.id);
+                nodes.insert(node.id, node);
+            }
+            nodes.insert(1, root);
+            snapshot.accept(Tree { root: 1, nodes }).unwrap();
+        }
+    }
+
+    #[test]
     fn a_cover_is_read_by_its_bytes_not_its_name() {
         let dir = std::env::temp_dir().join(format!("nk-cc-cover-{}", std::process::id()));
         std::fs::create_dir_all(&dir).unwrap();
@@ -1376,9 +1744,15 @@ mod tests {
             cc.press(centre(badge(&night).unwrap()), &s),
             Some(Act::Night(true))
         );
-        assert_eq!(cc.press(centre(night.rect), &s), None);
-        // The screenshot's 1×1 opens its detail: nothing yet.
-        assert_eq!(cc.press(centre(placed(&cc, "screenshot").rect), &s), None);
+        assert_eq!(
+            cc.press(centre(night.rect), &s),
+            Some(Act::OpenDetail("night_light"))
+        );
+        // A screenshot at 1×1 is a real detail entry.
+        assert_eq!(
+            cc.press(centre(placed(&cc, "screenshot").rect), &s),
+            Some(Act::OpenDetail("screenshot"))
+        );
         // The volume's track: the value under the pointer, held while dragged.
         let v = placed(&cc, "volume");
         let t = slider_track(v.rect, VALUE_W);

@@ -9,6 +9,7 @@ export NK_DOCK_BIN=${NK_DOCK_BIN:-$repo/toolkit/target/debug/nidara-shell}
 export NK_SESSIOND_BIN=${NK_SESSIOND_BIN:-$repo/session/target/release/nidara-sessiond}
 export NK_SETTINGS_DATA=${NK_SETTINGS_DATA:-/usr/share/nidara/settings-data}
 export NK_SHELL_BAR=1
+export NK_CC_DETAILS_CHECK=${NK_CC_DETAILS_CHECK:-1}
 export NK_WIDGETS_LOG=${NK_WIDGETS_LOG:-$repo/toolkit/target/dock-evidence-$(date +%s)}
 mkdir -p "$NK_WIDGETS_LOG" "$repo/toolkit/target/popup-runtime-tmp"
 export NK_WIDGETS_CHECK="../../toolkit/shell/dock-check.py"

@@ -153,6 +153,7 @@ pub struct Bar {
     pending: Option<(nk_wayland::TokenRequest, Command)>,
     waker: nk_wayland::Waker,
     a11y: Option<nk_a11y::bridge::Bridge>,
+    a11y_failed: bool,
     a11y_requests: Option<Receiver<(u64, nk_a11y::Request)>>,
     revision: u64,
     shape: Vec<(NodeId, Role, Vec<Action>, String)>,
@@ -168,6 +169,8 @@ pub struct Bar {
     cc: crate::cc::Cc,
     cc_open: bool,
     cc_writer: Option<crate::cc::Writer>,
+    cc_auth: Option<crate::ccauth::Auth>,
+    cc_paste: Option<(u64, (u64, usize, u64))>,
     /// The output's logical height: the surface's while the Control Center is open.
     output_height: u32,
 }
@@ -230,6 +233,7 @@ impl Bar {
             pending: None,
             waker,
             a11y: None,
+            a11y_failed: false,
             a11y_requests: None,
             revision: 0,
             shape: vec![],
@@ -241,6 +245,8 @@ impl Bar {
             cc: crate::cc::Cc::new(),
             cc_open: false,
             cc_writer: None,
+            cc_auth: None,
+            cc_paste: None,
             output_height,
         }
     }
@@ -355,6 +361,7 @@ impl Bar {
             dots,
         };
         if self.cc_open {
+            self.cc.detail_height = self.output_height as f64;
             self.cc.place(
                 right[0] + right[2],
                 m::TOP + m::CAPSULE_H,
@@ -724,6 +731,9 @@ impl Bar {
         }
         self.cc_open = open;
         self.cc.release();
+        if !open {
+            self.cc.back();
+        }
         let placement = placement(if open { self.output_height } else { HEIGHT }, open);
         if let Err(e) = w.set_layer_placement(placement) {
             eprintln!("nidara-shell: the Control Center cannot open: {e}");
@@ -733,21 +743,150 @@ impl Bar {
     }
 
     /// A Control Center act, to its service off the bar's thread.
-    fn act(&mut self, act: crate::cc::Act) {
+    fn act(&mut self, act: crate::cc::Act, w: &mut Window) {
+        match act {
+            crate::cc::Act::OpenDetail(page) => {
+                if self.cc.detail.as_ref().is_some_and(|d| d.page == page) {
+                    return;
+                }
+                self.cc.open_detail(page, &self.frame.status);
+                self.cc_auth = None;
+                if page == "wifi" {
+                    self.cc_auth = Some(crate::ccauth::Auth::new(self.waker.clone()));
+                }
+                return;
+            }
+            crate::cc::Act::Detail(crate::cc::detail::Action::Back) => {
+                if let (Some(auth), Some(form)) = (
+                    &self.cc_auth,
+                    self.cc.detail.as_ref().and_then(|d| d.form.as_ref()),
+                ) {
+                    auth.cancel(form.id);
+                }
+                self.cc.back();
+                return;
+            }
+            crate::cc::Act::Detail(crate::cc::detail::Action::SecretSubmit) => {
+                if let (Some(auth), Some(d)) = (&self.cc_auth, &mut self.cc.detail)
+                    && let Some(mut form) = d.form.take()
+                {
+                    let values = form.take();
+                    auth.submit(form.id, form.setting.clone(), values);
+                }
+                return;
+            }
+            crate::cc::Act::Detail(crate::cc::detail::Action::SecretCancel) => {
+                if let (Some(auth), Some(d)) = (&self.cc_auth, &mut self.cc.detail)
+                    && let Some(form) = d.form.take()
+                {
+                    auth.cancel(form.id);
+                }
+                return;
+            }
+            crate::cc::Act::Detail(crate::cc::detail::Action::Capture { mode, copy }) => {
+                let job = crate::capture::Job::Screenshot {
+                    mode,
+                    copy,
+                    output: self.name.clone(),
+                };
+                if let Err(e) = crate::capture::send(job) {
+                    if let Some(d) = &mut self.cc.detail {
+                        d.error = e;
+                    }
+                } else if self.cc_open {
+                    self.toggle_cc(w);
+                }
+                return;
+            }
+            crate::cc::Act::Detail(crate::cc::detail::Action::Record { mode, audio }) => {
+                let job = crate::capture::Job::Record {
+                    mode,
+                    audio,
+                    output: self.name.clone(),
+                };
+                if let Err(e) = crate::capture::send(job) {
+                    if let Some(d) = &mut self.cc.detail {
+                        d.error = e;
+                    }
+                } else if self.cc_open {
+                    self.toggle_cc(w);
+                }
+                return;
+            }
+            crate::cc::Act::Detail(crate::cc::detail::Action::StopRecording) => {
+                if let Err(error) = crate::capture::send(crate::capture::Job::Stop)
+                    && let Some(detail) = &mut self.cc.detail
+                {
+                    detail.error = error;
+                }
+                return;
+            }
+            _ => {}
+        }
+
         if self.cc_writer.is_none() {
-            self.cc_writer = self.bus.clone().map(crate::cc::Writer::new);
+            self.cc_writer = self
+                .bus
+                .clone()
+                .map(|conn| crate::cc::Writer::new(conn, self.waker.clone()));
         }
         match &self.cc_writer {
-            Some(writer) => writer.send(act),
+            Some(writer) => writer.send(self.cc.view_id(), act),
             None => eprintln!("nidara-shell: no session bus for the Control Center's {act:?}"),
         }
     }
 
+    fn auth_events(&mut self, w: &mut Window) {
+        let events: Vec<_> = self
+            .cc_auth
+            .as_ref()
+            .map(|a| a.events.try_iter().collect())
+            .unwrap_or_default();
+        for event in events {
+            if let Some(d) = &mut self.cc.detail {
+                match event {
+                    crate::ccauth::Event::Ready => d.auth_ready = true,
+                    crate::ccauth::Event::Prompt(id, meta) => {
+                        d.form = crate::ccauth::Form::new(id, &meta);
+                        if d.form.is_none() {
+                            if let Some(auth) = &self.cc_auth {
+                                auth.cancel(id);
+                            }
+                            d.error = "unsupported network authentication request".into();
+                        }
+                        d.offset = 0;
+                    }
+                    crate::ccauth::Event::Closed(id) => {
+                        if d.form.as_ref().is_some_and(|f| f.id == id) {
+                            d.form = None;
+                        }
+                    }
+                    crate::ccauth::Event::Error(error) => {
+                        d.auth_ready = false;
+                        d.form = None;
+                        d.error = error;
+                    }
+                }
+            }
+            self.refresh(w);
+        }
+    }
     fn refresh(&mut self, w: &mut Window) {
+        if self.cc.detail.as_ref().is_none_or(|d| d.page != "wifi") {
+            self.cc_auth = None;
+        }
+
         self.relayout();
         self.sync_input(w);
         w.redraw();
         self.publish_semantics(w);
+        let input = self
+            .cc
+            .detail
+            .as_ref()
+            .map(|d| d.text_input(self.look.as_mut()))
+            .unwrap_or_default();
+        w.set_text_input(input);
     }
 
     /// What a reader is told: a window named Bar holding its items in the order drawn, an
@@ -807,6 +946,15 @@ impl Bar {
         }
         match &self.a11y {
             Some(bridge) => {
+                if !self.a11y_failed
+                    && let Err(error) = bridge.check()
+                {
+                    eprintln!("nidara-shell: the bar's accessibility failed: {error}");
+                    self.a11y_failed = true;
+                }
+                if self.a11y_failed {
+                    return;
+                }
                 while bridge.published.try_recv().is_ok() {}
                 if let Err(e) = bridge.update(self.revision, tree) {
                     eprintln!("nidara-shell: the bar's accessibility stopped: {e}");
@@ -856,12 +1004,60 @@ impl Bar {
             if revision != self.revision {
                 continue;
             }
+            if let nk_a11y::Request::SetText(id, ref value) = request {
+                if let Some(crate::cc::Target::Detail(row)) = self.cc_target(id) {
+                    if let Some(d) = &mut self.cc.detail {
+                        let index =
+                            d.rows
+                                .iter()
+                                .find(|r| r.id == row)
+                                .and_then(|r| match r.action {
+                                    Some(crate::cc::detail::Action::SecretFocus(i)) => Some(i),
+                                    _ => None,
+                                });
+                        if let (Some(index), Some(form)) = (index, &mut d.form) {
+                            form.replace(index, value);
+                        }
+                    }
+                    self.refresh(w);
+                }
+                continue;
+            }
+            if let nk_a11y::Request::SetSelection(id, ref range) = request {
+                if let Some(crate::cc::Target::Detail(row)) = self.cc_target(id)
+                    && let Some(d) = &mut self.cc.detail
+                {
+                    let index = d
+                        .rows
+                        .iter()
+                        .find(|r| r.id == row)
+                        .and_then(|r| match r.action {
+                            Some(crate::cc::detail::Action::SecretFocus(i)) => Some(i),
+                            _ => None,
+                        });
+                    if let (Some(index), Some(form)) = (index, &mut d.form) {
+                        form.selection(index, range.clone());
+                    }
+                }
+                continue;
+            }
             if let nk_a11y::Request::SetValue(id, value) = request {
                 let target = self.cc_target(id);
+                if let Some(crate::cc::Target::Detail(id)) = target {
+                    if let Some(act) = self.cc.action(
+                        crate::cc::Target::Detail(id),
+                        &self.frame.status,
+                        Some(value),
+                    ) {
+                        self.act(act, w);
+                    }
+                    self.refresh(w);
+                    continue;
+                }
                 if let Some(crate::cc::Target::Slider(slider)) = target
                     && let Some(act) = self.cc.set_from_reader(slider, value, &self.frame.status)
                 {
-                    self.act(act);
+                    self.act(act, w);
                 }
                 continue;
             }
@@ -870,9 +1066,13 @@ impl Bar {
             };
             let activate = matches!(request, nk_a11y::Request::Activate(_));
             if let Some(target) = self.cc_target(id) {
-                if activate && let Some(act) = crate::cc::act_of(target, &self.frame.status) {
-                    self.act(act);
+                if !activate {
+                    self.cc.focus(target);
                 }
+                if activate && let Some(act) = self.cc.action(target, &self.frame.status, None) {
+                    self.act(act, w);
+                }
+                self.refresh(w);
                 continue;
             }
             if let Some(popup) = self.popup.as_mut().filter(|p| p.owns(id)) {
@@ -1129,6 +1329,7 @@ impl Application for Bar {
                 }
                 if let Some(f) = latest {
                     self.frame = f;
+                    Arc::make_mut(&mut self.frame).status.capture = crate::capture::state();
                     // Locked, or a fullscreen window: the Control Center goes with the bar.
                     if self.frame.hidden && self.cc_open {
                         self.toggle_cc(w);
@@ -1145,7 +1346,7 @@ impl Application for Bar {
                 if self.cc_open {
                     let (changed, act) = self.cc.motion((x, y), &self.frame.status);
                     if let Some(act) = act {
-                        self.act(act);
+                        self.act(act, w);
                     }
                     if changed {
                         w.redraw();
@@ -1173,9 +1374,9 @@ impl Application for Bar {
                 let p = self.pointer;
                 if self.cc_open && self.cc.contains(p) {
                     if let Some(act) = self.cc.press(p, &self.frame.status) {
-                        self.act(act);
+                        self.act(act, w);
                     }
-                    w.redraw();
+                    self.refresh(w);
                 } else if let Some(item) = self.item_at(p) {
                     if self.cc_open && item != Item::ControlCenter {
                         self.toggle_cc(w);
@@ -1192,21 +1393,118 @@ impl Application for Bar {
                 ..
             } => {
                 if self.cc.release() {
-                    w.redraw();
+                    self.refresh(w);
                 }
             }
-            Event::Key(key) if self.cc_open && key.sym == ESCAPE => self.toggle_cc(w),
+            Event::Key(key)
+                if self.cc_open && self.cc.detail.as_ref().is_some_and(|d| d.form.is_some()) =>
+            {
+                if key.sym == ESCAPE {
+                    self.act(
+                        crate::cc::Act::Detail(crate::cc::detail::Action::SecretCancel),
+                        w,
+                    );
+                } else if [0xff09, 0xfe20].contains(&key.sym)
+                    || self
+                        .cc
+                        .detail
+                        .as_ref()
+                        .and_then(|d| d.focused_field())
+                        .is_none()
+                {
+                    if let Some(act) = self.cc.key(&key, &self.frame.status) {
+                        self.act(act, w);
+                    }
+                } else if key.ctrl && [b'v' as u32, b'V' as u32].contains(&key.sym) {
+                    self.cc_paste = self
+                        .cc
+                        .detail
+                        .as_ref()
+                        .and_then(|d| d.form.as_ref())
+                        .map(|f| (self.cc.view_id(), f.paste_tag()));
+                    if let Err(error) = w.paste() {
+                        self.cc_paste = None;
+                        if let Some(d) = &mut self.cc.detail {
+                            d.error = error.to_string();
+                        }
+                    }
+                } else if key.sym == 0xff0d {
+                    self.act(
+                        crate::cc::Act::Detail(crate::cc::detail::Action::SecretSubmit),
+                        w,
+                    );
+                } else if let Some(form) = self.cc.detail.as_mut().and_then(|d| d.form.as_mut()) {
+                    form.key(&key);
+                }
+                self.refresh(w);
+            }
+            Event::Paste(text) => {
+                if let Some((view, tag)) = self.cc_paste.take()
+                    && view == self.cc.view_id()
+                    && self.cc.detail.as_ref().and_then(|d| d.focused_field()) == Some(tag.1)
+                    && let Some(form) = self.cc.detail.as_mut().and_then(|d| d.form.as_mut())
+                {
+                    form.paste(tag, &text);
+                    self.refresh(w);
+                }
+            }
+            Event::Ime(batch) if self.cc_open => {
+                if self
+                    .cc
+                    .detail
+                    .as_ref()
+                    .and_then(|d| d.focused_field())
+                    .is_some()
+                    && let Some(text) = batch.commit
+                    && let Some(form) = self.cc.detail.as_mut().and_then(|d| d.form.as_mut())
+                {
+                    form.key(&nk_wayland::Key {
+                        serial: None,
+                        sym: 0,
+                        text,
+                        shift: false,
+                        ctrl: false,
+                        alt: false,
+                    });
+                }
+                self.refresh(w);
+            }
+            Event::Key(key) if self.cc_open && key.sym == ESCAPE => {
+                if self.cc.back() {
+                    self.refresh(w);
+                } else {
+                    self.toggle_cc(w);
+                }
+            }
+            Event::Key(key) if self.cc_open => {
+                if let Some(act) = self.cc.key(&key, &self.frame.status) {
+                    self.act(act, w);
+                }
+                self.refresh(w);
+            }
             Event::Button {
                 button: button @ (RIGHT_BUTTON | MIDDLE_BUTTON),
                 pressed: true,
                 serial,
                 ..
             } => {
-                if let Some(Item::Tray(i)) = self.item_at(self.pointer) {
+                if self.cc_open
+                    && button == RIGHT_BUTTON
+                    && let Some(page) = self.cc.detail_at(self.pointer)
+                {
+                    self.act(crate::cc::Act::OpenDetail(page), w);
+                    self.refresh(w);
+                } else if let Some(Item::Tray(i)) = self.item_at(self.pointer) {
                     self.tray_click(i, button, Some(serial), w);
                 }
             }
-            Event::Scroll(delta) => self.tray_scroll(delta, false),
+            Event::Scroll(delta) => {
+                if self.cc_open && self.cc.scroll_detail(delta) {
+                    self.refresh(w);
+                } else {
+                    self.tray_scroll(delta, false);
+                }
+            }
             Event::HorizontalScroll(delta) => self.tray_scroll(delta, true),
             Event::PopupOverlay { id, event } => {
                 if let Some(popup) = self.popup.as_mut().filter(|p| p.id == id) {
@@ -1234,7 +1532,22 @@ impl Application for Bar {
             }
             _ => {}
         }
+        self.auth_events(w);
         self.a11y(w);
+        let results: Vec<_> = self
+            .cc_writer
+            .as_ref()
+            .map(|writer| writer.replies.try_iter().collect())
+            .unwrap_or_default();
+        for (version, result) in results {
+            if version != self.cc.view_id() {
+                continue;
+            }
+            if let Some(d) = &mut self.cc.detail {
+                d.error = result.err().unwrap_or_default();
+            }
+            self.refresh(w);
+        }
         if let (Some(popup), Some(look)) = (self.popup.as_mut(), self.look.as_mut()) {
             match popup.sync(w, look) {
                 Ok(true) => self.publish_semantics(w),
@@ -1249,6 +1562,19 @@ impl Application for Bar {
     }
 
     fn idle(&mut self, w: &mut Window) -> nk_wayland::Result<()> {
+        self.auth_events(w);
+        if self.cc_open
+            && self.cc.detail.as_ref().is_some_and(|d| d.page == "media")
+            && self.frame.status.media.as_ref().is_some_and(|m| m.playing)
+        {
+            self.refresh(w);
+        }
+        let capture = crate::capture::state();
+        if capture != self.frame.status.capture {
+            Arc::make_mut(&mut self.frame).status.capture = capture;
+            self.refresh(w);
+        }
+
         let now = self.now();
         if now != self.clock {
             self.clock = now;

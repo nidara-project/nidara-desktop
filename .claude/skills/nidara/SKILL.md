@@ -41,7 +41,8 @@ gtk4-layer-shell ⇒ no bar, no dock, nothing in the log). See `references/archi
 ⚠️ **Hyalo starts the Rust shell by default** (#1017, owner 2026-11-05):
 `nidara-rust-shell.service` runs `nidara-shell --bar` after the full session daemon.
 No TS shell or separate dock in Hyalo; `nidara-ipc` defaults to native routes.
-B2.2/B2.3/B3 and installed MCP transition/acceptance remain gaps; see
+B2.3/B3 and installed MCP transition/acceptance remain gaps; B2.2 details are
+implemented with private validation, not installed acceptance. See
 `toolkit/shell/SESSION.md`. The TS conventions below still apply to the remaining
 TS applications and frozen Hyprland source.
 
@@ -369,6 +370,15 @@ The Rust dock is `toolkit/shell` (binary `nidara-shell`, D1–D2 of #959). Read
 The Rust bar (B1) is the same process, started with `--bar`: `toolkit/shell/BAR.md`. Its
 check is `toolkit/shell/check-bar-headless.sh` (the dock's check plus the bar).
 Its Control Center (B2) is `toolkit/shell/CC.md`.
+B2.2 details replace the grid on this same surface. Read CC.md before editing:
+row identities pin service owners/epochs (seek also pins its track); stale replies
+belong only to their issuing view; slider writes coalesce per destination. Wi-Fi
+owns a private Network1 secrets-renderer connection only while its detail exists.
+Never put a password in Debug, accessibility text or IME surrounding text. The
+capture controller owns its recorder child, signals only that child and preserves
+recording preferences; screenshot and Stop use independent lanes. The extended
+private check is check-cc-headless.sh; export settings **and** tokens for it.
+
 - A tray item that registers with a SYNCHRONOUS call blocks its own main loop while the
   watcher reads its properties back: the registration fails with "No such interface".
   Apps register asynchronously; a fake must too (`TRAY_ITEM` in `dock-check.py`).

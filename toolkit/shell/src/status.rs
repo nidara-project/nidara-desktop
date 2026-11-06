@@ -99,6 +99,7 @@ pub struct Night {
 /// The selected player (Media1's `Selected`).
 #[derive(Clone, Debug, Default, PartialEq)]
 pub struct Media {
+    pub owner: String,
     pub title: String,
     pub artist: String,
     pub playing: bool,
@@ -111,6 +112,9 @@ pub struct Media {
 
 #[derive(Clone, Debug, Default, PartialEq)]
 pub struct Status {
+    pub details: crate::ccdata::Details,
+    pub capture: crate::capture::State,
+    pub night_schedule: (bool, String, String),
     pub wifi: Option<Wifi>,
     /// The network joined or being joined.
     pub wifi_name: String,
@@ -130,6 +134,21 @@ pub struct Status {
 
 #[derive(Clone, Debug, PartialEq)]
 pub enum Update {
+    BrightnessOwned(Option<Brightness>, String),
+    NightSchedule(bool, String, String),
+    Network(std::sync::Arc<Value>),
+    BluetoothSnapshot(std::sync::Arc<Value>),
+    Audio(
+        Option<Volume>,
+        String,
+        std::sync::Arc<Vec<crate::ccdata::Choice>>,
+    ),
+    Players(
+        Option<std::sync::Arc<Media>>,
+        String,
+        String,
+        std::sync::Arc<Vec<crate::ccdata::Choice>>,
+    ),
     Wifi(Option<Wifi>, String),
     Volume(Option<Volume>),
     Battery(Option<Battery>),
@@ -144,15 +163,58 @@ pub enum Update {
 impl Status {
     pub fn apply(&mut self, u: Update) {
         match u {
-            Update::Wifi(w, name) => (self.wifi, self.wifi_name) = (w, name),
-            Update::Volume(v) => self.volume = v,
+            Update::BrightnessOwned(value, owner) => {
+                self.brightness = value;
+                self.details.brightness_owner = owner;
+            }
+            Update::NightSchedule(on, from, to) => self.night_schedule = (on, from, to),
+            Update::Network(s) => {
+                self.wifi = wifi_of(&s);
+                self.wifi_name = wifi_name(&s);
+                self.details.network = Some(s);
+            }
+            Update::BluetoothSnapshot(s) => {
+                self.bluetooth = bluetooth_of(&s);
+                self.details.bluetooth = Some(s);
+            }
+            Update::Audio(v, default, nodes) => {
+                self.volume = v;
+                self.details.default_output = default;
+                self.details.audio = nodes;
+            }
+            Update::Players(m, selected, pinned, players) => {
+                self.media = m;
+                self.details.selected = selected;
+                self.details.pinned = pinned;
+                self.details.players = players;
+            }
+            Update::Wifi(w, name) => {
+                (self.wifi, self.wifi_name) = (w, name);
+                self.details.network = None;
+            }
+            Update::Volume(v) => {
+                self.volume = v;
+                self.details.audio = Default::default();
+                self.details.default_output.clear();
+            }
             Update::Battery(b) => self.battery = b,
             Update::Dnd(d) => self.dnd = d,
             Update::Dark(d) => self.dark = d,
             Update::Night(n) => self.night = n,
-            Update::Brightness(b) => self.brightness = b,
-            Update::Bluetooth(b) => self.bluetooth = b,
-            Update::Media(m) => self.media = m,
+            Update::Brightness(b) => {
+                self.brightness = b;
+                self.details.brightness_owner.clear();
+            }
+            Update::Bluetooth(b) => {
+                self.bluetooth = b;
+                self.details.bluetooth = None;
+            }
+            Update::Media(m) => {
+                self.media = m;
+                self.details.players = Default::default();
+                self.details.selected.clear();
+                self.details.pinned.clear();
+            }
         }
     }
 }
@@ -313,6 +375,13 @@ pub fn watch(conn: &Connection, emit: Sender<Update>) {
                 signal(
                     SESSION,
                     "org.freedesktop.DBus.ObjectManager",
+                    "InterfacesAdded",
+                    AUDIO_PATH,
+                    false,
+                ),
+                signal(
+                    SESSION,
+                    "org.freedesktop.DBus.ObjectManager",
                     "InterfacesRemoved",
                     AUDIO_PATH,
                     false,
@@ -364,6 +433,20 @@ pub fn watch(conn: &Connection, emit: Sender<Update>) {
                     "PropertiesChanged",
                     MEDIA_PATH,
                     true,
+                ),
+                signal(
+                    SESSION,
+                    "org.freedesktop.DBus.ObjectManager",
+                    "InterfacesAdded",
+                    MEDIA_PATH,
+                    false,
+                ),
+                signal(
+                    SESSION,
+                    "org.freedesktop.DBus.ObjectManager",
+                    "InterfacesRemoved",
+                    MEDIA_PATH,
+                    false,
                 ),
                 owner(SESSION),
             ],
@@ -512,33 +595,70 @@ fn proxy<'a>(
     zbus::blocking::Proxy::new(conn, dest, path, iface).map_err(|e| e.to_string())
 }
 
+fn service_owner(conn: &Connection, name: &str) -> Result<String, String> {
+    conn.call_method(
+        Some("org.freedesktop.DBus"),
+        "/org/freedesktop/DBus",
+        Some("org.freedesktop.DBus"),
+        "GetNameOwner",
+        &(name,),
+    )
+    .map_err(|e| e.to_string())?
+    .body()
+    .deserialize()
+    .map_err(|e| e.to_string())
+}
 fn read_wifi(conn: &Connection) -> Result<Update, String> {
+    let owner = service_owner(conn, NETWORK)?;
     let reply = conn
         .call_method(
-            Some(NETWORK),
+            Some(owner.as_str()),
             NETWORK_PATH,
             Some(NETWORK_IFACE),
             "Snapshot",
             &(),
         )
         .map_err(|e| e.to_string())?;
-    let (_, _, json): (u64, u64, String) = reply.body().deserialize().map_err(|e| e.to_string())?;
-    let snapshot: Value = serde_json::from_str(&json).map_err(|e| e.to_string())?;
-    Ok(Update::Wifi(wifi_of(&snapshot), wifi_name(&snapshot)))
+    let (epoch, _, json): (u64, u64, String) =
+        reply.body().deserialize().map_err(|e| e.to_string())?;
+    let mut snapshot: Value = serde_json::from_str(&json).map_err(|e| e.to_string())?;
+    if snapshot["schemaVersion"] != 1 {
+        return Err("unsupported service snapshot schema".into());
+    }
+    snapshot["_serviceOwner"] = Value::String(owner);
+    snapshot["_serviceEpoch"] = Value::from(epoch);
+    Ok(Update::Network(std::sync::Arc::new(snapshot)))
 }
 
 fn read_volume(conn: &Connection) -> Result<Update, String> {
-    let root = proxy(conn, SESSION, AUDIO_PATH, "org.nidara.Audio1")?;
+    let owner = service_owner(conn, SESSION)?;
+    let root = proxy(conn, &owner, AUDIO_PATH, "org.nidara.Audio1")?;
     let out: OwnedObjectPath = root
         .get_property("DefaultOutput")
         .map_err(|e| e.to_string())?;
-    if out.as_str() == "/" {
-        return Ok(Update::Volume(None));
+    let mut nodes = crate::ccdata::objects(conn, &owner, AUDIO_PATH, "org.nidara.AudioNode1")?;
+    let limit: f64 = root
+        .get_property("VolumeLimit")
+        .map_err(|e| e.to_string())?;
+    for node in &mut nodes {
+        node.volume_limit = if limit.is_finite() {
+            limit.clamp(0., 1.5)
+        } else {
+            1.
+        };
     }
-    let node = proxy(conn, SESSION, out.as_str(), "org.nidara.AudioNode1")?;
+    let nodes = std::sync::Arc::new(nodes);
+    if out.as_str() == "/" {
+        return Ok(Update::Audio(None, out.to_string(), nodes));
+    }
+    let node = proxy(conn, &owner, out.as_str(), "org.nidara.AudioNode1")?;
     let level: f64 = node.get_property("Volume").map_err(|e| e.to_string())?;
     let muted: bool = node.get_property("Muted").map_err(|e| e.to_string())?;
-    Ok(Update::Volume(Some(Volume { level, muted })))
+    Ok(Update::Audio(
+        Some(Volume { level, muted }),
+        out.to_string(),
+        nodes,
+    ))
 }
 
 fn read_battery(conn: &Connection) -> Result<Update, String> {
@@ -563,9 +683,10 @@ fn read_battery(conn: &Connection) -> Result<Update, String> {
 }
 
 fn read_brightness(conn: &Connection) -> Result<Update, String> {
+    let owner = service_owner(conn, SESSION)?;
     let reply = conn
         .call_method(
-            Some(SESSION),
+            Some(owner.as_str()),
             BRIGHTNESS_PATH,
             Some(BRIGHTNESS_IFACE),
             "GetState",
@@ -574,31 +695,54 @@ fn read_brightness(conn: &Connection) -> Result<Update, String> {
         .map_err(|e| e.to_string())?;
     let (_, _, devices): (u64, u64, Vec<DeviceRecord>) =
         reply.body().deserialize().map_err(|e| e.to_string())?;
-    Ok(Update::Brightness(brightness_of(&devices)))
+    Ok(Update::BrightnessOwned(brightness_of(&devices), owner))
 }
 
 fn read_bluetooth(conn: &Connection) -> Result<Update, String> {
+    let owner = service_owner(conn, BLUETOOTH)?;
     let reply = conn
         .call_method(
-            Some(BLUETOOTH),
+            Some(owner.as_str()),
             BLUETOOTH_PATH,
             Some(BLUETOOTH_IFACE),
             "Snapshot",
             &(),
         )
         .map_err(|e| e.to_string())?;
-    let (_, _, json): (u64, u64, String) = reply.body().deserialize().map_err(|e| e.to_string())?;
-    let snapshot: Value = serde_json::from_str(&json).map_err(|e| e.to_string())?;
-    Ok(Update::Bluetooth(bluetooth_of(&snapshot)))
+    let (epoch, _, json): (u64, u64, String) =
+        reply.body().deserialize().map_err(|e| e.to_string())?;
+    let mut snapshot: Value = serde_json::from_str(&json).map_err(|e| e.to_string())?;
+    if snapshot["schemaVersion"] != 1 {
+        return Err("unsupported service snapshot schema".into());
+    }
+    snapshot["_serviceOwner"] = Value::String(owner);
+    snapshot["_serviceEpoch"] = Value::from(epoch);
+    Ok(Update::BluetoothSnapshot(std::sync::Arc::new(snapshot)))
 }
 
 fn read_media(conn: &Connection) -> Result<Update, String> {
-    let root = proxy(conn, SESSION, MEDIA_PATH, MEDIA_IFACE)?;
+    let owner = service_owner(conn, SESSION)?;
+    let root = proxy(conn, &owner, MEDIA_PATH, MEDIA_IFACE)?;
     let selected: OwnedObjectPath = root.get_property("Selected").map_err(|e| e.to_string())?;
+    let players = std::sync::Arc::new(crate::ccdata::objects(
+        conn,
+        &owner,
+        MEDIA_PATH,
+        "org.nidara.MediaPlayer1",
+    )?);
+    let pinned: String = root.get_property("PinnedBus").map_err(|e| e.to_string())?;
     if selected.as_str() == "/" {
-        return Ok(Update::Media(Some(Default::default())));
+        return Ok(Update::Players(
+            Some(std::sync::Arc::new(Media {
+                owner: owner.clone(),
+                ..Default::default()
+            })),
+            selected.to_string(),
+            pinned,
+            players,
+        ));
     }
-    let p = proxy(conn, SESSION, selected.as_str(), "org.nidara.MediaPlayer1")?;
+    let p = proxy(conn, &owner, selected.as_str(), "org.nidara.MediaPlayer1")?;
     let text =
         |name: &str| -> Result<String, String> { p.get_property(name).map_err(|e| e.to_string()) };
     let flag =
@@ -608,15 +752,21 @@ fn read_media(conn: &Connection) -> Result<Update, String> {
         .then(|| text("ArtPath"))
         .transpose()?
         .filter(|a| !a.is_empty());
-    Ok(Update::Media(Some(std::sync::Arc::new(Media {
-        title: text("Title")?,
-        artist: artists.join(", "),
-        playing: text("PlaybackStatus")? == "Playing",
-        can_control: flag("CanControl")?,
-        can_next: flag("CanGoNext")?,
-        can_previous: flag("CanGoPrevious")?,
-        art,
-    }))))
+    Ok(Update::Players(
+        Some(std::sync::Arc::new(Media {
+            owner: owner.clone(),
+            title: text("Title")?,
+            artist: artists.join(", "),
+            playing: text("PlaybackStatus")? == "Playing",
+            can_control: flag("CanControl")?,
+            can_next: flag("CanGoNext")?,
+            can_previous: flag("CanGoPrevious")?,
+            art,
+        })),
+        selected.to_string(),
+        pinned,
+        players,
+    ))
 }
 
 #[cfg(test)]
@@ -701,3 +851,7 @@ mod tests {
         );
     }
 }
+
+#[cfg(test)]
+#[path = "ccwire.rs"]
+mod wire_tests;
