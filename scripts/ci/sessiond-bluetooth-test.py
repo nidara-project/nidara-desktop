@@ -314,14 +314,22 @@ def exercise(binary,root,managed=False):
         wait(lambda:ctrl('Info')['incomingResult']is not None,'incoming deadline/cancel',50)
         check(not ctrl('Info')['incomingResult']['ok'],'incoming consent deadline/cancel rejects unanswered request')
         fails(lambda:bt('ReplyRequest','(ttbs)',(q[0],q[1],True,''),bus=ui),'Conflict')
+        obex_updates=[]
+        watch=session.signal_subscribe(None,I,'Updated',P,None,Gio.DBusSignalFlags.NONE,
+            lambda c,s,p,i,m,x:obex_updates.append(json.loads(x.unpack()[2])))
         q=incoming('obex-lost');ctrl('ObexDrop');wait(lambda:ctrl('Info')['incomingResult']is not None,'obex owner loss cancels consent')
         check(not ctrl('Info')['incomingResult']['ok'],'OBEX loss invalidates pending consent')
         wait(lambda:not snapshot()['obexAvailable'],'obex unavailable')
+        wait(lambda:any(not d['obexAvailable'] for d in obex_updates),'OBEX invalidation published')
+        check(all(d['available'] and len(d['adapters'])==2 and d['pairAgentRegistered'] for d in obex_updates),
+              'OBEX loss never withdraws the unchanged BlueZ inventory or pairing agent')
         ctrl('Set',{'obexReject':True});attempts=ctrl('Info')['obexAttempts'];ctrl('ObexRestore')
         wait(lambda:ctrl('Info')['obexAttempts']>attempts,'refused agent registration')
         check(snapshot()['available']and not snapshot()['receiveAgentRegistered'],'foreign OBEX agent refusal leaves Bluetooth available without receive')
         bt('SetBlocked','(ob)',(D,True));check(snapshot()['devices'][0]['blocked'],'device control independent of OBEX agent')
         ctrl('Set',{'obexReject':False});wait(ready,'OBEX retry registers only our own agent')
+        pump();check(all(d['available'] for d in obex_updates),'OBEX restore/refusal never withdraws Bluetooth')
+        session.signal_unsubscribe(watch)
         old_epoch=bt('Snapshot')[0];ctrl('Drop');wait(lambda:not snapshot()['available'],'BlueZ loss clears devices');check(snapshot()['devices']==[]and 'fileReceptionPolicy'in snapshot()and not snapshot()['pairAgentRegistered'],'no stale BlueZ devices or capabilities')
         ctrl('Restore');wait(ready,'BlueZ restart and registration');check(bt('Snapshot')[0]!=old_epoch,'provider restart advances epoch')
         if managed:return

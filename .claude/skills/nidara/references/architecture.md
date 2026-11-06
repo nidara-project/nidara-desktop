@@ -1071,6 +1071,9 @@ The wire contract and isolated test procedure are in
 no agent and makes no provider writes or activations. BlueZ uses the system bus,
 obexd the session bus; callbacks pin their distinct unique owners. Epoch/revision
 snapshots expose all adapters/devices, optional Battery1 and transfer progress.
+An OBEX-only owner change invalidates file reception/transfers immediately, but
+keeps the unchanged BlueZ inventory and pairing capabilities in the intermediate
+snapshot too; publishing an all-unavailable placeholder creates a false outage.
 Sensor inventory updates are coalesced to four per second; user operations and
 unicast consent bypass the limiter. Inventory, provider control and transfer monitoring run independently,
 so stalled BlueZ discovery does not stop OBEX disk checks. Completed OBEX signals are retained even if
