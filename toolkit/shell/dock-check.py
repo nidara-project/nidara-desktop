@@ -352,6 +352,9 @@ def catalogue():
         source = Path('/usr/share/applications') / name
         if source.exists():
             (data / 'applications' / name).write_bytes(source.read_bytes())
+    if os.environ.get('NK_DOCK_DROP_CHECK') == '1':
+        from drop_check import catalogue as drop_catalogue
+        drop_catalogue(data)
     (data / 'applications' / 'mimeapps.list').write_text(
         '[Default Applications]\ninode/directory=org.gnome.Nautilus.desktop\n')
     (data / 'icons').symlink_to('/usr/share/icons')
@@ -472,7 +475,8 @@ try:
     assert result['trash_art'] == {'empty': '64x64', 'full': '64x64'}, result['trash_art']
     # NK_SHELL_BAR=1 (check-bar-headless.sh): the bar too (bar.rs, B1), along the top.
     with_bar = os.environ.get('NK_SHELL_BAR') == '1'
-    shell = start('shell', [SHELL, '--bar'] if with_bar else [SHELL])
+    shell = start('shell', [SHELL, '--bar'] if with_bar else [SHELL],
+                  **({'WAYLAND_DEBUG': 'client'} if os.environ.get('NK_DOCK_DROP_CHECK') == '1' else {}))
     first = until('a dock layer', docks)
     if with_bar:
         bars = until('a bar layer', lambda: [l for l in ipc('layers').get('ok', {}).get('layers', [])
@@ -484,6 +488,10 @@ try:
     # Shell1 (crates/nidara-shell-ipc): this process owns the name, says what it can do,
     # and refuses what it cannot rather than doing nothing.
     until('Shell1 answering', lambda: shell1('GetState') is not None)
+    if os.environ.get('NK_DOCK_DROP_CHECK') == '1':
+        from drop_check import run as drop_check
+        drop_check(globals())
+        raise SystemExit(0)
     state = shell1('GetState')
     assert state == (False, [('app-grid', False)], ''), state
     for surface, error in [('bar', 'Unavailable'), ('Dock', 'Invalid')]:

@@ -348,7 +348,7 @@ fn parse(path: &Path, id: &str) -> Result<Option<App>, String> {
     } else {
         "relaunch"
     };
-    let record = json!({"DesktopId":id,"Name":name,"GenericName":k.locale_string(g,"GenericName",None).unwrap_or_default().to_string(),"Comment":comment,"Keywords":keywords,"Visible":entry_available&&app.should_show(),"EntryAvailable":entry_available,"Launchable":entry_available,"UnavailableReason":unavailable_reason,"Origin":origin,"OriginId":fp,"DesktopPath":path.to_string_lossy(),"DBusActivatable":dbus,"StartupWMClass":s(&k,g,"StartupWMClass"),"Terminal":k.boolean(g,"Terminal").unwrap_or(false),"SingleMainWindow":single,"SupportsOpen":app.supports_files()||app.supports_uris()||(dbus&&!strv(&k,g,"MimeType").is_empty()),"NewWindowMode":new_window,"Actions":actions,"RawIcon":icon,"IconRef":{"Kind":"desktop","Value":icon},"ForegroundScore":0.0,"NewlyObservedAt":0.0,"IsNew":false,"Autostart":{"Available":false,"Reason":"Application autostart is A2"}});
+    let record = json!({"DesktopId":id,"Name":name,"GenericName":k.locale_string(g,"GenericName",None).unwrap_or_default().to_string(),"Comment":comment,"Keywords":keywords,"Visible":entry_available&&app.should_show(),"EntryAvailable":entry_available,"Launchable":entry_available,"UnavailableReason":unavailable_reason,"Origin":origin,"OriginId":fp,"DesktopPath":path.to_string_lossy(),"DBusActivatable":dbus,"StartupWMClass":s(&k,g,"StartupWMClass"),"Terminal":k.boolean(g,"Terminal").unwrap_or(false),"SingleMainWindow":single,"SupportsOpen":app.supports_files()||app.supports_uris()||(dbus&&!strv(&k,g,"MimeType").is_empty()),"SupportsFileDrop":super::desktop::supports_file_drop(&raw_exec),"MimeTypes":strv(&k,g,"MimeType"),"NewWindowMode":new_window,"Actions":actions,"RawIcon":icon,"IconRef":{"Kind":"desktop","Value":icon},"ForegroundScore":0.0,"NewlyObservedAt":0.0,"IsNew":false,"Autostart":{"Available":false,"Reason":"Application autostart is A2"}});
     if record.to_string().len() > 32768 {
         return Err("desktop record budget".into());
     }
@@ -455,6 +455,46 @@ pub fn save_root_history(history: &BTreeMap<PathBuf, String>) -> Result<(), Stri
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn file_drop_metadata_does_not_replace_dbus_open_support() {
+        let dir = std::env::current_dir()
+            .unwrap()
+            .join(format!("target/a1-drop-{}", super::super::unique()));
+        fs::create_dir_all(&dir).unwrap();
+        for (id, fields, open, drop) in [
+            (
+                "org.example.Dbus.desktop",
+                "DBusActivatable=true\nMimeType=application/pdf;\n",
+                true,
+                false,
+            ),
+            (
+                "field.desktop",
+                "Exec=/usr/bin/true %U\nMimeType=application/pdf;\n",
+                true,
+                true,
+            ),
+            (
+                "no-field.desktop",
+                "Exec=/usr/bin/true\nMimeType=application/pdf;\n",
+                false,
+                false,
+            ),
+        ] {
+            let path = dir.join(id);
+            fs::write(
+                &path,
+                format!("[Desktop Entry]\nType=Application\nName=Fixture\n{fields}"),
+            )
+            .unwrap();
+            let app = parse(&path, id).unwrap().unwrap();
+            assert_eq!(app.record["SupportsOpen"], open, "{id}");
+            assert_eq!(app.record["SupportsFileDrop"], drop, "{id}");
+            assert_eq!(app.record["MimeTypes"], json!(["application/pdf"]));
+        }
+        fs::remove_dir_all(dir).unwrap();
+    }
+
     #[test]
     fn real_roots_and_mount_loss_never_look_like_uninstall() {
         let dir = std::env::current_dir()

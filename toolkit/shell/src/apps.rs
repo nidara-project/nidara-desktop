@@ -278,7 +278,11 @@ fn parse(
                 String::new()
             },
             launchable: flag(a, "Launchable"),
-            opens: flag(a, "SupportsOpen"),
+            opens: flag(a, "SupportsFileDrop"),
+            mime_types: a
+                .get("MimeTypes")
+                .and_then(|v| Vec::<String>::try_from(v.try_clone().ok()?).ok())
+                .unwrap_or_default(),
             new_window: matches!(
                 text(a, "NewWindowMode").as_str(),
                 "declared-action" | "relaunch"
@@ -359,6 +363,20 @@ fn launcher(d: &Dict) -> Launcher {
             .map(|p| p.clamp(0., 1.)),
         urgent: flag(d, "Urgent"),
     }
+}
+
+/// No field code or no complete type list means no file drop. This is advisory;
+/// Applications1 revalidates the current files and declaration before dispatch.
+pub fn accepts_drop(app: &App, types: &[String]) -> bool {
+    app.opens
+        && !types.is_empty()
+        && types.iter().all(|kind| {
+            !kind.is_empty()
+                && app.mime_types.iter().any(|declared| {
+                    !declared.starts_with("x-scheme-handler/")
+                        && gio::content_type_is_a(kind, declared)
+                })
+        })
 }
 
 fn text(d: &Dict, key: &str) -> String {
@@ -450,6 +468,33 @@ mod tests {
             .iter()
             .map(|(k, x)| (k.to_string(), x.try_clone().unwrap()))
             .collect()
+    }
+
+    #[test]
+    fn drops_require_a_field_and_every_declared_type() {
+        let mut app = App {
+            opens: true,
+            mime_types: vec!["application/pdf".into()],
+            ..App::default()
+        };
+        assert!(accepts_drop(&app, &["application/pdf".into()]));
+        assert!(!accepts_drop(&app, &["inode/directory".into()]));
+        assert!(!accepts_drop(
+            &app,
+            &["application/pdf".into(), "inode/directory".into()]
+        ));
+        assert!(!accepts_drop(&app, &[]));
+        app.mime_types = vec!["inode/directory".into()];
+        assert!(accepts_drop(&app, &["inode/directory".into()]));
+        app.mime_types = vec!["x-scheme-handler/tg".into(), "x-scheme-handler/file".into()];
+        assert!(!accepts_drop(&app, &["inode/directory".into()]));
+        app.mime_types = vec!["image/*".into(), "text/plain".into()];
+        assert!(accepts_drop(
+            &app,
+            &["image/png".into(), "text/x-csrc".into()]
+        ));
+        app.opens = false; // kitty / Settings: no file field even if a MIME is present.
+        assert!(!accepts_drop(&app, &["image/png".into()]));
     }
 
     #[test]

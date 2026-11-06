@@ -321,6 +321,43 @@ gboolean nidara_wl_focus_grab_active (void);
 
 
 /**
+ * NidaraWlDragIntent:
+ * @NIDARA_WL_DRAG_INTENT_NONE: no accepted target
+ * @NIDARA_WL_DRAG_INTENT_OPEN: open with the target, Copy cursor
+ * @NIDARA_WL_DRAG_INTENT_PIN: make a reference, Alias cursor
+ *
+ * Cursor feedback only; does not negotiate or accept a Wayland drop.
+ */
+typedef enum {
+  NIDARA_WL_DRAG_INTENT_NONE,
+  NIDARA_WL_DRAG_INTENT_OPEN,
+  NIDARA_WL_DRAG_INTENT_PIN,
+} NidaraWlDragIntent;
+
+/**
+ * nidara_wl_has_drag_feedback:
+ *
+ * Returns: %TRUE if Hyalo offers optional destination-intent cursor feedback
+ */
+gboolean nidara_wl_has_drag_feedback (void);
+
+/**
+ * nidara_wl_set_drag_feedback:
+ * @surface: the current destination's root surface
+ * @serial: the wl_data_device.enter serial for the current visit
+ * @intent: what a drop here would do
+ *
+ * Hyalo ignores stale visits, other surfaces and ended drags. Copy negotiation
+ * and permission checks remain independent. Without support, use the ordinary
+ * negotiated cursor. The caller still accepts/refuses the ordinary data offer.
+ *
+ * Returns: %TRUE if queued, not proof of acceptance or an active drag
+ */
+gboolean nidara_wl_set_drag_feedback (GdkSurface *surface, guint serial,
+                                      NidaraWlDragIntent intent);
+
+
+/**
  * nidara_wl_has_material:
  *
  * Returns: %TRUE if the compositor offers nidara-material-v1 (Hyalo, the

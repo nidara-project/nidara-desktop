@@ -135,7 +135,7 @@ sender, 256 globally, 32 active launch records, icon reads capped below.
 ### App, match and icon records
 
 Wire types: identity/label/path/reason/enum fields are `s`; generation/revision/
-epoch fields are `t`; flags are `b`; Keywords/Capabilities/Candidates are `as`;
+epoch fields are `t`; flags are `b`; Keywords/MimeTypes/Capabilities/Candidates are `as`;
 Actions/Layout/WindowMatches/ActiveLaunches are `aa{sv}`; scores and timestamps
 in seconds are finite `d`. IconRef/Autostart/status are `a{sv}`; optional text is
 empty, never a D-Bus Maybe. DefaultDirectoryApp is an exact DesktopId or empty
@@ -144,7 +144,7 @@ types from JSON. Timestamps are explicitly wall time or CLOCK_MONOTONIC per fiel
 
 App metadata: DesktopId, Generation, Name, GenericName, Comment, Keywords,
 Visible, Launchable, UnavailableReason, Origin, OriginId, DesktopPath,
-DBusActivatable, StartupWMClass, Terminal, SingleMainWindow, SupportsOpen,
+DBusActivatable, StartupWMClass, Terminal, SingleMainWindow, SupportsOpen, SupportsFileDrop, MimeTypes,
 NewWindowMode (`declared-action`/`relaunch`/`unsupported`), Actions (id/localized name/icon reference), IconRef, RawIcon,
 IconRevision, ForegroundScore, NewlyObservedAt, IsNew, Autostart and its
 writability/reason. Public data excludes executable argv and private activation
@@ -667,6 +667,28 @@ Open capability on successful drop; validate limit/types and preserve every URI
 or reject visibly. No launch during drag-hover. Successful/failed/cancelled
 Wayland actions finish exactly once; ownership/serial and capture are released.
 External sources are untrusted data and cannot impersonate the Apps process.
+
+`MimeTypes:as` is the desktop entry's declared type list. `SupportsFileDrop:b`
+requires a real Exec file/URI field (`%f/%F/%u/%U`); it is independent of
+`SupportsOpen`, which also describes D-Bus Open. For local URI drops, each item
+must exist and have a known GIO content type (`inode/directory` for directories),
+and EVERY item must match a declared type through GIO alias/subtype/wildcard
+matching. `x-scheme-handler/*` never matches a local file. No partial launch.
+The daemon revalidates the current desktop declaration and every local URI type
+on open admission; hover classification is advisory, never launch authority.
+
+The negotiated Wayland action for both pinning and opening is Copy. An optional
+`nidara-drag-feedback-v1` global carries only destination intent (none/open/pin)
+with its surface and drag-enter serial: Hyalo shows Default/Copy/Alias while
+leaving negotiation and all effect permissions unchanged. Missing support falls
+back to the standard Copy cursor. Hints are scoped to the caller's current
+surface visit and disappear on leave, drop, cancel or writer destruction.
+
+The dock pre-reads an offer's URI list once, with a size and time bound, and
+classifies off the UI thread. Until both complete it offers no open target. A
+late result from a departed/replaced drag cannot accept the new offer. Hover
+only reads; launch and layout writes remain at Drop.
+
 
 Minimized entries use Hyalo's existing ext-foreign-toplevel-list identifiers
 (hex window ID) + ext-image-capture-source/ext-image-copy-capture. Add the native

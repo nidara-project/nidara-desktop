@@ -22,6 +22,7 @@
 #include "hyprland-surface-v1-client-protocol.h"
 #include "hyprland-toplevel-mapping-v1-client-protocol.h"
 #include "nidara-material-v1-client-protocol.h"
+#include "nidara-drag-feedback-v1-client-protocol.h"
 #include "nidara-window-controls-v1-client-protocol.h"
 
 /* A capture that has not answered in this long is not coming. Generous on
@@ -56,6 +57,7 @@ static struct hyprland_focus_grab_manager_v1 *focus_grab_mgr = NULL;
 static gboolean                        capture_supported = FALSE;
 static struct nidara_material_manager_v1 *material_mgr = NULL;
 static struct nidara_window_controls_manager_v1 *controls_mgr = NULL;
+static struct nidara_drag_feedback_v1 *drag_feedback = NULL;
 
 static void
 init_registry_global (void *data, struct wl_registry *registry, uint32_t name,
@@ -86,6 +88,9 @@ init_registry_global (void *data, struct wl_registry *registry, uint32_t name,
       material_mgr = wl_registry_bind (registry, name,
                                        &nidara_material_manager_v1_interface, 1);
     }
+  else if (g_strcmp0 (interface, nidara_drag_feedback_v1_interface.name) == 0)
+    drag_feedback = wl_registry_bind (registry, name,
+                                      &nidara_drag_feedback_v1_interface, 1);
   else if (g_strcmp0 (interface, nidara_window_controls_manager_v1_interface.name) == 0)
     controls_mgr = wl_registry_bind (registry, name,
                                      &nidara_window_controls_manager_v1_interface, 1);
@@ -326,6 +331,27 @@ nidara_wl_visible_region_clear (GdkSurface *surface)
 
   surface_state_send (surface, st, NULL);
   wl_display_flush (gdk_wl_display);
+}
+
+gboolean
+nidara_wl_has_drag_feedback (void)
+{
+  return wl_ok && drag_feedback != NULL;
+}
+
+gboolean
+nidara_wl_set_drag_feedback (GdkSurface *surface, guint serial,
+                              NidaraWlDragIntent intent)
+{
+  if (!nidara_wl_has_drag_feedback () || !GDK_IS_WAYLAND_SURFACE (surface) ||
+      intent < NIDARA_WL_DRAG_INTENT_NONE || intent > NIDARA_WL_DRAG_INTENT_PIN)
+    return FALSE;
+  struct wl_surface *wls = gdk_wayland_surface_get_wl_surface (surface);
+  if (!wls)
+    return FALSE;
+  nidara_drag_feedback_v1_set_feedback (drag_feedback, wls, serial, (uint32_t) intent);
+  wl_display_flush (gdk_wl_display);
+  return TRUE;
 }
 
 /* ======================================================================

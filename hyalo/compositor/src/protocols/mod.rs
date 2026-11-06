@@ -3,6 +3,7 @@
 //! it too — one file per protocol, for both ends.
 
 pub mod focus_grab;
+pub mod drag_feedback;
 pub mod layers;
 pub mod material;
 pub mod screencopy;
@@ -60,4 +61,16 @@ pub mod gen_layers {
     }
     use self::__interfaces::*;
     wayland_scanner::generate_server_code!("../../protocols/nidara-layers-v1.xml");
+}
+
+const _: &[u8] = include_bytes!("../../../../protocols/nidara-drag-feedback-v1.xml");
+pub mod gen_drag_feedback {
+    use wayland_server;
+    use wayland_server::protocol::*;
+    pub mod __interfaces {
+        use wayland_server::protocol::__interfaces::*;
+        wayland_scanner::generate_interfaces!("../../protocols/nidara-drag-feedback-v1.xml");
+    }
+    use self::__interfaces::*;
+    wayland_scanner::generate_server_code!("../../protocols/nidara-drag-feedback-v1.xml");
 }

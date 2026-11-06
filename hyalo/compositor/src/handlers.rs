@@ -103,6 +103,11 @@ impl CompositorHandler for Hyalo {
     }
 
     fn destroyed(&mut self, surface: &WlSurface) {
+        use smithay::reexports::wayland_server::Resource;
+        if self.dnd_feedback.surface_destroyed(&surface.id()) {
+            self.cursor_status = self.dnd_cursor();
+            self.queue_redraw(None);
+        }
         // A client that quits without destroying its window first (or is killed) has its
         // objects destroyed in the order it made them: the surface before its toplevel. The
         // closing picture is taken while the surface still holds its last frame (wm/motion.rs).
@@ -224,7 +229,7 @@ impl DataDeviceHandler for Hyalo {
     fn action_choice(&mut self, available: WlDndAction, preferred: WlDndAction) -> WlDndAction {
         let chosen = smithay::wayland::selection::data_device::default_action_chooser(available, preferred);
         if self.dnd_started.is_some() {
-            self.dnd_action = chosen;
+            self.dnd_feedback.choose(chosen);
             self.cursor_status = self.dnd_cursor();
             self.wm.chrome_cursor = true;
             self.queue_redraw(None);
@@ -275,8 +280,7 @@ impl WaylandDndGrabHandler for Hyalo {
         // Drawn under the pointer until the drop (render/mod.rs `push_cursor`).
         self.dnd_icon = icon.map(|surface| crate::render::DndIcon { surface, offset: (0, 0).into() });
         self.dnd_started = Some(serial);
-        self.dnd_action = WlDndAction::empty();
-        self.dnd_over = None;
+        self.dnd_feedback.clear();
         self.cursor_status = self.dnd_cursor();
         self.wm.chrome_cursor = true;
         match type_ {

@@ -264,6 +264,54 @@ fn tokenize(s: &str) -> Result<Vec<(String, bool)>, Error> {
     }
     Ok(v)
 }
+/// A drop needs a real standalone file field; D-Bus Open is a separate capability.
+pub fn supports_file_drop(exec: &str) -> bool {
+    let Ok(words) = tokenize(exec) else {
+        return false;
+    };
+    let fields = words
+        .iter()
+        .flat_map(|(word, _)| codes(word))
+        .filter(|c| ['f', 'F', 'u', 'U'].contains(c))
+        .count();
+    fields == 1
+        && words
+            .iter()
+            .any(|(word, quoted)| !quoted && ["%f", "%F", "%u", "%U"].contains(&word.as_str()))
+}
+
+/// GIO's content-type relation includes aliases, parent types and wildcards.
+/// Scheme handlers never authorize a local file, even an explicit `file` handler.
+pub fn accepts_type(declared: &[String], actual: &str) -> bool {
+    !actual.is_empty()
+        && declared.iter().any(|mime| {
+            !mime.starts_with("x-scheme-handler/") && gio::content_type_is_a(actual, mime)
+        })
+}
+
+pub fn local_type(uri: &str) -> Result<String, Error> {
+    use gio::prelude::*;
+    let path = local_file(uri)?;
+    let info = gio::File::for_path(path)
+        .query_info(
+            "standard::type,standard::content-type",
+            gio::FileQueryInfoFlags::NONE,
+            gio::Cancellable::NONE,
+        )
+        .map_err(|_| Error::Unsupported("local file type is unavailable".into()))?;
+    match info.file_type() {
+        gio::FileType::Directory => Ok("inode/directory".into()),
+        gio::FileType::Regular => info
+            .content_type()
+            .map(|t| t.to_string())
+            .filter(|t| !t.is_empty())
+            .ok_or_else(|| Error::Unsupported("unknown local file type".into())),
+        _ => Err(Error::Unsupported(
+            "requires a regular file or directory".into(),
+        )),
+    }
+}
+
 pub fn supports_uri(uri: &str, mimes: &[String]) -> bool {
     let Ok(uri_value) = glib::Uri::parse(uri, glib::UriFlags::NONE) else {
         return false;
@@ -470,6 +518,32 @@ mod tests {
         assert!(tokenize("echo ;rm").is_err());
         assert!(tokenize("echo \"no").is_err());
         assert_eq!(codes("%%f %U"), vec!['%', 'U']);
+    }
+    #[test]
+    fn declared_drop_types_cover_every_local_item() {
+        let telegram = vec!["x-scheme-handler/tg".into()];
+        let chrome = vec!["application/pdf".into(), "x-scheme-handler/https".into()];
+        let files = vec!["inode/directory".into()];
+        assert!(!accepts_type(&telegram, "inode/directory"));
+        assert!(!accepts_type(&chrome, "inode/directory"));
+        assert!(accepts_type(&files, "inode/directory"));
+        assert!(accepts_type(&chrome, "application/pdf"));
+        assert!(accepts_type(&chrome, "application/x-pdf"));
+        assert!(accepts_type(&["text/plain".into()], "text/x-csrc"));
+        assert!(accepts_type(&["image/*".into()], "image/png"));
+        assert!(!accepts_type(&[], "application/pdf"));
+        assert!(!accepts_type(
+            &["x-scheme-handler/file".into()],
+            "application/pdf"
+        ));
+        assert!(!accepts_type(&files, ""));
+        assert!(supports_file_drop("/bin/echo %U"));
+        assert!(supports_file_drop("/bin/echo %f"));
+        assert!(!supports_file_drop("kitty"));
+        assert!(!supports_file_drop("nidara-settings"));
+        assert!(!supports_file_drop("/bin/echo %%U"));
+        assert!(!supports_file_drop("/bin/echo \"%U\""));
+        assert!(!supports_file_drop("/bin/echo %U %F"));
     }
     #[test]
     fn fit_request_schema() {

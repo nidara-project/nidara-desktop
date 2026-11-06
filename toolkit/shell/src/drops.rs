@@ -66,6 +66,17 @@ pub enum Target {
     None,
 }
 
+impl Target {
+    /// Cursor intent only; both accepted operations still negotiate Wayland Copy.
+    pub fn feedback(&self) -> nk_wayland::DragFeedback {
+        match self {
+            Self::Pin(_) | Self::PinApp(_) => nk_wayland::DragFeedback::Pin,
+            Self::Open { .. } => nk_wayland::DragFeedback::Open,
+            Self::None => nk_wayland::DragFeedback::None,
+        }
+    }
+}
+
 /// What the drop over `view` as drawn (`hits`) at `along` would do. `opens` says whether an
 /// app opens files. Past the end of the last app, running app or minimized window — over the
 /// separator that follows it — it pins; never over half an icon, as a pin being moved does,
@@ -76,8 +87,12 @@ pub fn target(
     hits: &[[f64; 4]],
     horizontal: bool,
     along: f64,
+    files: &[String],
     opens: impl Fn(&str) -> bool,
 ) -> Target {
+    if files.is_empty() {
+        return Target::None;
+    }
     let span = |n: usize| {
         let [x, y, w, h] = hits[n];
         if horizontal { (x, w) } else { (y, h) }
@@ -213,16 +228,24 @@ pub fn before(view: &View, to: usize) -> Option<String> {
 }
 
 /// The local file URIs of a `text/uri-list`, in order, at most `MAX_URIS`: comments,
-/// blank lines and anything not a local `file:` URI are left out.
+/// blank lines are ignored. Invalid/non-local items or exceeded bounds reject the
+/// whole list: never silently lose one item from an open request.
 pub fn uris(data: &[u8]) -> Vec<String> {
-    String::from_utf8_lossy(data)
+    let Ok(text) = std::str::from_utf8(data) else {
+        return Vec::new();
+    };
+    let lines: Vec<_> = text
         .lines()
         .map(str::trim)
         .filter(|l| !l.is_empty() && !l.starts_with('#'))
-        .filter(|l| path(l).is_some())
-        .take(MAX_URIS)
-        .map(str::to_owned)
-        .collect()
+        .collect();
+    if lines.len() > MAX_URIS
+        || lines.iter().any(|l| path(l).is_none())
+        || lines.iter().map(|l| l.len()).sum::<usize>() > 256 * 1024
+    {
+        return Vec::new();
+    }
+    lines.into_iter().map(str::to_owned).collect()
 }
 
 /// The local path a `file:` URI names (`file:///p` or `file://localhost/p`,
@@ -230,7 +253,7 @@ pub fn uris(data: &[u8]) -> Vec<String> {
 pub fn path(uri: &str) -> Option<PathBuf> {
     let rest = uri.strip_prefix("file://")?;
     let rest = rest.strip_prefix("localhost").unwrap_or(rest);
-    if !rest.starts_with('/') {
+    if !rest.starts_with('/') || rest.contains(['?', '#']) {
         return None;
     }
     let bytes = rest.as_bytes();
@@ -283,6 +306,21 @@ mod tests {
         items.push(item("trash", Kind::Trash));
         View { items }
     }
+    #[test]
+    fn cursor_intent_distinguishes_pinning_opening_and_refusal() {
+        assert_eq!(Target::Pin(0).feedback(), nk_wayland::DragFeedback::Pin);
+        assert_eq!(Target::PinApp(0).feedback(), nk_wayland::DragFeedback::Pin);
+        assert_eq!(
+            Target::Open {
+                id: "app".into(),
+                generation: 1
+            }
+            .feedback(),
+            nk_wayland::DragFeedback::Open
+        );
+        assert_eq!(Target::None.feedback(), nk_wayland::DragFeedback::None);
+    }
+
     #[test]
     fn a_drop_lands_once_its_section_has_one_more_pin() {
         let v = view(true);
@@ -345,10 +383,27 @@ mod tests {
             id: "b".into(),
             generation: 1,
         };
-        assert_eq!(target(&v, &h, true, centre(&v, 1), |id| id == "b"), open);
+        assert_eq!(
+            target(
+                &v,
+                &h,
+                true,
+                centre(&v, 1),
+                &["file:///fixture".into()],
+                |id| id == "b"
+            ),
+            open
+        );
         // One that does not: refused.
         assert_eq!(
-            target(&v, &h, true, centre(&v, 0), |id| id == "b"),
+            target(
+                &v,
+                &h,
+                true,
+                centre(&v, 0),
+                &["file:///fixture".into()],
+                |id| id == "b"
+            ),
             Target::None
         );
         // The last running app, all of it: past its centre too, it opens.
@@ -356,12 +411,39 @@ mod tests {
             id: "r".into(),
             generation: 1,
         };
-        assert_eq!(target(&v, &h, true, centre(&v, 3) - 4., |_| true), r);
+        assert_eq!(
+            target(
+                &v,
+                &h,
+                true,
+                centre(&v, 3) - 4.,
+                &["file:///fixture".into()],
+                |_| true
+            ),
+            r
+        );
         let [x, _, w, _] = h[3];
-        assert_eq!(target(&v, &h, true, x + w - 0.5, |_| true), r);
+        assert_eq!(
+            target(
+                &v,
+                &h,
+                true,
+                x + w - 0.5,
+                &["file:///fixture".into()],
+                |_| true
+            ),
+            r
+        );
         // Over the separator after it, pinned.
         assert_eq!(
-            target(&v, &h, true, centre(&v, 4), |_| true),
+            target(
+                &v,
+                &h,
+                true,
+                centre(&v, 4),
+                &["file:///fixture".into()],
+                |_| true
+            ),
             Target::Pin(0)
         );
     }
@@ -372,15 +454,36 @@ mod tests {
         let h = hits(&v);
         // Before the folder, then after it, then over the Trash: at the end.
         assert_eq!(
-            target(&v, &h, true, centre(&v, 5) - 8., |_| false),
+            target(
+                &v,
+                &h,
+                true,
+                centre(&v, 5) - 8.,
+                &["file:///fixture".into()],
+                |_| false
+            ),
             Target::Pin(0)
         );
         assert_eq!(
-            target(&v, &h, true, centre(&v, 5) + 8., |_| false),
+            target(
+                &v,
+                &h,
+                true,
+                centre(&v, 5) + 8.,
+                &["file:///fixture".into()],
+                |_| false
+            ),
             Target::Pin(1)
         );
         assert_eq!(
-            target(&v, &h, true, centre(&v, 6), |_| false),
+            target(
+                &v,
+                &h,
+                true,
+                centre(&v, 6),
+                &["file:///fixture".into()],
+                |_| false
+            ),
             Target::Pin(1)
         );
         assert_eq!(keys(&preview(&v, 0))[5..], ["drop:", "folder:x", "trash"]);
@@ -389,7 +492,14 @@ mod tests {
         // Held where it opened: the pointer in the slot still lands there.
         let p = preview(&v, 0);
         assert_eq!(
-            target(&p, &hits(&p), true, centre(&p, 5), |_| false),
+            target(
+                &p,
+                &hits(&p),
+                true,
+                centre(&p, 5),
+                &["file:///fixture".into()],
+                |_| false
+            ),
             Target::Pin(0)
         );
     }
@@ -404,7 +514,14 @@ mod tests {
         assert_eq!(before(&v, 0), None);
         let p = preview(&v, 0);
         assert_eq!(
-            target(&p, &hits(&p), true, centre(&p, 5), |_| false),
+            target(
+                &p,
+                &hits(&p),
+                true,
+                centre(&p, 5),
+                &["file:///fixture".into()],
+                |_| false
+            ),
             Target::Pin(0)
         );
     }
@@ -466,29 +583,61 @@ mod tests {
         v.normalize_sections();
         let n = v.items.iter().position(|i| i.key == "min").unwrap();
         assert_eq!(
-            target(&v, &hits(&v), true, centre(&v, n), |_| false),
+            target(
+                &v,
+                &hits(&v),
+                true,
+                centre(&v, n),
+                &["file:///fixture".into()],
+                |_| false
+            ),
             Target::None
         );
         let p = preview(&v, 0);
         assert_eq!(keys(&p), ["a", "separator:2", "min", "drop:", "trash"]);
         assert_eq!(before(&v, 0), None);
         assert_eq!(
-            target(&p, &hits(&p), true, centre(&p, n + 1), |_| false),
+            target(
+                &p,
+                &hits(&p),
+                true,
+                centre(&p, n + 1),
+                &["file:///fixture".into()],
+                |_| false
+            ),
             Target::Pin(0)
+        );
+    }
+
+    #[test]
+    fn a_slow_or_unknown_offer_has_no_target_even_over_the_pinning_zone() {
+        let v = view(true);
+        assert_eq!(
+            target(&v, &hits(&v), true, centre(&v, 0), &[], |_| true),
+            Target::None
+        );
+        assert_eq!(
+            target(&v, &hits(&v), true, centre(&v, 5), &[], |_| true),
+            Target::None
         );
     }
 
     #[test]
     fn only_local_files_are_taken() {
         let list = b"# from a file manager\r\nfile:///home/u/My%20Docs\r\nhttps://x.org/a\r\nfile://localhost/tmp/a.pdf\r\nfile://host/x\r\n\r\nfile:///bad%00\r\n";
-        assert_eq!(
-            uris(list),
-            ["file:///home/u/My%20Docs", "file://localhost/tmp/a.pdf"]
-        );
+        assert_eq!(uris(list), Vec::<String>::new());
         assert_eq!(
             path("file:///home/u/My%20Docs"),
             Some(PathBuf::from("/home/u/My Docs"))
         );
         assert_eq!(path("file:///a%2"), None);
+        assert_eq!(path("file:///a#fragment"), None);
+        assert_eq!(
+            uris(b"# comment\r\nfile:///a%20b\r\nfile:///c\n"),
+            ["file:///a%20b", "file:///c"]
+        );
+        assert!(uris(b"file:///a\nfile://host/b\n").is_empty());
+        assert!(uris(&[255]).is_empty());
+        assert!(uris("file:///a\n".repeat(MAX_URIS + 1).as_bytes()).is_empty());
     }
 }

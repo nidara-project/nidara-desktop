@@ -125,6 +125,9 @@ pub struct Dock {
     dropped: Option<(crate::drops::Target, usize, Instant)>,
     /// What the drag over the strip carries (files, or an app from Apps).
     drop_offer: crate::drops::Offer,
+    drop_uris: Vec<String>,
+    drop_types: Option<Vec<String>>,
+    drop_probe: Option<Receiver<Option<Vec<String>>>>,
     /// The pin in the air, in a layer of its own so it can leave the strip.
     float: Option<nk_wayland::LayerId>,
     /// "Remove" over the pin in the air while a drop would unpin it.
@@ -215,6 +218,9 @@ impl Dock {
             dropping: None,
             dropped: None,
             drop_offer: crate::drops::Offer::Files,
+            drop_uris: Vec::new(),
+            drop_types: None,
+            drop_probe: None,
             float: None,
             remove_tip: None,
             landing: None,
@@ -1516,7 +1522,19 @@ impl Dock {
                 &self.shown.hits,
                 horizontal,
                 along,
-                |id| self.frame.can_launch && catalogue.get(id).is_some_and(|a| a.opens),
+                if self.drop_types.is_some() {
+                    &self.drop_uris
+                } else {
+                    &[]
+                },
+                |id| {
+                    self.frame.can_launch
+                        && catalogue.get(id).is_some_and(|a| {
+                            self.drop_types
+                                .as_ref()
+                                .is_some_and(|types| crate::apps::accepts_drop(a, types))
+                        })
+                },
             ),
             crate::drops::Offer::App => {
                 crate::drops::app_target(&self.frame.view, &self.shown.hits, horizontal, along)
@@ -1529,10 +1547,13 @@ impl Dock {
         {
             target = crate::drops::Target::None;
         }
+        if self.frame.hidden {
+            target = crate::drops::Target::None;
+        }
         let was = self.dropping.replace(target.clone());
         if first || was.as_ref() != Some(&target) {
             let takes = target != crate::drops::Target::None;
-            w.accept_drop(takes.then_some(self.drop_offer.mime()));
+            w.accept_drop_with_feedback(takes.then_some(self.drop_offer.mime()), target.feedback());
             self.reslot(w, None);
         }
         Ok(())
@@ -1545,6 +1566,9 @@ impl Dock {
         let Some(target) = self.dropping.take() else {
             return Ok(());
         };
+        self.drop_probe = None;
+        let offered = std::mem::take(&mut self.drop_uris);
+        let types = self.drop_types.take().unwrap_or_default();
         if let crate::drops::Target::PinApp(to) = target {
             // Named by the data, checked against our own catalogue: an app it does not
             // have is not pinned, whoever offered it.
@@ -1570,6 +1594,10 @@ impl Dock {
             return Ok(());
         }
         let uris = crate::drops::uris(data);
+        if uris != offered || types.len() != uris.len() {
+            self.reslot(w, None);
+            return Ok(());
+        }
         let command = |c| Request::Menu {
             command: c,
             token: None,
@@ -1578,10 +1606,8 @@ impl Dock {
             crate::drops::Target::Pin(to) if !uris.is_empty() => {
                 let places: Vec<(String, bool)> = uris
                     .into_iter()
-                    .map(|uri| {
-                        let folder = crate::drops::path(&uri).is_some_and(|p| p.is_dir());
-                        (uri, folder)
-                    })
+                    .zip(types)
+                    .map(|(uri, kind)| (uri, kind == "inode/directory"))
                     .collect();
                 eprintln!("nidara-shell: {} dropped places pinned", places.len());
                 self.hold_drop(&target);
@@ -2208,6 +2234,23 @@ impl Dock {
         } else {
             rgba(0, 0, 0, 56)
         };
+        if matches!((&self.dropping, &item.kind),
+            (Some(crate::drops::Target::Open { id, generation }), Kind::App { id: app, generation: current, .. })
+            if id == app && generation == current)
+        {
+            // Accepted drop target: the ordinary selection ink, around the full icon.
+            let pad = (w * 0.06) as f32;
+            c.rounded_rect(
+                Rect {
+                    x: r.x - pad,
+                    y: r.y - pad,
+                    width: r.width + 2. * pad,
+                    height: r.height + 2. * pad,
+                },
+                w * 0.26,
+                faint,
+            );
+        }
         match &item.kind {
             // One physical pixel, on the grid where it rests (a hairline between pixels reads
             // as a thick blurred one) and carried from there as its neighbours move, handed
@@ -2462,6 +2505,17 @@ impl Application for Dock {
         }
     }
     fn idle(&mut self, w: &mut Window) -> nk_wayland::Result<()> {
+        if let Some(result) = self
+            .drop_probe
+            .as_ref()
+            .and_then(|probe| probe.try_recv().ok())
+        {
+            self.drop_probe = None;
+            self.drop_types = result;
+            if self.dropping.is_some() {
+                self.drop_over(w, self.pointer, false)?;
+            }
+        }
         if let Some(Overlay::Chooser(c)) = self.popup.as_mut() {
             c.refresh(w);
         }
@@ -2523,6 +2577,9 @@ impl Application for Dock {
             Event::Error(e) => return Err(e),
             Event::Wake => {
                 self.drain(w)?;
+                if self.dropping.is_some() {
+                    self.drop_over(w, self.pointer, false)?;
+                }
                 self.a11y(w)?;
             }
             Event::Configure => self.apply(w)?,
@@ -2569,15 +2626,35 @@ impl Application for Dock {
             Event::DragEnter { x, y, mimes } => match crate::drops::offer(&mimes) {
                 Some(offer) => {
                     self.drop_offer = offer;
+                    self.drop_uris.clear();
+                    self.drop_types = None;
+                    self.drop_probe = None;
                     self.dropping = Some(crate::drops::Target::None);
+                    if offer == crate::drops::Offer::Files {
+                        w.preview_drop(offer.mime());
+                    }
                     self.drop_over(w, (x, y), true)?;
                 }
                 None => w.accept_drop(None),
             },
+            Event::DragPreview { mime, data }
+                if self.dropping.is_some()
+                    && self.drop_offer == crate::drops::Offer::Files
+                    && mime == crate::drops::URI_LIST =>
+            {
+                self.drop_uris = data.as_deref().map(crate::drops::uris).unwrap_or_default();
+                self.drop_types = None;
+                self.drop_probe =
+                    crate::dropfiles::start(self.drop_uris.clone(), self.waker.clone());
+                self.drop_over(w, self.pointer, false)?;
+            }
             Event::DragMotion(x, y) if self.dropping.is_some() => {
                 self.drop_over(w, (x, y), false)?;
             }
             Event::DragLeave => {
+                self.drop_uris.clear();
+                self.drop_types = None;
+                self.drop_probe = None;
                 if self.dropping.take().is_some() {
                     self.reslot(w, None);
                 }
@@ -3429,5 +3506,58 @@ mod sections_tests {
             }
             assert!(!d.slides.contains_key(key));
         }
+    }
+}
+
+#[cfg(test)]
+mod drop_highlight_tests {
+    use super::*;
+
+    #[test]
+    fn only_the_accepted_current_app_gets_a_painted_drop_highlight() {
+        let mut dock = super::hold_expiry_tests::dock();
+        let mut frame = (*dock.frame).clone();
+        frame.view.items.truncate(1);
+        frame.view.items[0].kind = Kind::App {
+            id: "pdf.desktop".into(),
+            generation: 7,
+            launchable: true,
+            pinned: true,
+        };
+        dock.frame = Arc::new(frame);
+        dock.layout = Dock::lay(&dock.frame, dock.output_size);
+        dock.shown = dock.layout.clone();
+        let now = Instant::now();
+        let paint = |dock: &Dock| {
+            let mut canvas = Canvas::new(1920, 256, 1.);
+            dock.paint_item(&mut canvas, 0, &dock.frame.view.items[0], now);
+            canvas.finish()
+        };
+        let plain = paint(&dock);
+        dock.dropping = Some(crate::drops::Target::Open {
+            id: "pdf.desktop".into(),
+            generation: 7,
+        });
+        assert_ne!(paint(&dock), plain, "accepted icon needs visible feedback");
+        dock.dropping = Some(crate::drops::Target::Open {
+            id: "pdf.desktop".into(),
+            generation: 6,
+        });
+        assert_eq!(
+            paint(&dock),
+            plain,
+            "stale generations cannot highlight a replacement"
+        );
+        dock.dropping = Some(crate::drops::Target::Open {
+            id: "other.desktop".into(),
+            generation: 7,
+        });
+        assert_eq!(paint(&dock), plain);
+        dock.dropping = Some(crate::drops::Target::Pin(0));
+        assert_eq!(
+            paint(&dock),
+            plain,
+            "pinning never highlights an app as an open target"
+        );
     }
 }

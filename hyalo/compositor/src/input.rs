@@ -353,7 +353,7 @@ impl Hyalo {
         let under = self.surface_under(pos);
         pointer.motion(self, under, &MotionEvent { location: pos, serial, time: Event::time(event) });
         pointer.frame(self);
-        self.update_controls_hover(pos);
+        self.update_controls_hover(pos, serial);
         self.activate_constraint_under_pointer();
         self.queue_redraw(None);
     }
@@ -367,9 +367,10 @@ impl Hyalo {
         self.pointer_on_output(pos);
         let under = self.surface_under(pos);
         let pointer = self.seat.get_pointer().unwrap();
-        pointer.motion(self, under, &MotionEvent { location: pos, serial: SERIAL_COUNTER.next_serial(), time });
+        let serial = SERIAL_COUNTER.next_serial();
+        pointer.motion(self, under, &MotionEvent { location: pos, serial, time });
         pointer.frame(self);
-        self.update_controls_hover(pos);
+        self.update_controls_hover(pos, serial);
         self.activate_constraint_under_pointer();
         self.queue_redraw(None);
     }
@@ -411,13 +412,14 @@ impl Hyalo {
         if self.wm.controls_hover.is_some_and(|h| h.pressed) && !self.keys.band_buttons.contains(&crate::binds::BTN_LEFT) {
             self.keys.band_buttons.push(crate::binds::BTN_LEFT);
         }
-        self.update_controls_hover(pos);
+        let serial = SERIAL_COUNTER.next_serial();
+        self.update_controls_hover(pos, serial);
         pointer.motion(
             self,
             None,
             &MotionEvent {
                 location: pos,
-                serial: SERIAL_COUNTER.next_serial(),
+                serial,
                 time,
             },
         );

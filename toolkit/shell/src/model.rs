@@ -13,8 +13,10 @@ pub struct App {
     /// Flatpak's own application ID when Origin is flatpak; empty otherwise.
     pub flatpak_id: String,
     pub launchable: bool,
-    /// SupportsOpen: it takes files (a drop on it opens them).
+    /// SupportsFileDrop: a real file field, independent of D-Bus Open.
     pub opens: bool,
+    /// Declared desktop MimeType entries, from Applications1.
+    pub mime_types: Vec<String>,
     /// NewWindowMode is `declared-action` or `relaunch`: 'Nueva ventana' and middle-click.
     pub new_window: bool,
     /// The entry's declared desktop actions, in its order.

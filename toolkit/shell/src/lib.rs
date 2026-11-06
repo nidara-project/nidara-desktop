@@ -13,6 +13,7 @@ pub mod cclayout;
 pub mod chooser;
 pub mod cycle;
 pub mod dock;
+mod dropfiles;
 pub mod drops;
 pub mod geometry;
 pub mod hub;
