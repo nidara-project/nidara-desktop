@@ -256,9 +256,13 @@ file's content type).
 `file:` URIs only, at most 128) are taken by the strip (`drops.rs`). From the separator
 after the last app, running app or minimized window on, a slot opens among the folders and files
 where they would land, and the drop pins them there (`insert-folder`/`insert-file`, one after
-another, each against the revision the previous one made). Over an app that opens files
-(`SupportsOpen`), the whole of its icon, the drop opens them with it (Launch, `open` mode);
-Applications1 refuses types the app does not declare. Never half an icon for the slot, as a
+another, each against the revision the previous one made). Over an app with a real Exec file field
+(`SupportsFileDrop`) whose `MimeTypes` accept EVERY dragged type, the whole of
+its icon opens them with it (Launch, `open` mode) and is highlighted while the
+drop is accepted. GIO matches aliases, parent types and wildcards; directories
+are `inode/directory`, and scheme-handler declarations never admit local files.
+Applications1 rechecks types on open admission, including D-Bus Open, while
+`SupportsOpen` retains its separate general activation meaning. Never half an icon for the slot, as a
 pin being moved has: a file over an app is the app's to open (owner). The launch carries
 an activation token made with the drop's serial, so the app comes to the front; Hyalo
 honours it for the drop's target, once, shortly after the drop (`activation.rs`). Anywhere else the drag is refused,
@@ -268,6 +272,13 @@ arrow elsewhere (hyalo.md, "The cursor through a drag is Hyalo's"). Until 2026-1
 A pinning drop's slot stays open after the drop until the service's view has one more pin
 in that section (`drops::landed`, at most `reorder::HOLD`): closing it at once and opening it
 again when the pin arrives read as a flicker.
+The offer is pre-read once during hover, capped at 1 MiB/2 s by nk-wayland;
+Drop reuses those bytes and finishes once. The whole local URI list (at most
+128/256 KiB) is validated or refused, never filtered/truncated into a partial
+request. A single process-wide worker classifies actual GIO types outside the
+UI loop, with one queued offer and a 2 s query deadline. Until complete, no
+pin/open action is offered. A departed offer drops its result receiver; neither
+late bytes nor a late classification can accept its replacement.
 Nothing is launched or written while hovering. An app dragged from Apps
 (`application/x-nidara-app`, `nidara_shell_ipc::drag`: its DesktopId and generation) opens a
 pin's slot among the pins and is pinned there through EditLayout, once the dock finds the id

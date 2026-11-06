@@ -199,6 +199,13 @@ Owns everything between a string and positioned glyphs, and the editing model on
   `DragLeave`. The data is read without blocking, at most 1 MiB (more, or a read error, is a
   `DragLeave`); the offer is finished and destroyed once it is all in. A selection change
   never destroys a drag's offer.
+  `Window::preview_drop(mime)` pre-reads one offered type once during hover,
+  without accepting an action or finishing the offer. `DragPreview { mime, data }`
+  returns `None` on read failure, more than 1 MiB, or the 2 s deadline. Pending
+  data grants nothing: acceptance stays refused until the requested preview succeeds,
+  and only that same MIME can then be accepted. Successful bytes are cached and reused by Drop, with one
+  finish after Drop only; a departed offer cannot deliver into its replacement.
+
 - **Being a drag source** (#959 D4, the Apps grid): `Window::start_drag(serial, offers, icon)`
   offers `(mime, bytes)` pairs (a copy) from a button press's `serial`, with an optional
   `DragIcon` — premultiplied ARGB8888 pixels at a logical size and a hotspot — drawn by the

@@ -400,6 +400,11 @@ Its Control Center (B2) is `toolkit/shell/CC.md`.
   `Window::root_pointer_position()` before destroying the popup and reconcile
   presence/auto-hide/hover; a retired popup's local coordinates are not the root's
   (#1030). The dock shares its ordinary leave cleanup and adds no timer.
+- File drops use Applications1 `SupportsFileDrop` plus `MimeTypes`, never `%U`
+  alone or the broader `SupportsOpen`. All GIO types must match (directory =
+  `inode/directory`); scheme handlers do not authorize local files. The transport
+  pre-reads once, with byte/time bounds and no finish until Drop; UI classification
+  is off-loop and a late result belongs only to its original offer. See DOCK.md.
 - Never build while the headless check runs: on this machine the load alone makes
   `nidara-hyalo msg` time out and the check fail for no reason of its own.
 - The fonts have no bold and the text engine refuses to fake one: a figure that must

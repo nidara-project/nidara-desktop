@@ -366,6 +366,20 @@ pub fn prepare(
     default_directory: &str,
 ) -> Result<Plan, Error> {
     let d = Desktop::load(app)?;
+    if request.mode == "open" {
+        let declared = catalogue::strv(&d.key, "Desktop Entry", "MimeType");
+        for uri in &request.uris {
+            if glib::Uri::parse(uri, glib::UriFlags::NONE)
+                .is_ok_and(|u| u.scheme().eq_ignore_ascii_case("file"))
+                && !desktop::accepts_type(&declared, &desktop::local_type(uri)?)
+            {
+                return Err(Error::Unsupported(
+                    "local file type is not declared by this app".into(),
+                ));
+            }
+        }
+    }
+
     if request.uris.iter().any(|u| {
         glib::Uri::parse(u, glib::UriFlags::NONE)
             .is_ok_and(|u| u.scheme().eq_ignore_ascii_case("trash"))

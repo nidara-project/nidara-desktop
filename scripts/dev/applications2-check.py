@@ -85,7 +85,9 @@ class Services:
 def setup(out,env):
     env.update(GTK_THEME='Empty',INVOCATION_ID='unrelated-invocation',XDG_ACTIVATION_TOKEN='unrelated-token',MEMORY_PRESSURE_WATCH='/private/fd',XDG_CONFIG_DIRS=str(out/'system-config'))
     (out/'services').mkdir();(out/'system-config/autostart').mkdir(parents=True)
+    (out/'data/mime').symlink_to('/usr/share/mime')
     (out/'probes').mkdir();(out/'working directory').mkdir()
+    for name in ['input with spaces.txt','two.txt']:(out/name).write_text('fixture text\n')
     probe=out/'probe.py'
     probe.write_text('''import json,os,sys\nfrom pathlib import Path\nPath(os.environ['XDG_DATA_HOME']).parent.joinpath('probes',str(os.getpid())+'.json').write_text(json.dumps(dict(argv=sys.argv[1:],cwd=os.getcwd(),env={k:os.environ.get(k) for k in ['GTK_THEME','INVOCATION_ID','XDG_ACTIVATION_TOKEN','MEMORY_PRESSURE_WATCH','GIO_LAUNCHED_DESKTOP_FILE']})))\n''')
     appdir=out/'data/applications'
@@ -94,10 +96,12 @@ def setup(out,env):
         (appdir/id).write_text(text);return text
     basic='Exec=/usr/bin/python3 '+str(probe)+' %U\nMimeType=inode/directory;x-scheme-handler/https;\n'
     desktop('Files.desktop',basic+'Path='+str(out/'working directory')+'\nActions=new-window;\n[Desktop Action new-window]\nName=New Window\nExec=/usr/bin/python3 '+str(probe)+' new-action\n')
+    desktop('Telegram.desktop','Exec=/usr/bin/python3 '+str(probe)+' %U\nMimeType=x-scheme-handler/tg;\n')
+    desktop('Chrome.desktop','Exec=/usr/bin/python3 '+str(probe)+' %U\nMimeType=application/pdf;x-scheme-handler/https;\n')
     desktop('Literal.desktop','Name[es]=Literal App\nExec=/usr/bin/python3 '+str(probe)+' "${HOME};not-a-shell" %% %c %k %i\nIcon=example\n')
-    desktop('Single.desktop','Exec=/usr/bin/python3 '+str(probe)+' %f\n')
-    desktop('Many.desktop','Exec=/usr/bin/python3 '+str(probe)+' %F\n')
-    desktop('Delayed.desktop','Exec=/usr/bin/python3 '+str(probe)+' %f\n');desktop('JobFailure.desktop',basic);desktop('Refuse.desktop',basic);desktop('Hold.desktop',basic);desktop('Timeout.desktop',basic)
+    desktop('Single.desktop','Exec=/usr/bin/python3 '+str(probe)+' %f\nMimeType=text/plain;\n')
+    desktop('Many.desktop','Exec=/usr/bin/python3 '+str(probe)+' %F\nMimeType=text/plain;\n')
+    desktop('Delayed.desktop','Exec=/usr/bin/python3 '+str(probe)+' %f\nMimeType=text/plain;\n');desktop('JobFailure.desktop',basic);desktop('Refuse.desktop',basic);desktop('Hold.desktop',basic);desktop('Timeout.desktop',basic)
     desktop('OnlyOne.desktop',basic+'SingleMainWindow=true\n')
     desktop(APP+'.desktop','DBusActivatable=true\nExec=/usr/bin/false %U\nMimeType=x-scheme-handler/https;inode/directory;\nActions=new-window;\n[Desktop Action new-window]\nName=New Window\n')
     desktop('org.example.NoExec.desktop','DBusActivatable=true\nName=D-Bus Only\n')
@@ -157,9 +161,19 @@ def inside(binary,out):
             wait(snap,'Applications1 ready');e,_,state,apps=snap()
             assert state['CatalogueComplete'] and state['LaunchAvailable']  # Unity availability is independent (A3).
             assert apps['org.example.NoExec.desktop']['DBusActivatable'] and apps['org.example.NoExec.desktop']['Launchable']
+            assert not apps['org.example.NoExec.desktop']['SupportsFileDrop']
+            assert not apps['Literal.desktop']['SupportsFileDrop']
+            assert apps['Chrome.desktop']['SupportsFileDrop']
+            assert apps['Chrome.desktop']['MimeTypes']==['application/pdf','x-scheme-handler/https']
+
             fail('Launch','(tsta{sv})',(e,'Files.desktop',apps['Files.desktop']['Generation'],{}),'AccessDenied')
             setting('allow-config-write',False)
             setting('allow-computer-control',True)
+            # A field code alone never grants local folder handling (#1031).
+            folder=(out/'working directory').as_uri()
+            for app_id in ['Telegram.desktop','Chrome.desktop']:
+                fail('Launch','(tsta{sv})',(e,app_id,apps[app_id]['Generation'],request('open',Uris=[folder])),'Unsupported')
+            print('PASS: Telegram and Chrome refuse a folder despite %U',flush=True)
             lid=wait(lambda:launch('Literal.desktop',request(RequestId='literal')),'launch permission')
             assert done(lid)['State']=='dispatched'
             wait(lambda:len(probes())>=1,'literal child')
@@ -255,6 +269,13 @@ def inside(binary,out):
             fail('SetAutostart','(tstb)',(e,'Files.desktop',apps['Files.desktop']['Generation'],True),'Conflict');duplicate.unlink()
             real=user.with_suffix('.saved');user.rename(real);user.symlink_to(real)
             fail('SetAutostart','(tstb)',(e,'Files.desktop',apps['Files.desktop']['Generation'],True),'AccessDenied');user.unlink();real.rename(user)
+            pdf=out/'example.pdf';pdf.write_bytes(b'%PDF-1.4\n')
+            lid=launch('Chrome.desktop',request('open',Uris=[pdf.as_uri()]))
+            assert done(lid)['State']=='dispatched'
+            before=len(services.calls)
+            fail('Launch','(tsta{sv})',(e,'Chrome.desktop',apps['Chrome.desktop']['Generation'],request('open',Uris=[pdf.as_uri(),folder])),'Unsupported')
+            assert len(services.calls)==before,'mixed types must not partially launch'
+            print('PASS: PDF opens in Chrome; a mixed PDF/folder list causes zero effects',flush=True)
             # Queued launches must recheck revocation at their effect.
             held=[launch('Hold.desktop') for _ in range(8)];wait(lambda:len(services.hold)==8,'eight workers occupied')
             queued=launch('Files.desktop');started=time.monotonic();snap();assert time.monotonic()-started<1;setting('allow-computer-control',False);time.sleep(.15);before=len(services.calls);services.release()

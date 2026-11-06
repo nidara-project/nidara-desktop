@@ -2,6 +2,7 @@
 //! One thread owns the connection, input and buffers. All sizes and input are
 //! logical pixels; only Frame's buffer dimensions are physical pixels.
 mod activation;
+mod drop_preview;
 pub use activation::Activation;
 mod control_material;
 pub use control_material::{ControlMaterial, InkCoverage, MaterialRect, Response, StateRegion};
@@ -141,6 +142,12 @@ pub enum Event {
         mimes: Vec<String>,
     },
     DragMotion(f64, f64),
+    /// One advisory read requested by `preview_drop`, during hover. None means
+    /// failure/timeout; it never means an empty successful drop. No offer is finished.
+    DragPreview {
+        mime: String,
+        data: Option<Vec<u8>>,
+    },
     /// The drag left, was cancelled, or was dropped with nothing accepted.
     DragLeave,
     /// A drag this window started (`start_drag`) is over: `dropped` when a client took
@@ -210,6 +217,9 @@ struct Drag {
     serial: u32,
     /// The type the app accepts now (`accept_drop`), if any.
     accepted: Option<String>,
+    preview_requested: bool,
+    preview: Option<(String, drop_preview::Preview)>,
+    cached: Option<(String, Vec<u8>)>,
 }
 /// A drop being read: its offer is finished once the data is all in.
 struct Dropped {
@@ -513,6 +523,9 @@ impl Window {
         let Some(d) = &mut self.drag else {
             return;
         };
+        let mime = mime.filter(|mime| {
+            !d.preview_requested || d.cached.as_ref().is_some_and(|(cached, _)| cached == mime)
+        });
         let copy = wl_data_device_manager::DndAction::Copy;
         let none = wl_data_device_manager::DndAction::empty();
         d.offer.accept(d.serial, mime.map(str::to_owned));
@@ -523,6 +536,45 @@ impl Window {
         }
         d.accepted = mime.map(str::to_owned);
     }
+    /// Read one offered type during hover, once per offer. This does not accept
+    /// an action or finish the drag. The cached bytes are reused if it is dropped.
+    pub fn preview_drop(&mut self, mime: &str) -> bool {
+        let Some(d) = &mut self.drag else {
+            return false;
+        };
+        if d.preview_requested
+            || !self
+                .offers
+                .iter()
+                .any(|o| o.proxy == d.offer && o.mimes.iter().any(|m| m == mime))
+        {
+            return false;
+        }
+        d.preview_requested = true;
+        d.accepted = None;
+        d.offer.accept(d.serial, None);
+        let none = wl_data_device_manager::DndAction::empty();
+        d.offer.set_actions(none, none);
+        let pipe = rustix::pipe::pipe().and_then(|(read, write)| {
+            rustix::fs::fcntl_setfl(&read, rustix::fs::OFlags::NONBLOCK)?;
+            Ok((read, write))
+        });
+        let Ok((read, write)) = pipe else {
+            self.events.push(Event::DragPreview {
+                mime: mime.into(),
+                data: None,
+            });
+            return false;
+        };
+        d.offer.receive(mime.into(), write.as_fd());
+        drop(write);
+        d.preview = Some((
+            mime.into(),
+            drop_preview::Preview::new(read.into(), Instant::now()),
+        ));
+        true
+    }
+
     /// Start a drag from the root surface with the press `serial` (a button held now):
     /// it offers each `(mime, data)` as a copy, and `icon` follows the pointer. The data
     /// is handed to whoever asks for it while the drag lasts; `Event::DragEnded` says how
@@ -656,6 +708,16 @@ impl Window {
         Ok(())
     }
     fn transfers(&mut self) -> Result<()> {
+        if let Some(d) = &mut self.drag
+            && let Some((mime, preview)) = &mut d.preview
+            && let Some(result) = preview.poll(Instant::now())
+        {
+            let mime = mime.clone();
+            let data = result.ok();
+            d.cached = data.as_ref().map(|data| (mime.clone(), data.clone()));
+            d.preview = None;
+            self.events.push(Event::DragPreview { mime, data });
+        }
         if let Some(d) = &mut self.dropped {
             let mut buf = [0; 8192];
             loop {
@@ -901,6 +963,10 @@ mod close_tests {
         };
         let out = terminals_on_close([
             Event::Motion(1., 2.),
+            Event::DragPreview {
+                mime: "text/uri-list".into(),
+                data: Some(b"file:///a".to_vec()),
+            },
             Event::Capture {
                 id: CaptureId(1),
                 result: Ok(image),
@@ -1418,6 +1484,7 @@ fn run_inner(
             let mut ms = if w.keyboard.repeat.is_some()
                 || w.receive.is_some()
                 || w.dropped.is_some()
+                || w.drag.as_ref().is_some_and(|d| d.preview.is_some())
                 || !w.sends.is_empty()
             {
                 8
@@ -2119,6 +2186,9 @@ impl Dispatch<wl_data_device::WlDataDevice, ()> for Window {
                     offer,
                     serial,
                     accepted: None,
+                    preview_requested: false,
+                    preview: None,
+                    cached: None,
                 });
                 w.events.push(Event::DragEnter { x, y, mimes });
             }
@@ -2133,6 +2203,31 @@ impl Dispatch<wl_data_device::WlDataDevice, ()> for Window {
                     w.end_drag();
                     return;
                 };
+                if d.preview_requested {
+                    // A preview which did not complete successfully cannot be read a
+                    // second time at Drop. Late bytes never turn refusal into acceptance.
+                    let Some((cached_mime, data)) = d.cached else {
+                        w.drag = Some(d);
+                        w.end_drag();
+                        return;
+                    };
+                    if cached_mime != mime {
+                        d.offer.destroy();
+                        w.offers.retain(|o| o.proxy != d.offer);
+                        w.events.push(Event::DragLeave);
+                        return;
+                    }
+                    d.offer.finish();
+                    w.offers.retain(|o| o.proxy != d.offer);
+                    d.offer.destroy();
+                    w.tokens.delivered(d.serial);
+                    w.events.push(Event::Drop {
+                        mime,
+                        data,
+                        serial: d.serial,
+                    });
+                    return;
+                }
                 let pipe = rustix::pipe::pipe().and_then(|(read, write)| {
                     rustix::fs::fcntl_setfl(&read, rustix::fs::OFlags::NONBLOCK)?;
                     Ok((read, write))
