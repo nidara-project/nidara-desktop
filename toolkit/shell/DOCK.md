@@ -108,12 +108,18 @@ A source that fails marks its part of the view unavailable; nothing waits foreve
 
 ## 4. The model (pure, unit-tested)
 
-`model.rs` turns (layout, catalogue, windows, preferences) into a `DockView`: ordered
-**pinned** entries (apps, the `default-handler:inode/directory` entry resolved to the
-current default app, folders), a separator, **running** unpinned app groups in order of
-first observed live window, a separator, **minimized** windows (one slot each, dialogs
-minimized with their parent folded in), and **Trash** last. Empty sections and their
-separators vanish. Focus changes never reorder.
+`model.rs` turns (layout, catalogue, windows, preferences) into a `DockView` with
+three groups (#1026, owner 2026-11-05): **pinned apps | running unpinned apps |
+minimized windows + pinned folders/files + Trash**. The right side is one group:
+minimized slots come first, places retain their stored order beside Trash, and Trash
+stays last. There are at most two separators; an empty group contributes none.
+
+Every local preview, dropped-order hold, unpin suppression and external drop is
+composed before `present()` normalizes the groups once. No shown view has adjacent
+separators or a separator at either end. Boundary keys follow their right-hand group
+(`separator:1`, `separator:2`), never an item index, so the surviving line keeps its
+identity and slides with the icons through `reslot`/`Slide`. No ghost line is drawn.
+Any count change still goes through relayout (#1024). Focus changes never reorder.
 
 A minimized slot draws the window's **picture** (`thumbs.rs`): captured once per minimize
 through nk-wayland's capture client (Hyalo lists the window under its id in hex and keeps
@@ -238,9 +244,9 @@ focus never starts on one); there the arrow away from the edge grows the icons b
 and the arrow toward it shrinks them, and a reader's `SetValue` is clamped and sent the
 same way. No resize cursor yet: the toolkit has no cursor shapes.
 
-**Folders and files (D3).** Pinned folders and files sit in a section of their own, after
-the minimized windows and before the Trash (owner, 2026-11-02): pinned apps, running apps,
-minimized windows, folders and files, Trash. The stored layout is one list; `model.rs` puts
+**Folders and files (D3).** Pinned folders and files share the right-hand section with
+minimized windows and Trash (#1026). They follow minimized windows and stay beside
+Trash, with no separator inside that group. The stored layout is one list; `model.rs` puts
 each kind in its section and keeps its order. A click opens a folder with the folder app
 (`OpenDirectory`) and a file with the default app for its type (`OpenFile`); their art is
 the theme's icon for them, by layout key (`GetLayoutIcon`: a special folder's own icon, a
@@ -248,7 +254,7 @@ file's content type).
 
 **Drops (D3).** Files and folders dragged from a file manager (`text/uri-list`, local
 `file:` URIs only, at most 128) are taken by the strip (`drops.rs`). From the separator
-after the last app, running app or minimized window on, a slot opens in the folders' and files' section
+after the last app, running app or minimized window on, a slot opens among the folders and files
 where they would land, and the drop pins them there (`insert-folder`/`insert-file`, one after
 another, each against the revision the previous one made). Over an app that opens files
 (`SupportsOpen`), the whole of its icon, the drop opens them with it (Launch, `open` mode);
@@ -269,7 +275,7 @@ in its own catalogue; the MIME data grants nothing by itself.
 
 **Reorder (D3).** A long press (`reorder::LONG_PRESS`, 400 ms within `SLOP` 6 px) picks
 up a pin, or a running app that is not pinned (`reorder.rs`). A folder or file moves only
-among the folders and files (`reorder::section`), an app pin only among the apps. The picked icon leaves the
+among the folders and files (`reorder::section`), an app pin among pinned or running apps. The picked icon leaves the
 strip for a layer of its own (nk-wayland `create_layer`, an empty input region so the strip
 keeps the pointer), follows the pointer, and the others slide to make room where it would
 land (`reslot`: each slides from where it was drawn on the magnification's spring, which
@@ -287,6 +293,13 @@ last pin (owner). Dropped:
   follows it), and a running app is pinned there (`insert-app` with that `BeforeKey`). The
   dropped order is held over the service's views until it has it (`reorder::hold`, at most
   `HOLD` 2 s), so nothing jumps back meanwhile;
+- **among running apps**, an app pin is removed with `EditLayout remove`. Its live
+  group keeps its windows at the dropped position; the hub changes the shared session
+  running order, so all docks agree and later focus updates cannot undo it. A pin with
+  no windows disappears. The local preview leaves the pinned group and opens the
+  running slot before the drop; it is held until acknowledgement or `HOLD` expires.
+  A default-directory pin lands under its resolved app's group key. Folders/files
+  dropped over apps return without an edit;
 - **off the strip**, past `OUT` (¾ of an icon) away from the screen edge, a pin is
   unpinned (`remove`). "Remove" is shown over the icon while a drop would do it (owner,
   2026-11-02: clearer than the faint icon that came before). A running app keeps its
@@ -441,3 +454,18 @@ As built:
   bounds say, and the check asks only that it grows.
 - A private nested session (`scripts/dev/rust-session.sh --applications nidara-shell`)
   for the owner to look at. Not the daily session, no install, no sudo.
+
+### Focused section/drag evidence (#1026)
+
+Run `NK_DOCK_SECTIONS_ONLY=1 toolkit/shell/check-dock-headless.sh` with
+`NK_DOCK_BIN` pointing to the compiled shell and `NK_SESSIOND_BIN` to sessiond.
+This uses the same private Cage/Hyalo harness, never the installed session. It
+drags the only running app into pins, a live pin back among running apps, and a
+pin without windows into running. It reads back the stored layout and AT-SPI
+order, checks no adjacent/end separators during the drag, and keeps screenshots
+and a JSON report in `NK_WIDGETS_LOG`. The ordinary D1/D2 checker remains unchanged
+when the variable is absent.
+
+Local software rendering and unit spring checks do not establish the owner's
+visual acceptance at the physical display's refresh rate. That remains a live
+Rust-only check; do not silently switch back to the TS shell for it.

@@ -432,3 +432,14 @@ remove slots. `present` + `reshape` leaves the resting layout stale and can pani
 when painting the restored last pin. Keep frame and geometry together through
 `present_layout`; missing drawing geometry is skipped defensively. See
 `toolkit/shell/DOCK.md`, Reorder, and `hold_expiry_tests` for the regression.
+
+### Native dock sections (#1026)
+
+The three groups are pinned apps | running apps | minimized + folders/files + Trash.
+Only two boundaries, no internal right-hand separators. `present()` normalizes after
+all previews/holds/suppression; stable boundary keys keep the surviving separator on
+the icon spring, without a ghost line. Places are found by kind, not separators.
+Dropping an app pin among running apps removes the pin and puts its surviving group
+at the dropped position in the hub's shared session order; no windows means it goes.
+Folders/files dropped over apps return. Keep count changes on relayout (#1024),
+including hold expiry, and check Rust alone. See `toolkit/shell/DOCK.md` §4/Reorder.

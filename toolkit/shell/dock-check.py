@@ -375,6 +375,69 @@ def schemas():
     return str(out)
 
 
+def section_drags():
+    """Focused #1026 check: real pointer drags, native layout readback, AT-SPI order."""
+    gsettings('magnification', 'false')
+    time.sleep(.8)
+    def order():
+        nodes = walk() or []
+        assert all(a['role'] != 'slider' or b['role'] != 'slider'
+                   for a, b in zip(nodes, nodes[1:])), nodes
+        assert not nodes or (nodes[0]['role'] != 'slider' and nodes[-1]['role'] != 'slider'), nodes
+        assert sum(n['role'] == 'slider' for n in nodes) <= 2, nodes
+        return nodes
+    def layout():
+        raw = subprocess.run(['gsettings', 'get', 'org.nidara.dock', 'layout'],
+                             capture_output=True, text=True, check=True, timeout=5).stdout.strip()
+        return raw
+    def drag(name, target, expected_lines):
+        x,y = item_point(name)
+        with open(os.environ['HYALO_CONTROL'], 'w', buffering=1) as pipe:
+            pipe.write(f'move {x} {y}\nmove {x+1} {y}\n')
+            time.sleep(.2)
+            pipe.write(f'press {x} {y} 272\n')
+            time.sleep(.65)
+            tx,ty = target()
+            for n in range(1, 31):
+                pipe.write(f'move {x+(tx-x)*n/30} {y+(ty-y)*n/30}\n')
+                time.sleep(.025)
+                order()
+            time.sleep(.7)
+            nodes = order()
+            assert sum(n['role']=='slider' for n in nodes)==expected_lines, nodes
+            shot(LOG / f'sections-preview-{name}.png')
+            pipe.write('release 272\n')
+        time.sleep(.8)
+        order()
+    initial = layout()
+    nodes = until('the running demo is accessible', lambda: (v:=order()) and any(n['name']=='GTK Demo' for n in v) and v)
+    assert sum(n['role']=='slider' for n in nodes)==2, nodes
+    first = next(n['name'] for n in nodes if n['role']=='button')
+    # The lone running app enters pins: its empty running group loses its boundary,
+    # including while the picked icon is still in the air.
+    drag('GTK Demo', lambda: item_point(first), 1)
+    until('demo is pinned', lambda: 'org.gtk.Demo4.desktop' in layout())
+    assert sum(n['role']=='slider' for n in order())==1
+    # A real running group is needed as the unpin destination. The second client
+    # uses the existing twins fixture, giving a group with stable readback.
+    before_twins = {n['name'] for n in order()}
+    twin = RUN / 'sections-twins.py'
+    twin.write_text(TWINS)
+    start('sections-twins', ['python', str(twin)], GSK_RENDERER='cairo', GDK_DISABLE='gl,vulkan')
+    running_name = until('the second running group', lambda: next((n['name'] for n in order() if n['role']=='button' and n['name'] not in before_twins), None))
+    drag('GTK Demo', lambda: item_point(running_name), 2)
+    until('demo is unpinned but still running', lambda: 'org.gtk.Demo4.desktop' not in layout())
+    assert any(n['name']=='GTK Demo' for n in order()), order()
+    # A pinned app without windows disappears when dropped among running apps.
+    drag('kitty', lambda: item_point(running_name), 2)
+    until('kitty unpinned', lambda: 'kitty.desktop' not in layout())
+    until('kitty disappears', lambda: not any(n['name']=='kitty' for n in order()))
+    shot(LOG / 'sections-unpinned.png')
+    report={'initial':initial,'final':layout(),'items':order(),'windows':ipc('windows')}
+    (LOG / 'sections.json').write_text(json.dumps(report, indent=2))
+    print('PASS #1026: lone-running pin preview; live and non-running unpin; no adjacent/end separators', flush=True)
+
+
 try:
     os.environ['GSETTINGS_SCHEMA_DIR'] = schemas()
     accessibility()
@@ -590,6 +653,9 @@ try:
     until('a client window', lambda: ipc('windows').get('ok', {}).get('windows'))
     time.sleep(1.5)  # icons, the running dot and the glass settle
     result['first'] = first
+    if os.environ.get('NK_DOCK_SECTIONS_ONLY') == '1':
+        section_drags()
+        raise SystemExit(0)
     for position in ['bottom', 'left', 'right']:
         gsettings('position', position)
         time.sleep(1.0)

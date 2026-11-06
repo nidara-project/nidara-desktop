@@ -168,6 +168,29 @@ pub struct View {
     pub items: Vec<Item>,
 }
 
+impl View {
+    /// One boundary between nonempty groups, after every local preview/hold is composed.
+    /// Boundary identity follows the group on its right, independent of item counts.
+    pub fn normalize_sections(&mut self) {
+        let mut items = Vec::with_capacity(self.items.len());
+        let mut previous = None;
+        for item in std::mem::take(&mut self.items) {
+            let group = match item.kind {
+                Kind::Separator => continue,
+                Kind::App { pinned: true, .. } | Kind::MissingApp { .. } => 0,
+                Kind::App { pinned: false, .. } | Kind::Unknown { .. } => 1,
+                _ => 2,
+            };
+            if previous.is_some_and(|old| old != group) {
+                items.push(separator(group));
+            }
+            previous = Some(group);
+            items.push(item);
+        }
+        self.items = items;
+    }
+}
+
 /// Who a window belongs to, in the contract's order. `None` = no app or more than one.
 /// Last, when nothing matches exactly, the same names ignoring ASCII case (owner,
 /// 2026-11-02): an app whose window says `Chatgpt` for its `chatgpt.desktop` was left an
@@ -213,6 +236,30 @@ pub struct Model {
 }
 
 impl Model {
+    /// A pin dropped among running groups changes their session order, never the
+    /// persistent pin layout's order. Every output receives the same projection.
+    pub fn place_running(&mut self, id: &str, before: Option<&str>) {
+        let key = format!("app:{id}");
+        if !self.first_seen.contains_key(&key) {
+            return;
+        }
+        let mut keys: Vec<_> = self
+            .first_seen
+            .keys()
+            .filter(|k| **k != key)
+            .cloned()
+            .collect();
+        keys.sort_by_key(|k| self.first_seen[k]);
+        let at = before
+            .and_then(|b| keys.iter().position(|k| k == b))
+            .unwrap_or(keys.len());
+        keys.insert(at, key);
+        for (n, key) in keys.into_iter().enumerate() {
+            self.first_seen.insert(key, n as u64);
+        }
+        self.next = self.first_seen.len() as u64;
+    }
+
     pub fn view(&mut self, i: &Inputs) -> View {
         let by_id: HashMap<&str, usize> = i
             .apps
@@ -392,19 +439,10 @@ impl Model {
             })
             .collect();
 
-        let mut out = vec![];
-        for section in [items, tail, minimized, places] {
-            if section.is_empty() {
-                continue;
-            }
-            if !out.is_empty() {
-                out.push(separator(out.len()));
-            }
-            out.extend(section);
-        }
-        if !out.is_empty() {
-            out.push(separator(out.len()));
-        }
+        let mut out: Vec<_> = [items, tail, minimized, places]
+            .into_iter()
+            .flatten()
+            .collect();
         for item in &mut out {
             let launcher = match &item.kind {
                 Kind::App { id, .. } => by_id.get(id.as_str()).map(|&n| i.apps[n].launcher),
@@ -430,7 +468,9 @@ impl Model {
             minimized: vec![],
             signal: Default::default(),
         });
-        View { items: out }
+        let mut view = View { items: out };
+        view.normalize_sections();
+        view
     }
 }
 
@@ -543,11 +583,10 @@ mod tests {
             [
                 "default-handler:inode/directory",
                 "app:firefox.desktop",
-                "separator:2",
+                "separator:1",
                 "app:foot.desktop",
-                "separator:4",
+                "separator:2",
                 "minimized:2:7",
-                "separator:6",
                 "trash"
             ]
         );
@@ -567,11 +606,11 @@ mod tests {
         let apps = [app("a.desktop")];
         assert_eq!(
             keys(&view(&apps, &[pin("a.desktop")], &[])),
-            ["app:a.desktop", "separator:1", "trash"]
+            ["app:a.desktop", "separator:2", "trash"]
         );
         assert_eq!(
             keys(&view(&apps, &[], &[win(1, "a")])),
-            ["app:a.desktop", "separator:1", "trash"]
+            ["app:a.desktop", "separator:2", "trash"]
         );
     }
 
@@ -649,17 +688,15 @@ mod tests {
                 "app:files.desktop",
                 "separator:1",
                 "app:foot.desktop",
-                "separator:3",
+                "separator:2",
                 "minimized:0:7",
-                "separator:5",
                 "file:file:///home/u/a.pdf",
                 "folder:file:///home/u/Docs",
-                "separator:8",
                 "trash"
             ]
         );
         assert_eq!(
-            v.items[6].kind,
+            v.items[5].kind,
             Kind::File {
                 uri: "file:///home/u/a.pdf".into()
             }
@@ -695,7 +732,6 @@ mod tests {
                 "app:gone.desktop",
                 "separator:2",
                 "folder:file:///home/u/Docs",
-                "separator:4",
                 "trash"
             ]
         );
@@ -728,10 +764,9 @@ mod tests {
             keys(&v),
             [
                 "app:a.desktop",
-                "separator:1",
+                "separator:2",
                 "minimized:0:1",
                 "minimized:0:3",
-                "separator:4",
                 "trash"
             ]
         );
@@ -783,5 +818,49 @@ mod tests {
             "Hyalo's flag on a running app"
         );
         assert_eq!(at("trash"), Signal::default());
+    }
+    #[test]
+    fn dropping_a_pin_into_running_keeps_windows_and_the_shared_drop_order() {
+        let apps = [app("a.desktop"), app("b.desktop"), app("c.desktop")];
+        let windows = [win(1, "a"), win(2, "b"), win(3, "c")];
+        let pins = [pin("a.desktop")];
+        let mut m = Model::default();
+        m.view(&Inputs {
+            apps: &apps,
+            pins: &pins,
+            windows: &windows,
+            ..Default::default()
+        });
+        m.place_running("a.desktop", Some("app:c.desktop"));
+        let after = m.view(&Inputs {
+            apps: &apps,
+            windows: &windows,
+            ..Default::default()
+        });
+        assert_eq!(
+            keys(&after),
+            [
+                "app:b.desktop",
+                "app:a.desktop",
+                "app:c.desktop",
+                "separator:2",
+                "trash"
+            ]
+        );
+        assert_eq!(after.items[1].windows, [1]);
+        // A later focus update cannot undo the position chosen by the drop.
+        let again = m.view(&Inputs {
+            apps: &apps,
+            windows: &windows,
+            ..Default::default()
+        });
+        assert_eq!(after, again);
+        // With no windows, an unpinned app has no running slot.
+        let gone = m.view(&Inputs {
+            apps: &apps,
+            windows: &windows[1..],
+            ..Default::default()
+        });
+        assert!(!keys(&gone).contains(&"app:a.desktop"));
     }
 }
