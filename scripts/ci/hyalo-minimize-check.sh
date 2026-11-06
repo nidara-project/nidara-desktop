@@ -50,9 +50,33 @@ pids=""
 ws=""
 # Keep a known icon-free strip in the dock's top padding. Hover magnification can
 # otherwise lift a neighbour into it as the restoring click enters the dock.
+# A restoring window initially crosses only the top of the neighbouring Trash
+# icon. Theme art can be neutral there (e.g. a white bin lid), so arbitrary colour
+# is not evidence that the icon is missing. Give the REAL dock a known full-slot
+# foreground through its ordinary theme resolver; restore the user's theme too.
+icon_theme=$(gsettings get org.gnome.desktop.interface icon-theme)
+icons="${XDG_DATA_HOME:-$HOME/.local/share}/icons"
+mkdir -p "$icons"
+fixture_theme=$(mktemp -d "$icons/hyalo-minimize.XXXXXX")
 magnification=$(gsettings get org.nidara.dock magnification)
 gsettings set org.nidara.dock magnification false
-trap 'gsettings set org.nidara.dock magnification "$magnification" 2>/dev/null || true; kill $pids 2>/dev/null || true; $MSG settings "{\"windows\":null,\"animations\":null}" >/dev/null 2>&1 || true; [ -n "$ws" ] && $MSG do set-workspace-mode "$ws" default >/dev/null 2>&1 || true' EXIT
+trap 'gsettings set org.gnome.desktop.interface icon-theme "$icon_theme" 2>/dev/null || true; rm -rf "$fixture_theme"; gsettings set org.nidara.dock magnification "$magnification" 2>/dev/null || true; kill $pids 2>/dev/null || true; $MSG settings "{\"windows\":null,\"animations\":null}" >/dev/null 2>&1 || true; [ -n "$ws" ] && $MSG do set-workspace-mode "$ws" default >/dev/null 2>&1 || true' EXIT
+mkdir -p "$fixture_theme/64x64/places"
+parent_theme=$(python3 -c 'import ast,sys; print(ast.literal_eval(sys.argv[1]))' "$icon_theme")
+cat >"$fixture_theme/index.theme" <<EOF
+[Icon Theme]
+Name=Hyalo minimize foreground fixture
+Inherits=$parent_theme
+Directories=64x64/places
+[64x64/places]
+Size=64
+Type=Fixed
+Context=Places
+EOF
+for name in user-trash user-trash-full; do
+    printf '%s\n' '<svg xmlns="http://www.w3.org/2000/svg" width="64" height="64"><path fill="#11ad53" d="M0 0h64v64H0z"/></svg>' >"$fixture_theme/64x64/places/$name.svg"
+done
+gsettings set org.gnome.desktop.interface icon-theme "$(basename "$fixture_theme")"
 probe_pixel() { gjs -m "$here/hyalo-window-look-probe.js" pixel "$@"; }
 # The probe's main window (the dialog is titled …-dialog), and its dialog.
 win() { $MSG windows | jq -c '.ok.windows[] | select(.title == "window-controls-probe")' | head -n 1; }
@@ -154,13 +178,31 @@ for py in range(top, bottom):
         if any(cx <= px < cr and cy <= py < cb for cx, cy, cr, cb in controls):
             continue
         colour = rgb[(py * width + px) * 3:(py * width + px) * 3 + 3]
-        if max(colour) - min(colour) >= 24:
+        if all(abs(c - want) <= 3 for c, want in zip(colour, (17, 173, 83))):
             print(f"ok    dock icon over the restoring grey body at {px} {py}: {tuple(colour)}")
             sys.exit(0)
-raise SystemExit("only neutral grey in the icon/body overlap")
+raise SystemExit("the known Trash foreground is absent in the icon/body overlap")
 PYICON
 }
 scale=$($MSG outputs | jq '.ok.outputs[0].scale')
+
+# Wait for the theme change to reach Applications1 and the real dock. Keep the
+# picture as proof the foreground was present before testing its stacking.
+fixture_ready=""
+for _ in $(seq 1 20); do
+    $MSG screenshot "$log/foreground.ppm" >/dev/null || fail "no foreground screenshot"
+    if python3 - "$log/foreground.ppm" 2>/dev/null <<'PYART'
+from pathlib import Path
+import sys
+header = Path(sys.argv[1]).read_bytes().split(b"\n", 3)
+assert header[0] == b"P6" and header[2] == b"255"
+rgb = header[3]
+assert sum(rgb[i:i+3] == bytes((17, 173, 83)) for i in range(0, len(rgb), 3)) >= 64
+PYART
+    then fixture_ready=1; break; fi
+    sleep 0.1
+done
+[ -n "$fixture_ready" ] || fail "the real dock did not load the known Trash foreground"
 
 # From the shipped buttons, whatever the shell carried from button-layout before.
 $MSG settings '{"windows":null,"animations":{"minimize":12000}}' >/dev/null \

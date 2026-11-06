@@ -119,6 +119,30 @@ pub struct Bluetooth {
     space: Arc<dyn files::Space>,
     obex_cache: Arc<Mutex<BTreeMap<String, Props>>>,
 }
+/// OBEX restart invalidates transfer capabilities, not an unchanged BlueZ owner.
+/// Publish the invalidation immediately without falsely withdrawing its inventory.
+fn invalidated_snapshot(previous: &str, bluez_changed: bool) -> String {
+    let mut doc = json!({"schemaVersion":1,"available":false,"obexAvailable":false,
+        "pairAgentRegistered":false,"defaultAgent":false,"receiveAgentRegistered":false,
+        "fileReceptionPolicy":{"scope":"opp-only","deploymentStatus":"unverified","advertisedUnsupportedServers":[]},
+        "adapters":[],"devices":[],"transfers":[]});
+    if !bluez_changed && let Ok(previous) = serde_json::from_str::<Json>(previous) {
+        for key in [
+            "available",
+            "pairAgentRegistered",
+            "defaultAgent",
+            "adapters",
+            "devices",
+            "fileReceptionPolicy",
+        ] {
+            if let Some(value) = previous.get(key) {
+                doc[key] = value.clone();
+            }
+        }
+    }
+    doc.to_string()
+}
+
 struct DeviceGuard {
     operations: Arc<std::sync::Mutex<BTreeSet<String>>>,
     device: String,
@@ -245,7 +269,7 @@ impl Bluetooth {
             let mut s = self.state.lock().await;
             s.owners = owners.clone();
             s.revision += 1;
-            s.json=json!({"schemaVersion":1,"available":false,"obexAvailable":false,"pairAgentRegistered":false,"defaultAgent":false,"receiveAgentRegistered":false,"fileReceptionPolicy":{"scope":"opp-only","deploymentStatus":"unverified","advertisedUnsupportedServers":[]},"adapters":[],"devices":[],"transfers":[]}).to_string();
+            s.json = invalidated_snapshot(&s.json, previous.0 != owners.0);
             self.emit(&s).await?;
         }
         let objects = if let Some(p) = &bluez {
@@ -1273,6 +1297,27 @@ pub async fn serve(session: &Connection, read_only: bool) -> Result<(), Error> {
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn obex_invalidation_preserves_only_the_unchanged_bluez_domain() {
+        let old = serde_json::json!({"available":true,"pairAgentRegistered":true,"defaultAgent":true,
+            "obexAvailable":true,"receiveAgentRegistered":true,"adapters":["a"],"devices":["d"],"transfers":["t"]});
+        let obex: serde_json::Value =
+            serde_json::from_str(&super::invalidated_snapshot(&old.to_string(), false)).unwrap();
+        assert_eq!(obex["available"], true);
+        assert_eq!(obex["pairAgentRegistered"], true);
+        assert_eq!(obex["defaultAgent"], true);
+        assert_eq!(obex["adapters"], old["adapters"]);
+        assert_eq!(obex["devices"], old["devices"]);
+        assert_eq!(obex["obexAvailable"], false);
+        assert_eq!(obex["receiveAgentRegistered"], false);
+        assert_eq!(obex["transfers"], serde_json::json!([]));
+        let bluez: serde_json::Value =
+            serde_json::from_str(&super::invalidated_snapshot(&old.to_string(), true)).unwrap();
+        assert_eq!(bluez["available"], false);
+        assert_eq!(bluez["pairAgentRegistered"], false);
+        assert_eq!(bluez["adapters"], serde_json::json!([]));
+        assert_eq!(bluez["devices"], serde_json::json!([]));
+    }
     use super::*;
     struct FakeSpace(AtomicU64);
     impl files::Space for FakeSpace {

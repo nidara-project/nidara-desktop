@@ -1366,6 +1366,14 @@ that picture and grows back out of it. `wm/minimize.rs`.
   where it was, and beside the small window, above the dock, what is there once it has gone).
   Nothing is captured before it: on the nightlies of 2026-10-22/23 a capture "a second in" came
   back with the window already into the dock, and no poll after it could see it cross.
+  The restore check needs a known foreground in that capture, not merely any colourful
+  pixel: the ordinary Trash art may have a white lid exactly where the small window
+  crosses it. A temporary private icon theme paints Trash a full-slot known green;
+  the real dock must load it before the probe starts. Its colour must survive over
+  the neutral moving body, excluding the projected window/dialog controls. Restore
+  the prior icon theme and magnification on exit. Keep both stacking controls:
+  window above icons fails the green check; window below glass fails the edge-grey
+  check. Do not hide either failure with timing or colour-threshold relaxation.
   Controls seen failing nested: the installed Hyalo before #724; one without `AtScale` ("its
   full-size box is drawn too"); one whose focus does not restore.
 
