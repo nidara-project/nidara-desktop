@@ -339,8 +339,9 @@ async fn check_schedule(store: &Handle, mut state: Schedule) -> Schedule {
 }
 
 /// Reconnect after a compositor restart and restate runtime effects. Output hotplug also
-/// reapplies the wallpaper for the new output. We do not react to our own config reloads.
-async fn events(path: PathBuf, reset: watch::Sender<u64>) {
+/// reapplies output-dependent effects. Hyalo also emits outputs_changed on ordinary
+/// config reloads: never use that notification to overwrite a persisted cursor.
+async fn events(path: PathBuf, reset: watch::Sender<u64>, cursor_reset: watch::Sender<u64>) {
     loop {
         if let Ok(mut stream) = UnixStream::connect(&path).await
             && stream
@@ -348,6 +349,7 @@ async fn events(path: PathBuf, reset: watch::Sender<u64>) {
                 .await
                 .is_ok()
         {
+            cursor_reset.send_modify(|n| *n += 1);
             reset.send_modify(|n| *n += 1);
             let mut lines = BufReader::new(stream).lines();
             while let Ok(Some(line)) = lines.next_line().await {
@@ -368,6 +370,7 @@ pub(super) fn start(store: Handle, changes: Arc<Changes>) {
     // This sender is retained by the GTK worker even without Hyalo, so reset.changed()
     // remains pending instead of spinning on a closed channel.
     let (reset, reset_rx) = watch::channel(0);
+    let (cursor_reset, cursor_reset_rx) = watch::channel(0);
     let keep = reset.clone();
     tokio::spawn(lane(
         "gtk-settings",
@@ -389,7 +392,7 @@ pub(super) fn start(store: Handle, changes: Arc<Changes>) {
         tokio::spawn(lane(
             "cursor",
             rx.clone(),
-            reset_rx.clone(),
+            cursor_reset_rx,
             |s| s.gtk.as_ref().map(|g| (g.cursor.clone(), g.size)),
             move |(theme, size)| {
                 let p = p.clone();
@@ -423,7 +426,7 @@ pub(super) fn start(store: Handle, changes: Arc<Changes>) {
                 }
             },
         ));
-        tokio::spawn(events(path, reset));
+        tokio::spawn(events(path, reset, cursor_reset));
     }
     // Never run a live-session wallpaper client from a bus-only daemon/test.
     if std::env::var_os("WAYLAND_DISPLAY").is_some() {
@@ -440,6 +443,49 @@ pub(super) fn start(store: Handle, changes: Arc<Changes>) {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[tokio::test]
+    async fn output_notifications_do_not_reset_the_persisted_cursor() {
+        let dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+            .join("../../target")
+            .join(format!("cursor-events-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let path = dir.join("hyalo.sock");
+        let listener = tokio::net::UnixListener::bind(&path).unwrap();
+        let (reset, mut effects) = watch::channel(0);
+        let (cursor_reset, mut cursor) = watch::channel(0);
+        let task = tokio::spawn(events(path, reset, cursor_reset));
+        let (stream, _) = listener.accept().await.unwrap();
+        let mut stream = BufReader::new(stream);
+        let mut line = String::new();
+        stream.read_line(&mut line).await.unwrap();
+        assert_eq!(
+            serde_json::from_str::<Json>(&line).unwrap()["request"],
+            "event_stream"
+        );
+        effects.changed().await.unwrap();
+        cursor.changed().await.unwrap();
+        effects.borrow_and_update();
+        cursor.borrow_and_update();
+        stream
+            .get_mut()
+            .write_all(b"{\"event\":\"outputs_changed\",\"outputs\":[]}\n")
+            .await
+            .unwrap();
+        tokio::time::timeout(Duration::from_secs(2), effects.changed())
+            .await
+            .unwrap()
+            .unwrap();
+        assert!(
+            !cursor.has_changed().unwrap(),
+            "a config reload must not reapply the cursor home"
+        );
+        task.abort();
+        let _ = task.await;
+        drop(stream);
+        drop(listener);
+        std::fs::remove_dir_all(dir).unwrap();
+    }
+
     fn night() -> Night {
         Night {
             enabled: false,

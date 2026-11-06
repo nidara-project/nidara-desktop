@@ -4126,3 +4126,18 @@ classicui theme are lost again even when the explicit restart case passed.
 When auditing Orca logs, use `orca-report.json`: FAIL inside a deliberately broken
 control is expected when the aggregate marks that control CAUGHT. The 2026-10-25
 #946 run 40232572113 had a passing baseline and all 24 controls CAUGHT.
+
+### Native cursor reload and session test readiness (#1017)
+
+Hyalo persists `set-cursor` in its settings layer. Config1's cursor follower must
+reapply its GSettings home on startup, compositor reconnect and actual preference
+changes, but not on `outputs_changed`: Hyalo emits that notification after ordinary
+config reloads too. Resetting the cursor lane there overwrites the saved cursor
+when an unrelated keyboard preference changes. Output-dependent effects retain
+their hotplug reset.
+
+`org.nidara.Config` can exist before the selected services have finished starting.
+A test of Media must wait for the `org.nidara.Session` readiness name before creating
+its cached zbus proxy. An initial failed GetAll remains cached even after the name
+appears; repeatedly polling that proxy cannot recover. Keep the five-second
+readiness deadline and explicit `--config --media` subset.
