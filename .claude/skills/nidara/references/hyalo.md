@@ -2791,6 +2791,15 @@ caret from the adjacent candidate panel's pixel flood, and persist test output
 scale in the private settings layer when also changing the keyboard: applying
 keyboard settings reapplies configured outputs and resets a transient scale.
 
+The shared fcitx5 classicui fixture uses the diagnostic background `#d1ffd9`
+(`nk-real-common.CANDIDATE_BACKGROUND`). `candidate_box` requires its connected
+fill plus blue selection, measures the whole pane and refuses missing/ambiguous
+components. Never flood ordinary white: it joins light Settings content and
+reports the whole window (#958). Do not replace this with selected-row bounds or
+choose the pane nearest the expected caret; those hide real placement regressions.
+`nk-ime-pixels-test.py` is the offline regression, and real cursor-displacement
+controls must still fail the unmodified geometry predicates.
+
 Orca's form walk also includes authentic flat review (#846): KP_Up (evdev 72) must
 speak the complete `日本🙂 word`, separately from the earlier focus announcement;
 KP_Subtract (74) leaves review before editing continues.

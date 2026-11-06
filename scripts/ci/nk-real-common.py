@@ -241,6 +241,10 @@ def start_reader(p):
                            device=device, key_events=key_events, caps=caps)
 
 
+# A private diagnostic colour, distinct from light and dark application surfaces.
+CANDIDATE_BACKGROUND = (209, 255, 217)
+
+
 def start_ime(p, engine, label, log, env):
     """Real fcitx5, fresh profile and classicui theme shared by both IME matrices."""
     config = p.log / 'config' / label / 'fcitx5'
@@ -255,11 +259,12 @@ def start_ime(p, engine, label, log, env):
     (conf / 'classicui.conf').write_text('Theme=preflight\nUseDarkTheme=False\nUseAccentColor=False\n')
     theme = p.log / 'data/fcitx5/themes/preflight'
     theme.mkdir(parents=True, exist_ok=True)
+    background = '#%02x%02x%02x' % CANDIDATE_BACKGROUND
     (theme / 'theme.conf').write_text(
         '[Metadata]\nName=Preflight diagnostic\nVersion=1\n'
         '[InputPanel]\nNormalColor=#000000\nHighlightColor=#ffffff\n'
         '[InputPanel/TextMargin]\nLeft=5\nRight=5\nTop=5\nBottom=5\n'
-        '[InputPanel/Background]\nColor=#ffffff\n'
+        f'[InputPanel/Background]\nColor={background}\n'
         '[InputPanel/Highlight]\nColor=#0080ff\n')
     ime = p.start(['fcitx5', '-D', '--disable=ibusfrontend,xim,notifications,cloudpinyin',
                    '--verbose=key_trace=5'], log, env | {'XDG_CONFIG_HOME': str(config.parent)})

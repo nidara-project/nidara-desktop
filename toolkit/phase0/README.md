@@ -111,6 +111,11 @@ actual Editor state and logical geometry in `IME_STATE` JSON (a separate file
 selected by `NK_IME_STATE_LOG`, so wire debug cannot interleave with records); screenshots
 independently measure underline ink and the candidate panel. The panel's flood
 fill excludes the caret, which can touch it on the next pixel row after #839.
+Its shared private classicui theme marks the background `#d1ffd9`; a candidate
+component must contain that fill and the blue selection. White cannot delimit a
+pane against light client content (#958). The full pane is measured, never just
+its selected row; missing/ambiguous diagnostic components are setup failures.
+`python scripts/ci/nk-ime-pixels-test.py` checks the offline pixel oracle.
 Every assertion has a targeted control: the test window reads a private fault
 file armed immediately before the action, and records that it applied the
 mutation. An unrelated setup failure or a crash cannot satisfy a control.
