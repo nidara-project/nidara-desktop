@@ -51,37 +51,54 @@ GROUP = {step: group for step,(group,_) in CONTROLS.items()}
 
 
 def candidate_box(path, win, scale, caret):
-    data = path.read_bytes()
-    magic, dims, depth, pixels = data.split(b'\n', 3)
+    """Measure the entire private classicui pane, independently of its expected position.
+
+    White is also a valid application background. Flooding white from a blue row
+    swallowed the whole light Settings window; measuring just the row would hide
+    a popup whose earlier rows cover the caret. Require the unique diagnostic
+    background AND a selection in the same connected component instead.
+    """
+    magic, dims, depth, pixels = path.read_bytes().split(b'\n', 3)
     assert magic == b'P6' and depth == b'255', 'expected Hyalo PPM'
     width, height = map(int, dims.split())
-    points = []
-    # Deterministic private classicui theme; this private compositor has no shell.
-    # The upper form area excludes the corpus's coloured emoji further below.
+    assert len(pixels) == width * height * 3, 'incomplete Hyalo PPM'
+
+    def colors(x, y):
+        r, g, b = pixels[(y * width + x) * 3: (y * width + x) * 3 + 3]
+        background = all(abs(a-b) <= 4 for a,b in zip((r,g,b), native.CANDIDATE_BACKGROUND))
+        return background, r < 70 and 70 < g < 210 and b > 220
+
+    seeds = []
     for y in range(max(0, int(win['y'] * scale)), min(height, int((win['y'] + win['height']) * scale))):
         for x in range(max(0, int(win['x'] * scale)), min(width, int((win['x'] + win['width']) * scale))):
-            r, g, b = pixels[(y * width + x) * 3: (y * width + x) * 3 + 3]
-            if r < 70 and 70 < g < 210 and b > 220:
-                points.append((x, y))
-    assert len(points) > 100 * scale, 'no classicui candidate selection found'
-    # Flood the diagnostic selection AND its contiguous white background. The
-    # selected row alone is insufficient: a later Mozc candidate can be below
-    # the caret even when the top of its popup still covers the preedit.
-    todo = deque([points[0]])
-    visited = set()
-    while todo:
-        x, y = todo.popleft()
-        if (x, y) in visited or not (0 <= x < width and 0 <= y < height):
+            if colors(x, y)[1]:
+                seeds.append((x, y))
+    seen, panes = set(), []
+    for seed in seeds:
+        if seed in seen:
             continue
-        if caret[0] - 1 <= x < caret[2] + 1 and caret[1] - 1 <= y < caret[3]:
-            continue
-        r, g, b = pixels[(y * width + x) * 3: (y * width + x) * 3 + 3]
-        if not (min(r, g, b) > 235 or (r < 70 and 70 < g < 210 and b > 220)):
-            continue
-        visited.add((x, y))
-        todo.extend([(x-1,y), (x+1,y), (x,y-1), (x,y+1)])
-    return [min(x for x,y in visited), min(y for x,y in visited),
-            max(x for x,y in visited) + 1, max(y for x,y in visited) + 1]
+        todo = deque([seed])
+        component = []
+        background_count = selection_count = 0
+        while todo:
+            x, y = todo.popleft()
+            if (x, y) in seen or not (0 <= x < width and 0 <= y < height):
+                continue
+            seen.add((x, y))
+            if caret[0] - 1 <= x < caret[2] + 1 and caret[1] - 1 <= y < caret[3]:
+                continue
+            background, selection = colors(x, y)
+            if not (background or selection):
+                continue
+            component.append((x, y))
+            background_count += background
+            selection_count += selection
+            todo.extend([(x-1,y), (x+1,y), (x,y-1), (x,y+1)])
+        if background_count > 100 * scale and selection_count > 100 * scale:
+            panes.append([min(x for x,y in component), min(y for x,y in component),
+                          max(x for x,y in component) + 1, max(y for x,y in component) + 1])
+    assert len(panes) == 1, f'expected one diagnostic classicui candidate pane, found {panes}'
+    return panes[0]
 
 
 def state(directory):

@@ -11,7 +11,21 @@ Rows: Mozc, Pinyin and Hangul, at 1 and 1.25, on both search and font search.
 Each checks real preedit, committed text, cancellation retaining the preceding
 query, and the cursor rectangle against classicui candidate pixels. Hangul's
 candidate row opens its real Hanja list with F9; ordinary Hangul composition has
-no candidate list. Candidate placement uses the existing phase-0 pixel oracle.
+no candidate list. Candidate placement uses the shared phase-0 pixel oracle.
+
+The private classicui theme uses `#d1ffd9` for its panel background and blue for
+its selection (`nk-real-common.CANDIDATE_BACKGROUND`). The oracle requires both
+colours in one connected component and measures the whole pane, excluding the
+caret. A client accent alone, missing theme or ambiguous panes fails setup. It
+never chooses the component nearest the expected caret or trims the box to it.
+The former white flood also accepted the light Settings background (250/250/250)
+and swallowed the entire window, causing #958's false candidate-placement failure.
+No production theme, client geometry or placement tolerance changes with this fix.
+
+Run `python scripts/ci/nk-ime-pixels-test.py` for offline colour/extent regressions:
+light client plus an earlier accent, full-pane bounds at multiple scales,
+displaced panes, missing background/selection, and ambiguity. Real-engine cursor
+faults still have to fail the ordinary placement predicate.
 
 Each row has a separate applied fault: ignore preedit, drop commit, retain
 composition across cancellation, or displace only the transmitted cursor by 80
