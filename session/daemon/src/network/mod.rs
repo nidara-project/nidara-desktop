@@ -486,8 +486,8 @@ pub async fn serve(
     session: &Connection,
     read_only: bool,
 ) -> Result<(), Box<dyn std::error::Error>> {
-    // Do not queue or replace another network service. Only an explicit Rust-session flag
-    // reaches this function; normal TS sessiond invocations never register an NM agent.
+    // Do not queue or replace another network service. The Rust session enables this
+    // by default; private harnesses select only the services they intend to exercise.
     session
         .request_name_with_flags(NAME, zbus::fdo::RequestNameFlags::DoNotQueue.into())
         .await?;

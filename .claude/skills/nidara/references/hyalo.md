@@ -2744,12 +2744,15 @@ screenshot, and check the value moved (a drag beside the slider still drew every
   while `build_to_shown` is most of a refresh.
 - **`nidara-hyalo msg debug-overlay on|off`** (or `HYALO_DEBUG_OVERLAY=1`): each glass element's
   capture region outlined (cyan), a flash where one re-captured, the frame's damage outlined
-  (magenta), fading over 400 ms. It is drawn with damage tracking like anything else, so it
-  leaves out of what it shows (1) damage inside its own elements of this frame and the last and
-  (2) frames drawn whole (and their re-captures) — or it would show its own redraws and never
-  settle. One entry per rectangle (a region re-captured every frame flashes once). It shows in
-  `msg screenshot` too. The smoke (`hyalo-smoke.sh`) requires a desktop at rest to draw no more
-  frames with the overlay on than without it.
+  (magenta), fading over 400 ms. Its diagnostic damage comes from a separate tracker
+  of the scene before debug elements, with buffer age 1, only while enabled. Do not
+  filter final framebuffer damage by overlay geometry: glass effects expand it and
+  buffer history combines it, feeding the overlay itself (Rust shell, #1033).
+  Only scene-driven captures renew flashes; the cost counters still report ALL real
+  rendered frames, damage and captures. Offscreen screenshots do not advance this
+  tracker. One entry per rectangle; it shows in `msg screenshot` too. The unchanged
+  smoke requires an idle desktop to settle with the overlay enabled.
+
 
 ## Testing Hyalo
 
@@ -2829,14 +2832,21 @@ an unapplied mutation, infrastructure failure or previous utterance as evidence.
   without their glass, and nothing said so) — and `measure-session.sh`, run once per session, gives the
   like-for-like numbers #681 asks for. Running Hyalo on the maintainer's own GPU is the owner's
   step: it needs sudo, and the first boot on new hardware is the one most likely to fail.
-  It also installs the native dock at `/usr/bin/nidara-shell`; `org.nidara.dock
-  native-preview` swaps it in for the TS dock from the next login (`hyalo/session/start-shell`,
-  `toolkit/shell/DOCK.md` §1) — the only way to see the Rust dock outside a nested window
-  before #959 D4. 🔴 There the dock and the TS shell start together and both claim
-  `org.nidara.Shell`: the dock allows replacement and the TS shell replaces, so the name ends
-  with the TS shell (DOCK.md). An AT-SPI marker per update (`A11Y_PUBLISHED`) flooded the
-  journal there at hundreds of lines a second; it now prints only with `NK_A11Y_TRACE` set,
-  which the nk-* checks set.
+  Hyalo now starts one Rust shell with `--bar` (#1017, owner 2026-11-05), through
+  `nidara-rust-shell.service`, after all default sessiond services. No native-preview
+  key, TS shell, separate dock or TS fallback. The package ships the Rust shell too.
+  `toolkit/shell/SESSION.md` records pending panels, the installed MCP transition/acceptance
+  gap, and removal of only the three temporary rust-only.conf overrides after an
+  owner-authorized install. Super+Shift+R restarts the Rust unit; nidara-ipc defaults
+  to native routes without NIDARA_SESSION. Test logging A11Y_PUBLISHED remains
+  opt-in via NK_A11Y_TRACE.
+- The Hyalo smoke boots the installed Rust shell and complete sessiond (#1033).
+  Readiness must prove Session/Shell1 and the process owner, never just listActions
+  (a local catalogue with no renderer); the absent-renderer control must fail.
+  CC uses real accessible button clicks until Shell1 exposes it. Its PNG capture has
+  one bounded 15 s request: vkms/llvmpipe takes about 3 s just to render it, before
+  encoding and IPC. Quick state reads stay at 3 s; captures are never retried. Fusion/drawn-region
+  coverage uses the layer-placement probe. Unported TS checks are itemized in #1033.
 - CI's `hyalo` job (`scripts/ci/hyalo-smoke.sh`) runs clippy `-D warnings` and the unit tests,
   builds and installs THE PACKAGE (`phase_package`: makepkg -e in the checkout, pacman -U), then
   boots the tty backend on vkms with the installed shell on it. 🔴 Never add a hand-copied

@@ -18,7 +18,7 @@ repo=$(cd "$here/../.." && pwd)
 
 files="/usr/bin/nidara-hyalo /usr/bin/nidara-hyalo-session /usr/lib/nidara-hyalo/restore-wallpaper
 /usr/lib/nidara-hyalo/start-shell /usr/bin/nidara-shell
-/usr/lib/systemd/user/nidara-dock.service
+/usr/lib/systemd/user/nidara-rust-shell.service
 /usr/share/nidara/hyalo/hyalo.toml /usr/share/wayland-sessions/nidara-hyalo.desktop"
 # The shell's glass as the token export states it: what Hyalo paints its own glass with (the
 # window controls, render/glass_tokens.rs). Without it they fall back to a plain capsule,
@@ -57,9 +57,8 @@ fi
 
 echo "Building Hyalo (release)…"
 (cd "$repo/hyalo" && cargo build --release --locked)
-# The native dock, which the session starts instead of the TS one with
-# `gsettings set org.nidara.dock native-preview true` (from the next login; #959, until D4).
-echo "Building the native dock (release)…"
+# Hyalo starts the Rust bar, dock and panels together, without a preview key.
+echo "Building the Rust shell (release)…"
 (cd "$repo/toolkit" && cargo build --release --locked -p nidara-shell --bin nidara-shell)
 
 echo "Installing (sudo)…"
@@ -68,7 +67,7 @@ sudo install -Dm755 "$repo/bin/nidara-hyalo-session"                   /usr/bin/
 sudo install -Dm755 "$repo/hyalo/session/restore-wallpaper"            /usr/lib/nidara-hyalo/restore-wallpaper
 sudo install -Dm755 "$repo/hyalo/session/start-shell"                  /usr/lib/nidara-hyalo/start-shell
 sudo install -Dm755 "$repo/toolkit/target/release/nidara-shell"        /usr/bin/nidara-shell
-sudo install -Dm644 "$repo/bin/nidara-dock.service"                    /usr/lib/systemd/user/nidara-dock.service
+sudo install -Dm644 "$repo/bin/nidara-rust-shell.service"                    /usr/lib/systemd/user/nidara-rust-shell.service
 sudo install -Dm644 "$repo/config/hyalo/hyalo.toml"                    /usr/share/nidara/hyalo/hyalo.toml
 sudo install -Dm644 "$repo/config/wayland-sessions/nidara-hyalo.desktop" /usr/share/wayland-sessions/nidara-hyalo.desktop
 if owned "$tokens"; then
@@ -81,17 +80,12 @@ else
     sudo install -Dm644 "$out/tokens/glass.json" "$tokens"
 fi
 
-# The native dock needs the session services with Applications1, which only a unit as new as
-# this checkout's starts (bin/nidara-sessiond.service); install.sh installs that, not this.
-if ! grep -q NIDARA_SESSIOND_PREVIEW /usr/lib/systemd/user/nidara-sessiond.service 2>/dev/null; then
-    echo
-    echo "Note: your nidara-sessiond.service predates the native dock preview. Run install.sh"
-    echo "from this checkout before turning it on, or that dock will find no applications."
-fi
+# Session daemon and CLI are installed by install.sh, not by this compositor installer.
+# They must come from this checkout too: older binaries default to the TS routes.
+echo "Run install.sh from this checkout as well to update nidara-sessiond and nidara-ipc."
 
 echo
 echo "Installed: $(nidara-hyalo --version)"
 echo "Log out; in the greeter, pick \"Nidara — Hyalo preview\" under the password field."
 echo "Ctrl+Alt+Backspace ends the session. To remove it: $0 --uninstall"
-echo "The native dock instead of the TS one, from the next login:"
-echo "  gsettings set org.nidara.dock native-preview true   (false to go back)"
+echo "Hyalo starts the Rust shell exclusively from the next login (#1017)."

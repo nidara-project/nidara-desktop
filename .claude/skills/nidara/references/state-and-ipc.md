@@ -69,17 +69,17 @@ busctl --user call org.nidara.Shell /org/nidara/Shell \
 ```
 
 **Use `nidara-ipc <cmd>`.** The installed client is Rust (`session/ipc/`), built
-with the session workspace by install.sh and PKGBUILD. TS compatibility remains the default:
-exact argv to `org.nidara.Shell.Request(as) → s`, verbatim reply plus newline. One leading `--`
+with the session workspace by install.sh and PKGBUILD. Rust is the default (#1017).
+Explicit TS compatibility sends exact argv to `org.nidara.Shell.Request(as) → s`,
+with verbatim reply plus newline. One leading `--`
 is still accepted. `bin/nidara-ipc.c` remains only for the unchanged TS headless smoke fixture;
 installation no longer compiles it.
 
 ### The native Rust routes (#959 B)
 
-`NIDARA_SESSION=rust` or `--session=rust` explicitly selects native owners; `--session=ts`
-selects compatibility. Only the exact environment value rust selects native;
-unknown environment values warn and use TS, so an unrelated session marker cannot
-break installed shortcuts. An invalid explicit --session value still exits 2.
+Native owners are selected by default, including with no environment variable (#1017).
+`NIDARA_SESSION=ts` or `--session=ts` explicitly selects compatibility; unknown
+environment values warn and use Rust. An explicit --session option overrides the environment. An invalid explicit --session value still exits 2.
 Never infer the session from HYALO_SOCKET (TS also runs on Hyalo),
 and never retry or fall back between TS and Rust after a failure. The Rust session launcher
 sets the mode and selects this checkout's built client on its private PATH. Missing services
@@ -95,10 +95,10 @@ allow-computer-control GSettings and syncs, even without a renderer.
 
 The typed `org.nidara.Shell1` contract lives in `crates/nidara-shell-ipc/`: its renderer owns
 Available, per-function Capabilities and authoritative state, surface toggles/focus, Settings
-presentation and ShowOSD. **B starts no Shell1 server**: absent surface renderers return
+presentation and ShowOSD. The Rust shell serves Shell1 for its implemented surfaces; absent renderers return
 Unavailable. C may implement only volume/brightness OSD; no OSD over ext-session-lock.
 No broker, sessiond mirror, renderer registration, ACK or TS bridge. Applications1 is a
-separate opt-in service; A2 routes listApps/launchApp directly to it, as External,
+separate service, enabled by default in sessiond (#1017); A2 routes listApps/launchApp directly to it, as External,
 with dispatch-only confirmation (never window/focus success). Native helper,
 agent and UI introspection routes lacking an implementation also explicitly refuse; B does
 not promise the helpers/MCP or full TS dumpState schema in Rust. See `session/ipc/README.md`

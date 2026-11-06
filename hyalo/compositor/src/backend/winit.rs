@@ -148,7 +148,6 @@ fn render(state: &mut Hyalo) {
     // Instrumented (render/stats.rs, #766) as on the tty backend.
     let name = output.name();
     let area = output.current_mode().map_or(0, |m| m.size.w.max(0) as u64 * m.size.h.max(0) as u64);
-    render::stats::frame_begin(&name, area);
     let age = w.graphics.buffer_age().unwrap_or(0);
     let (result, build, render_time) = {
         let (renderer, mut framebuffer) = match w.graphics.bind() {
@@ -158,6 +157,8 @@ fn render(state: &mut Hyalo) {
                 return;
             }
         };
+        // Only a bound real frame may advance overlay scene tracking.
+        render::stats::frame_begin(&name, area);
         let built = std::time::Instant::now();
         // No cursor: the host compositor draws its own over the window.
         let elements = render::output_elements(&scene, renderer, &output, None);

@@ -6,7 +6,8 @@ interface `org.nidara.Network1`. **Never enable this flag in the daily TypeScrip
 session**: that shell already registers an agent for the same user's NetworkManager.
 The Rust agent identifier is `org.nidara.Session.NetworkAgent`, distinct from TS.
 `--network-read-only` exports the snapshot and refuses writes without exporting or
-registering a secret agent. Neither flag is enabled by the normal sessiond command.
+registering a secret agent. No-argument startup enables the writable service by default (#1017).
+Explicit flags select a subset for private harnesses.
 
 ## Wire contract
 

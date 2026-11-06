@@ -265,7 +265,7 @@ def run(binary, root):
     def start(*flags):
         p = launch([binary, *flags])
         wait(lambda: own(N), 'sessiond start')
-        if flags:
+        if '--tray' in flags:
             wait(lambda: call(c, N, P, 'org.freedesktop.DBus.Properties', 'Get', '(ss)', (I, 'Available'))[0], 'Tray1 ready')
         return p
     def stop(p):
@@ -279,8 +279,8 @@ def run(binary, root):
     def items():
         return tray('GetSnapshot')[1]
     try:
-        p = start()
-        check(not own(W) and not own(F), 'tray disabled without --tray')
+        p = start('--notifications-only')
+        check(not own(W) and not own(F), 'tray absent in explicit notifications-only mode')
         stop(p)
         # An existing watcher is not replaced or queued behind, whichever alias it owns.
         for occupied in (W, F):

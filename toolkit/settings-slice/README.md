@@ -15,6 +15,10 @@ scripts/dev/startup-probe.py --ready '^CONTENT_READY' nk-settings-slice 6 -- too
 
 `NK_SETTINGS_DATA` overrides `build/settings-data`. Labels use the session language
 (`LANGUAGE`, then `LC_ALL`/`LC_MESSAGES`/`LANG`), with per-key English fallback.
+Native Config1 supplies `ui.i18n` and option translation keys; the slice resolves
+them in that language instead of requiring the TS server's pretranslated labels.
+The checker records stderr before waiting for a mapped window, so an early failure
+always includes its exit code and startup error.
 Every manifest page appears in the scrollable sidebar; subpages without an icon
 inherit their parent's icon. Appearance is selected; other pages are draw-only.
 The interface icon theme is resolved under `ui/shell/assets/icons/<theme>/`, with

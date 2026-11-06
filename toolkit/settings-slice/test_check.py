@@ -33,6 +33,19 @@ class ListingDiagnostics(unittest.TestCase):
                         child.kill()
                     child.wait()
 
+    def test_baseline_run_reports_stderr_when_child_exits_before_mapping(self):
+        root = Path(__file__).resolve().parents[1] / "target"
+        root.mkdir(exist_ok=True)
+        with tempfile.TemporaryDirectory(prefix="baseline-exit-", dir=root) as folder:
+            folder = Path(folder)
+            binary = folder / "slice"
+            binary.write_text(f"#!{sys.executable}\nimport sys\nprint('SLICE_ERROR native schema probe', file=sys.stderr)\nsys.exit(23)\n")
+            binary.chmod(0o755)
+            with patch.object(check, "hyalo_windows", return_value=[]):
+                with self.assertRaisesRegex(RuntimeError, "exited 23.*SLICE_ERROR native schema probe"):
+                    check.run(str(binary), False, folder)
+            self.assertIn("SLICE_ERROR native schema probe", (folder / "baseline.log").read_text())
+
     def test_listing_matches_the_requested_pid(self):
         wanted = {"pid": 77, "background": {"level": "opaque"}}
         with patch.object(check, "hyalo_windows", return_value=[{"pid": 12}, wanted]):

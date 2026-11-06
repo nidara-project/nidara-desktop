@@ -1,18 +1,18 @@
 [Unit]
-Description=Nidara session services (notifications, media and power)
+Description=Nidara session services
 Documentation=https://github.com/nidara-project/nidara-desktop
 PartOf=graphical-session.target
 After=graphical-session.target
-Before=nidara.service
+Before=nidara-rust-shell.service
+Conflicts=nidara-sessiond-legacy.service
 StartLimitIntervalSec=30
 StartLimitBurst=5
 
 [Service]
 Type=dbus
 BusName=org.nidara.Session
-# $NIDARA_SESSIOND_PREVIEW: unset (no word at all) unless the Hyalo preview's start-shell set it
-# to --applications for the native dock (org.nidara.dock native-preview, #959 until D4).
-ExecStart=/usr/bin/nidara-sessiond --media --power $NIDARA_SESSIOND_PREVIEW
+# No flags means all Rust session services (#1017).
+ExecStart=/usr/bin/nidara-sessiond
 Restart=on-failure
 RestartSec=1
 TimeoutStopSec=3

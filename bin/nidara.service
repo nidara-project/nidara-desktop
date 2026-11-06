@@ -2,8 +2,8 @@
 Description=Nidara UI (bar, dock, overlays)
 Documentation=https://github.com/nidara-project/nidara-desktop
 PartOf=graphical-session.target
-Wants=nidara-sessiond.service
-After=graphical-session.target nidara-sessiond.service
+Wants=nidara-sessiond-legacy.service
+After=graphical-session.target nidara-sessiond-legacy.service
 # Crash-loop guard: if the shell dies more than 5 times in 30s (e.g. a broken
 # build or a config that crashes on startup), stop retrying instead of respawning
 # forever in a flickering loop — drop to a TTY and fix it. Re-arm with
@@ -20,6 +20,7 @@ Type=simple
 # broken migration must cost a log line, never the session.
 ExecStartPre=/usr/bin/nidara-migrate
 ExecStart=/usr/bin/nidara-ui
+Environment=NIDARA_SESSION=ts
 # Respawn on crash (segfault / non-zero exit / signal). A clean exit is NOT
 # restarted, so quitting on purpose stays quit.
 Restart=on-failure

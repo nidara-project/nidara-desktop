@@ -38,7 +38,8 @@ impl Bus {
         let mut cli = Command::new(env!("CARGO_BIN_EXE_nidara-ipc"));
         cli.env("DBUS_SESSION_BUS_ADDRESS", &self.address)
             .env_remove("NIDARA_SESSION")
-            .env_remove("HYALO_SOCKET");
+            .env_remove("HYALO_SOCKET")
+            .env("GSETTINGS_BACKEND", "memory");
         if let Some(session) = session {
             cli.env("NIDARA_SESSION", session);
         }
@@ -137,7 +138,7 @@ fn ts_verbatim_and_native_never_retry_into_ts() {
         proxy.show_osd("volume", 0.5, false, "Headphones"),
         Err(Error::Unavailable(_))
     ));
-    let out = bus.cli(&["--", "setConfig", "key", "spaces %s", "-1"]);
+    let out = bus.cli(&["--session=ts", "--", "setConfig", "key", "spaces %s", "-1"]);
     assert!(out.status.success(), "{}", stderr(&out));
     assert_eq!(
         String::from_utf8(out.stdout).unwrap(),
@@ -147,7 +148,7 @@ fn ts_verbatim_and_native_never_retry_into_ts() {
         calls.lock().unwrap()[0],
         ["setConfig", "key", "spaces %s", "-1"]
     );
-    let out = bus.cli(&["--session=rust", "toggleCC", "keyboard"]);
+    let out = bus.cli(&["toggleCC", "keyboard"]);
     assert_eq!(out.status.code(), Some(1));
     assert!(stderr(&out).contains("AccessDenied"), "{}", stderr(&out));
     assert_eq!(*native.lock().unwrap(), ["toggle:cc:true"]);
@@ -170,7 +171,7 @@ fn ts_verbatim_and_native_never_retry_into_ts() {
     );
 }
 #[test]
-fn unknown_environment_warns_and_preserves_ts_shortcuts() {
+fn unknown_environment_warns_and_uses_native_routes() {
     let runtime = tokio::runtime::Builder::new_multi_thread()
         .worker_threads(1)
         .enable_all()
@@ -186,15 +187,13 @@ fn unknown_environment_warns_and_preserves_ts_shortcuts() {
     c.request_name("org.nidara.Shell").unwrap();
     for value in ["unexpected", "Rust", "rust ", ""] {
         let out = bus.cli_env(&["toggleCC", "keyboard"], Some(value));
-        assert!(out.status.success(), "{}", stderr(&out));
+        assert_eq!(out.status.code(), Some(1));
+        assert!(stderr(&out).contains("Unavailable"));
         assert!(stderr(&out).contains("unknown NIDARA_SESSION="));
-        assert!(stderr(&out).contains("using ts compatibility"));
-        assert!(String::from_utf8(out.stdout).unwrap().ends_with('\n'));
+        assert!(stderr(&out).contains("using native routes"));
+        assert!(out.stdout.is_empty());
     }
-    assert_eq!(
-        *calls.lock().unwrap(),
-        vec![vec!["toggleCC", "keyboard"]; 4]
-    );
+    assert!(calls.lock().unwrap().is_empty());
     let out = bus.cli_env(&["--session=ts", "dumpState"], Some("unexpected"));
     assert!(out.status.success());
     assert!(
@@ -208,7 +207,7 @@ fn unknown_environment_warns_and_preserves_ts_shortcuts() {
     assert_eq!(out.status.code(), Some(2));
     assert_eq!(
         calls.lock().unwrap().len(),
-        5,
+        1,
         "bad explicit option never dispatches"
     );
 }
@@ -345,4 +344,57 @@ fn hyalo_denial_and_ambiguous_windows_never_turn_into_success() {
     server.join().unwrap();
     std::fs::remove_file(path).unwrap();
     assert_eq!(requests.lock().unwrap()[2]["command"], "close-window 1");
+}
+
+#[test]
+fn factory_hyalo_shortcuts_never_call_legacy_request() {
+    let runtime = tokio::runtime::Builder::new_multi_thread()
+        .worker_threads(1)
+        .enable_all()
+        .build()
+        .unwrap();
+    let _entered = runtime.enter();
+    let bus = Bus::new();
+    let calls = Arc::new(Mutex::new(vec![]));
+    let native = Arc::new(Mutex::new(vec![]));
+    let c = conn(&bus);
+    c.object_server()
+        .at("/org/nidara/Shell", Legacy(calls.clone()))
+        .unwrap();
+    c.object_server()
+        .at("/org/nidara/Shell", Shell(native.clone()))
+        .unwrap();
+    c.request_name("org.nidara.Shell").unwrap();
+    let config = include_str!("../../../config/hyalo/hyalo.toml");
+    let mut count = 0;
+    for line in config.lines().filter(|l| !l.trim_start().starts_with('#')) {
+        if let Some((_, command)) = line.split_once("spawn nidara-ipc ") {
+            let args: Vec<_> = command
+                .split('"')
+                .next()
+                .unwrap()
+                .split_whitespace()
+                .collect();
+            let out = bus.cli(&args);
+            assert_ne!(
+                out.status.code(),
+                Some(2),
+                "bad shortcut {args:?}: {}",
+                stderr(&out)
+            );
+            assert!(
+                calls.lock().unwrap().is_empty(),
+                "shortcut reached TS: {args:?}"
+            );
+            count += 1;
+        }
+    }
+    assert!(count >= 10, "factory shortcut coverage disappeared");
+    assert!(native.lock().unwrap().iter().any(|s| s == "settings::"));
+    let reload = config
+        .lines()
+        .find(|l| l.starts_with("\"Super+Shift+R\""))
+        .unwrap();
+    assert!(reload.contains("restart nidara-rust-shell.service"));
+    assert!(!reload.contains("restart nidara.service"));
 }

@@ -7,14 +7,14 @@ cargo build --manifest-path session/Cargo.toml --workspace --release --locked
 nidara-ipc --session=rust listActions
 ```
 
-Only exact `NIDARA_SESSION=rust` selects native routing. Unset or `ts` preserves
-the installed TS route; any other environment value warns on stderr and selects TS:
+Native Rust routing is the default (#1017), including when NIDARA_SESSION is unset.
+An unknown environment value warns and uses Rust. Only explicit `--session=ts` or
+`NIDARA_SESSION=ts` selects the frozen compatibility route:
 `org.nidara.Shell /org/nidara/Shell org.nidara.Shell.Request(as) → s`, exact argv
 and verbatim reply plus newline. One leading `--` remains accepted. The explicit
-`--session=ts|rust` option wins over the environment without warning about an
-unused environment value. An invalid explicit option still fails with usage exit 2. `HYALO_SOCKET` does not select Rust: the TS shell also uses Hyalo.
-`scripts/dev/rust-session.sh` sets `NIDARA_SESSION=rust` and puts this checkout's
-built CLI first on its private PATH. It rejects an old C-only installed client.
+`--session=ts|rust` option wins over the environment. An invalid explicit option
+fails with usage exit 2. `HYALO_SOCKET` does not select the mode.
+`scripts/dev/rust-session.sh` still sets Rust explicitly and uses this checkout's CLI.
 
 No service is auto-activated: D-Bus names resolve to a unique owner before a call.
 No call is retried, no fallback sends a native command to TS, and a timeout never
@@ -104,19 +104,11 @@ Rust 3.270 ms. This checks the keybind client overhead, not live-session latency
 ## Installed TS-session acceptance (pending, before merge)
 
 Both installation paths replace the daily C client. Private/fake-service checks
-do not validate that installed transition. After an explicitly authorized
-installation, the owner should check in the real TS shell session:
-
-1. Super+C, Super+N, Super+Space and Super+S still open/close their expected
-   surfaces/settings. Super+Ctrl+B/D still move keyboard focus correctly.
-2. With NIDARA_SESSION unset (or ts), `nidara-ipc dumpState` and
-   `nidara-ipc listActions` preserve the TS replies and exit successfully.
-3. `NIDARA_SESSION=typo nidara-ipc listActions` warns on stderr and returns the
-   same TS action list; `nidara-ipc --session=typo listActions` exits 2 without
-   dispatch. Exact rust continues to select native routes.
-4. During an owner-controlled shell-down test, a TS request exits 1 with
-   Unavailable rather than activating/retrying another shell. This document
-   does not authorize stopping the daily shell or installing the client.
-
-No installed/live-session result has been obtained for B yet; carry this
-acceptance status and checklist into its PR description.
+do not validate that installed transition. After an explicitly authorized installation,
+check the Hyalo session: Super opens Apps; Super+C opens the Rust CC; Super+Ctrl+B/D
+focuses bar/dock; Super+Shift+R restarts only nidara-rust-shell.service. With the
+environment unset, `nidara-ipc listActions` and `dumpState` use native routes.
+Unsupported panels return Unavailable, without starting or contacting TS.
+Explicit `--session=ts` remains available for the frozen Hyprland shell.
+See `toolkit/shell/SESSION.md` for pending surfaces, MCP gaps and temporary override cleanup.
+No installed/live-session acceptance is claimed by these private tests.

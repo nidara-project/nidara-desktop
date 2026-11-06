@@ -79,7 +79,7 @@ def main(args):
 
     def start():
         nonlocal daemon
-        daemon = subprocess.Popen([args.binary], stdout=log, stderr=log)
+        daemon = subprocess.Popen([args.binary, "--notifications-only"], stdout=log, stderr=log)
         wait(lambda: owns() or daemon.poll() is not None, "daemon ready")
         check(daemon.poll() is None, "daemon starts")
         wait(lambda: bus.call_sync("org.freedesktop.DBus", "/org/freedesktop/DBus", "org.freedesktop.DBus",

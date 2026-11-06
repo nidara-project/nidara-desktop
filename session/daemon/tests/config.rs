@@ -738,7 +738,7 @@ if os.path.exists(os.path.join(os.environ['HOME'], 'awww-refuse')):
     let before = calls().len();
     std::fs::remove_file(env.dir.join("awww-refuse")).unwrap();
     eventually("failed wallpaper retried", || calls().len() > before).await;
-    // Hotplug and a fresh event connection both restate runtime effects.
+    // Hotplug restates output-dependent effects; reconnect also restores the cursor.
     let mut stream = peer.events.recv_timeout(Duration::from_secs(2)).unwrap();
     stream
         .write_all(b"{\"event\":\"outputs_changed\",\"outputs\":[]}\n")
@@ -746,6 +746,8 @@ if os.path.exists(os.path.join(os.environ['HOME'], 'awww-refuse')):
     peer.expect(json!({"request":"night_light","temperature":null}))
         .await;
     drop(stream);
+    peer.expect(json!({"request":"settings","patch":{"cursor":{"theme":"TestCursor","size":48}}}))
+        .await;
     peer.expect(json!({"request":"night_light","temperature":null}))
         .await;
     // A no-op must not rewrite the INI or reapply wallpaper after it has settled.
@@ -777,28 +779,37 @@ async fn media_preferences_and_optional_audio_backend() {
     env.daemon = Some(command.spawn().unwrap());
     let conn = connect(&env.address).await;
     wait_for_config(&conn).await;
-    let media = zbus::Proxy::new(
-        &conn,
-        "org.nidara.Session",
-        "/org/nidara/Media",
-        "org.nidara.Media1",
-    )
-    .await
-    .unwrap();
-    tokio::time::timeout(Duration::from_secs(5), async {
+    // Config1 is registered earlier than Media. Do not initialize zbus' property
+    // cache before the session readiness name exists: a failed initial GetAll is
+    // cached permanently, so polling that same proxy never recovers.
+    let dbus = zbus::fdo::DBusProxy::new(&conn).await.unwrap();
+    let media = tokio::time::timeout(Duration::from_secs(5), async {
         loop {
-            if media.get_property::<String>("State").await.is_ok() {
+            if dbus
+                .name_has_owner("org.nidara.Session".try_into().unwrap())
+                .await
+                .unwrap()
+            {
                 break;
             }
             tokio::time::sleep(Duration::from_millis(10)).await;
         }
+        let media = zbus::Proxy::new(
+            &conn,
+            "org.nidara.Session",
+            "/org/nidara/Media",
+            "org.nidara.Media1",
+        )
+        .await
+        .unwrap();
+        assert_eq!(
+            media.get_property::<String>("State").await.unwrap(),
+            "Ready"
+        );
+        media
     })
     .await
-    .unwrap();
-    assert_eq!(
-        media.get_property::<String>("State").await.unwrap(),
-        "Ready"
-    );
+    .expect("the selected services never announced session readiness");
     assert!(
         !media
             .get_property::<bool>("HeadphonePauseAvailable")

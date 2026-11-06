@@ -38,6 +38,13 @@ on a GObject subclass would shadow the property accessors) and the wrapper's `LD
 gtk4-layer-shell ⇒ no bar, no dock, nothing in the log). See `references/architecture.md` →
 "The application host is OURS" and `references/dev-workflow.md` → "The toolchain is ours".
 
+⚠️ **Hyalo starts the Rust shell by default** (#1017, owner 2026-11-05):
+`nidara-rust-shell.service` runs `nidara-shell --bar` after the full session daemon.
+No TS shell or separate dock in Hyalo; `nidara-ipc` defaults to native routes.
+B2.2/B2.3/B3 and installed MCP transition/acceptance remain gaps; see
+`toolkit/shell/SESSION.md`. The TS conventions below still apply to the remaining
+TS applications and frozen Hyprland source.
+
 ⚠️ **Widgets are built imperatively — there is no JSX in this repo** and none of Gnim's reactive
 primitives are used, despite the `.tsx` extensions. Read `references/architecture.md` ("There is no
 JSX in this repo") before writing a widget; a JSX-shaped contribution will not match anything here.

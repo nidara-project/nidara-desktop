@@ -325,13 +325,13 @@ hl.animation({ leaf = "glowangle",     enabled = true, speed = 30,  bezier = "li
 
 -- ── Nidara startup ─────────────────────────────────────────────────────
 hl.on("hyprland.start", function()
-    hl.exec_cmd("uwsm finalize")
+    hl.exec_cmd("uwsm finalize NIDARA_SESSION")
     -- The shell runs as a systemd user unit so it respawns on crash (segfault etc.)
     -- instead of leaving a bare compositor. We START it explicitly here (the unit is
     -- intentionally NOT enabled via graphical-session.target — that would leak the UI
     -- into every Hyprland session; see bin/nidara.service). `finalize`
     -- above has just activated graphical-session.target, which the unit orders After.
-    hl.exec_cmd("systemctl --user start nidara-sessiond.service nidara.service")
+    hl.exec_cmd("systemctl --user start nidara-sessiond-legacy.service nidara.service")
     -- Background daemons go in background-graphical.slice (-s b), not the foreground
     -- app slice: systemd deprioritizes them under CPU/IO/memory pressure and the OOM
     -- killer targets them before real apps — correct for wallpaper/idle/clipboard helpers.

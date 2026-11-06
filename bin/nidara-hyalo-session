@@ -14,6 +14,7 @@ exec 1>/dev/null 2>&1
 
 export GDK_BACKEND=wayland,x11
 export XDG_SESSION_TYPE=wayland
+export NIDARA_SESSION=rust
 export MOZ_ENABLE_WAYLAND=1
 export ELECTRON_OZONE_PLATFORM_HINT=auto
 export OZONE_PLATFORM=wayland

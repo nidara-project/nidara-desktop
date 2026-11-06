@@ -9,11 +9,9 @@ slice value; otherwise the control cannot discriminate and setup fails explicitl
 """
 import json
 import os
-import queue
 import subprocess
 import sys
 import tempfile
-import threading
 import time
 from pathlib import Path
 from gi.repository import Gio, GLib
@@ -53,23 +51,27 @@ def first_listing(pid, deadline, process=None, log=None):
 def run(binary, control, folder):
     env = dict(os.environ, NK_SLICE_FRAME=str(folder / ('fault.argb' if control else 'baseline.argb')))
     # The control also declares no window background (toolkit/PHASE1.md D6).
-    proc = subprocess.Popen([binary] + (['--control-default-values', '--control-no-background'] if control else []),
-                            env=env, stdout=subprocess.DEVNULL, stderr=subprocess.PIPE, text=True)
-    lines = queue.Queue()
-    threading.Thread(target=lambda: [lines.put(s.rstrip()) for s in proc.stderr], daemon=True).start()
+    # Direct file redirection captures even an exit before the first mapped window.
+    # A pipe-reader queue was drained only after first_listing, hiding startup errors.
+    log = folder / ('fault.log' if control else 'baseline.log')
+    with log.open('w') as stderr:
+        proc = subprocess.Popen([binary] + (['--control-default-values', '--control-no-background'] if control else []),
+                                env=env, stdout=subprocess.DEVNULL, stderr=stderr, text=True)
+    stderr = log.open()
     seen, frame, ready, a11y = [], None, False, False
     try:
         deadline = time.monotonic() + 6
         # Hyalo draws the window's background from its first frame (D6): the first time it lists
         # the window — mapped, so with that frame — it has it.
-        listed = first_listing(proc.pid, deadline, proc)
+        listed = first_listing(proc.pid, deadline, proc, log)
         while time.monotonic() < deadline and not (ready and a11y):
             if proc.poll() is not None:
-                raise RuntimeError(f'process exited {proc.returncode}: {seen}')
-            try:
-                line = lines.get(timeout=.05)
-            except queue.Empty:
+                raise RuntimeError(f'process exited {proc.returncode}: {log.read_text()}')
+            line = stderr.readline()
+            if not line:
+                time.sleep(.05)
                 continue
+            line = line.rstrip()
             seen.append(line)
             if line.startswith('SLICE_ERROR'):
                 raise RuntimeError(line)
@@ -119,9 +121,9 @@ def run(binary, control, folder):
                 if max(strengths) < 3 or strengths.count(max(strengths)) != 1:
                     raise RuntimeError(f'cannot read selected segment pixels: {strengths}')
                 values[key] = segments[strengths.index(max(strengths))]['value']
-        (folder / ('fault.log' if control else 'baseline.log')).write_text('\n'.join(seen) + '\n')
         return values, background
     finally:
+        stderr.close()
         proc.terminate()
         try:
             proc.wait(timeout=2)

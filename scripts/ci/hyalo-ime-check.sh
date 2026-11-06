@@ -1,15 +1,9 @@
 #!/bin/sh
 # hyalo-ime-check.sh — input methods on Hyalo (text-input-v3 + input-method-v2, handlers.rs):
-# what fcitx5 types reaches a window, AND the shell's search while it holds the keyboard through a
-# focus grab — which Hyprland never managed (#679 #10, #503: no Chinese in our search). The
-# stand-in input method commits a fixed string when a field is activated (hyalo-ime-probe.c).
-#
-#   1. a focused window's empty field gets the input method's text — no key was pressed, so it
-#      can only have come through the input method (the control is the empty field before);
-#   2. the shell's search (a layer surface under a focus grab) gets it too.
-#
-# Run INSIDE a Hyalo session with the shell (the Hyalo smoke; locally, a nested Hyalo), with
-# `hyalo-ime-probe` in PATH. Exits 1 on failure. MSG overrides `nidara-hyalo msg`.
+# A focused window's empty field must get the stand-in input method's text, with
+# the empty field before it as the control. Rust Prism/search is not implemented
+# (#959); that old TS-specific half is explicitly removed, not silently skipped.
+# Run only inside the isolated Hyalo smoke or a private nested compositor.
 set -eu
 here=$(dirname "$(realpath "$0")")
 MSG=${MSG:-nidara-hyalo msg}
@@ -35,15 +29,5 @@ for _ in $(seq 1 40); do grep -q "VICTIM 输入法" "$log/field.log" && break; s
 grep -q "VICTIM 输入法" "$log/field.log" || fail "the window's field did not get the input method's text"
 echo "ok    a window's field got the input method's text (and nothing before it ran)"
 
-if command -v nidara-ipc >/dev/null && nidara-ipc toggleSearch >/dev/null 2>&1; then
-    sleep 1.5
-    hyalo-ime-probe "搜索" >"$log/ime2.log" 2>&1 &
-    pids="$pids $!"
-    for _ in $(seq 1 40); do nidara-ipc queryUI .prism-search-entry 2>/dev/null | grep -q '"text": "搜索"' && break; sleep 0.25; done
-    nidara-ipc queryUI .prism-search-entry 2>/dev/null | grep -q '"text": "搜索"' \
-        || fail "the shell's search, under its focus grab, did not get the input method's text"
-    nidara-ipc toggleSearch >/dev/null 2>&1 || true
-    echo "ok    the shell's search under its focus grab got it too (#503)"
-else
-    echo "skip  the shell's search: no shell to ask (nidara-ipc)"
-fi
+# Rust Prism/search is not ported (#959). The compositor/window IME check above
+# remains mandatory; real toolkit fcitx5/Orca gates remain in hyalo-smoke.sh.

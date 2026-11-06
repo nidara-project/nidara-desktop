@@ -1,8 +1,8 @@
 # Native session media (Media1 v1)
 
 `nidara-sessiond --media` serves `org.nidara.Media1` on `org.nidara.Session`,
-`/org/nidara/Media`, with ObjectManager. The packaged notification/media unit
-passes `--media`; Audio1, Config1, Network1 and Bluetooth1 remain separate opt-ins.
+`/org/nidara/Media`, with ObjectManager. The packaged unit starts all services by default (#1017);
+explicit flags select a subset for private harnesses.
 The MPRIS reader can coexist with the legacy TS reader. No TS code or bridge is
 added: a pin in the current TS panel does **not** change Media1 selection. Keys
 use Media1 selection until the panel moves to Rust. Lock UI is a later Rust-lock

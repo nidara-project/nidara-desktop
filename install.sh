@@ -746,9 +746,10 @@ if [ "$MODE" = "dev" ] || [ "$MODE" = "update-apply" ]; then
 fi
 # The factory Super+P action launches this Rust toplevel. Build/install only the
 # selector; this does not install or take over the native Settings application.
-echo "  Building nidara-display-selector..."
-(cd "$REPO_DIR/toolkit" && run_user env CARGO_TARGET_DIR=target RUSTUP_TOOLCHAIN=stable cargo build --release --locked -p nk-settings --bin nidara-display-selector)
+echo "  Building nidara-display-selector and the Rust shell..."
+(cd "$REPO_DIR/toolkit" && run_user env CARGO_TARGET_DIR=target RUSTUP_TOOLCHAIN=stable cargo build --release --locked -p nk-settings --bin nidara-display-selector -p nidara-shell --bin nidara-shell)
 sudo install -Dm755 "$REPO_DIR/toolkit/target/release/nidara-display-selector" /usr/bin/nidara-display-selector
+sudo install -Dm755 "$REPO_DIR/toolkit/target/release/nidara-shell" /usr/bin/nidara-shell
 sudo install -Dm644 "$REPO_DIR/config/wireplumber/nidara-audio.lua" /usr/share/wireplumber/scripts/nidara/audio.lua
 sudo install -Dm644 "$REPO_DIR/config/wireplumber/60-nidara-audio.conf" /usr/share/wireplumber/wireplumber.conf.d/60-nidara-audio.conf
 
@@ -759,6 +760,8 @@ sudo install -Dm644 "$REPO_DIR/config/wireplumber/60-nidara-audio.conf" /usr/sha
 sudo mkdir -p /usr/lib/systemd/user
 sudo cp "$REPO_DIR/bin/nidara.service" /usr/lib/systemd/user/nidara.service
 sudo cp "$REPO_DIR/bin/nidara-sessiond.service" /usr/lib/systemd/user/nidara-sessiond.service
+sudo cp "$REPO_DIR/bin/nidara-sessiond-legacy.service" /usr/lib/systemd/user/nidara-sessiond-legacy.service
+sudo cp "$REPO_DIR/bin/nidara-rust-shell.service" /usr/lib/systemd/user/nidara-rust-shell.service
 # Only OPP asks our agent before receiving EACH file; FTP/PCSuite bypass it.
 sudo install -Dm644 "$REPO_DIR/config/bluetooth/obex-opp-only.conf" \
     /usr/lib/systemd/user/obex.service.d/50-nidara-opp-only.conf
@@ -890,7 +893,9 @@ if [ "$MODE" = "update-apply" ]; then
     fi
     # Reload the running shell so the new bundle takes effect now; greeter and
     # lockscreen pick theirs up on next use. Harmless if the session isn't ours.
-    if run_user systemctl --user is-active --quiet nidara.service 2>/dev/null; then
+    if run_user systemctl --user is-active --quiet nidara-rust-shell.service 2>/dev/null; then
+        run_user systemctl --user restart nidara-rust-shell.service || true
+    elif run_user systemctl --user is-active --quiet nidara.service 2>/dev/null; then
         run_user systemctl --user restart nidara.service || true
         echo "  Shell reloaded."
     fi

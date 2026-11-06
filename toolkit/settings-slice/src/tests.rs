@@ -213,3 +213,66 @@ fn settings_data_of_another_version_or_none_is_refused() {
     assert!(data::check_version(Some("2")).is_err());
     assert!(data::check_version(None).is_err());
 }
+
+#[test]
+fn native_ui_translation_keys_use_client_language_and_english_without_changing_values() {
+    let mut exports = exports();
+    exports.strings["native.dark"] = json!("Modo oscuro");
+    exports.strings["native.dark.desc"] = json!("Aspecto oscuro");
+    exports.english["native.background"] = json!("Window style");
+    exports.english["native.background.desc"] = json!("Window background");
+    exports.english["native.controls"] = json!("Window buttons");
+    let mut services = services();
+    services.schema["keys"]["appearance.darkMode"]["ui"] =
+        json!({"i18n":"native.dark","control":"toggle"});
+    for (key, prefix, options) in [
+        (
+            "appearance.windowBackground",
+            "native.background",
+            vec!["opaque", "tinted", "translucent"],
+        ),
+        (
+            "appearance.windowControls",
+            "native.controls",
+            vec!["left", "right"],
+        ),
+    ] {
+        let options: Vec<_> = options
+            .into_iter()
+            .map(|value| {
+                let label = format!("{prefix}.{value}");
+                exports.english[&label] = json!(format!("label {value}"));
+                json!({"value":value,"i18n":label})
+            })
+            .collect();
+        services.schema["keys"][key]["ui"] =
+            json!({"i18n":prefix,"control":"segmented","options":options});
+    }
+    let view = view::View::new(exports, &services, false).unwrap();
+    let rows: Vec<_> = view.groups.iter().flat_map(|(_, rows)| rows).collect();
+    assert_eq!(rows[0].title, "Modo oscuro");
+    assert_eq!(rows[0].subtitle, "Aspecto oscuro");
+    assert_eq!(rows[1].title, "Window style");
+    assert_eq!(rows[1].subtitle, "Window background");
+    assert_eq!(rows[1].options[1], (json!("tinted"), "label tinted".into()));
+    assert_eq!(rows[2].title, "Window buttons");
+    assert_eq!(rows[2].subtitle, "");
+    assert_eq!(
+        rows.iter().map(|r| r.value.clone()).collect::<Vec<_>>(),
+        vec![json!(true), json!("tinted"), json!("left")]
+    );
+}
+
+#[test]
+fn resolved_ui_labels_are_preserved_and_missing_translation_is_an_error() {
+    let exports = exports();
+    let supplied = json!({"title":"Provided","subtitle":"Description","i18n":"absent",
+        "options":[{"value":"left","label":"Left","i18n":"also.absent"}]});
+    assert_eq!(exports.localize_ui(&supplied).unwrap(), supplied);
+    assert!(
+        exports
+            .localize_ui(&json!({"control":"toggle","i18n":"missing.title"}))
+            .unwrap_err()
+            .contains("missing translation missing.title")
+    );
+}

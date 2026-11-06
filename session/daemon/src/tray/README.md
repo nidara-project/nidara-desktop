@@ -1,8 +1,8 @@
 # Native session tray (Tray1 v1)
 
 `nidara-sessiond --tray` serves `org.nidara.Tray1` on `org.nidara.Session`,
-`/org/nidara/Tray`. Without this explicit flag the interface and watchers are
-absent. The installed unit and TS shell are untouched. There is no TS bridge,
+`/org/nidara/Tray`. No-argument startup enables it by default (#1017); explicit service flags
+select a subset for private harnesses. There is no TS bridge,
 Rust bar, Settings reader, focus action or popup renderer in this service step
 (#959 A). The toolkit popup work is B; the Rust bar/Settings consumer is C.
 

@@ -1,0 +1,21 @@
+[Unit]
+Description=Nidara Rust shell (bar, dock and panels)
+Documentation=https://github.com/nidara-project/nidara-desktop
+PartOf=graphical-session.target
+Requires=nidara-sessiond.service
+After=graphical-session.target nidara-sessiond.service
+Conflicts=nidara.service nidara-dock.service
+StartLimitIntervalSec=30
+StartLimitBurst=5
+
+[Service]
+Type=simple
+ExecStartPre=/usr/bin/nidara-migrate
+ExecStart=/usr/bin/nidara-shell --bar
+Environment=NIDARA_SESSION=rust
+Restart=on-failure
+RestartSec=1
+TimeoutStopSec=3
+Slice=session-graphical.slice
+
+# No WantedBy: only the Nidara Hyalo launcher starts this unit.

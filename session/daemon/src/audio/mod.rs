@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
-//! Audio1, opt-in. WirePlumber owns graph policy and persistent mixer state.
+//! Audio1, enabled by default in the Rust session. WirePlumber owns graph policy and persistent mixer state.
 mod bus;
 mod fallback;
 mod model;

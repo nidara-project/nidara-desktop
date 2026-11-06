@@ -150,6 +150,32 @@ impl Exports {
             .map(str::to_owned)
             .ok_or_else(|| format!("missing translation {k}"))
     }
+    /// Native Config1 leaves UI labels as translation keys. Resolve them in this
+    /// reader's language, with the same per-key English fallback as manifest labels.
+    pub fn localize_ui(&self, ui: &Value) -> Result<Value> {
+        let mut ui = ui.clone();
+        if ui["title"].is_null() {
+            ui["title"] = self.label(&ui["i18n"])?.into();
+        }
+        if ui["subtitle"].is_null() {
+            let subtitle = ui["i18n"].as_str().and_then(|key| {
+                let key = format!("{key}.desc");
+                self.strings.get(&key).or_else(|| self.english.get(&key))
+            });
+            ui["subtitle"] = match subtitle {
+                Some(value) => string(value)?.into(),
+                None => "".into(),
+            };
+        }
+        if let Some(options) = ui["options"].as_array_mut() {
+            for option in options {
+                if option["label"].is_null() {
+                    option["label"] = self.label(&option["i18n"])?.into();
+                }
+            }
+        }
+        Ok(ui)
+    }
     pub fn scss(&self, key: &str) -> Result<f32> {
         string(&self.sizes["scss"][key])?
             .trim_end_matches("px")
