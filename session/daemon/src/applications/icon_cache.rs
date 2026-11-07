@@ -199,6 +199,33 @@ pub fn trace(kind: &str, hit: bool) {
         );
     }
 }
+pub fn resolved(id: &str, side: u32, path: Option<&std::path::Path>) {
+    if std::env::var_os("NK_ICON_METRICS").is_some() {
+        eprintln!(
+            "ICON_DAEMON_ASSET {}",
+            serde_json::json!({"id":id,"side":side,"path":path,"bytes":path.and_then(|p| p.metadata().ok()).map(|m|m.len()),"us":glib::monotonic_time()})
+        );
+    }
+}
+pub struct Span(Option<(i64, &'static str, String, u32)>);
+pub fn span(stage: &'static str, id: &str, side: u32) -> Span {
+    static ENABLED: OnceLock<bool> = OnceLock::new();
+    Span(
+        (*ENABLED.get_or_init(|| std::env::var_os("NK_ICON_METRICS").is_some()))
+            .then(|| (glib::monotonic_time(), stage, id.into(), side)),
+    )
+}
+impl Drop for Span {
+    fn drop(&mut self) {
+        if let Some((start, stage, id, side)) = self.0.take() {
+            let now = glib::monotonic_time();
+            eprintln!(
+                "ICON_DAEMON_DETAIL {}",
+                serde_json::json!({"stage":stage,"id":id,"side":side,"start_us":start,"us":now,"elapsed_us":now-start})
+            );
+        }
+    }
+}
 #[cfg(test)]
 mod tests {
     use super::*;

@@ -76,6 +76,10 @@ def run(ctx):
         until('Apps closes',lambda:not [l for l in ipc('layers').get('ok',{}).get('layers',[]) if l.get('namespace')=='nidara-apps'])
         return {'get_icon_requests':count,'first_frame_ready':first['ready'],'visible':first['wanted'],'first_visible_ready':visible['ready'],'first_visible_wanted':visible['wanted'],'open_to_last_icon_ms':(last['us']-opened['us'])/1000,'open_to_confirmed_pixels_ms':pixels_ms,'all_icon_rectangles_visible':True if 'rectangles' in last else None,'wall_seconds':time.monotonic()-start}
     cold_dock=dock_result()
+    if os.environ.get('NK_ICON_REFRESH_PROBE') == '1':
+        # Controlled overlap with a catalogue refresh, private copies only.
+        next((ctx['RUN']/'apps/applications').glob('*.desktop')).touch()
+        time.sleep(.25)
     cold_apps=apps_result('apps-cold');warm_apps=apps_result('apps-warm')
     ctx['shot'](log/'dock-ready.png')
     def daemon_events():

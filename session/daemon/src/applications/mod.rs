@@ -4,6 +4,7 @@ mod autostart;
 mod catalogue;
 mod desktop;
 mod icon_cache;
+mod icon_view;
 mod icons;
 mod launch;
 mod layout;
@@ -665,18 +666,13 @@ impl Applications {
             return Err(Error::Invalid("icon size/scale bounds".into()));
         }
         let side = (logical_size as f64 * scale).ceil().min(1024.0) as u32;
-        let id = desktop_id.clone();
-        let (a, revision, theme) = self
-            .store
-            .call(move |s| {
-                s.epoch(epoch)?;
-                Ok((
-                    s.app(&id, generation)?.clone(),
-                    s.icon_revision,
-                    s.theme.clone(),
-                ))
-            })
-            .await?;
+        let store_span = icon_cache::span("published-metadata", &desktop_id, side);
+        let published = self.store.icon_snapshot()?;
+        published.epoch(epoch)?;
+        let a = published.app(&desktop_id, generation)?.clone();
+        let revision = published.revision;
+        let theme = published.theme.clone();
+        drop(store_span);
         let key = icon_cache::Key {
             epoch,
             id: format!("app:{desktop_id}"),
@@ -685,40 +681,49 @@ impl Applications {
             theme: theme.clone(),
             side,
         };
-        let cached = self.icon_cache.get(&key);
+        let cached = {
+            let _span = icon_cache::span("cache-lookup", &desktop_id, side);
+            self.icon_cache.get(&key)
+        };
         icon_cache::trace("app", cached.is_some());
         let image = if let Some(image) = cached {
             image
         } else {
+            let permit_span = icon_cache::span("permit", &desktop_id, side);
             let permit = self
                 .decode
                 .clone()
                 .try_acquire_owned()
                 .map_err(|_| Error::Busy("icon workers occupied".into()))?;
+            drop(permit_span);
+            let queued = icon_cache::span("blocking-queue", &desktop_id, side);
+            let trace_id = desktop_id.clone();
             tokio::task::spawn_blocking(move || {
+                drop(queued);
+                let _span = icon_cache::span("blocking-worker", &trace_id, side);
                 let _permit = permit;
-                let path = icons::resolve(&a, &theme, side);
+                let path = {
+                    let _span = icon_cache::span("resolve", &trace_id, side);
+                    icons::resolve(&a, &theme, side)
+                };
+                icon_cache::resolved(&trace_id, side, path.as_deref());
+                let decode_span = icon_cache::span("decode", &trace_id, side);
                 let (reason, pixels) = match path.as_ref().map(|p| icons::read(p, side)) {
                     Some(Ok(p)) => ("asset", p),
                     Some(Err(_)) => ("fallback-v1:decode", icons::fallback(side)),
                     None => ("fallback-v1:missing", icons::fallback(side)),
                 };
+                drop(decode_span);
+                let _span = icon_cache::span("hash", &trace_id, side);
                 Arc::new(icon_cache::Rendered::new(path, reason, pixels))
             })
             .await
             .map_err(|e| Error::Failed(e.to_string()))?
         };
-        let checked_id = desktop_id.clone();
-        self.store
-            .call(move |s| {
-                s.epoch(epoch)?;
-                s.app(&checked_id, generation)?;
-                if revision != s.icon_revision {
-                    return Err(Error::Stale("icon changed during decode".into()));
-                }
-                Ok(())
-            })
-            .await?;
+        let _span = icon_cache::span("freshness-and-reply", &desktop_id, side);
+        let current = self.store.icon_snapshot()?;
+        current.unchanged(epoch, revision)?;
+        current.app(&desktop_id, generation)?;
         self.icon_cache.put(key, image.clone());
         Ok(image.reply(
             &format!("app:{desktop_id}:{generation}:{revision}"),
@@ -745,13 +750,10 @@ impl Applications {
             return Err(Error::Invalid("icon size/scale bounds".into()));
         }
         let side = (logical_size as f64 * scale).ceil().min(1024.0) as u32;
-        let (revision, theme) = self
-            .store
-            .call(move |s| {
-                s.epoch(epoch)?;
-                Ok((s.icon_revision, s.theme.clone()))
-            })
-            .await?;
+        let published = self.store.icon_snapshot()?;
+        published.epoch(epoch)?;
+        let revision = published.revision;
+        let theme = published.theme.clone();
         let cache_key = icon_cache::Key {
             epoch,
             id: format!("trash:{full}"),
@@ -786,15 +788,7 @@ impl Applications {
             .map_err(|e| Error::Failed(e.to_string()))?
             .ok_or_else(|| Error::Unavailable("the icon theme has no requested icon".into()))?
         };
-        self.store
-            .call(move |s| {
-                s.epoch(epoch)?;
-                if revision != s.icon_revision {
-                    return Err(Error::Stale("icon changed during decode".into()));
-                }
-                Ok(())
-            })
-            .await?;
+        self.store.icon_snapshot()?.unchanged(epoch, revision)?;
         self.icon_cache.put(cache_key, image.clone());
         Ok(image.reply(&format!("trash:{full}:{revision}"), logical_size, scale))
     }
@@ -817,17 +811,13 @@ impl Applications {
             return Err(Error::Invalid("icon size/scale bounds".into()));
         }
         let side = (logical_size as f64 * scale).ceil().min(1024.0) as u32;
-        let k = key.clone();
-        let (revision, theme) = self
-            .store
-            .call(move |s| {
-                s.epoch(epoch)?;
-                if !s.layout.contains(&k) {
-                    return Err(Error::NotFound("layout key missing".into()));
-                }
-                Ok((s.icon_revision, s.theme.clone()))
-            })
-            .await?;
+        let published = self.store.icon_snapshot()?;
+        published.epoch(epoch)?;
+        if !published.layout.contains(&key) {
+            return Err(Error::NotFound("layout key missing".into()));
+        }
+        let revision = published.revision;
+        let theme = published.theme.clone();
         let k = key.clone();
         let cache_key = icon_cache::Key {
             epoch,
@@ -863,15 +853,11 @@ impl Applications {
             .map_err(|e| Error::Failed(e.to_string()))?
             .ok_or_else(|| Error::Unavailable("the icon theme has no requested icon".into()))?
         };
-        self.store
-            .call(move |s| {
-                s.epoch(epoch)?;
-                if revision != s.icon_revision {
-                    return Err(Error::Stale("icon changed during decode".into()));
-                }
-                Ok(())
-            })
-            .await?;
+        let current = self.store.icon_snapshot()?;
+        current.unchanged(epoch, revision)?;
+        if !current.layout.contains(&key) {
+            return Err(Error::NotFound("layout key removed during decode".into()));
+        }
         self.icon_cache.put(cache_key, image.clone());
         Ok(image.reply(&format!("layout:{key}:{revision}"), logical_size, scale))
     }
@@ -947,6 +933,7 @@ impl Applications {
                 s.epoch(epoch)?;
                 s.app(&desktop_id, generation)?;
                 s.authorize(&peer, Operation::AppIcon)?;
+                s.withdraw_icons();
                 icons::write_override(&desktop_id, &bytes)?;
                 s.icons_changed();
                 Ok(s.icon_revision)
@@ -969,6 +956,7 @@ impl Applications {
                 s.app(&desktop_id, generation)?;
                 s.authorize(&peer, Operation::AppIcon)?;
                 icons::check_override_parent()?;
+                s.withdraw_icons();
                 match std::fs::remove_file(icons::app_override(&desktop_id)) {
                     Ok(()) => {
                         s.icons_changed();
@@ -1294,5 +1282,264 @@ mod page_tests {
         p.close(":1", 1, &a);
         assert!(p.read(":1", 1, &w).is_err());
         assert!(p.sessions.is_empty());
+    }
+    fn held_icon_service() -> (
+        Applications,
+        impl Send,
+        Arc<icon_view::Published>,
+        std::path::PathBuf,
+    ) {
+        let path = std::env::temp_dir().join(format!("nidara-icon-read-{}.svg", unique()));
+        std::fs::write(&path, r##"<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16"><path fill="#ff0000" d="M0 0h16v16H0z"/></svg>"##).unwrap();
+        let app = catalogue::App {
+            id: "IconReadTest.desktop".into(),
+            generation: 7,
+            digest: String::new(),
+            source_hash: String::new(),
+            exec_hash: String::new(),
+            record: json!({}),
+            executable: String::new(),
+            keywords: vec![],
+            icon: path.to_string_lossy().into_owned(),
+        };
+        let snapshot = icon_view::Snapshot {
+            epoch: 9,
+            catalogue_revision: 1,
+            layout_revision: 1,
+            revision: 11,
+            theme: "fixture".into(),
+            apps: std::collections::BTreeMap::from([(app.id.clone(), app)]),
+            layout: std::collections::BTreeSet::from(["folder:file:///tmp/held".into()]),
+        };
+        // Keep the actor receiver alive but permanently unserviced, as during
+        // disk traversal. Calls which regress to that queue cannot complete.
+        let (store, barrier, published) = store::Handle::held_for_test(snapshot);
+        (
+            Applications {
+                admission: Arc::default(),
+                store,
+                pages: Arc::default(),
+                peers: Arc::default(),
+                decode: Arc::new(Semaphore::new(8)),
+                icon_cache: Arc::default(),
+                launch_workers: Arc::new(Semaphore::new(8)),
+            },
+            barrier,
+            published,
+            path,
+        )
+    }
+    fn icon_message() -> zbus::Message {
+        zbus::Message::method_call(PATH, "GetIcon")
+            .unwrap()
+            .sender(":1.999")
+            .unwrap()
+            .build(&())
+            .unwrap()
+    }
+    fn warm_icon(service: &Applications, id: &str, generation: u64) {
+        let key = icon_cache::Key {
+            epoch: 9,
+            id: id.into(),
+            generation,
+            revision: 11,
+            theme: "fixture".into(),
+            side: 64,
+        };
+        service.icon_cache.get(&key);
+        service.icon_cache.put(
+            key,
+            Arc::new(icon_cache::Rendered::new(
+                None,
+                "asset",
+                (1, 1, vec![11, 22, 33, 255]),
+            )),
+        );
+    }
+    #[tokio::test]
+    async fn cached_app_place_and_trash_reads_finish_while_the_catalogue_actor_is_held() {
+        let (mut service, _actor_barrier, _published, path) = held_icon_service();
+        // A hit must need neither the catalogue actor nor a decode permit.
+        service.decode = Arc::new(Semaphore::new(0));
+        for (id, generation) in [
+            ("app:IconReadTest.desktop", 7),
+            ("trash:false", 0),
+            ("layout:folder:file:///tmp/held", 0),
+        ] {
+            warm_icon(&service, id, generation);
+        }
+        let message = icon_message();
+        let app = tokio::time::timeout(
+            Duration::from_secs(1),
+            service.get_icon(
+                9,
+                "IconReadTest.desktop".into(),
+                7,
+                64,
+                1.,
+                message.header(),
+            ),
+        )
+        .await
+        .expect("GetIcon waited behind the held refresh")
+        .unwrap();
+        assert_eq!(app.3, [11, 22, 33, 255]);
+        let trash = tokio::time::timeout(
+            Duration::from_secs(1),
+            service.get_trash_icon(9, false, 64, 1., message.header()),
+        )
+        .await
+        .expect("Trash waited behind refresh")
+        .unwrap();
+        assert_eq!(trash.3, app.3);
+        let place = tokio::time::timeout(
+            Duration::from_secs(1),
+            service.get_layout_icon(
+                9,
+                "folder:file:///tmp/held".into(),
+                64,
+                1.,
+                message.header(),
+            ),
+        )
+        .await
+        .expect("Layout icon waited behind refresh")
+        .unwrap();
+        assert_eq!(place.3, app.3);
+        std::fs::remove_file(path).unwrap();
+    }
+    #[tokio::test]
+    async fn a_cold_decode_also_finishes_while_the_catalogue_actor_is_held() {
+        let (service, _actor_barrier, _published, path) = held_icon_service();
+        let message = icon_message();
+        let image = tokio::time::timeout(
+            Duration::from_secs(1),
+            service.get_icon(
+                9,
+                "IconReadTest.desktop".into(),
+                7,
+                64,
+                1.,
+                message.header(),
+            ),
+        )
+        .await
+        .expect("cold icon/freshness check waited behind refresh")
+        .unwrap();
+        assert_eq!((image.1, image.2), (64, 64));
+        assert_eq!(
+            &image.3[(32 * 64 + 32) * 4..(32 * 64 + 32) * 4 + 4],
+            &[255, 0, 0, 255]
+        );
+        std::fs::remove_file(path).unwrap();
+    }
+    #[tokio::test]
+    async fn published_reads_reject_withdrawn_revised_removed_and_replaced_metadata() {
+        let (service, _actor_barrier, published, path) = held_icon_service();
+        warm_icon(&service, "app:IconReadTest.desktop", 7);
+        let message = icon_message();
+        let previous = published.get().unwrap();
+        published.withdraw();
+        assert!(matches!(
+            service
+                .get_icon(
+                    9,
+                    "IconReadTest.desktop".into(),
+                    7,
+                    64,
+                    1.,
+                    message.header()
+                )
+                .await,
+            Err(Error::Busy(_))
+        ));
+        let mut next = (*previous).clone();
+        next.revision += 1;
+        published.publish(next.clone());
+        // This is the same post-decode check used by the endpoint. Holding an
+        // old Arc cannot make it pass after the publication boundary.
+        assert!(matches!(
+            published.get().unwrap().unchanged(9, 11),
+            Err(Error::Stale(_))
+        ));
+        std::fs::write(&path, r##"<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16"><path fill="#0000ff" d="M0 0h16v16H0z"/></svg>"##).unwrap();
+        let changed = service
+            .get_icon(
+                9,
+                "IconReadTest.desktop".into(),
+                7,
+                64,
+                1.,
+                message.header(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(
+            &changed.3[(32 * 64 + 32) * 4..(32 * 64 + 32) * 4 + 4],
+            &[0, 0, 255, 255]
+        );
+        next.apps
+            .get_mut("IconReadTest.desktop")
+            .unwrap()
+            .generation = 8;
+        next.catalogue_revision += 1;
+        published.publish(next.clone());
+        assert!(matches!(
+            service
+                .get_icon(
+                    9,
+                    "IconReadTest.desktop".into(),
+                    7,
+                    64,
+                    1.,
+                    message.header()
+                )
+                .await,
+            Err(Error::Stale(_))
+        ));
+        next.apps.clear();
+        next.layout.clear();
+        published.publish(next.clone());
+        assert!(matches!(
+            service
+                .get_icon(
+                    9,
+                    "IconReadTest.desktop".into(),
+                    8,
+                    64,
+                    1.,
+                    message.header()
+                )
+                .await,
+            Err(Error::NotFound(_))
+        ));
+        assert!(matches!(
+            service
+                .get_layout_icon(
+                    9,
+                    "folder:file:///tmp/held".into(),
+                    64,
+                    1.,
+                    message.header()
+                )
+                .await,
+            Err(Error::NotFound(_))
+        ));
+        next.epoch = 10;
+        published.publish(next);
+        assert!(matches!(
+            service
+                .get_trash_icon(9, false, 64, 1., message.header())
+                .await,
+            Err(Error::Stale(_))
+        ));
+        drop(icon_view::Lifetime(published));
+        assert!(matches!(
+            service
+                .get_trash_icon(10, false, 64, 1., message.header())
+                .await,
+            Err(Error::Unavailable(_))
+        ));
+        std::fs::remove_file(path).unwrap();
     }
 }

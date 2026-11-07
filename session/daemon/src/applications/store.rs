@@ -36,6 +36,7 @@ pub struct Store {
     pub icon_revision: u64,
     /// The icon theme app icons resolve against (`apply_theme`).
     pub theme: String,
+    icon_view: Arc<super::icon_view::Published>,
     portal_theme: Option<String>,
     interface: Option<gio::Settings>,
     pub apps: BTreeMap<String, App>,
@@ -63,7 +64,7 @@ pub struct Store {
     domains: BTreeSet<String>,
 }
 impl Store {
-    fn new(notify: Arc<Notify>) -> Self {
+    fn new(notify: Arc<Notify>, icon_view: Arc<super::icon_view::Published>) -> Self {
         let schema = gio::SettingsSchemaSource::default()
             .and_then(|s| s.lookup("org.nidara.dock", true))
             .filter(|s| s.has_key("pinned") && s.has_key("layout") && s.has_key("layout-version"));
@@ -133,6 +134,7 @@ impl Store {
             layout_revision: 1,
             icon_revision: 1,
             theme: String::new(),
+            icon_view,
             portal_theme: None,
             interface,
             apps: BTreeMap::new(),
@@ -155,6 +157,29 @@ impl Store {
             notify,
             domains: BTreeSet::new(),
         }
+    }
+    fn publish_icons(&self) {
+        let stamp = (
+            self.epoch,
+            self.catalogue_revision,
+            self.layout_revision,
+            self.icon_revision,
+        );
+        if self.icon_view.get().is_ok_and(|s| s.stamp() == stamp) {
+            return;
+        }
+        self.icon_view.publish(super::icon_view::Snapshot {
+            epoch: self.epoch,
+            catalogue_revision: self.catalogue_revision,
+            layout_revision: self.layout_revision,
+            revision: self.icon_revision,
+            theme: self.theme.clone(),
+            apps: self.apps.clone(),
+            layout: self.layout.iter().cloned().collect(),
+        });
+    }
+    pub fn withdraw_icons(&self) {
+        self.icon_view.withdraw();
     }
     /// What the portal answered for the icon theme; None while no portal answers.
     pub fn set_portal_theme(&mut self, theme: Option<String>) {
@@ -265,9 +290,13 @@ impl Store {
         Ok(())
     }
     pub fn refresh(&mut self) {
+        let _refresh = super::icon_cache::span("catalogue-refresh", "catalogue", 0);
         self.apply_theme();
         let previous = self.present.clone();
-        let mut scan = catalogue::scan(&self.roots, &mut self.present);
+        let mut scan = {
+            let _span = super::icon_cache::span("catalogue-scan", "catalogue", 0);
+            catalogue::scan(&self.roots, &mut self.present)
+        };
         if previous != self.present
             && catalogue::root_history_valid()
             && let Err(e) = catalogue::save_root_history(&self.present)
@@ -281,6 +310,7 @@ impl Store {
             scan.diagnostics
                 .push("root history corrupt or unreadable; pruning disabled".into());
         }
+        let icon_audit = super::icon_cache::span("catalogue-icon-audit", "catalogue", 0);
         let (icon_watches, icon_complete, mut signatures) = super::icons::watches();
         let mut assets = std::collections::BTreeMap::new();
         for a in scan.apps.values() {
@@ -293,6 +323,7 @@ impl Store {
                 signatures.push_str(&format!("{}:{}:{:?};", p.display(), m.len(), m.modified()));
             }
         }
+        drop(icon_audit);
         let fingerprint = catalogue::hash(signatures.as_bytes());
         if !self.icon_fingerprint.is_empty() && self.icon_fingerprint != fingerprint {
             self.icon_revision += 1;
@@ -446,9 +477,29 @@ impl Store {
 type Job = Box<dyn FnOnce(&mut Store) + Send>;
 #[derive(Clone)]
 pub struct Handle {
+    icon_view: Arc<super::icon_view::Published>,
     tx: tokio::sync::mpsc::Sender<Job>,
 }
 impl Handle {
+    pub fn icon_snapshot(&self) -> Result<Arc<super::icon_view::Snapshot>, Error> {
+        self.icon_view.get()
+    }
+    #[cfg(test)]
+    pub(super) fn held_for_test(
+        snapshot: super::icon_view::Snapshot,
+    ) -> (Self, impl Send, Arc<super::icon_view::Published>) {
+        let (tx, rx) = tokio::sync::mpsc::channel::<Job>(256);
+        let icon_view = Arc::new(super::icon_view::Published::default());
+        icon_view.publish(snapshot);
+        (
+            Self {
+                tx,
+                icon_view: icon_view.clone(),
+            },
+            rx,
+            icon_view,
+        )
+    }
     pub async fn call<T: Send + 'static>(
         &self,
         f: impl FnOnce(&mut Store) -> Result<T, Error> + Send + 'static,
@@ -457,7 +508,11 @@ impl Handle {
         self.tx
             .try_send(Box::new(move |store| {
                 if !tx.is_closed() {
-                    let _ = tx.send(f(store));
+                    let result = f(store);
+                    // Publish before the effect's reply: a subsequent read must
+                    // see acknowledged overrides, generations and layout changes.
+                    store.publish_icons();
+                    let _ = tx.send(result);
                 }
             }))
             .map_err(|_| Error::Busy("application queue full or unavailable".into()))?;
@@ -471,14 +526,18 @@ pub async fn spawn() -> Result<(Handle, Arc<Notify>), Error> {
     let (tx, mut rx) = tokio::sync::mpsc::channel::<Job>(256);
     let (ready_tx, ready_rx) = oneshot::channel();
     let notify = Arc::new(Notify::new());
+    let icon_view = Arc::new(super::icon_view::Published::default());
+    let published = icon_view.clone();
     let n = notify.clone();
     std::thread::Builder::new()
         .name("applications-glib".into())
         .spawn(move || {
+            let _icons_lifetime = super::icon_view::Lifetime(published.clone());
             let ctx = glib::MainContext::new();
             let _ = ctx.with_thread_default(|| {
-                let mut store = Store::new(n);
+                let mut store = Store::new(n, published);
                 store.refresh();
+                store.publish_icons();
                 let _ = ready_tx.send(());
                 let main_loop = glib::MainLoop::new(Some(&ctx), false);
                 let stop = main_loop.clone();
@@ -504,15 +563,17 @@ pub async fn spawn() -> Result<(Handle, Arc<Notify>), Error> {
                                 // Consume the notification accumulated during coalescing.
                                 let _ = dirty.notified().now_or_never();
                                 store.refresh();
+                                store.publish_icons();
                                 backoff = 1;
                                 recovery_at = Instant::now() + Duration::from_secs(backoff);
                             }
                             _ = recovery => {
                                 store.refresh();
+                                store.publish_icons();
                                 backoff = (backoff * 2).min(60);
                                 recovery_at = Instant::now() + Duration::from_secs(backoff);
                             }
-                            _ = tracking => {store.tracking_tick();}
+                            _ = tracking => {store.tracking_tick(); store.publish_icons();}
                             job = rx.recv() => {
                                 let Some(job) = job else { break };
                                 // A ready queue must yield so normal-priority GSettings
@@ -532,7 +593,7 @@ pub async fn spawn() -> Result<(Handle, Arc<Notify>), Error> {
         .await
         .map_err(|_| Error::Timeout("catalogue startup".into()))?
         .map_err(|_| Error::Unavailable("catalogue worker failed".into()))?;
-    Ok((Handle { tx }, notify))
+    Ok((Handle { tx, icon_view }, notify))
 }
 
 /// The portal's answer while it gives one; else the setting it would publish; else none

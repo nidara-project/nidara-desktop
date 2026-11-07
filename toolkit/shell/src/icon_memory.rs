@@ -557,7 +557,26 @@ fn worker(inner: Arc<Inner>) {
                 };
             }
         };
-        let result = (inner.fetch)(&key).and_then(Asset::new);
+        let result = {
+            let tags = match &key {
+                Key::App {
+                    id, logical, scale, ..
+                } => serde_json::json!({"id":id,"logical":logical,"scale":f64::from_bits(*scale)}),
+                Key::Named { name, side, .. } => serde_json::json!({"id":name,"side":side}),
+                Key::Tray { handle, side, .. } => serde_json::json!({"id":handle,"side":side}),
+            };
+            let fetched = {
+                let _span = crate::icon_metrics::span("icon-fetch", tags.clone());
+                (inner.fetch)(&key)
+            };
+            if let Err(error) = &fetched {
+                let mut data = tags.clone();
+                data["error"] = format!("{error:?}").into();
+                crate::icon_metrics::emit("icon-fetch-error", data);
+            }
+            let _span = crate::icon_metrics::span("icon-convert", tags);
+            fetched.and_then(Asset::new)
+        };
         let callbacks = {
             let mut s = inner.state.lock().unwrap_or_else(|p| p.into_inner());
             s.running.remove(&key);

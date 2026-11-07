@@ -49,6 +49,10 @@ start their own GetIcon worker or decoded cache (#1041). Interface glyphs and
 album/window pictures are separate resources. Read `toolkit/shell/ICONS.md` and
 `session/design/APPLICATIONS1-DOCK.md` before adding an app-icon consumer; use its
 readiness API, invalidation and Busy retry rather than a surface-local loader.
+Daemon icon reads validate against `session/daemon/src/applications/icon_view.rs`,
+the atomically published icon metadata; do not put their pre/post-decode checks
+back on `Store::call`, behind synchronous catalogue refresh. Actor effects publish
+before reply; override writes withdraw/re-publish, and actor exit retires the view.
 The TS conventions below still apply to the remaining
 TS applications and frozen Hyprland source.
 

@@ -219,7 +219,13 @@ impl Launcher {
     ) -> Self {
         let metrics_id = glib::monotonic_time();
         crate::icon_metrics::emit("apps-open", serde_json::json!({"instance":metrics_id}));
-        let all = entries(apps);
+        let all = {
+            let _span = crate::icon_metrics::span(
+                "apps-stage",
+                serde_json::json!({"instance":metrics_id,"stage":"catalogue-sort","count":apps.len()}),
+            );
+            entries(apps)
+        };
         let shown = (0..all.len()).collect();
         Self {
             metrics_id,
@@ -833,6 +839,10 @@ impl Application for Launcher {
         let quiet = matches!(event, Event::Motion(..) | Event::PointerLeave);
         match event {
             Event::Configure => {
+                let _span = crate::icon_metrics::span(
+                    "apps-stage",
+                    serde_json::json!({"instance":self.metrics_id,"stage":"configure"}),
+                );
                 let size = w.size();
                 if size != self.size {
                     self.size = size;
@@ -842,6 +852,10 @@ impl Application for Launcher {
                 if !self.tried_look {
                     self.tried_look = true;
                     if let Some(bus) = &self.bus {
+                        let _span = crate::icon_metrics::span(
+                            "apps-stage",
+                            serde_json::json!({"instance":self.metrics_id,"stage":"look"}),
+                        );
                         self.look = Look::load(bus)
                             .map_err(|e| eprintln!("nidara-shell: Apps has no look: {e}"))
                             .ok();
@@ -852,6 +866,10 @@ impl Application for Launcher {
                 w.redraw();
             }
             Event::Wake => {
+                let _span = crate::icon_metrics::span(
+                    "apps-stage",
+                    serde_json::json!({"instance":self.metrics_id,"stage":"wake"}),
+                );
                 self.a11y(w);
                 if self.closing {
                     return Ok(());
@@ -953,10 +971,28 @@ impl Application for Launcher {
     }
 
     fn paint(&mut self, f: nk_wayland::Frame) -> nk_wayland::Result<Vec<u8>> {
-        let mut c = Canvas::new(f.pixel_width, f.pixel_height, f.scale);
+        let _span = crate::icon_metrics::span(
+            "apps-stage",
+            serde_json::json!({"instance":self.metrics_id,"stage":"paint","held":self.waiting_for_icons()}),
+        );
+        let mut c = {
+            let _span = crate::icon_metrics::span(
+                "apps-stage",
+                serde_json::json!({"instance":self.metrics_id,"stage":"canvas"}),
+            );
+            Canvas::new(f.pixel_width, f.pixel_height, f.scale)
+        };
         if self.dragging || self.closing || self.look.is_none() || self.waiting_for_icons() {
+            let _span = crate::icon_metrics::span(
+                "apps-stage",
+                serde_json::json!({"instance":self.metrics_id,"stage":"finish-held"}),
+            );
             return Ok(c.finish());
         }
+        let content = crate::icon_metrics::span(
+            "apps-stage",
+            serde_json::json!({"instance":self.metrics_id,"stage":"content"}),
+        );
         self.icons_presented = true;
         let (g, ..) = self.geometry();
         let rect = |r: [f64; 4]| Rect {
@@ -1105,6 +1141,11 @@ impl Application for Launcher {
             }
         }
         c.pop_clip();
+        drop(content);
+        let _span = crate::icon_metrics::span(
+            "apps-stage",
+            serde_json::json!({"instance":self.metrics_id,"stage":"finish-visible"}),
+        );
         Ok(c.finish())
     }
 
@@ -1175,7 +1216,17 @@ fn ink(alpha: f32) -> Color {
 /// One Apps layer's whole life on its own thread: on the output the compositor chooses
 /// (the one in use), over everything, with the keyboard.
 pub fn run(mut launcher: Launcher, wake: (Waker, WakeSource)) -> nk_wayland::Result<()> {
-    launcher.start_workers(wake.0);
+    {
+        let _span = crate::icon_metrics::span(
+            "apps-stage",
+            serde_json::json!({"instance":launcher.metrics_id,"stage":"workers"}),
+        );
+        launcher.start_workers(wake.0);
+    }
+    crate::icon_metrics::emit(
+        "apps-layer-start",
+        serde_json::json!({"instance":launcher.metrics_id}),
+    );
     nk_wayland::run_layer(
         launcher,
         Options {

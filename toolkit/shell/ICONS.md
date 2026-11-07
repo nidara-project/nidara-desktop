@@ -31,7 +31,16 @@ once; Trash retains its existing themed/symbol fallback.
 The daemon caches resolved paths and rendered pixels after validated reads, with
 post-decode stale checks. Publication retires obsolete catalogue generations.
 An old decode cannot enter the new namespace or revive a removed app. Cache hits
-need no decode permit. Neither layer has a disk cache: measured process-local
+need no decode permit. Both metadata validation and post-decode freshness use
+`session/daemon/src/applications/icon_view.rs`, an immutable committed view. A full
+catalogue refresh keeps the previous view available while it traverses disk;
+GetIcon, Trash and place reads never queue behind it. New metadata is published
+before an actor effect is acknowledged. Managed override writes withdraw the
+view before changing files and republish on success or error; concurrent reads
+receive Busy. Actor exit retires the view with Unavailable. A captured old Arc
+cannot make the final epoch/revision/generation/membership check pass. The
+published view holds catalogue metadata in addition to the pixel LRU budget;
+readers share it by Arc. It is not a usage/window/launch snapshot. Neither layer has a disk cache: measured process-local
 reuse removes reopen traffic without one.
 
 ## Reproduce the measurement
@@ -62,7 +71,11 @@ Before/after evidence and exact results accompany this change. Hardware/live
 session timing and visual acceptance remain separate; no installation, CI or
 owner-session configuration is part of #1041.
 
-## Before/after evidence (Papirus, software Hyalo)
+## Diagnostic debug measurements (superseded for package latency)
+
+The following historical comparison uses unoptimized dev binaries, not the
+PKGBUILD profile. Keep it for diagnosis only; release measurements are required
+for the PR's performance claims.
 
 Base main `1028c79a`, installed catalogue copied into private state, owner's typed
 pin layout. Baseline `baseline-2` uses the original serial loaders plus opt-in
@@ -96,3 +109,37 @@ absence, loss of cross-surface reuse, daemon cache bypass and an output without
 Apps icon pixels. Positive tests cover coalescing, eight-worker bound, generation
 and owner retirement, paused-queue saturation, ambiguity, LRU budgets and bounded
 SVG decoding. No CI/configuration or session changes accompany this work.
+
+## Apps latency diagnosis and catalogue contention
+
+Opt-in `apps-stage`, `icon-fetch`/`icon-convert`, `ICON_DAEMON_DETAIL` and
+`ICON_DAEMON_ASSET` events split catalogue sort, layer/configure, appearance,
+paint, resolver, decoder, permits, blocking queue, metadata and final freshness.
+Stage spans overlap; do not sum concurrent worker durations as wall-clock time.
+
+The debug diagnostic reproduced 2167 ms cold and 380 ms warm. The largest
+individual decode was a 23.6 KiB Chrome-PWA PNG at 46.6 ms, not a giant Papirus
+SVG; the next PNG was 43.8 ms, Papirus SVGs at most 12.8 ms. Permit acquisition
+was at most 1 microsecond, blocking dispatch 0.266 ms and renderer conversion
+1.02 ms; no Busy occurred. Several GetIcon replies instead waited 1.61 s for
+Store or its final freshness check. A full refresh measured 1696 ms, including
+1633 ms auditing catalogue icon paths. These are debug figures, not package costs.
+
+`NK_ICON_REFRESH_PROBE=1` touches only a copied private desktop entry and opens
+Apps during its refresh. In the pre-fix control the exact same refresh ran from
+151 ms before Apps to 1463 ms after it, and a metadata read waited 1332 ms.
+Another unforced run without that wait opened in 565 ms. This establishes actor
+contention separately from decoding speed. The native endpoint regression tests
+hold the actor queue unserviced: cached app/place/Trash reads with zero available
+decode permits, and a cold decode, must finish before that barrier is released.
+Putting only the final freshness check back on the queue makes both tests fail.
+
+During startup the current policy keeps content and material transparent until
+the visible batch is ready, bounded at two seconds before neutral fallback.
+It does not guarantee immediate visual feedback if icon acquisition stalls;
+the first complete buffer also costs paint/submission time after that deadline.
+No new partial-batch policy or persistent hidden Apps layer is introduced here.
+In the debug warm sample, about 128 ms loads appearance, 126 ms builds content
+and 123 ms finishes the CPU canvas; catalogue sorting is below 0.1 ms and there
+is no GetApps RPC on reopen. Release results, rather than those unoptimized
+costs, determine the remaining user-visible limitation.

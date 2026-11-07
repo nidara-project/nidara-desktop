@@ -241,8 +241,18 @@ not an empty well. Warm Apps reopens reuse the first frame without GetIcon.
 The daemon separately retains resolved paths and rendered pixels in a 64 MiB,
 1024-entry LRU keyed by epoch, identity/generation, icon revision, theme and
 physical side. Validate admission/epoch/generation before a hit and freshness
-after decode. Cache hits bypass the eight decode permits; cancellation keeps a
-permit until its blocking decode finishes. Both caches are process-local; there
+after decode. GetIcon/GetTrashIcon/GetLayoutIcon use an immutable, atomically
+published icon-metadata view for both checks: neither a hit nor a cold decode
+queues behind the actor's synchronous catalogue/disk refresh. The last committed
+view remains usable while the next catalogue is built; the new view is published
+before acknowledging an actor effect or emitting its change. Override file
+writes first withdraw the view (Busy), then republish on success or failure before
+replying, so readers cannot return uncommitted artwork. Actor exit retires the
+view (Unavailable). A post-decode check uses the latest published epoch/revision,
+app generation or layout membership, never the captured old Arc. This view is
+for icon reads, not a substitute for current usage/window/launch snapshots.
+Cache hits bypass the eight decode permits; cancellation keeps a permit until
+its blocking decode finishes. Both caches are process-local; there
 is no disk cache. See `toolkit/shell/ICONS.md` for consumers and measurement.
 No pixels in broadcast signals or bulk catalogue records. Persist overrides atomically under the user's
 Nidara icon area; import existing raw-key overrides read-only on first lookup.
