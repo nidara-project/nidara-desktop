@@ -418,6 +418,11 @@ private check is check-cc-headless.sh; export settings **and** tokens for it.
   Pin/Open both negotiate Copy. Optional `nidara-drag-feedback-v1` conveys only
   cursor intent (Alias/Copy/Default), scoped to the destination surface and its
   current drag-enter serial; unsupported compositors keep standard Copy.
+- `check-dock-popup-headless.sh` shares the full bar check's popup assertions.
+  Its outside click uses blank space below the bar: `(10,10)` opens the System
+  menu and legitimately prevents dock re-entry while its grab remains (#1040).
+  A screenshot showing that menu is not evidence of a magnification regression.
+  See `toolkit/shell/POPUP-REENTRY.md`; CI inclusion is only a nightly proposal.
 - Never build while the headless check runs: on this machine the load alone makes
   `nidara-hyalo msg` time out and the check fail for no reason of its own.
 - The fonts have no bold and the text engine refuses to fake one: a figure that must

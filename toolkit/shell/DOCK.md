@@ -454,6 +454,14 @@ As built:
 - The skin stays dark whatever the system mode (owner's decision). Reduce transparency
   (`org.nidara.appearance`) picks the tokens' solid variant.
 
+### Popup regression probe (#1040)
+
+`check-dock-popup-headless.sh` runs the full check's shared popup-presence
+assertions with the bar present. An outside click must land on blank space:
+`(10,10)` opens the bar's System menu, whose grab correctly blocks dock motion.
+See [POPUP-REENTRY.md](POPUP-REENTRY.md) for the diagnosis, history and nightly-only
+CI proposal. `NK_DOCK_POINTER_TRACE=1` records client Wayland events on failure.
+
 ## 8. Evidence for D1
 
 - Unit tests: matching, sections, ordering, fit scale, view diffing, Applications1
