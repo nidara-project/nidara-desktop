@@ -84,6 +84,14 @@ def run(ctx):
     ctx['shot'](log/'dock-ready.png')
     def daemon_events():
         return [json.loads(line.split('ICON_DAEMON_METRIC ',1)[1]) for line in (log/'sessiond.log').read_text().splitlines() if 'ICON_DAEMON_METRIC ' in line]
+    if os.environ.get('NK_ICON_RESTART_QUIET') == '1':
+        # Compare daemon-warm restarts at the same refresh phase. Faster Apps
+        # otherwise restarts the shell earlier in this scenario's background scan.
+        trigger_us=time.monotonic_ns()//1000
+        next((ctx['RUN']/'apps/applications').glob('*.desktop')).touch()
+        def refreshed():
+            return any(json.loads(line.split('ICON_DAEMON_DETAIL ',1)[1]).get('stage')=='catalogue-refresh' and json.loads(line.split('ICON_DAEMON_DETAIL ',1)[1])['start_us']>=trigger_us for line in (log/'sessiond.log').read_text().splitlines(keepends=True) if line.endswith('\n') and 'ICON_DAEMON_DETAIL ' in line)
+        until('explicit private refresh completes before daemon-warm restart',refreshed,timeout=30)
     ctx['shell'].terminate();ctx['shell'].wait(timeout=10)
     daemon_before=len(daemon_events())
     until('old dock unmapped',lambda:not ctx['docks']())

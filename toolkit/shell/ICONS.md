@@ -71,11 +71,82 @@ Before/after evidence and exact results accompany this change. Hardware/live
 session timing and visual acceptance remain separate; no installation, CI or
 owner-session configuration is part of #1041.
 
+## Package-profile before/after (Papirus, software Hyalo)
+
+Use the PKGBUILD options: stable `cargo build --release --locked --offline`,
+`audio-native` for sessiond and release Hyalo (`--frozen --release`); both
+manifests retain their release `line-tables-only` debug information. Baseline is
+main `1028c79a` plus measurement hooks only; after is `c0205141`. Each checkout
+has its own target directories. Alternate two cold before/after runs with the
+same theme, copied catalogue, typed layout, exports and compositor. Cold means
+new processes, not flushed kernel caches. These are client-buffer times; they
+are not hardware presentation or installed-session acceptance.
+
+| Measurement | Before, two runs | After, two runs |
+|---|---:|---:|
+| Dock first commit → complete 10-icon batch | 2878.795–2898.307 ms | 70.880–74.083 ms |
+| Apps open → complete visible batch | 1703.534–1712.663 ms | 190.757–195.230 ms |
+| Apps reopen → complete visible batch | 474.519–476.864 ms | 120.983–127.179 ms |
+| Apps cold GetIcon, including prefetch | 30 | 24 |
+| Apps reopen GetIcon | 30 | 0 |
+| Apps first visible client buffer | 0/18 ready | 18/18 ready |
+
+Direct Cage captures after the frame callback confirm art in all 18 cold/warm
+icon rectangles. Report pixel-confirmation time separately: the checker includes
+a deliberate 300 ms prefetch settle and screenshot/check overhead. It does not
+add that delay to buffer-submission measurements.
+
+### Where Apps spends time
+
+The second release after-run opens cold in 195.230 ms. Sorting 105 catalogue
+records takes 0.031 ms; starting workers 0.030 ms; the layer reaches configure in
+5.042 ms. Appearance loading takes 113.336 ms. The 24 concurrent calls include
+at most 25.927 ms resolving a path, 1.737 ms decoding, 1.096 ms dispatching to a
+blocking worker, 0.038 ms reading published metadata and 0.017 ms validating and
+constructing the reply. Decode permits take at most 0.001 ms; no Busy occurs.
+Stages overlap across workers; they are not additive wall-clock components.
+The first complete paint starts at 184.888 ms, takes 9.909 ms and is committed
+at 195.230 ms. Earlier commits are transparent, including their material.
+
+Warm reopen takes 127.179 ms: sort 0.057 ms, worker startup 0.019 ms, configure
+starts at 2.441 ms, appearance 113.413 ms, then paint 9.082 ms (content 7.701,
+canvas finish 1.038). There is no new GetApps call or icon RPC. This attributes
+the remaining cost to appearance and paint, not an assumed 400 ms cost to create
+a Wayland layer. Keeping Apps alive or changing its lifetime is outside this
+change. Appearance's internal operations are not split further by these spans.
+
+### Refresh-overlap and daemon-warm controls
+
+`NK_ICON_REFRESH_PROBE=1` touches a private copied desktop entry before Apps.
+The release baseline's refresh occupies 1288.863 ms and Apps needs 1518.273 ms.
+After the correction, a 1342.236 ms refresh still runs from 151.003 ms before
+Apps until 1191.233 ms after opening, yet the complete Apps buffer is submitted
+at 191.086 ms while that refresh remains busy. Metadata reads take at most
+0.039 ms and final checks/reply construction 0.030 ms. Reopen remains 125.789 ms,
+zero GetIcon. No shortening of the two-second fallback policy is needed to remove
+this queue delay; the normal visible batch completes well before that limit.
+
+A new shell must still hydrate its catalogue. In the ordinary end-of-scenario
+restart, baseline measures 142.146–155.604 ms and after 327.065–328.058 ms.
+The latter has 22 daemon hits, zero misses, and its catalogue reaches the client
+only 303.769 ms after the first dock commit. Faster earlier Apps steps restart
+the shell in a different background-refresh phase; this row cannot be presented
+as an unconditional daemon-warm speedup. `NK_ICON_RESTART_QUIET=1` instead triggers
+and waits for an explicit private refresh before restarting both versions:
+154.457 ms before, 43.679 ms after, again 22 hits/zero misses. GetSnapshot/initial
+catalogue hydration can still wait on the actor; this change bypasses that queue
+only for valid icon reads, not usage/window/launch/catalogue APIs.
+
+Release evidence: `release-before-{1,2}`, `release-after-{1,2}`, the refresh and
+quiet controls, `release-summary.json`, baseline instrumentation patch and binary
+hashes. The complete release bar/dock/CC B2.2 graphical checker passes. The native
+held-actor tests and negative queued-check control separately prevent the icon
+read contention from returning. No compilation overlaps a graphical measurement.
+
 ## Diagnostic debug measurements (superseded for package latency)
 
 The following historical comparison uses unoptimized dev binaries, not the
-PKGBUILD profile. Keep it for diagnosis only; release measurements are required
-for the PR's performance claims.
+PKGBUILD profile. Keep it for diagnosis only; the package-profile section above supplies the PR's performance claims.
 
 Base main `1028c79a`, installed catalogue copied into private state, owner's typed
 pin layout. Baseline `baseline-2` uses the original serial loaders plus opt-in
