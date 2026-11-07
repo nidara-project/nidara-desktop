@@ -39,3 +39,7 @@ pub mod thumbs;
 pub mod tooltip;
 pub mod trash;
 pub mod tray;
+
+pub mod icon_metrics;
+
+pub mod icon_memory;

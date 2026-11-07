@@ -31,6 +31,9 @@ const RIGHT_BUTTON: u32 = 0x111;
 const MIDDLE_BUTTON: u32 = 0x112;
 
 pub struct Dock {
+    icon_start: Instant,
+    icons_presented: bool,
+    metrics_commit: u64,
     frames: Receiver<Arc<Frame>>,
     hub: Sender<Request>,
     output_name: String,
@@ -205,6 +208,9 @@ impl Dock {
         let layout = Self::lay(&frame, output_size);
         let hide = crate::autohide::Hide::new(frame.prefs.auto_hide);
         Self {
+            icon_start: Instant::now(),
+            icons_presented: false,
+            metrics_commit: 0,
             frames,
             hub,
             output_name,
@@ -347,6 +353,12 @@ impl Dock {
         l
     }
 
+    fn waiting_for_icons(&self) -> bool {
+        !self.icons_presented
+            && crate::icon_memory::global().is_some()
+            && !self.frame.icons_ready
+            && self.icon_start.elapsed() < crate::icon_memory::STARTUP_WAIT
+    }
     /// Magnify around the pointer as things stand, and send the input region it covers.
     fn reshape(&mut self, w: &mut Window) {
         let slots = slots(&self.frame.view);
@@ -2340,7 +2352,7 @@ impl Dock {
                 };
                 match id.and_then(|id| self.art(id, w)) {
                     Some(icon) => c.image(icon, r, ImageFit::Contain),
-                    None => c.rounded_rect(r, w * 0.22, faint),
+                    None => c.image(&crate::icon_memory::generic().raster, r, ImageFit::Contain),
                 }
             }
         }
@@ -2455,6 +2467,12 @@ impl Dock {
 
 impl Application for Dock {
     fn poll_interval_ms(&self) -> u32 {
+        if !self.icons_presented {
+            return crate::icon_memory::STARTUP_WAIT
+                .saturating_sub(self.icon_start.elapsed())
+                .as_millis()
+                .clamp(1, 1000) as u32;
+        }
         // Everything arrives by Wake; an open chooser refreshes its pictures, and a bounce
         // wants its frames.
         if self
@@ -2505,6 +2523,9 @@ impl Application for Dock {
         }
     }
     fn idle(&mut self, w: &mut Window) -> nk_wayland::Result<()> {
+        if !self.icons_presented && !self.waiting_for_icons() {
+            w.redraw();
+        }
         if let Some(result) = self
             .drop_probe
             .as_ref()
@@ -2568,6 +2589,13 @@ impl Application for Dock {
         Ok(())
     }
     fn event(&mut self, event: Event, w: &mut Window) -> nk_wayland::Result<()> {
+        if matches!(event, Event::FrameDone) {
+            let commit = self.metrics_commit;
+            crate::icon_metrics::emit(
+                "frame-done",
+                serde_json::json!({"surface":"dock","output":self.output_name,"commit":commit}),
+            );
+        }
         if let Event::Button { pressed: true, .. } = event {
             // A press, wherever: no tooltip, and none again on this item.
             self.hover.press();
@@ -2839,6 +2867,10 @@ impl Application for Dock {
     }
     fn paint(&mut self, f: nk_wayland::Frame) -> nk_wayland::Result<Vec<u8>> {
         let mut c = Canvas::new(f.pixel_width, f.pixel_height, f.scale);
+        if self.waiting_for_icons() {
+            return Ok(c.finish());
+        }
+        self.icons_presented = true;
         if !self.frame.hidden && f.width == self.layout.size.0 && f.height == self.layout.size.1 {
             if !f.material {
                 // No compositor glass (another compositor): an opaque base of our own (D5).
@@ -2877,8 +2909,37 @@ impl Application for Dock {
         }
         Ok(c.finish())
     }
+    fn committed(&mut self, commit: u64) {
+        self.metrics_commit = commit;
+        if !crate::icon_metrics::enabled() {
+            return;
+        }
+        let mut wanted = 0;
+        let mut ready = 0;
+        for item in &self.frame.view.items {
+            let id = match &item.kind {
+                Kind::App { id, .. } => Some(id.as_str()),
+                Kind::Folder { .. } | Kind::File { .. } => Some(item.key.as_str()),
+                Kind::Trash => Some(if self.frame.trash.is_some_and(|t| t.full) {
+                    TRASH_FULL
+                } else {
+                    TRASH_EMPTY
+                }),
+                _ => None,
+            };
+            if let Some(id) = id {
+                wanted += 1;
+                ready += usize::from(self.frame.icons.contains_key(id));
+            }
+        }
+        crate::icon_metrics::emit(
+            "frame",
+            serde_json::json!({"surface":"dock","visible":self.icons_presented,"output":self.output_name,"commit":commit,"ready":ready,"wanted":wanted}),
+        );
+    }
     fn material(&self) -> Option<Material> {
-        if self.frame.hidden {
+        // Readiness may change after paint; glass must match that buffer.
+        if self.frame.hidden || !self.icons_presented {
             return None;
         }
         // The capsule, wherever magnification has stretched it to.

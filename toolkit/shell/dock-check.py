@@ -437,6 +437,9 @@ def catalogue():
         source = Path('/usr/share/applications') / name
         if source.exists():
             (data / 'applications' / name).write_bytes(source.read_bytes())
+    if os.environ.get('NK_ICON_CHECK') == '1':
+        from icon_check import catalogue as real_catalogue
+        real_catalogue(data)
     if os.environ.get('NK_DOCK_DROP_CHECK') == '1':
         from drop_check import catalogue as drop_catalogue
         drop_catalogue(data)
@@ -529,6 +532,9 @@ def section_drags():
 try:
     os.environ['GSETTINGS_SCHEMA_DIR'] = schemas()
     accessibility()
+    if os.environ.get('NK_ICON_CHECK') == '1':
+        from icon_check import setup
+        setup(RUN)
     if os.environ.get('NK_CC_DETAILS_CHECK') == '1':
         from cc_check import setup
         setup(RUN)
@@ -578,6 +584,10 @@ try:
     # Shell1 (crates/nidara-shell-ipc): this process owns the name, says what it can do,
     # and refuses what it cannot rather than doing nothing.
     until('Shell1 answering', lambda: shell1('GetState') is not None)
+    if os.environ.get('NK_ICON_CHECK') == '1':
+        from icon_check import run as icon_check
+        icon_check(globals())
+        raise SystemExit(0)
     if os.environ.get('NK_DOCK_POPUP_ONLY') == '1':
         until('the dock ready for popup checks', lambda: (items := walk()) and any(i['name'] == 'kitty' for i in items))
         popup_presence()

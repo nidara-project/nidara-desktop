@@ -43,7 +43,13 @@ gtk4-layer-shell ⇒ no bar, no dock, nothing in the log). See `references/archi
 No TS shell or separate dock in Hyalo; `nidara-ipc` defaults to native routes.
 B2.3/B3 and installed MCP transition/acceptance remain gaps; B2.2 details are
 implemented with private validation, not installed acceptance. See
-`toolkit/shell/SESSION.md`. The TS conventions below still apply to the remaining
+`toolkit/shell/SESSION.md`. App/place/tray artwork uses one process-wide
+`toolkit/shell/src/icon_memory.rs`; surfaces keep shared references and never
+start their own GetIcon worker or decoded cache (#1041). Interface glyphs and
+album/window pictures are separate resources. Read `toolkit/shell/ICONS.md` and
+`session/design/APPLICATIONS1-DOCK.md` before adding an app-icon consumer; use its
+readiness API, invalidation and Busy retry rather than a surface-local loader.
+The TS conventions below still apply to the remaining
 TS applications and frozen Hyprland source.
 
 ⚠️ **Widgets are built imperatively — there is no JSX in this repo** and none of Gnim's reactive

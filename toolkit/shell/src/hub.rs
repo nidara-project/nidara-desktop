@@ -2,7 +2,7 @@
 //! The hub (DOCK.md §2): it owns every source and the model, builds one immutable frame per
 //! change and hands it to every dock, and carries out what the docks ask for. Service calls
 //! run on short-lived workers so a slow one never holds the frames back.
-use crate::apps::{AppsState, AppsUpdate, Icon, IconJob, TRASH_EMPTY, TRASH_FULL};
+use crate::apps::{AppsState, AppsUpdate, TRASH_EMPTY, TRASH_FULL};
 use crate::geometry::BAR_RESERVATION;
 use crate::hyalo::{HyaloUpdate, HyaloWindow};
 use crate::menu::{Command, Launch};
@@ -25,6 +25,7 @@ pub struct Frame {
     /// The provisional top reservation a side dock stays below (BAR_RESERVATION).
     pub reserved_top: f64,
     pub icons: HashMap<String, Arc<Raster>>,
+    pub icons_ready: bool,
     /// The same art at the largest magnified size, for icons drawn bigger than `icons`.
     pub large_icons: HashMap<String, Arc<Raster>>,
     pub trash: Option<crate::trash::TrashState>,
@@ -63,6 +64,7 @@ impl Frame {
             prefs,
             reserved_top: BAR_RESERVATION,
             icons: HashMap::new(),
+            icons_ready: false,
             large_icons: HashMap::new(),
             trash: None,
             focused: None,
@@ -143,7 +145,7 @@ pub enum Request {
 
 pub enum HubEvent {
     Apps(AppsUpdate),
-    Icon(IconJob, Option<Icon>),
+    IconsChanged,
     /// None: the Trash's fill cannot be told.
     Trash(Option<crate::trash::TrashState>),
     Hyalo(HyaloUpdate),
@@ -205,14 +207,6 @@ struct BarHandle {
     waker: Waker,
 }
 
-struct Cached {
-    generation: u64,
-    revision: u64,
-    logical: u32,
-    scale: f64,
-    raster: Arc<Raster>,
-}
-
 struct PendingUnpin {
     key: String,
     id: String,
@@ -230,11 +224,11 @@ pub struct Hub {
     locked: bool,
     prefs: Prefs,
     docks: HashMap<OutputId, DockHandle>,
-    icons: HashMap<String, Cached>,
-    large_icons: HashMap<String, Cached>,
+    // Presentation references only; decoded ownership and freshness live in Memory.
+    icons: HashMap<String, Arc<Raster>>,
+    large_icons: HashMap<String, Arc<Raster>>,
+    memory: Option<Arc<crate::icon_memory::Memory>>,
     trash: Option<crate::trash::TrashState>,
-    pending_icons: HashSet<(String, u64, u64, u32, u64)>,
-    icon_jobs: Option<Sender<IconJob>>,
     apps_conn: Option<zbus::blocking::Connection>,
     tokens: Option<Arc<Value>>,
     /// The latest keyboard-focus request: its number and the dock it went to.
@@ -292,7 +286,6 @@ pub fn target_owners<'a>(windows: &[HyaloWindow], outputs: &'a [String]) -> Hash
 impl Hub {
     pub fn new(
         prefs: Prefs,
-        icon_jobs: Option<Sender<IconJob>>,
         apps_conn: Option<zbus::blocking::Connection>,
         tokens: Option<Arc<Value>>,
         status: Arc<Status>,
@@ -310,8 +303,7 @@ impl Hub {
             icons: HashMap::new(),
             large_icons: HashMap::new(),
             trash: None,
-            pending_icons: HashSet::new(),
-            icon_jobs,
+            memory: crate::icon_memory::global(),
             apps_conn,
             tokens,
             keyboard: (0, String::new()),
@@ -379,7 +371,14 @@ impl Hub {
 
     fn handle(&mut self, event: HubEvent) -> bool {
         match event {
+            HubEvent::IconsChanged => {
+                self.request_icons();
+            }
             HubEvent::Apps(AppsUpdate::State(s)) => {
+                crate::icon_metrics::emit(
+                    "catalogue",
+                    serde_json::json!({"apps":s.apps.len(),"pins":s.pins.len()}),
+                );
                 let model = &mut self.model;
                 self.pending_unpins.retain(|p| {
                     if p.epoch != s.epoch || p.at.elapsed() >= crate::reorder::HOLD {
@@ -396,42 +395,21 @@ impl Hub {
                     }
                     still_pinned
                 });
+                if let Some(memory) = self.memory.clone() {
+                    memory.update(Some(&s));
+                }
                 self.apps = Some(s);
                 self.request_icons();
             }
             HubEvent::Apps(AppsUpdate::Unavailable(why)) => {
                 eprintln!("nidara-shell: Applications1 unavailable: {why}");
                 self.apps = None;
+                self.icons.clear();
+                self.large_icons.clear();
+                if let Some(memory) = self.memory.clone() {
+                    memory.update(None);
+                }
                 self.pending_unpins.clear();
-            }
-            HubEvent::Icon(job, icon) => {
-                self.pending_icons
-                    .retain(|p| !(p.0 == job.id && p.1 == job.generation && p.3 == job.logical));
-                let current = self.apps.as_ref().is_some_and(|a| a.epoch == job.epoch);
-                let Some(icon) = icon.filter(|_| current) else {
-                    return false;
-                };
-                let Ok(raster) =
-                    Raster::from_rgba(icon.width as u16, icon.height as u16, icon.rgba)
-                else {
-                    return false;
-                };
-                let revision = self.apps.as_ref().map_or(0, |a| a.icon_revision);
-                let cache = if Some(job.logical) == self.large_logical() {
-                    &mut self.large_icons
-                } else {
-                    &mut self.icons
-                };
-                cache.insert(
-                    job.id,
-                    Cached {
-                        generation: job.generation,
-                        revision,
-                        logical: job.logical,
-                        scale: job.scale,
-                        raster: Arc::new(raster),
-                    },
-                );
             }
             HubEvent::Trash(trash) => self.trash = trash,
             HubEvent::Hyalo(HyaloUpdate::Windows {
@@ -671,27 +649,62 @@ impl Hub {
     }
 
     fn request_icons_at(&mut self, logical: u32, large: bool) {
-        let (Some(apps), Some(jobs)) = (self.apps.as_ref(), self.icon_jobs.as_ref()) else {
-            return;
+        if let Some(memory) = self.memory.clone() {
+            let Some(apps) = self.apps.as_ref() else {
+                return;
+            };
+            let scale = self.docks.values().map(|d| d.scale).fold(1., f64::max);
+            let mut wanted: Vec<_> = apps
+                .apps
+                .iter()
+                .filter(|a| self.shown(&a.id))
+                .map(|a| (a.id.clone(), a.generation))
+                .collect();
+            if apps.can("trash-icon") {
+                wanted.extend([(TRASH_EMPTY.into(), 0), (TRASH_FULL.into(), 0)]);
+            }
+            if apps.can("layout-icon") {
+                wanted.extend(apps.pins.iter().filter_map(|p| match p {
+                    crate::model::Pin::Folder { key, .. } | crate::model::Pin::File { key, .. } => {
+                        Some((key.clone(), 0))
+                    }
+                    _ => None,
+                }));
+            }
+            let mut view = HashMap::new();
+            for (id, generation) in wanted {
+                if let Some(key) = memory.app(&id, generation, logical, scale) {
+                    memory.request(key.clone());
+                    if let Some(asset) = memory.get(&key).or_else(|| {
+                        (memory.unavailable(&key) && id != TRASH_EMPTY && id != TRASH_FULL)
+                            .then(crate::icon_memory::generic)
+                    }) {
+                        view.insert(id, asset.raster.clone());
+                    }
+                }
+            }
+            if large {
+                self.large_icons = view;
+            } else {
+                self.icons = view;
+            }
+        }
+    }
+
+    fn icons_are_ready(&self) -> bool {
+        let Some(apps) = &self.apps else {
+            return false;
+        };
+        let Some(memory) = &self.memory else {
+            return true;
         };
         let scale = self.docks.values().map(|d| d.scale).fold(1., f64::max);
-        let cache = if large {
-            &self.large_icons
-        } else {
-            &self.icons
-        };
-        // The shown apps, and the Trash's two looks: both are fetched, so filling or
-        // emptying the Trash swaps art the dock already has.
-        let mut wanted: Vec<(&str, u64)> = apps
+        let mut wanted: Vec<_> = apps
             .apps
             .iter()
-            .filter(|app| self.shown(&app.id))
-            .map(|app| (app.id.as_str(), app.generation))
+            .filter(|a| self.shown(&a.id))
+            .map(|a| (a.id.as_str(), a.generation))
             .collect();
-        if apps.can("trash-icon") {
-            wanted.extend([(TRASH_EMPTY, 0), (TRASH_FULL, 0)]);
-        }
-        // Pinned folders and files, by their layout key.
         if apps.can("layout-icon") {
             wanted.extend(apps.pins.iter().filter_map(|p| match p {
                 crate::model::Pin::Folder { key, .. } | crate::model::Pin::File { key, .. } => {
@@ -700,34 +713,24 @@ impl Hub {
                 _ => None,
             }));
         }
-        for (id, generation) in wanted {
-            let fresh = cache.get(id).is_some_and(|c| {
-                c.generation == generation
-                    && c.revision == apps.icon_revision
-                    && c.logical == logical
-                    && c.scale == scale
-            });
-            let key = (
-                id.to_string(),
-                generation,
-                apps.icon_revision,
-                logical,
-                scale.to_bits(),
-            );
-            if fresh || self.pending_icons.contains(&key) {
-                continue;
-            }
-            self.pending_icons.insert(key);
-            let _ = jobs.send(IconJob {
-                epoch: apps.epoch,
-                id: id.to_string(),
-                generation,
-                logical,
-                scale,
-            });
+        if apps.can("trash-icon") {
+            wanted.push((
+                if self.trash.is_some_and(|t| t.full) {
+                    TRASH_FULL
+                } else {
+                    TRASH_EMPTY
+                },
+                0,
+            ));
         }
+        // Readiness must describe this published frame, not a later worker completion.
+        wanted.into_iter().all(|(id, generation)| {
+            self.icons.contains_key(id)
+                || memory
+                    .app(id, generation, self.prefs.icon_size, scale)
+                    .is_some_and(|key| memory.unavailable(&key))
+        })
     }
-
     /// A pinned folder or file, opened by Applications1 (`OpenDirectory`, `OpenFile`) with
     /// the default app for it.
     fn open_place(&self, method: &'static str, uri: String, token: Option<String>) {
@@ -788,13 +791,7 @@ impl Hub {
             windows: &windows,
             hyalo_epoch: self.hyalo_epoch,
         });
-        let rasters = |cache: &HashMap<String, Cached>| -> HashMap<String, Arc<Raster>> {
-            cache
-                .iter()
-                .map(|(k, c)| (k.clone(), c.raster.clone()))
-                .collect()
-        };
-        let (icons, large_icons) = (rasters(&self.icons), rasters(&self.large_icons));
+        let (icons, large_icons) = (self.icons.clone(), self.large_icons.clone());
         let names: Vec<String> = self.docks.values().map(|d| d.name.clone()).collect();
         let owners = target_owners(&self.windows, &names);
         let sizes: HashMap<String, (u32, u32)> = self
@@ -824,6 +821,7 @@ impl Hub {
                 view: view.clone(),
                 prefs: self.prefs,
                 reserved_top: BAR_RESERVATION,
+                icons_ready: self.icons_are_ready(),
                 icons: icons.clone(),
                 large_icons: large_icons.clone(),
                 trash: self.trash,
@@ -1324,23 +1322,40 @@ mod tests {
             moving: false,
         }
     }
+    fn icon_memory() -> (
+        Arc<crate::icon_memory::Memory>,
+        std::sync::mpsc::Receiver<crate::icon_memory::Key>,
+    ) {
+        let (tx, rx) = std::sync::mpsc::channel();
+        let memory = crate::icon_memory::Memory::new(move |key| {
+            let _ = tx.send(key.clone());
+            let crate::icon_memory::Key::App { logical, scale, .. } = key else {
+                panic!("app key");
+            };
+            let side = (*logical as f64 * f64::from_bits(*scale)) as u32;
+            Ok(crate::apps::Icon {
+                width: side,
+                height: side,
+                rgba: vec![255; (side * side * 4) as usize],
+            })
+        });
+        (memory, rx)
+    }
     #[test]
     fn a_new_window_of_an_unpinned_app_fetches_its_icon() {
-        let (jobs, requested) = std::sync::mpsc::channel();
+        let (memory, requested) = icon_memory();
         let mut hub = Hub::new(
             Prefs::default(),
-            Some(jobs),
             None,
             None,
             Arc::new(Status::default()),
             None,
         );
-        let terminal = crate::model::App {
+        hub.memory = Some(memory);
+        let terminal = App {
             id: "org.gnome.Terminal.desktop".into(),
             generation: 1,
             name: "Terminal".into(),
-            startup_wm_class: String::new(),
-            flatpak_id: String::new(),
             launchable: true,
             ..Default::default()
         };
@@ -1348,11 +1363,8 @@ mod tests {
             epoch: 1,
             revision: 1,
             apps: vec![terminal],
-            pins: vec![],
-            default_directory: None,
-            capabilities: vec![],
             icon_revision: 1,
-            layout_revision: 0,
+            ..Default::default()
         })));
         assert!(requested.try_recv().is_err(), "not shown yet: no art");
         let mut w = hw(6, "DP-1", false);
@@ -1362,69 +1374,59 @@ mod tests {
             windows: vec![w],
             workspaces: vec![],
         }));
-        let job = requested
-            .try_recv()
-            .expect("its window opened: the icon is asked for");
-        assert_eq!(job.id, "org.gnome.Terminal.desktop");
+        let key = requested
+            .recv_timeout(std::time::Duration::from_secs(2))
+            .expect("newly shown app fetched");
+        assert!(
+            matches!(key,crate::icon_memory::Key::App{id,..} if id=="org.gnome.Terminal.desktop")
+        );
     }
     #[test]
-    fn a_magnifying_dock_fetches_its_art_at_both_sizes() {
+    fn a_magnifying_dock_can_draw_both_sizes_from_the_common_memory() {
         for magnification in [true, false] {
-            let (jobs, requested) = std::sync::mpsc::channel();
+            let (memory, _requested) = icon_memory();
             let prefs = Prefs {
                 icon_size: 64,
                 max_icon_size: 128,
                 magnification,
-                ..Prefs::default()
-            };
-            let mut hub = Hub::new(
-                prefs,
-                Some(jobs),
-                None,
-                None,
-                Arc::new(Status::default()),
-                None,
-            );
-            let kitty = crate::model::App {
-                id: "kitty.desktop".into(),
-                generation: 1,
-                name: "kitty".into(),
-                launchable: true,
                 ..Default::default()
             };
+            let mut hub = Hub::new(prefs, None, None, Arc::new(Status::default()), None);
+            hub.memory = Some(memory.clone());
             hub.handle(HubEvent::Apps(AppsUpdate::State(AppsState {
                 epoch: 1,
-                revision: 1,
-                apps: vec![kitty],
+                apps: vec![App {
+                    id: "kitty.desktop".into(),
+                    generation: 1,
+                    launchable: true,
+                    ..Default::default()
+                }],
                 pins: vec![crate::model::Pin::App {
                     id: "kitty.desktop".into(),
                     key: "app:kitty.desktop".into(),
                 }],
-                default_directory: None,
-                capabilities: vec![],
                 icon_revision: 1,
-                layout_revision: 0,
+                ..Default::default()
             })));
-            let asked: Vec<IconJob> = requested.try_iter().collect();
-            let sizes: Vec<u32> = asked.iter().map(|j| j.logical).collect();
-            if !magnification {
-                assert_eq!(sizes, [64]);
-                continue;
+            let small = memory.app("kitty.desktop", 1, 64, 1.).unwrap();
+            let large = memory.app("kitty.desktop", 1, 128, 1.).unwrap();
+            let keys = if magnification {
+                vec![small, large]
+            } else {
+                vec![small]
+            };
+            let end = std::time::Instant::now() + std::time::Duration::from_secs(2);
+            while !memory.readiness(&keys).complete() {
+                assert!(std::time::Instant::now() < end);
+                std::thread::yield_now();
             }
-            assert_eq!(sizes, [64, 128]);
-            for job in asked {
-                let side = job.logical;
-                hub.handle(HubEvent::Icon(
-                    job,
-                    Some(crate::apps::Icon {
-                        width: side,
-                        height: side,
-                        rgba: vec![0; (side * side * 4) as usize],
-                    }),
-                ));
+            hub.handle(HubEvent::IconsChanged);
+            assert!(hub.icons["kitty.desktop"].size().0 >= 64);
+            if magnification {
+                assert!(hub.large_icons["kitty.desktop"].size().0 >= 128);
+            } else {
+                assert!(hub.large_icons.is_empty());
             }
-            assert_eq!(hub.icons["kitty.desktop"].logical, 64);
-            assert_eq!(hub.large_icons["kitty.desktop"].logical, 128);
         }
     }
     #[test]
@@ -1462,7 +1464,6 @@ mod tests {
         for expired in [false, true] {
             let mut hub = Hub::new(
                 Prefs::default(),
-                None,
                 None,
                 None,
                 Arc::new(Status::default()),

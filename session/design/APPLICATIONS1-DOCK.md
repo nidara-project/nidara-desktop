@@ -222,9 +222,29 @@ GetIcon accepts sizes 16..512 logical and scale 1..4; cap physical side at 1024,
 source read at 16 MiB, decoded source at 16 megapixels and output at 4 MiB. Decode
 SVG/raster off the bus executor, preserve alpha/color, scale to fit without aspect
 distortion. Missing/corrupt art returns a versioned generic app icon with a reason,
-not an unbounded retry. Clients cache token+size+scale in a bounded LRU (proposed
-64 MiB); icon/theme/override changes invalidate tokens. No pixels in broadcast
-signals or bulk catalogue records. Persist overrides atomically under the user's
+not an unbounded retry. The Rust shell uses one process-wide icon memory for
+all app/place consumers and tray art, not one loader per surface. Its keys include
+unique service owner, epoch, icon revision, identity/generation, logical size and
+scale; replacement owners and stale in-flight results cannot repopulate a retired
+namespace. A larger texture may satisfy a smaller request of the same identity.
+The resident LRU accounts for straight RGBA plus the renderer's shared allocation
+(64 MiB, 4096 entries); frames hold Arc references, not decoded copies. Active
+frame references, eight in-flight decodes and the shared neutral fallback sit
+outside that resident budget. Pending/running requests are capped at 256; eight
+workers coalesce requests. Busy is pending and backs off (40 ms up to 1 s), never
+a missing-icon result. Requests without interest pause after 30 s and resume on
+request; no healthy idle polling. Readiness distinguishes ready, pending,
+unavailable and retired. Initial dock/Apps presentation waits for the visible
+batch, bounded at 2 s; a terminal/timeout result uses the existing neutral art,
+not an empty well. Warm Apps reopens reuse the first frame without GetIcon.
+
+The daemon separately retains resolved paths and rendered pixels in a 64 MiB,
+1024-entry LRU keyed by epoch, identity/generation, icon revision, theme and
+physical side. Validate admission/epoch/generation before a hit and freshness
+after decode. Cache hits bypass the eight decode permits; cancellation keeps a
+permit until its blocking decode finishes. Both caches are process-local; there
+is no disk cache. See `toolkit/shell/ICONS.md` for consumers and measurement.
+No pixels in broadcast signals or bulk catalogue records. Persist overrides atomically under the user's
 Nidara icon area; import existing raw-key overrides read-only on first lookup.
 New per-app overrides win over legacy shared raw-icon keys; Reset removes only
 the app's override, exposing a legacy override if present. The UI distinguishes

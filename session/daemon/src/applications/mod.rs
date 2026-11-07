@@ -3,6 +3,7 @@
 mod autostart;
 mod catalogue;
 mod desktop;
+mod icon_cache;
 mod icons;
 mod launch;
 mod layout;
@@ -271,6 +272,7 @@ struct Applications {
     pages: Arc<Mutex<Pages>>,
     peers: Arc<Mutex<HashMap<String, Arc<Peer>>>>,
     decode: Arc<Semaphore>,
+    icon_cache: Arc<icon_cache::Cache>,
     launch_workers: Arc<Semaphore>,
 }
 enum LaunchTarget {
@@ -663,11 +665,6 @@ impl Applications {
             return Err(Error::Invalid("icon size/scale bounds".into()));
         }
         let side = (logical_size as f64 * scale).ceil().min(1024.0) as u32;
-        let _permit = self
-            .decode
-            .clone()
-            .try_acquire_owned()
-            .map_err(|_| Error::Busy("icon workers occupied".into()))?;
         let id = desktop_id.clone();
         let (a, revision, theme) = self
             .store
@@ -680,39 +677,54 @@ impl Applications {
                 ))
             })
             .await?;
-        let (token, w, h, rgba) = tokio::task::spawn_blocking(move || {
-            let path = icons::resolve(&a, &theme, side);
-            let image = path.as_ref().map(|p| icons::read(p, side));
-            let (reason, (w, h, rgba)) = match image {
-                Some(Ok(p)) => ("asset", p),
-                Some(Err(_)) => ("fallback-v1:decode", icons::fallback(side)),
-                None => ("fallback-v1:missing", icons::fallback(side)),
-            };
-            let pixels_hash = catalogue::hash(&rgba);
-            let token = catalogue::hash(
-                format!(
-                    "{}:{generation}:{revision}:{logical_size}:{scale}:{reason}:{pixels_hash}:{}",
-                    a.id,
-                    path.map(|p| p.to_string_lossy().into_owned())
-                        .unwrap_or_default()
-                )
-                .as_bytes(),
-            );
-            (format!("{reason}:{token}"), w, h, rgba)
-        })
-        .await
-        .map_err(|e| Error::Failed(e.to_string()))?;
+        let key = icon_cache::Key {
+            epoch,
+            id: format!("app:{desktop_id}"),
+            generation,
+            revision,
+            theme: theme.clone(),
+            side,
+        };
+        let cached = self.icon_cache.get(&key);
+        icon_cache::trace("app", cached.is_some());
+        let image = if let Some(image) = cached {
+            image
+        } else {
+            let permit = self
+                .decode
+                .clone()
+                .try_acquire_owned()
+                .map_err(|_| Error::Busy("icon workers occupied".into()))?;
+            tokio::task::spawn_blocking(move || {
+                let _permit = permit;
+                let path = icons::resolve(&a, &theme, side);
+                let (reason, pixels) = match path.as_ref().map(|p| icons::read(p, side)) {
+                    Some(Ok(p)) => ("asset", p),
+                    Some(Err(_)) => ("fallback-v1:decode", icons::fallback(side)),
+                    None => ("fallback-v1:missing", icons::fallback(side)),
+                };
+                Arc::new(icon_cache::Rendered::new(path, reason, pixels))
+            })
+            .await
+            .map_err(|e| Error::Failed(e.to_string()))?
+        };
+        let checked_id = desktop_id.clone();
         self.store
             .call(move |s| {
                 s.epoch(epoch)?;
-                s.app(&desktop_id, generation)?;
+                s.app(&checked_id, generation)?;
                 if revision != s.icon_revision {
                     return Err(Error::Stale("icon changed during decode".into()));
                 }
                 Ok(())
             })
             .await?;
-        Ok((token, w, h, rgba))
+        self.icon_cache.put(key, image.clone());
+        Ok(image.reply(
+            &format!("app:{desktop_id}:{generation}:{revision}"),
+            logical_size,
+            scale,
+        ))
     }
     /// The Trash's art from the user's icon theme (§8 Trash), the one dock slot with no
     /// desktop entry. Fixed freedesktop names only, never a generic named-icon lookup, and
@@ -733,11 +745,6 @@ impl Applications {
             return Err(Error::Invalid("icon size/scale bounds".into()));
         }
         let side = (logical_size as f64 * scale).ceil().min(1024.0) as u32;
-        let _permit = self
-            .decode
-            .clone()
-            .try_acquire_owned()
-            .map_err(|_| Error::Busy("icon workers occupied".into()))?;
         let (revision, theme) = self
             .store
             .call(move |s| {
@@ -745,26 +752,40 @@ impl Applications {
                 Ok((s.icon_revision, s.theme.clone()))
             })
             .await?;
-        let found = tokio::task::spawn_blocking(move || {
-            let path = icons::trash_names(full)
-                .iter()
-                .find_map(|n| icons::resolve_name(n, &theme, side))?;
-            let pixels = icons::read(&path, side).ok()?;
-            Some((path, pixels))
-        })
-        .await
-        .map_err(|e| Error::Failed(e.to_string()))?;
-        let Some((path, (w, h, rgba))) = found else {
-            return Err(Error::Unavailable("the icon theme has no Trash".into()));
+        let cache_key = icon_cache::Key {
+            epoch,
+            id: format!("trash:{full}"),
+            generation: 0,
+            revision,
+            theme: theme.clone(),
+            side,
         };
-        let token = catalogue::hash(
-            format!(
-                "trash:{full}:{revision}:{logical_size}:{scale}:{}:{}",
-                path.to_string_lossy(),
-                catalogue::hash(&rgba)
-            )
-            .as_bytes(),
-        );
+        let cached = self.icon_cache.get(&cache_key);
+        icon_cache::trace("trash", cached.is_some());
+        let image = if let Some(image) = cached {
+            image
+        } else {
+            let permit = self
+                .decode
+                .clone()
+                .try_acquire_owned()
+                .map_err(|_| Error::Busy("icon workers occupied".into()))?;
+            tokio::task::spawn_blocking(move || {
+                let _permit = permit;
+                let path = icons::trash_names(full)
+                    .iter()
+                    .find_map(|n| icons::resolve_name(n, &theme, side))?;
+                let pixels = icons::read(&path, side).ok()?;
+                Some(Arc::new(icon_cache::Rendered::new(
+                    Some(path),
+                    "asset",
+                    pixels,
+                )))
+            })
+            .await
+            .map_err(|e| Error::Failed(e.to_string()))?
+            .ok_or_else(|| Error::Unavailable("the icon theme has no requested icon".into()))?
+        };
         self.store
             .call(move |s| {
                 s.epoch(epoch)?;
@@ -774,7 +795,8 @@ impl Applications {
                 Ok(())
             })
             .await?;
-        Ok((format!("asset:{token}"), w, h, rgba))
+        self.icon_cache.put(cache_key, image.clone());
+        Ok(image.reply(&format!("trash:{full}:{revision}"), logical_size, scale))
     }
     /// The theme's icon for a pinned folder or file: what the file manager shows for it
     /// (a special folder's own icon, a file's content type), the plain folder or file icon
@@ -795,11 +817,6 @@ impl Applications {
             return Err(Error::Invalid("icon size/scale bounds".into()));
         }
         let side = (logical_size as f64 * scale).ceil().min(1024.0) as u32;
-        let _permit = self
-            .decode
-            .clone()
-            .try_acquire_owned()
-            .map_err(|_| Error::Busy("icon workers occupied".into()))?;
         let k = key.clone();
         let (revision, theme) = self
             .store
@@ -812,28 +829,40 @@ impl Applications {
             })
             .await?;
         let k = key.clone();
-        let found = tokio::task::spawn_blocking(move || {
-            let path = icons::layout_names(&k)?
-                .iter()
-                .find_map(|n| icons::resolve_name(n, &theme, side))?;
-            let pixels = icons::read(&path, side).ok()?;
-            Some((path, pixels))
-        })
-        .await
-        .map_err(|e| Error::Failed(e.to_string()))?;
-        let Some((path, (w, h, rgba))) = found else {
-            return Err(Error::Unavailable(
-                "the icon theme has no icon for it".into(),
-            ));
+        let cache_key = icon_cache::Key {
+            epoch,
+            id: format!("layout:{key}"),
+            generation: 0,
+            revision,
+            theme: theme.clone(),
+            side,
         };
-        let token = catalogue::hash(
-            format!(
-                "layout:{key}:{revision}:{logical_size}:{scale}:{}:{}",
-                path.to_string_lossy(),
-                catalogue::hash(&rgba)
-            )
-            .as_bytes(),
-        );
+        let cached = self.icon_cache.get(&cache_key);
+        icon_cache::trace("layout", cached.is_some());
+        let image = if let Some(image) = cached {
+            image
+        } else {
+            let permit = self
+                .decode
+                .clone()
+                .try_acquire_owned()
+                .map_err(|_| Error::Busy("icon workers occupied".into()))?;
+            tokio::task::spawn_blocking(move || {
+                let _permit = permit;
+                let path = icons::layout_names(&k)?
+                    .iter()
+                    .find_map(|n| icons::resolve_name(n, &theme, side))?;
+                let pixels = icons::read(&path, side).ok()?;
+                Some(Arc::new(icon_cache::Rendered::new(
+                    Some(path),
+                    "asset",
+                    pixels,
+                )))
+            })
+            .await
+            .map_err(|e| Error::Failed(e.to_string()))?
+            .ok_or_else(|| Error::Unavailable("the icon theme has no requested icon".into()))?
+        };
         self.store
             .call(move |s| {
                 s.epoch(epoch)?;
@@ -843,7 +872,8 @@ impl Applications {
                 Ok(())
             })
             .await?;
-        Ok((format!("asset:{token}"), w, h, rgba))
+        self.icon_cache.put(cache_key, image.clone());
+        Ok(image.reply(&format!("layout:{key}:{revision}"), logical_size, scale))
     }
     async fn set_icon_override(
         &self,
@@ -1130,6 +1160,7 @@ pub async fn serve(conn: &Connection) -> Result<bool, Box<dyn std::error::Error>
     let (store, notify) = store::spawn().await?;
     let pages = Arc::new(Mutex::new(Pages::default()));
     let peers = Arc::new(Mutex::new(HashMap::new()));
+    let icon_cache = Arc::new(icon_cache::Cache::default());
     conn.object_server()
         .at(
             PATH,
@@ -1139,6 +1170,7 @@ pub async fn serve(conn: &Connection) -> Result<bool, Box<dyn std::error::Error>
                 pages: pages.clone(),
                 peers: peers.clone(),
                 decode: Arc::new(Semaphore::new(8)),
+                icon_cache: icon_cache.clone(),
                 launch_workers: Arc::new(Semaphore::new(8)),
             },
         )
@@ -1193,6 +1225,24 @@ pub async fn serve(conn: &Connection) -> Result<bool, Box<dyn std::error::Error>
             if let Ok((e, r, d)) = result
                 && !d.is_empty()
             {
+                if d.iter()
+                    .any(|domain| domain == "icons" || domain == "catalogue")
+                    && let Ok((epoch, revision, theme, generations)) = signal_store
+                        .call(|s| {
+                            Ok((
+                                s.epoch,
+                                s.icon_revision,
+                                s.theme.clone(),
+                                s.apps
+                                    .iter()
+                                    .map(|(id, a)| (id.clone(), a.generation))
+                                    .collect::<HashMap<_, _>>(),
+                            ))
+                        })
+                        .await
+                {
+                    icon_cache.observe(epoch, revision, theme, generations);
+                }
                 let _ = Applications::changed(&emitter, e, r, d).await;
                 let _ = signal_connection
                     .emit_signal(

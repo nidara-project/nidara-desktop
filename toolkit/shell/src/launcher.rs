@@ -17,13 +17,13 @@
 //!
 //! The panel's glass is Hyalo's (the panel material of `nk-settings`' exports, as the
 //! dock's menus); its content is ours, in the shell's dark skin.
-use crate::apps::{Icon, IconJob};
+use crate::apps::Icon;
 use crate::hub::{HubEvent, Request};
 use crate::menu::Label;
 use crate::model::App;
 use crate::popup::Look;
 use nidara_shell_ipc::drag;
-use nk_render::{Canvas, Color, ImageFit, Raster};
+use nk_render::{Canvas, Color, ImageFit};
 use nk_text::{Rect, TextBackend, TextStyle};
 use nk_wayland::{
     Application, DragIcon, Edges, Event, KeyboardMode, LayerLevel, LayerPlacement, LayerSpec,
@@ -161,13 +161,13 @@ fn inside(r: [f64; 4], (x, y): (f64, f64)) -> bool {
 /// What the workers hand the layer: icons, and search answers.
 #[derive(Default)]
 struct Inbox {
-    icons: Vec<(IconJob, Option<Icon>)>,
     /// (the query asked, its ids best first); Err: Search failed.
     results: Vec<(String, Result<Vec<String>, String>)>,
 }
 
 /// One Apps layer: opened by the hub, closed by itself or by the hub.
 pub struct Launcher {
+    metrics_id: i64,
     hub: Sender<HubEvent>,
     epoch: u64,
     all: Vec<Entry>,
@@ -187,10 +187,11 @@ pub struct Launcher {
     pointer: (f64, f64),
     size: (u32, u32),
     scale: f64,
-    icons: HashMap<String, Arc<Raster>>,
-    art: HashMap<String, Icon>,
-    asked: std::collections::HashSet<String>,
-    icon_jobs: Option<Sender<IconJob>>,
+    memory: Option<Arc<crate::icon_memory::Memory>>,
+    icon_subscription: Option<crate::icon_memory::Subscription>,
+    icon_start: Instant,
+    icons_presented: bool,
+    metrics_commit: u64,
     searches: Option<Sender<String>>,
     inbox: Arc<Mutex<Inbox>>,
     look: Option<Look>,
@@ -216,9 +217,12 @@ impl Launcher {
         bus: Option<zbus::blocking::Connection>,
         close: Arc<AtomicBool>,
     ) -> Self {
+        let metrics_id = glib::monotonic_time();
+        crate::icon_metrics::emit("apps-open", serde_json::json!({"instance":metrics_id}));
         let all = entries(apps);
         let shown = (0..all.len()).collect();
         Self {
+            metrics_id,
             hub,
             epoch,
             all,
@@ -235,10 +239,11 @@ impl Launcher {
             pointer: (-1., -1.),
             size: (0, 0),
             scale: 1.,
-            icons: HashMap::new(),
-            art: HashMap::new(),
-            asked: Default::default(),
-            icon_jobs: None,
+            memory: crate::icon_memory::global(),
+            icon_subscription: None,
+            icon_start: Instant::now(),
+            icons_presented: false,
+            metrics_commit: 0,
             searches: None,
             inbox: Arc::new(Mutex::new(Inbox::default())),
             look: None,
@@ -263,18 +268,12 @@ impl Launcher {
         let Some(conn) = self.bus.clone() else {
             return;
         };
-        let (jobs_tx, jobs_rx) = channel::<IconJob>();
-        let (inbox, w) = (self.inbox.clone(), waker.clone());
-        let c = conn.clone();
-        let _ = std::thread::Builder::new()
-            .name("apps-layer-icons".into())
-            .spawn(move || {
-                crate::apps::icons(c, jobs_rx, move |job, icon| {
-                    inbox.lock().unwrap().icons.push((job, icon));
-                    let _ = w.wake();
-                })
-            });
-        self.icon_jobs = Some(jobs_tx);
+        if let Some(memory) = &self.memory {
+            let w = waker.clone();
+            self.icon_subscription = Some(memory.subscribe(move || {
+                let _ = w.wake();
+            }));
+        }
         let (search_tx, search_rx) = channel::<String>();
         let (inbox, epoch) = (self.inbox.clone(), self.epoch);
         let _ = std::thread::Builder::new()
@@ -355,15 +354,6 @@ impl Launcher {
 
     fn drain(&mut self) {
         let inbox = std::mem::take(&mut *self.inbox.lock().unwrap());
-        for (job, icon) in inbox.icons {
-            if let Some(icon) = icon
-                && let Ok(r) =
-                    Raster::from_rgba(icon.width as u16, icon.height as u16, icon.rgba.clone())
-            {
-                self.icons.insert(job.id.clone(), Arc::new(r));
-                self.art.insert(job.id, icon);
-            }
-        }
         // Only the answer to the query typed now counts.
         let now = self.query.trim().to_string();
         for (q, result) in inbox.results {
@@ -399,7 +389,7 @@ impl Launcher {
 
     /// Ask for the icons of the tiles in view (and a row either side).
     fn want_icons(&mut self) {
-        let Some(jobs) = &self.icon_jobs else {
+        let Some(memory) = &self.memory else {
             return;
         };
         let (g, columns, rows) = self.geometry();
@@ -409,18 +399,37 @@ impl Launcher {
         let _ = g;
         for &i in self.shown.get(from..to).unwrap_or(&[]) {
             let e = &self.all[i];
-            if self.asked.insert(e.id.clone()) {
-                let _ = jobs.send(IconJob {
-                    epoch: self.epoch,
-                    id: e.id.clone(),
-                    generation: e.generation,
-                    logical: ICON as u32,
-                    scale: self.scale,
-                });
+            if let Some(key) = memory.current_app(&e.id, ICON as u32, self.scale) {
+                memory.request(key);
             }
         }
     }
 
+    fn asset(&self, e: &Entry) -> Option<Arc<crate::icon_memory::Asset>> {
+        let memory = self.memory.as_ref()?;
+        let key = memory.current_app(&e.id, ICON as u32, self.scale)?;
+        memory.get(&key)
+    }
+    fn waiting_for_icons(&self) -> bool {
+        if self.icons_presented || self.icon_start.elapsed() >= crate::icon_memory::STARTUP_WAIT {
+            return false;
+        }
+        let Some(memory) = &self.memory else {
+            return false;
+        };
+        let (g, ..) = self.geometry();
+        let keys: Vec<_> = (0..self.shown.len())
+            .filter(|&n| {
+                let t = self.tile(n);
+                t[1] + t[3] >= g.grid[1] && t[1] <= g.grid[1] + g.grid[3]
+            })
+            .filter_map(|n| {
+                let e = &self.all[self.shown[n]];
+                memory.current_app(&e.id, ICON as u32, self.scale)
+            })
+            .collect();
+        !memory.readiness(&keys).complete()
+    }
     fn finish(&mut self, w: &mut Window) {
         if !self.closing {
             self.closing = true;
@@ -475,7 +484,7 @@ impl Launcher {
             id: e.id.clone(),
             generation: e.generation,
         });
-        let icon = self.art.get(&e.id).map(drag_icon);
+        let icon = self.asset(&e).map(|asset| drag_icon(&asset.raw));
         match w.start_drag(serial, vec![(drag::APP_MIME.to_string(), data)], icon) {
             Ok(()) => {
                 self.dragging = true;
@@ -793,7 +802,29 @@ fn drag_icon(icon: &Icon) -> DragIcon {
 }
 
 impl Application for Launcher {
+    fn poll_interval_ms(&self) -> u32 {
+        if !self.icons_presented {
+            return crate::icon_memory::STARTUP_WAIT
+                .saturating_sub(self.icon_start.elapsed())
+                .as_millis()
+                .clamp(1, 1000) as u32;
+        }
+        1000
+    }
+    fn idle(&mut self, w: &mut Window) -> nk_wayland::Result<()> {
+        if !self.icons_presented && !self.waiting_for_icons() {
+            w.redraw();
+        }
+        Ok(())
+    }
     fn event(&mut self, event: Event, w: &mut Window) -> nk_wayland::Result<()> {
+        if matches!(event, Event::FrameDone) {
+            let commit = self.metrics_commit;
+            crate::icon_metrics::emit(
+                "frame-done",
+                serde_json::json!({"surface":"apps","instance":self.metrics_id,"commit":commit}),
+            );
+        }
         if self.close.load(Ordering::SeqCst) && !self.closing {
             self.finish(w);
             return Ok(());
@@ -923,9 +954,10 @@ impl Application for Launcher {
 
     fn paint(&mut self, f: nk_wayland::Frame) -> nk_wayland::Result<Vec<u8>> {
         let mut c = Canvas::new(f.pixel_width, f.pixel_height, f.scale);
-        if self.dragging || self.closing || self.look.is_none() {
+        if self.dragging || self.closing || self.look.is_none() || self.waiting_for_icons() {
             return Ok(c.finish());
         }
+        self.icons_presented = true;
         let (g, ..) = self.geometry();
         let rect = |r: [f64; 4]| Rect {
             x: r[0] as f32,
@@ -1049,10 +1081,8 @@ impl Application for Launcher {
                 width: ICON as f32,
                 height: ICON as f32,
             };
-            match self.icons.get(&e.id) {
-                Some(art) => c.image(art, icon, ImageFit::Contain),
-                None => c.rounded_rect(icon, 16., ink(0.10)),
-            }
+            let asset = self.asset(&e).unwrap_or_else(crate::icon_memory::generic);
+            c.image(&asset.raster, icon, ImageFit::Contain);
             if e.is_new {
                 // "New": a small accent dot by the icon's corner (the badge is the dot;
                 // its word is for the screen reader).
@@ -1078,7 +1108,39 @@ impl Application for Launcher {
         Ok(c.finish())
     }
 
+    fn committed(&mut self, commit: u64) {
+        self.metrics_commit = commit;
+        if !crate::icon_metrics::enabled() || self.look.is_none() || self.closing {
+            return;
+        }
+        let (g, ..) = self.geometry();
+        let mut ready = 0;
+        let mut wanted = 0;
+        let mut rectangles = Vec::new();
+        for n in 0..self.shown.len() {
+            let t = self.tile(n);
+            if t[1] + t[3] < g.grid[1] || t[1] > g.grid[1] + g.grid[3] {
+                continue;
+            }
+            rectangles.push([
+                t[0] + (t[2] - ICON) / 2.,
+                t[1] + TILE_PAD_Y + (PLATE - ICON) / 2.,
+                ICON,
+                ICON,
+            ]);
+            wanted += 1;
+            ready += usize::from(self.asset(&self.all[self.shown[n]]).is_some());
+        }
+        crate::icon_metrics::emit(
+            "frame",
+            serde_json::json!({"surface":"apps","visible":self.icons_presented,"instance":self.metrics_id,"commit":commit,"ready":ready,"wanted":wanted,"rectangles":rectangles,"size":self.size}),
+        );
+    }
     fn material(&self) -> Option<Material> {
+        // Match the buffer we painted, even if a worker completes meanwhile.
+        if !self.icons_presented {
+            return None;
+        }
         if self.dragging || self.closing || self.size.0 == 0 {
             return None;
         }

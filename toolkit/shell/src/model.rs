@@ -7,6 +7,7 @@ use std::collections::{BTreeMap, HashMap};
 #[derive(Clone, Debug, Default, PartialEq)]
 pub struct App {
     pub id: String,
+    pub raw_icon: String,
     pub generation: u64,
     pub name: String,
     pub startup_wm_class: String,
