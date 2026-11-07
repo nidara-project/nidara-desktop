@@ -237,6 +237,9 @@ fn main() {
             prefs::watch_cc(move |c| {
                 use nidara_shell::status::Update;
                 drop(t.send(match c {
+                    prefs::Cc::NightSchedule(on, from, to) => {
+                        hub::HubEvent::Widgets(Update::NightSchedule(on, from, to))
+                    }
                     prefs::Cc::Dark(d) => hub::HubEvent::Widgets(Update::Dark(d)),
                     prefs::Cc::Night(n) => hub::HubEvent::Widgets(Update::Night(n)),
                     prefs::Cc::Layout(l) => hub::HubEvent::CcLayout(l),

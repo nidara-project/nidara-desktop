@@ -212,6 +212,7 @@ pub const WIDGETS: &str = "org.nidara.widgets";
 /// What the Control Center reads from GSettings, on its own thread like `watch`: dark
 /// mode, Night Light, and the grid as stored (cclayout.rs).
 pub enum Cc {
+    NightSchedule(bool, String, String),
     Dark(bool),
     Night(Option<crate::status::Night>),
     Layout(crate::cclayout::Stored),
@@ -250,6 +251,13 @@ pub fn watch_cc(emit: impl Fn(Cc) + 'static) {
         let stored = std::rc::Rc::new(stored);
         emit(interface.as_ref().map_or(Cc::Dark(false), dark));
         emit(night.as_ref().map_or(Cc::Night(None), lit));
+        if let Some(s) = &night {
+            emit(Cc::NightSchedule(
+                s.boolean("schedule-enabled"),
+                s.string("schedule-from").to_string(),
+                s.string("schedule-to").to_string(),
+            ));
+        }
         emit(stored());
         if let Some(s) = &interface {
             let emit = emit.clone();
@@ -260,6 +268,13 @@ pub fn watch_cc(emit: impl Fn(Cc) + 'static) {
             s.connect_changed(None, move |s, key| {
                 if ["enabled", "temperature"].contains(&key) {
                     emit(lit(s))
+                }
+                if ["schedule-enabled", "schedule-from", "schedule-to"].contains(&key) {
+                    emit(Cc::NightSchedule(
+                        s.boolean("schedule-enabled"),
+                        s.string("schedule-from").to_string(),
+                        s.string("schedule-to").to_string(),
+                    ));
                 }
             });
         }

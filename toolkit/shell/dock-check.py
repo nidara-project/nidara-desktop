@@ -134,6 +134,9 @@ Gio.bus_own_name_on_connection(bus, 'org.nidara.Network', 0, None, None)
 GLib.MainLoop().run()
 """
 
+if os.environ.get('NK_CC_DETAILS_CHECK') == '1':
+    from cc_check import NETWORK
+
 # An app's tray icon (StatusNotifierItem + dbusmenu), registered with Tray1's watcher:
 # its icon from its own IconThemePath, a menu with a submenu, and every call it gets
 # written to the file named by argv[1] (one JSON line each).
@@ -444,6 +447,9 @@ def section_drags():
 try:
     os.environ['GSETTINGS_SCHEMA_DIR'] = schemas()
     accessibility()
+    if os.environ.get('NK_CC_DETAILS_CHECK') == '1':
+        from cc_check import setup
+        setup(RUN)
     # The dock menu writes its preferences through Config1; an unidentified development
     # binary is External there, so the private session grants the consent gates.
     subprocess.run(['gsettings', 'set', 'org.nidara.ai', 'allow-computer-control', 'true'], check=True, timeout=5)
@@ -451,6 +457,8 @@ try:
     # With the bar, its widgets' services too: Power1 read-only (it only reads this
     # machine's UPower), Network1 the stand-in above.
     readers = ['--power-read-only', '--tray'] if os.environ.get('NK_SHELL_BAR') == '1' else []
+    if os.environ.get('NK_CC_DETAILS_CHECK') == '1':
+        readers.append('--media')
     start('sessiond', [SESSIOND, '--applications', '--config', *readers], XDG_DATA_DIRS=catalogue())
     def snapshot():
         r = subprocess.run(['busctl', '--user', '--json=short', 'call', 'org.nidara.Applications',
@@ -480,7 +488,7 @@ try:
     first = until('a dock layer', docks)
     if with_bar:
         bars = until('a bar layer', lambda: [l for l in ipc('layers').get('ok', {}).get('layers', [])
-                                             if l.get('namespace') == 'nidara-bar'])
+                                             if l.get('namespace') == 'nidara-bar' and l.get('width', 0) > 0 and l.get('height', 0) > 0])
         assert bars[0]['y'] == 0 and bars[0]['height'] == 48, bars
         time.sleep(1.5)  # the glass and the text (software Hyalo)
         shot(LOG / 'bar.png')
@@ -652,10 +660,15 @@ try:
             shot(LOG / 'cc-focus-on.png')
             subprocess.run(['gsettings', 'set', 'org.nidara.notifications', 'do-not-disturb', 'false'],
                            check=True, timeout=5)
+            if os.environ.get('NK_CC_DETAILS_CHECK') == '1':
+                from cc_check import run as cc_check
+                cc_check(globals())
             # Outside the panel and the bar's glass: it closes.
             pipe.write(f'click {layer["x"] + 40} {layer["y"] + grown["height"] - 40}\n')
             until('a click outside closes it', lambda: not cc_tiles() and bar_layer()['height'] == 48)
         result['bar']['cc'] = {'tiles': names, 'grown': grown['height']}
+        if os.environ.get('NK_CC_ONLY') == '1':
+            raise SystemExit(0)
     # Software Hyalo cannot take a GL client's dmabufs here (it crashes); draw on the CPU.
     start('client', ['gtk4-demo'], GDK_BACKEND='wayland', GSK_RENDERER='cairo', GDK_DISABLE='gl,vulkan')
     until('a client window', lambda: ipc('windows').get('ok', {}).get('windows'))
