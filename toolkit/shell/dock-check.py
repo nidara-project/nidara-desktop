@@ -318,6 +318,88 @@ def menu_rows(owner='Dock'):
     return found
 
 
+def extent(name):
+    node = next(n for n in children(dock_node()) if n.get_name() == name)
+    return node.get_component_iface().get_extents(Atspi.CoordType.WINDOW).width
+
+
+def popup_presence():
+    # Magnification (D2): resting on an item grows it toward the configured maximum, its
+    # neighbours making room; the reader's bounds follow what is drawn; leaving undoes it.
+    with open(os.environ['HYALO_CONTROL'], 'w', buffering=1) as pipe:
+        layer = docks()[0]
+        outside = (1, max(49, (layer['y'] + layer['height']) // 2))
+        pipe.write(f'move {outside[0]} {outside[1]}\n')
+    until('the dock settled before popup checks', lambda: extent('kitty') == extent('Files'))
+    rest = extent('kitty')
+    with open(os.environ['HYALO_CONTROL'], 'w', buffering=1) as pipe:
+        x, y = item_point('kitty')
+        pipe.write(f'move {x} {y}\nmove {x + 1} {y}\n')
+        # How far depends on the room the output leaves (a small logical output at scale 2
+        # leaves little): it grows, and settles where the envelope allows.
+        grown = until('kitty grows under the pointer', lambda: (e := extent('kitty')) > rest + 4 and e)
+        time.sleep(.5)
+        grown = extent('kitty')
+        time.sleep(.3)
+        shot(LOG / 'dock-magnified.png')
+        layer = docks()[0]
+        pipe.write(f'move {x} {layer["y"] - 300}\n')
+        until('kitty back at rest', lambda: extent('kitty') == rest)
+    result['magnification'] = {'rest': rest, 'grown': grown}
+    # #1030: a modal menu filters the root's motion/leave; closing it must
+    # reconcile the transport's actual pointer focus, without waiting for re-entry.
+    result['popup_presence'] = {}
+    with open(os.environ['HYALO_CONTROL'], 'w', buffering=1) as pipe:
+        def magnified_menu():
+            x, y = item_point('kitty')
+            pipe.write(f'move {x} {y}\nmove {x + 1} {y}\n')
+            try:
+                until('kitty magnifies before its menu', lambda: extent('kitty') > rest + 4)
+            except RuntimeError:
+                (LOG/'popup-reentry-failure.json').write_text(json.dumps({'point':[x,y], 'rest':rest, 'extent':extent('kitty'), 'layers':docks(), 'items':walk()},indent=2))
+                shot(LOG/'popup-reentry-failure.png')
+                raise
+            time.sleep(.5)
+            x, y = item_point('kitty')
+            pipe.write(f'rclick {x} {y}\n')
+            until('the magnified kitty menu opens', menu_rows)
+            return x, y
+
+        magnified_menu()
+        # (10,10) is the bar's System menu button, not background. Its new
+        # grab correctly prevents dock re-entry and was the false #1040 failure.
+        pipe.write(f'move {outside[0]} {outside[1]}\nclick {outside[0]} {outside[1]}\n')
+        until('outside click dismisses the menu', lambda: not menu_rows())
+        assert not menu_rows('Bar'), 'outside click opened another modal menu'
+        until('outside dismissal restores resting bounds', lambda: extent('kitty') == rest)
+        result['popup_presence']['outside'] = extent('kitty')
+        shot(LOG / 'dock-menu-dismissed-outside.png')
+
+        # Popup-local coordinates must not become root coordinates when its ID
+        # is retired. Escape with the pointer still on a menu above the dock.
+        magnified_menu()
+        row = menu_rows()[0][0]
+        r = row.get_component_iface().get_extents(Atspi.CoordType.WINDOW)
+        layer = docks()[0]
+        mx, my = layer['x'] + r.x + r.width // 2, layer['y'] + r.y + r.height // 2
+        pipe.write(f'move {mx} {my}\nmove {mx + 1} {my}\n')
+        time.sleep(.3)
+        pipe.write('key 1\n')
+        until('Escape closes the menu under the pointer', lambda: not menu_rows())
+        until('popup focus is not stale root focus', lambda: extent('kitty') == rest)
+        result['popup_presence']['popup_escape'] = extent('kitty')
+
+        for how in ('click', 'escape'):
+            x, y = magnified_menu()
+            pipe.write(f'click {x} {y}\n' if how == 'click' else 'key 1\n')
+            until(f'{how} dismisses the menu over the root', lambda: not menu_rows())
+            time.sleep(.5)
+            assert extent('kitty') > rest + 4, f'{how} shrank the dock under the pointer'
+            result['popup_presence'][how] = extent('kitty')
+            pipe.write('move 10 10\n')
+            until('leaving still restores resting bounds', lambda: extent('kitty') == rest)
+
+
 def item_point(name):
     """The middle of a dock item, in global logical pixels."""
     layer = docks()[0]
@@ -484,7 +566,7 @@ try:
     # NK_SHELL_BAR=1 (check-bar-headless.sh): the bar too (bar.rs, B1), along the top.
     with_bar = os.environ.get('NK_SHELL_BAR') == '1'
     shell = start('shell', [SHELL, '--bar'] if with_bar else [SHELL],
-                  **({'WAYLAND_DEBUG': 'client'} if os.environ.get('NK_DOCK_DROP_CHECK') == '1' else {}))
+                  **({'WAYLAND_DEBUG': 'client'} if os.environ.get('NK_DOCK_DROP_CHECK') == '1' or os.environ.get('NK_DOCK_POINTER_TRACE') == '1' else {}))
     first = until('a dock layer', docks)
     if with_bar:
         bars = until('a bar layer', lambda: [l for l in ipc('layers').get('ok', {}).get('layers', [])
@@ -496,6 +578,12 @@ try:
     # Shell1 (crates/nidara-shell-ipc): this process owns the name, says what it can do,
     # and refuses what it cannot rather than doing nothing.
     until('Shell1 answering', lambda: shell1('GetState') is not None)
+    if os.environ.get('NK_DOCK_POPUP_ONLY') == '1':
+        until('the dock ready for popup checks', lambda: (items := walk()) and any(i['name'] == 'kitty' for i in items))
+        popup_presence()
+        (LOG/'popup-presence.json').write_text(json.dumps(result,indent=2))
+        print('PASS popup presence and re-entry',flush=True)
+        raise SystemExit(0)
     if os.environ.get('NK_DOCK_DROP_CHECK') == '1':
         from drop_check import run as drop_check
         drop_check(globals())
@@ -758,70 +846,7 @@ try:
         shot(LOG / 'dock-tooltip-next.png')
         pipe.write(f'move {bx} {by - 200}\n')
     result['tooltip'] = 'shown, see dock-tooltip.png'
-    # Magnification (D2): resting on an item grows it toward the configured maximum, its
-    # neighbours making room; the reader's bounds follow what is drawn; leaving undoes it.
-    def extent(name):
-        node = next(n for n in children(dock_node()) if n.get_name() == name)
-        return node.get_component_iface().get_extents(Atspi.CoordType.WINDOW).width
-    rest = extent('kitty')
-    with open(os.environ['HYALO_CONTROL'], 'w', buffering=1) as pipe:
-        x, y = item_point('kitty')
-        pipe.write(f'move {x} {y}\nmove {x + 1} {y}\n')
-        # How far depends on the room the output leaves (a small logical output at scale 2
-        # leaves little): it grows, and settles where the envelope allows.
-        grown = until('kitty grows under the pointer', lambda: (e := extent('kitty')) > rest + 4 and e)
-        time.sleep(.5)
-        grown = extent('kitty')
-        time.sleep(.3)
-        shot(LOG / 'dock-magnified.png')
-        layer = docks()[0]
-        pipe.write(f'move {x} {layer["y"] - 300}\n')
-        until('kitty back at rest', lambda: extent('kitty') == rest)
-    result['magnification'] = {'rest': rest, 'grown': grown}
-    # #1030: a modal menu filters the root's motion/leave; closing it must
-    # reconcile the transport's actual pointer focus, without waiting for re-entry.
-    result['popup_presence'] = {}
-    with open(os.environ['HYALO_CONTROL'], 'w', buffering=1) as pipe:
-        def magnified_menu():
-            x, y = item_point('kitty')
-            pipe.write(f'move {x} {y}\nmove {x + 1} {y}\n')
-            until('kitty magnifies before its menu', lambda: extent('kitty') > rest + 4)
-            time.sleep(.5)
-            x, y = item_point('kitty')
-            pipe.write(f'rclick {x} {y}\n')
-            until('the magnified kitty menu opens', menu_rows)
-            return x, y
-
-        magnified_menu()
-        pipe.write('move 10 10\nclick 10 10\n')
-        until('outside click dismisses the menu', lambda: not menu_rows())
-        until('outside dismissal restores resting bounds', lambda: extent('kitty') == rest)
-        result['popup_presence']['outside'] = extent('kitty')
-        shot(LOG / 'dock-menu-dismissed-outside.png')
-
-        # Popup-local coordinates must not become root coordinates when its ID
-        # is retired. Escape with the pointer still on a menu above the dock.
-        magnified_menu()
-        row = menu_rows()[0][0]
-        r = row.get_component_iface().get_extents(Atspi.CoordType.WINDOW)
-        layer = docks()[0]
-        mx, my = layer['x'] + r.x + r.width // 2, layer['y'] + r.y + r.height // 2
-        pipe.write(f'move {mx} {my}\nmove {mx + 1} {my}\n')
-        time.sleep(.3)
-        pipe.write('key 1\n')
-        until('Escape closes the menu under the pointer', lambda: not menu_rows())
-        until('popup focus is not stale root focus', lambda: extent('kitty') == rest)
-        result['popup_presence']['popup_escape'] = extent('kitty')
-
-        for how in ('click', 'escape'):
-            x, y = magnified_menu()
-            pipe.write(f'click {x} {y}\n' if how == 'click' else 'key 1\n')
-            until(f'{how} dismisses the menu over the root', lambda: not menu_rows())
-            time.sleep(.5)
-            assert extent('kitty') > rest + 4, f'{how} shrank the dock under the pointer'
-            result['popup_presence'][how] = extent('kitty')
-            pipe.write('move 10 10\n')
-            until('leaving still restores resting bounds', lambda: extent('kitty') == rest)
+    popup_presence()
     # Auto-hide (D2): on, the dock slides out past the screen edge once the pointer is
     # away; the pointer at that edge, along the dock, brings it back; away again, it hides
     # after the delay; off, it stays.
