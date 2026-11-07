@@ -7,7 +7,7 @@
 //! Icons: a themed name is looked up the way GTK would (the interface icon theme, what it
 //! inherits, hicolor, the item's own IconThemePath, /usr/share/pixmaps); a name it cannot
 //! find, or none, falls back to the item's pixmap (`GetIcon`). A `-symbolic` icon is drawn
-//! in the bar's ink. All of it on the watcher's thread, never the bar's.
+//! in the bar's ink. Resolution and decoding use the process-wide icon memory's worker pool.
 //!
 //! A left click raises the window of the process that owns the item (that process, or one
 //! it started), and only when there is none asks the app (`Activate`). An item that is
@@ -31,12 +31,58 @@ const ANCESTRY: usize = 8;
 
 pub type Props = HashMap<String, OwnedValue>;
 
-/// Straight (not premultiplied) RGBA.
+/// Asset identity only; decoded pixels belong to the shared icon memory.
 #[derive(Clone, Debug, PartialEq)]
 pub struct Picture {
-    pub width: u16,
-    pub height: u16,
-    pub rgba: Vec<u8>,
+    owner: String,
+    handle: String,
+    generation: u64,
+    revision: u64,
+    theme: String,
+    name: String,
+    extra: Vec<PathBuf>,
+    attention: bool,
+}
+impl Picture {
+    pub fn asset(&self) -> Option<Arc<crate::icon_memory::Asset>> {
+        let memory = crate::icon_memory::global()?;
+        let symbolic = self.name.ends_with("-symbolic");
+        if !self.attention
+            && !symbolic
+            && self.extra.is_empty()
+            && let Some(key) = memory.app_for_name(&self.name, PIXELS, 1.)
+        {
+            memory.request(key.clone());
+            return memory.get(&key);
+        }
+        if !self.name.is_empty() {
+            let key = memory.named(
+                &self.theme,
+                &self.name,
+                self.extra.clone(),
+                PIXELS,
+                symbolic,
+            );
+            memory.request(key.clone());
+            if let Some(asset) = memory.get(&key) {
+                return Some(asset);
+            }
+            if !memory.unavailable(&key) {
+                return None;
+            }
+        }
+        let key = crate::icon_memory::Key::Tray {
+            owner: self.owner.clone(),
+            handle: self.handle.clone(),
+            generation: self.generation,
+            revision: self.revision,
+            attention: self.attention,
+            side: PIXELS,
+            symbolic,
+        };
+        memory.request(key.clone());
+        memory.get(&key)
+    }
 }
 
 #[derive(Clone, Debug, PartialEq)]
@@ -227,7 +273,6 @@ pub fn watch(conn: &Connection, emit: Sender<Arc<Vec<TrayItem>>>) {
             }
             forward(iters, &tx, "tray");
             let mut host: Option<String> = None;
-            let mut cache: HashMap<(String, u64, String), Option<Arc<Picture>>> = HashMap::new();
             run(
                 "tray",
                 &rx,
@@ -236,23 +281,28 @@ pub fn watch(conn: &Connection, emit: Sender<Arc<Vec<TrayItem>>>) {
                     // A new daemon knows no host: register with it, and forget its handles.
                     if host.as_deref() != Some(owner.as_str()) {
                         call(&conn, "RegisterHost", &())?;
-                        host = Some(owner);
-                        cache.clear();
+                        host = Some(owner.clone());
                     }
-                    let (_, rows): (u64, Vec<Props>) = call(&conn, "GetSnapshot", &())?
+                    let (revision, rows): (u64, Vec<Props>) = call(&conn, "GetSnapshot", &())?
                         .body()
                         .deserialize()
                         .map_err(|e| e.to_string())?;
                     let theme = icon_theme();
                     let items = items_of(&rows, |p, attention| {
-                        let name = icon_name(p, attention);
-                        let key = (text(p, "Handle"), number(p, "Generation")?, name.clone());
-                        cache
-                            .entry(key)
-                            .or_insert_with(|| {
-                                picture(&conn, &theme, p, &name, attention).map(Arc::new)
-                            })
-                            .clone()
+                        Some(Arc::new(Picture {
+                            owner: host.clone()?,
+                            handle: text(p, "Handle"),
+                            generation: number(p, "Generation")?,
+                            revision,
+                            theme: theme.clone(),
+                            name: icon_name(p, attention),
+                            extra: Some(text(p, "IconThemePath"))
+                                .filter(|p| p.starts_with('/'))
+                                .map(PathBuf::from)
+                                .into_iter()
+                                .collect(),
+                            attention,
+                        }))
                     });
                     Ok(Arc::new(items))
                 },
@@ -307,112 +357,6 @@ fn icon_theme() -> String {
                 .to_string()
         })
         .unwrap_or_else(|| "hicolor".into())
-}
-
-fn picture(
-    conn: &Connection,
-    theme: &str,
-    p: &Props,
-    name: &str,
-    attention: bool,
-) -> Option<Picture> {
-    let extra: Vec<PathBuf> = Some(text(p, "IconThemePath"))
-        .filter(|t| t.starts_with('/'))
-        .map(PathBuf::from)
-        .into_iter()
-        .collect();
-    let themed = nk_icons::find_app_icon(theme, name, PIXELS, &nk_icons::search_path(), &extra)
-        .and_then(|path| load(&path));
-    let mut pic = match themed {
-        Some(pic) => pic,
-        None => {
-            let kind = if attention { "attention" } else { "normal" };
-            let (w, h, rgba): (u32, u32, Vec<u8>) = conn
-                .call_method(
-                    Some(SESSION),
-                    ROOT,
-                    Some(IFACE),
-                    "GetIcon",
-                    &(text(p, "Handle"), number(p, "Generation")?, kind, PIXELS),
-                )
-                .ok()?
-                .body()
-                .deserialize()
-                .ok()?;
-            let (width, height) = (u16::try_from(w).ok()?, u16::try_from(h).ok()?);
-            (rgba.len() == usize::from(width) * usize::from(height) * 4).then_some(Picture {
-                width,
-                height,
-                rgba,
-            })?
-        }
-    };
-    if name.ends_with("-symbolic") {
-        // Drawn in the bar's ink: white, keeping the drawing's alpha.
-        for px in pic.rgba.as_chunks_mut::<4>().0 {
-            px[..3].fill(255);
-        }
-    }
-    Some(pic)
-}
-
-/// An SVG drawn at the bar's size, or a PNG as it is (the bar scales it).
-fn load(path: &std::path::Path) -> Option<Picture> {
-    let bytes = std::fs::read(path).ok()?;
-    if path.extension().is_some_and(|e| e == "svg") {
-        let tree = resvg::usvg::Tree::from_data(&bytes, &resvg::usvg::Options::default()).ok()?;
-        let size = tree.size();
-        let scale = PIXELS as f32 / size.width().max(size.height());
-        let mut pixmap = resvg::tiny_skia::Pixmap::new(PIXELS, PIXELS)?;
-        let dx = (PIXELS as f32 - size.width() * scale) / 2.;
-        let dy = (PIXELS as f32 - size.height() * scale) / 2.;
-        resvg::render(
-            &tree,
-            resvg::tiny_skia::Transform::from_scale(scale, scale).post_translate(dx, dy),
-            &mut pixmap.as_mut(),
-        );
-        let rgba = pixmap
-            .pixels()
-            .iter()
-            .flat_map(|p| {
-                let c = p.demultiply();
-                [c.red(), c.green(), c.blue(), c.alpha()]
-            })
-            .collect();
-        return Some(Picture {
-            width: PIXELS as u16,
-            height: PIXELS as u16,
-            rgba,
-        });
-    }
-    let mut decoder = png::Decoder::new(std::io::Cursor::new(bytes));
-    decoder.set_transformations(png::Transformations::normalize_to_color8());
-    let mut reader = decoder.read_info().ok()?;
-    let mut buf = vec![0; reader.output_buffer_size()?];
-    let info = reader.next_frame(&mut buf).ok()?;
-    let px = &buf[..info.buffer_size()];
-    let rgba: Vec<u8> = match info.color_type {
-        png::ColorType::Rgba => px.to_vec(),
-        png::ColorType::Rgb => px
-            .as_chunks::<3>()
-            .0
-            .iter()
-            .flat_map(|c| [c[0], c[1], c[2], 255])
-            .collect(),
-        png::ColorType::GrayscaleAlpha => px
-            .as_chunks::<2>()
-            .0
-            .iter()
-            .flat_map(|c| [c[0], c[0], c[0], c[1]])
-            .collect(),
-        png::ColorType::Grayscale => px.iter().flat_map(|g| [*g, *g, *g, 255]).collect(),
-        png::ColorType::Indexed => return None,
-    };
-    Some(Picture {
-        width: u16::try_from(info.width).ok()?,
-        height: u16::try_from(info.height).ok()?,
-        rgba,
-    })
 }
 
 // What a click asks of an item. Each runs on a worker thread of the caller's.

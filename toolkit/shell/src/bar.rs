@@ -18,7 +18,7 @@ use crate::menu::{Command, Label, System};
 use crate::popup::Look;
 use crate::popup::{Outcome, Popup};
 use nk_a11y::{Action, Bounds, Node, NodeId, Role, Tree};
-use nk_render::{Canvas, Color, ImageFit, Raster};
+use nk_render::{Canvas, Color, ImageFit};
 use nk_text::{Rect, TextBackend, TextStyle};
 use nk_wayland::{
     Application, Edges, Event, KeyboardMode, LayerLevel, LayerOutput, LayerPlacement, LayerSpec,
@@ -160,8 +160,6 @@ pub struct Bar {
     /// This output's logical origin: tray calls take global points.
     origin: (i32, i32),
     /// The frame's tray icons, ready to draw, and the tray they were made for.
-    tray_pictures: Vec<Option<Raster>>,
-    tray_seen: Arc<Vec<crate::tray::TrayItem>>,
     /// The open tray menu's session and its item.
     tray_menu: Option<(String, usize)>,
     tray_replies: (Sender<TrayReply>, Receiver<TrayReply>),
@@ -238,8 +236,6 @@ impl Bar {
             revision: 0,
             shape: vec![],
             origin,
-            tray_pictures: vec![],
-            tray_seen: Arc::default(),
             tray_menu: None,
             tray_replies: std::sync::mpsc::channel(),
             cc: crate::cc::Cc::new(),
@@ -611,23 +607,6 @@ impl Bar {
             self.tray_menu = Some((reply.token, reply.item));
             self.open_menu(w, rows, reply.serial, Item::Tray(reply.item));
         }
-    }
-
-    /// The tray's icons as rasters, made again only when the tray changed.
-    fn sync_tray_pictures(&mut self) {
-        if Arc::ptr_eq(&self.frame.tray, &self.tray_seen) {
-            return;
-        }
-        self.tray_seen = self.frame.tray.clone();
-        self.tray_pictures = self
-            .frame
-            .tray
-            .iter()
-            .map(|t| {
-                let p = t.icon.as_ref()?;
-                Raster::from_rgba(p.width, p.height, p.rgba.clone()).ok()
-            })
-            .collect();
     }
 
     fn choose(&mut self, command: Command, serial: Option<u32>, w: &mut Window) {
@@ -1334,7 +1313,6 @@ impl Application for Bar {
                     if self.frame.hidden && self.cc_open {
                         self.toggle_cc(w);
                     }
-                    self.sync_tray_pictures();
                     self.clock = self.now();
                     self.refresh(w);
                 }
@@ -1664,8 +1642,14 @@ impl Application for Bar {
                 }
                 Item::Island => {}
                 Item::Tray(i) => {
-                    if let Some(Some(p)) = self.tray_pictures.get(i) {
-                        c.image(p, icon_box(b), ImageFit::Contain);
+                    if let Some(p) = self
+                        .frame
+                        .tray
+                        .get(i)
+                        .and_then(|t| t.icon.as_ref())
+                        .and_then(|p| p.asset())
+                    {
+                        c.image(&p.raster, icon_box(b), ImageFit::Contain);
                     }
                 }
             }

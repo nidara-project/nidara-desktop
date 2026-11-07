@@ -177,19 +177,19 @@ fn main() {
         .map_err(|e| eprintln!("nidara-shell: no glass tokens: {e}"))
         .ok();
 
-    let mut icon_jobs = None;
+    static ICON_SUBSCRIPTION: std::sync::OnceLock<nidara_shell::icon_memory::Subscription> =
+        std::sync::OnceLock::new();
     let mut apps_conn = None;
     match apps::connect() {
         Ok(conn) => {
-            let (jobs_tx, jobs_rx) = channel();
-            icon_jobs = Some(jobs_tx);
-            apps_conn = Some(conn.clone());
-            let (t, c) = (hub_tx.clone(), conn.clone());
-            spawn("apps-icons", move || {
-                apps::icons(c, jobs_rx, move |job, icon| {
-                    drop(t.send(hub::HubEvent::Icon(job, icon)))
-                })
+            let memory = nidara_shell::icon_memory::install(conn.clone());
+            let t = hub_tx.clone();
+            let subscription = memory.subscribe(move || {
+                let _ = t.send(hub::HubEvent::IconsChanged);
             });
+            // The hub's process lifetime owns this subscription, not each surface.
+            let _ = ICON_SUBSCRIPTION.set(subscription);
+            apps_conn = Some(conn.clone());
             let t = hub_tx.clone();
             spawn("apps", move || {
                 apps::watch(conn, move |u| drop(t.send(hub::HubEvent::Apps(u))))
@@ -265,7 +265,6 @@ fn main() {
     let bus = apps_conn.clone();
     let hub = hub::Hub::new(
         prefs::Prefs::default(),
-        icon_jobs,
         apps_conn,
         tokens.clone(),
         status,

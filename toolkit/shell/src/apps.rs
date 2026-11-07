@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: LGPL-3.0-or-later
 //! Applications1, read for the dock (DOCK.md §3, APPLICATIONS1-DOCK.md §2): subscribe to
 //! Changed and the owner first, then the snapshot and its pages; a newer revision that
-//! arrived meanwhile rereads. Icons come on demand from their own worker. Every call has
+//! arrived meanwhile rereads. Icons come on demand through the shared icon memory. Every call has
 //! the connection's deadline; a failure is an explicit Unavailable, never an empty dock.
 use crate::model::{App, Autostart, DesktopAction, Launcher, Pin};
 use std::collections::HashMap;
@@ -22,6 +22,7 @@ type Dict = HashMap<String, OwnedValue>;
 
 #[derive(Clone, Debug, Default, PartialEq)]
 pub struct AppsState {
+    pub owner: String,
     pub epoch: u64,
     pub revision: u64,
     pub apps: Vec<App>,
@@ -49,15 +50,6 @@ pub enum AppsUpdate {
 pub const TRASH_EMPTY: &str = "trash:empty";
 pub const TRASH_FULL: &str = "trash:full";
 
-/// An icon job: (epoch, DesktopId or a Trash pseudo-id, generation, logical size, scale).
-#[derive(Clone, Debug, PartialEq)]
-pub struct IconJob {
-    pub epoch: u64,
-    pub id: String,
-    pub generation: u64,
-    pub logical: u32,
-    pub scale: f64,
-}
 /// Straight-alpha RGBA, as the service sends it.
 #[derive(Clone, Debug, PartialEq)]
 pub struct Icon {
@@ -233,6 +225,26 @@ pub fn search(
 }
 
 fn snapshot(conn: &Connection) -> Result<AppsState, String> {
+    let owner = || -> Result<String, String> {
+        conn.call_method(
+            Some("org.freedesktop.DBus"),
+            "/org/freedesktop/DBus",
+            Some("org.freedesktop.DBus"),
+            "GetNameOwner",
+            &(DEST,),
+        )
+        .and_then(|r| r.body().deserialize())
+        .map_err(|e| e.to_string())
+    };
+    let before = owner()?;
+    let mut state = snapshot_data(conn)?;
+    if before != owner()? {
+        return Err("Applications1 owner changed during hydration".into());
+    }
+    state.owner = before;
+    Ok(state)
+}
+fn snapshot_data(conn: &Connection) -> Result<AppsState, String> {
     let props = zbus::blocking::Proxy::new(conn, DEST, PATH, IFACE).map_err(|e| e.to_string())?;
     let capabilities: Vec<String> = props
         .get_property("Capabilities")
@@ -269,6 +281,7 @@ fn parse(
         .iter()
         .map(|a| App {
             id: text(a, "DesktopId"),
+            raw_icon: text(a, "RawIcon"),
             generation: number(a, "Generation"),
             name: text(a, "Name"),
             startup_wm_class: text(a, "StartupWMClass"),
@@ -338,6 +351,7 @@ fn parse(
         .collect();
     let default = text(state, "DefaultDirectoryApp");
     AppsState {
+        owner: String::new(),
         epoch,
         revision,
         apps,
@@ -416,42 +430,6 @@ pub fn is_place(key: &str) -> bool {
 /// Below 16 the dock asks for 16 and scales the art down itself.
 pub fn icon_request(logical: f64, scale: f64) -> (u32, f64) {
     ((logical.ceil() as u32).clamp(16, 512), scale.clamp(1., 4.))
-}
-
-/// Runs forever on its own thread: one GetIcon (or GetTrashIcon) per job, in order.
-pub fn icons(
-    conn: Connection,
-    jobs: Receiver<IconJob>,
-    done: impl Fn(IconJob, Option<Icon>) + Send + 'static,
-) {
-    for job in jobs {
-        let (logical, scale) = icon_request(job.logical as f64, job.scale);
-        let icon = match job.id.as_str() {
-            TRASH_EMPTY | TRASH_FULL => call::<_, (String, u32, u32, Vec<u8>)>(
-                &conn,
-                "GetTrashIcon",
-                &(job.epoch, job.id == TRASH_FULL, logical, scale),
-            ),
-            key if is_place(key) => call::<_, (String, u32, u32, Vec<u8>)>(
-                &conn,
-                "GetLayoutIcon",
-                &(job.epoch, key, logical, scale),
-            ),
-            id => call::<_, (String, u32, u32, Vec<u8>)>(
-                &conn,
-                "GetIcon",
-                &(job.epoch, id, job.generation, logical, scale),
-            ),
-        }
-        .ok()
-        .filter(|(_, w, h, rgba)| *w > 0 && *h > 0 && rgba.len() == *w as usize * *h as usize * 4)
-        .map(|(_, width, height, rgba)| Icon {
-            width,
-            height,
-            rgba,
-        });
-        done(job, icon);
-    }
 }
 
 #[cfg(test)]
