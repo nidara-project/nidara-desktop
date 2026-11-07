@@ -34,7 +34,7 @@ use std::rc::Rc;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::mpsc::{Receiver, Sender, channel};
 use std::sync::{Arc, Mutex};
-use std::time::Instant;
+use std::time::{Duration, Instant};
 use unicode_segmentation::UnicodeSegmentation;
 
 pub const NAMESPACE: &str = "nidara-apps";
@@ -64,6 +64,10 @@ const TILE_RADIUS: f64 = 14.;
 /// How far a held tile must move to become a drag.
 const DRAG_SLOP: f64 = 6.;
 const SEARCH_LIMIT: u32 = 100;
+/// How long Apps holds its first frame for the visible icons. Super must open something at
+/// once: a cold batch is ready in ~190 ms (release, #1047), and past this Apps shows what it
+/// has, the rest in the neutral art until each arrives. The dock keeps `STARTUP_WAIT`.
+const ICON_WAIT: Duration = Duration::from_millis(250);
 
 const LEFT_BUTTON: u32 = 0x110;
 const ESCAPE: u32 = 0xff1b;
@@ -417,7 +421,7 @@ impl Launcher {
         memory.get(&key)
     }
     fn waiting_for_icons(&self) -> bool {
-        if self.icons_presented || self.icon_start.elapsed() >= crate::icon_memory::STARTUP_WAIT {
+        if !holds(self.icons_presented, self.icon_start.elapsed()) {
             return false;
         }
         let Some(memory) = &self.memory else {
@@ -767,6 +771,11 @@ fn tree(s: &Semantics) -> nk_a11y::Tree {
     nk_a11y::Tree { root: ROOT, nodes }
 }
 
+/// Whether the first frame may still wait for icons, `elapsed` after Apps was asked for.
+fn holds(presented: bool, elapsed: Duration) -> bool {
+    !presented && elapsed < ICON_WAIT
+}
+
 fn search_worker(
     conn: zbus::blocking::Connection,
     epoch: u64,
@@ -810,7 +819,7 @@ fn drag_icon(icon: &Icon) -> DragIcon {
 impl Application for Launcher {
     fn poll_interval_ms(&self) -> u32 {
         if !self.icons_presented {
-            return crate::icon_memory::STARTUP_WAIT
+            return ICON_WAIT
                 .saturating_sub(self.icon_start.elapsed())
                 .as_millis()
                 .clamp(1, 1000) as u32;
@@ -1267,6 +1276,13 @@ mod tests {
             visible,
             ..Default::default()
         }
+    }
+
+    #[test]
+    fn the_first_frame_waits_for_icons_only_briefly() {
+        assert!(holds(false, Duration::from_millis(100)));
+        assert!(!holds(false, Duration::from_millis(300)));
+        assert!(!holds(true, Duration::ZERO));
     }
 
     #[test]
