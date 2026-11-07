@@ -234,9 +234,11 @@ outside that resident budget. Pending/running requests are capped at 256; eight
 workers coalesce requests. Busy is pending and backs off (40 ms up to 1 s), never
 a missing-icon result. Requests without interest pause after 30 s and resume on
 request; no healthy idle polling. Readiness distinguishes ready, pending,
-unavailable and retired. Initial dock/Apps presentation waits for the visible
-batch, bounded at 2 s; a terminal/timeout result uses the existing neutral art,
-not an empty well. Warm Apps reopens reuse the first frame without GetIcon.
+unavailable and retired. Initial dock presentation waits for the visible batch,
+bounded at 2 s. Apps is opened by the user, so its first frame waits at most
+250 ms (a cold release batch takes ~190 ms) and then shows what is ready, each
+late icon replacing the neutral art as it arrives. A terminal/timeout result uses
+the existing neutral art, not an empty well. Warm Apps reopens reuse the first frame without GetIcon.
 
 The daemon separately retains resolved paths and rendered pixels in a 64 MiB,
 1024-entry LRU keyed by epoch, identity/generation, icon revision, theme and
