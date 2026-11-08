@@ -113,6 +113,9 @@ three groups (#1026, owner 2026-11-05): **pinned apps | running unpinned apps |
 minimized windows + pinned folders/files + Trash**. The right side is one group:
 minimized slots come first, places retain their stored order beside Trash, and Trash
 stays last. There are at most two separators; an empty group contributes none.
+A pinned app the catalogue does not have is not shown: Applications1 keeps the pin, so
+an upgrade that briefly removes the entry, or a reinstall, brings it back in its place
+(#1053). Its windows, if any, show as a running app.
 
 Every local preview, dropped-order hold, unpin suppression and external drop is
 composed before `present()` normalizes the groups once. No shown view has adjacent

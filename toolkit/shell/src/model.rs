@@ -124,7 +124,7 @@ pub enum Kind {
         launchable: bool,
         pinned: bool,
     },
-    /// A pin whose app the catalogue does not have (yet): shown, never launched.
+    /// The default-directory pin with no handler app: shown, never launched.
     MissingApp {
         id: String,
     },
@@ -328,6 +328,10 @@ impl Model {
                     });
                     continue;
                 }
+                // A pin whose app is not installed is kept but not shown (#1053): an upgrade
+                // briefly removes its entry, and a reinstall brings the pin back. Its
+                // windows, if any, show as a running app.
+                Pin::App { id, .. } if !by_id.contains_key(id.as_str()) => continue,
                 Pin::App { key, id } => (key, id.as_str()),
                 Pin::DefaultDirectory { key } => match i.default_directory {
                     Some(id) => (key, id),
@@ -707,8 +711,9 @@ mod tests {
     }
 
     #[test]
-    fn pins_never_vanish_and_resolve_to_one_slot() {
-        // A pin the catalogue lacks stays visible; two pins for one app keep one slot.
+    fn missing_apps_hide_and_pins_resolve_to_one_slot() {
+        // A pin the catalogue lacks is hidden, not dropped (#1053); two pins for one app
+        // keep one slot.
         let apps = [app("files.desktop")];
         let pins = [
             Pin::DefaultDirectory {
@@ -732,17 +737,10 @@ mod tests {
             keys(&v),
             [
                 "default-handler:inode/directory",
-                "app:gone.desktop",
                 "separator:2",
                 "folder:file:///home/u/Docs",
                 "trash"
             ]
-        );
-        assert_eq!(
-            v.items[1].kind,
-            Kind::MissingApp {
-                id: "gone.desktop".into()
-            }
         );
         // No handler at all: the default pin keeps its slot.
         let v = view(&apps, &pins[..1], &[]);

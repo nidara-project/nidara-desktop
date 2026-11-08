@@ -458,22 +458,16 @@ catalogue, prepends the formerly fixed Files and Apps in that order, then retain
 other pins/order. Strip only known old synthetic prefixes, never arbitrary paths
 or case-folded IDs. A version-1 empty list is intentional and remains empty.
 Fresh default order: Files, Apps, remaining factory app pins; Trash is derived
-last. **An uninstalled app pin is removed**, but only after a **complete, healthy
-catalogue** proves its exact DesktopId absent. A failed/partial/degraded scan,
-provider outage, watch overflow awaiting recovery, unreadable root or unmounted
-Flatpak/Snap export root can never trigger pruning. Record root health/availability
-and retain the last good baseline; never interpret unavailable roots as healthy
-empty directories. Canonical snapshot completeness requires all configured
-catalogue roots to have a successful scan or a verified healthy absence, rather
-than an I/O or mount failure. If health is uncertain, defer pruning. The same
-rule applies to migrated pins: import first, prune only with that evidence, not
-against a partial startup cache. The absence must also outlast a 60 s grace, since
-a package upgrade unlinks and rewrites the entry in place (#1053); during the grace
-the pin stays, unavailable. A healthy absence past the grace removes the pin in the
-shared layout transaction and publishes its new LayoutRevision, so an in-flight
-drag receives Conflict rather than restoring a stale pin. Folder entries retain
-the distinct missing-folder behavior above; a dynamic default-directory pin is
-not pruned merely because handler resolution is temporarily unavailable. No
+last. **An uninstalled app pin is kept, and the dock hides it** (owner, 08-11,
+#1053). Pruning it lost pins for good: a package upgrade unlinks and rewrites a
+desktop entry, and a refresh in that gap saw a healthy catalogue without the app.
+The layout keeps the target, Applications1 publishes it with `Available` false,
+and the dock shows no slot for it (its windows, if any, show as a running app).
+An upgrade or a reinstall brings the pin back in its place. Migrated pins follow
+the same rule. The unpin is the user's: the layout never shrinks on its own.
+Folder entries retain the distinct missing-folder behavior above; a dynamic
+default-directory pin is not pruned merely because handler resolution is
+temporarily unavailable. No
 .desktop file or app is fabricated for a missing factory entry; Apps is seeded
 only when its binary/entry ships.
 
@@ -840,7 +834,7 @@ not a claim that any runtime test has been performed for this design.
 | 20 Apps ordinary app | real .desktop/app-id, visible in own grid, movable/removable, factory pin in former launcher's relative position |
 | 21 Files default app | inode/directory resolver, replace handler without dock source change, actual app windows grouped, movable/removable |
 | 22 Trash fixed | final slot alone fixed, disabled unsupported backend reports why, no reorder/remove/deletion via data payload |
-| 23 pin placement/factory | menu pin at pinned-section end, drag at drop, Files→Apps→rest, intentional empty layout survives; uninstalled exact-ID pins (including migrated) pruned only after complete healthy catalogue and a 60 s grace (#1053) |
+| 23 pin placement/factory | menu pin at pinned-section end, drag at drop, Files→Apps→rest, intentional empty layout survives; uninstalled exact-ID pins (including migrated) kept and hidden by the dock, back on reinstall (#1053) |
 | 24 folders now | typed persistent URI, current default manager opens, missing folder removable, no fan/grid stack yet |
 | 25 no surface recreation | same Wayland surface identity and focus/input/material lifecycle across bottom/left/right; snap now, #966 later |
 
@@ -887,6 +881,8 @@ programming in this chat or expand the owner's standing permissions.
    complete healthy catalogue proves their exact ID absent. Never prune from
    failed/partial/degraded scans, provider loss or unmounted export roots; this
    protects migrated pins too.
+   Superseded on 08-11 (#1053): uninstalled app pins are kept and hidden, never
+   pruned (§6).
 
 The owner subsequently gave the explicit A1 implementation go-ahead in Codex's
 chat. That authorization is separate from this relayed review and does not cover

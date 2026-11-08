@@ -101,10 +101,7 @@ def inside(binary,out):
     def launcher():return snap()[3]['Files.desktop']['Launcher']
     def record(lid):return call('GetLaunch','(ts)',(e,lid))[0]
     try:
-        start()
-        # The shared fixture migrates a pin to an absent app; let its grace end first (#1053).
-        wait(lambda:'app:deleted.desktop' not in [x['Key'] for x in snap()[2]['Layout']],'migrated absent pin pruned')
-        e,_,state,apps=snap();layout=state['LayoutRevision'];generation=apps['Files.desktop']['Generation'];initial_epoch=state['HyaloEpoch']
+        start();e,_,state,apps=snap();layout=state['LayoutRevision'];generation=apps['Files.desktop']['Generation'];initial_epoch=state['HyaloEpoch']
         wait(lambda:(out/'state/nidara/applications-v1.json').exists(),'durable baseline')
         assert not any(a['IsNew'] for a in apps.values())
         matched=call('ResolveWindow','(tst)',(e,initial_epoch,1))[0];assert matched['DesktopId']=='Files.desktop' and matched['MatchKind']=='exact-app-id'

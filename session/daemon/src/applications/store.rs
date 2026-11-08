@@ -50,8 +50,6 @@ pub struct Store {
     next_generation: u64,
     icon_fingerprint: String,
     pins: Option<gio::Settings>,
-    /// Pinned apps missing from the catalogue, and since when (`layout::prune`).
-    missing_pins: BTreeMap<String, Instant>,
     /// The layout this service last wrote. GSettings tells us of our own write too, and
     /// that is not a change to read again: answered with a full refresh, it held the
     /// `Changed` of every pin, unpin and move back by the refresh, 1.3–1.75 s measured
@@ -150,7 +148,6 @@ impl Store {
             next_generation: 0,
             icon_fingerprint: String::new(),
             pins,
-            missing_pins: BTreeMap::new(),
             settings: super::super::config::registry::Store::new(),
             monitors: vec![],
             dirty,
@@ -384,7 +381,37 @@ impl Store {
             self.default = default;
             self.mark("defaults");
         }
-        self.reconcile_layout();
+        let pending = self.pins.as_ref().map(|p| {
+            let raw = p
+                .strv("layout")
+                .iter()
+                .map(|s| s.to_string())
+                .collect::<Vec<_>>();
+            match p.uint("layout-version") {
+                0 => {
+                    let legacy = p
+                        .strv("pinned")
+                        .iter()
+                        .map(|s| s.to_string())
+                        .collect::<Vec<_>>();
+                    Ok(layout::migrate(&legacy, &self.apps))
+                }
+                1 => layout::validate(&raw),
+                _ => Err(Error::Invalid("future layout version".into())),
+            }
+        });
+        if let Some(pending) = pending {
+            match pending {
+                // A pin whose app is not installed stays: the dock hides it, and an
+                // upgrade that briefly removes the entry or a reinstall finds it (#1053).
+                Ok(next) => {
+                    if let Err(e) = self.save_layout(next) {
+                        self.diagnostics.push(e.to_string());
+                    }
+                }
+                Err(e) => self.diagnostics.push(e.to_string()),
+            }
+        }
         if previous_health != self.healthy || previous_diagnostics != self.diagnostics {
             self.mark("catalogue");
         }
@@ -761,69 +788,15 @@ impl Store {
             self.mark("launcher");
         }
     }
-    /// Reads the dock layout and prunes the pins whose app stayed uninstalled (#1053).
-    fn reconcile_layout(&mut self) {
-        let pending = self.pins.as_ref().map(|p| {
-            let raw = p
-                .strv("layout")
-                .iter()
-                .map(|s| s.to_string())
-                .collect::<Vec<_>>();
-            match p.uint("layout-version") {
-                0 => {
-                    let legacy = p
-                        .strv("pinned")
-                        .iter()
-                        .map(|s| s.to_string())
-                        .collect::<Vec<_>>();
-                    Ok(layout::migrate(&legacy, &self.apps))
-                }
-                1 => layout::validate(&raw),
-                _ => Err(Error::Invalid("future layout version".into())),
-            }
-        });
-        if let Some(pending) = pending {
-            match pending {
-                Ok(mut next) => {
-                    layout::prune(
-                        &mut next,
-                        &self.apps,
-                        self.healthy,
-                        &mut self.missing_pins,
-                        Instant::now(),
-                    );
-                    if let Err(e) = self.save_layout(next) {
-                        self.diagnostics.push(e.to_string());
-                    }
-                }
-                Err(e) => {
-                    self.missing_pins.clear();
-                    self.diagnostics.push(e.to_string());
-                }
-            }
-        } else {
-            self.missing_pins.clear();
-        }
-    }
     fn tracking_deadline(&self) -> Option<Instant> {
         self.unity_publish_at
             .into_iter()
             .chain(self.persist_at)
             .chain(self.usage.needs_decay().then_some(self.decay_at))
-            .chain(self.pin_deadline())
             .min()
-    }
-    /// When the first held pin's grace ends; only while the catalogue is healthy, since
-    /// an unhealthy one never prunes and its recovery refresh reconciles anyway.
-    fn pin_deadline(&self) -> Option<Instant> {
-        let first = self.missing_pins.values().min()?;
-        self.healthy.then(|| *first + layout::prune_grace())
     }
     fn tracking_tick(&mut self) {
         let now = Instant::now();
-        if self.pin_deadline().is_some_and(|at| at <= now) {
-            self.reconcile_layout();
-        }
         if self.unity_publish_at.is_some_and(|at| at <= now) {
             self.unity_publish_at = None;
             let ids = self.unity.flush();

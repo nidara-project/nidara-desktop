@@ -19,8 +19,6 @@ from gi.repository import Gio, GLib
 NAME='org.nidara.Applications'
 PATH='/org/nidara/Applications'
 IFACE='org.nidara.Applications1'
-# The pin-prune grace, shortened from the daemon's 60 s (#1053).
-GRACE=1.5
 
 class Portal:
     """Private Settings portal: ReadOne once per owner, live SettingChanged."""
@@ -123,11 +121,8 @@ def inside(binary, out):
         assert 'nested-Tool.desktop' in apps
         assert 'TryMissing.desktop' in apps and not apps['TryMissing.desktop']['EntryAvailable'] and not apps['TryMissing.desktop']['Visible']
         assert apps['Sample.desktop']['Origin']=='flatpak'
-        # A migrated pin whose app is absent waits out the grace like any other (#1053).
-        assert 'app:deleted.desktop' in [x['Key'] for x in s['Layout']],s['Layout']
-        migrated=['default-handler:inode/directory','app:Sample.desktop','app:Case.desktop']
-        wait(lambda:[x['Key'] for x in snap()[2]['Layout']]==migrated,'migrated absent pin pruned after the grace')
-        e,r,s,apps=all_apps()
+        # A migrated pin to an absent app is kept, unavailable: the dock hides it (#1053).
+        assert [x['Key'] for x in s['Layout']]==['default-handler:inode/directory','app:Sample.desktop','app:deleted.desktop','app:Case.desktop'],s['Layout']
         def dock_get(key):
             return subprocess.run(['gsettings','get','org.nidara.dock',key],capture_output=True,text=True,check=True).stdout.strip()
         def dock_set(key,value):
@@ -197,7 +192,7 @@ def inside(binary, out):
             ctx.iteration(False);time.sleep(.002)
         bus.signal_unsubscribe(sub)
         assert got and got[0]-t0<.09,f'Changed {(got[0]-t0)*1000 if got else -1:.0f} ms after an edit: held behind a refresh'
-        # Healthy uninstall removes a pin; lost root must preserve it, including restart.
+        # A lost root preserves a pin, including restart.
         saved=appdir.with_name('applications-offline');appdir.rename(saved)
         wait(lambda:not snap()[2]['CatalogueComplete'],'provider/root outage degrades catalogue')
         assert 'app:Added.desktop' in [x['Key'] for x in snap()[2]['Layout']]
@@ -208,18 +203,15 @@ def inside(binary, out):
         saved.rename(appdir)
         wait(lambda:snap()[2]['CatalogueComplete'],'root recovery')
         previous_gen=all_apps()[3]['Added.desktop']['Generation']
-        # A package upgrade unlinks and rewrites the entry: a pin outlives that gap (#1053).
-        pinned=lambda:'app:Added.desktop' in [x['Key'] for x in snap()[2]['Layout']]
+        # An uninstall, or an upgrade that unlinks and rewrites the entry, keeps the pin;
+        # it is only unavailable until the entry is back (#1053).
+        added=lambda:[x for x in snap()[2]['Layout'] if x['Key']=='app:Added.desktop']
         (appdir/'Added.desktop').unlink()
         wait(lambda:'Added.desktop' not in all_apps()[3],'entry gone from a healthy catalogue')
-        assert pinned(),'a pin outlives a momentary absence'
-        desktop(appdir,'Added.desktop','Upgraded')
-        wait(lambda:'Added.desktop' in all_apps()[3],'entry back')
-        time.sleep(GRACE+.5)
-        assert pinned(),'an entry back within the grace keeps its pin'
-        (appdir/'Added.desktop').unlink()
-        wait(lambda:not pinned(),'healthy uninstall prunes pin after the grace')
+        time.sleep(.5)
+        assert added() and not added()[0]['Available'],'a healthy uninstall keeps the pin, unavailable'
         desktop(appdir,'Added.desktop','Recreated')
+        wait(lambda:added() and added()[0]['Available'],'a reinstall brings the pin back')
         wait(lambda:all_apps()[3].get('Added.desktop',{}).get('Generation',0)>previous_gen,'recreated ID has a fresh generation')
         e=e2;_,_,s,apps=all_apps();sample=apps['Sample.desktop'];g=sample['Generation']
         token,w,h,rgba=call('GetIcon','(tstud)',(e,'Sample.desktop',g,32,1.25))
@@ -292,7 +284,7 @@ def inside(binary, out):
         fe,_,fs=snap()
         fail('EditLayout','(tta{sv})',(fe,fs['LayoutRevision'],edit),'Unavailable')
         assert dock_get('layout-version')=='uint32 2' and ast.literal_eval(dock_get('pinned'))==['case']
-        print('PASS Applications1: opt-in/name conflict, XDG precedence/case/hidden/nested IDs, >300 apps + caller-bound immutable pages, search tiers, canonical layout migration/CAS/folder, consent+revocation, root outage+restart retention and healthy-only pruning, PNG/RGBA/SVG text + overrides, stale epochs/generations, TS/native key isolation+empty restart+future version, portal ReadOne/signals/owner/spoof; no launches or live session')
+        print('PASS Applications1: opt-in/name conflict, XDG precedence/case/hidden/nested IDs, >300 apps + caller-bound immutable pages, search tiers, canonical layout migration/CAS/folder, consent+revocation, root outage+restart retention and pins kept across uninstall/reinstall, PNG/RGBA/SVG text + overrides, stale epochs/generations, TS/native key isolation+empty restart+future version, portal ReadOne/signals/owner/spoof; no launches or live session')
     finally:
         stop();log.close();second.close_sync(None)
         if portal:portal.close()
@@ -368,7 +360,7 @@ def outer(binary, idle_seconds=None, driver=None, setup=None):
     desktop(appdir,'Text.desktop','Text');p=appdir/'Text.desktop';p.write_text(p.read_text().replace(str(out/'red.svg'),str(out/'text.svg')))
     with tempfile.TemporaryDirectory(prefix='napp-') as rt:
         address='unix:path='+rt+'/bus'
-        env=dict(os.environ,HOME=str(out/'home'),XDG_DATA_HOME=str(out/'data'),XDG_DATA_DIRS=str(out/'system/share'),XDG_CONFIG_HOME=str(out/'config'),XDG_STATE_HOME=str(out/'state'),XDG_CACHE_HOME=str(out/'cache'),XDG_RUNTIME_DIR=rt,DBUS_SESSION_BUS_ADDRESS=address,DBUS_SYSTEM_BUS_ADDRESS='unix:path='+rt+'/no-system-bus',GSETTINGS_BACKEND='keyfile',GSETTINGS_SCHEMA_DIR=str(out/'schemas'),XDG_CURRENT_DESKTOP='Nidara',NIDARA_APPLICATIONS_PRUNE_GRACE_MS=str(int(GRACE*1000)))
+        env=dict(os.environ,HOME=str(out/'home'),XDG_DATA_HOME=str(out/'data'),XDG_DATA_DIRS=str(out/'system/share'),XDG_CONFIG_HOME=str(out/'config'),XDG_STATE_HOME=str(out/'state'),XDG_CACHE_HOME=str(out/'cache'),XDG_RUNTIME_DIR=rt,DBUS_SESSION_BUS_ADDRESS=address,DBUS_SYSTEM_BUS_ADDRESS='unix:path='+rt+'/no-system-bus',GSETTINGS_BACKEND='keyfile',GSETTINGS_SCHEMA_DIR=str(out/'schemas'),XDG_CURRENT_DESKTOP='Nidara')
         env.pop('HYALO_SOCKET',None);env.pop('WAYLAND_DISPLAY',None)
         env['GIO_USE_VFS']='local'
         config=out/'bus.xml'
