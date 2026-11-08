@@ -132,9 +132,24 @@ try:
     settings('org.nidara.ai','allow-computer-control','true')
     start('sessiond',[os.environ['NK_SESSIOND_BIN'],'--config','--applications'],XDG_DATA_DIRS=str(data))
     until('daemon',lambda: history() == [])
-    start('shell',[os.environ['NK_DOCK_BIN'],'--bar'])
+    renderer=start('shell',[os.environ['NK_DOCK_BIN'],'--bar'],NK_ICON_METRICS='1')
     until('banner source ready',lambda:state()['available'])
     until('bar accessibility',bar)
+    if os.environ.get('NK_NOTIFICATION_HIDPI_CHECK')=='1':
+        image=RUN/'hidpi.svg'
+        image.write_text('<svg xmlns="http://www.w3.org/2000/svg" width="64" height="64"><rect width="64" height="64" fill="#0066ee"/></svg>')
+        notify('HiDPI startup',hints={'image-path':GLib.Variant('s',str(image))})
+        until('scaled card',lambda:node('HiDPI startup'))
+        def metrics():
+            return [json.loads(line.split('ICON_METRIC ',1)[1]) for line in (LOG/'shell.log').read_text().splitlines() if 'ICON_METRIC ' in line]
+        def scaled_artwork(v):
+            scales=[e.get('scale',1) for e in v if e.get('logical')==44 and e.get('scale',1)>1]
+            return bool(scales) and any(e.get('side')==int(64*scales[-1]+.999) and str(e.get('id','')).startswith('winit:') for e in v)
+        requests=until('physical artwork requests at HiDPI',lambda:(v:=metrics()) and scaled_artwork(v) and v,timeout=30)
+        oracle('artwork follows renderer pixel scale',scaled_artwork,requests,[e for e in requests if e.get('scale',1)<=1 and e.get('side',0)<=64])
+        (LOG/'report.json').write_text(json.dumps(REPORT,indent=2))
+        print('B3.1 HiDPI PASSED',flush=True)
+        raise SystemExit(0)
     listener=Atspi.EventListener.new(lambda e,*_: ANNOUNCEMENTS.append((e.type,e.detail1,e.any_data)))
     listener.register('object:announcement')
     BUS.signal_subscribe(None,'org.nidara.Notifications1','Notified','/org/nidara/Notifications',None,Gio.DBusSignalFlags.NONE,
@@ -196,6 +211,11 @@ try:
     # Send through notify-send as well as the persistent action-capable sender above.
     subprocess.run(['notify-send','--expire-time=0','--app-name=B3 notify-send','Real notify-send'],check=True,timeout=5)
     until('notify-send renderer',lambda:any(n['summary']=='Real notify-send' for n in banners()))
+    def neutral_art():
+        rows=[json.loads(line.split('ICON_METRIC ',1)[1]) for line in (LOG/'shell.log').read_text().splitlines() if 'ICON_METRIC ' in line]
+        return [e for e in rows if e.get('id')=='nd-notifications-symbolic']
+    neutral=until('neutral reference artwork decoded',lambda:(v:=neutral_art()) and any(e.get('event')=='icon-convert' for e in v) and v)
+    oracle('unknown sender gets reference neutral artwork',lambda v:any(e.get('event')=='icon-convert' for e in v) and not any(e.get('event')=='icon-fetch-error' for e in v),neutral,neutral+[{'event':'icon-fetch-error'}])
     clear()
     image=RUN/'thumbnail.svg'
     image.write_text('<svg xmlns="http://www.w3.org/2000/svg" width="64" height="64"><rect width="64" height="64" fill="#ee4400"/></svg>')
@@ -365,6 +385,14 @@ g.connect('pressed',pressed);button.add_controller(g);w.present();GLib.MainLoop(
     surface=until('fullscreen row hidden in committed glass',lambda:next((l for l in msg('layers')['ok']['layers'] if l['namespace']=='nidara-bar' and l.get('glass',{}).get('shapes')==1),None))
     oracle('fullscreen banner stays above client',lambda v:v.get('layer')=='overlay' and v.get('height',0)>48 and v.get('glass',{}).get('shapes')==1,surface,{'layer':'top','height':48})
     clear();msg('do','fullscreen',client_window['id'])
+    # A renderer restart never turns historical records back into fresh popups.
+    previous=notify('No replay on renderer restart')
+    until('pre-restart banner',lambda:previous in ids(banners()))
+    renderer.terminate();renderer.wait(timeout=5);PROCS.remove(renderer)
+    renderer=start('shell-restarted',[os.environ['NK_DOCK_BIN'],'--bar'],NK_ICON_METRICS='1')
+    until('new renderer source ready',lambda:state()['available'])
+    oracle('renderer restart does not replay history',lambda v:previous not in ids(v) and previous in ids(history()),banners(),history())
+    clear()
     # Native dumpState exercises the additive capability without altering GetState's tuple.
     if os.environ.get('NIDARA_IPC_BIN'):
         dump=json.loads(subprocess.check_output([os.environ['NIDARA_IPC_BIN'],'dumpState'],text=True,timeout=5))

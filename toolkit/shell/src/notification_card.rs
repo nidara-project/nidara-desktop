@@ -23,6 +23,18 @@ pub struct Card {
     pub rect: [f64; 4],
     pub buttons: Vec<(Target, String, [f64; 4])>,
 }
+/// The caller's output scale also belongs in every raster request.
+pub struct Artwork<'a> {
+    pub theme: &'a str,
+    pub catalogue: &'a HashMap<String, crate::model::App>,
+    pub namespace: &'a str,
+    pub scale: f64,
+}
+impl Artwork<'_> {
+    fn pixels(&self, logical: u32) -> u32 {
+        (f64::from(logical) * self.scale).ceil().clamp(1., 1024.) as u32
+    }
+}
 pub fn right_edge(
     width: f64,
     height: u32,
@@ -177,9 +189,7 @@ impl Card {
         c: &mut Canvas,
         look: &mut Look,
         material: bool,
-        theme: &str,
-        catalogue: &HashMap<String, crate::model::App>,
-        namespace: &str,
+        art: &Artwork<'_>,
     ) -> nk_wayland::Result<()> {
         let b = &self.banner;
         let r = self.rect;
@@ -193,10 +203,10 @@ impl Card {
         } else {
             image
         };
-        let thumb = asset_image(namespace, b, thumbnail, 64);
+        let thumb = asset_image(art.namespace, b, thumbnail, art.pixels(64));
         let text_x = r[0] + 72.;
         let room = (r[2] - 88. - if thumb.is_some() { 68. } else { 0. }).max(1.);
-        if let Some(asset) = app_asset(theme, b, catalogue, namespace) {
+        if let Some(asset) = app_asset(art, b) {
             c.image(
                 &asset.raster,
                 rect([r[0] + 16., r[1] + 24., 44., 44.]),
@@ -316,12 +326,11 @@ fn asset_image(
     m.request(key.clone());
     m.get(&key)
 }
-fn app_asset(
-    theme: &str,
-    b: &Banner,
-    apps: &HashMap<String, crate::model::App>,
-    namespace: &str,
-) -> Option<Arc<crate::icon_memory::Asset>> {
+fn app_asset(art: &Artwork<'_>, b: &Banner) -> Option<Arc<crate::icon_memory::Asset>> {
+    let theme = art.theme;
+    let apps = art.catalogue;
+    let namespace = art.namespace;
+    let side = art.pixels(44);
     let m = crate::icon_memory::global()?;
     let desktop = b.notice.hint("desktop-entry").trim_end_matches(".desktop");
     let direct = apps
@@ -338,7 +347,7 @@ fn app_asset(
         None
     };
     if let Some(app) = direct.or(unique)
-        && let Some(key) = m.current_app(&app.id, 44, 1.)
+        && let Some(key) = m.current_app(&app.id, 44, art.scale)
     {
         m.request(key.clone());
         if let Some(asset) = m.get(&key) {
@@ -350,7 +359,7 @@ fn app_asset(
     }
     let name = b.notice.app_icon.as_str();
     if (std::path::Path::new(name).is_absolute() || name.starts_with("file://"))
-        && let Some(a) = asset_image(namespace, b, name, 44)
+        && let Some(a) = asset_image(namespace, b, name, side)
     {
         return Some(a);
     }
@@ -371,7 +380,7 @@ fn app_asset(
                 | "unknown"
         )
     {
-        let key = m.named(theme, name, vec![], 44, false);
+        let key = m.named(theme, name, vec![], side, false);
         m.request(key.clone());
         if let Some(a) = m.get(&key) {
             return Some(a);
@@ -380,7 +389,22 @@ fn app_asset(
             return None;
         }
     }
-    let key = m.named(theme, "nd-notifications-symbolic", vec![], 44, true);
+    let reference = crate::paths::icon_reference();
+    let extra = reference
+        .parent()
+        .map(|p| vec![p.to_path_buf()])
+        .unwrap_or_default();
+    let fallback_theme = reference
+        .file_name()
+        .and_then(|n| n.to_str())
+        .unwrap_or("nidara");
+    let key = m.named(
+        fallback_theme,
+        "nd-notifications-symbolic",
+        extra,
+        side,
+        true,
+    );
     m.request(key.clone());
     m.get(&key)
 }

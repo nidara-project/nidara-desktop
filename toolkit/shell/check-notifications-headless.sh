@@ -10,6 +10,10 @@ repo=$(cd "$(dirname "$0")/../.." && pwd)
 export NK_WIDGETS_LOG=${NK_WIDGETS_LOG:-$repo/toolkit/target/notification-evidence}
 export NK_WIDGETS_CHECK="../../toolkit/shell/notification_check.py"
 mkdir -p "$NK_WIDGETS_LOG" "$repo/toolkit/target/notification-runtime-tmp"
+if [ "${NK_NOTIFICATION_HIDPI_CHECK:-0}" = 1 ]; then
+    printf '[outputs.winit]\nscale = 1.5\n' > "$NK_WIDGETS_LOG/hidpi.toml"
+    export NK_WIDGETS_HYALO_CONFIG="$NK_WIDGETS_LOG/hidpi.toml"
+fi
 exec bwrap --die-with-parent --unshare-pid --bind / / --dev-bind /dev /dev --proc /proc \
     --tmpfs "/run/user/$(id -u)" --setenv TMPDIR "$repo/toolkit/target/notification-runtime-tmp" \
     --setenv LIBGL_ALWAYS_SOFTWARE 1 --setenv WLR_RENDERER pixman \

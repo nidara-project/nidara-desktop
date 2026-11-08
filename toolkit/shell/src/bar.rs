@@ -2046,9 +2046,12 @@ impl Application for Bar {
                 &mut c,
                 look,
                 f.material,
-                &self.frame.notification_theme,
-                &self.frame.catalogue,
-                &self.name,
+                &crate::notification_card::Artwork {
+                    theme: &self.frame.notification_theme,
+                    catalogue: &self.frame.catalogue,
+                    namespace: &self.name,
+                    scale: f.scale,
+                },
             )?;
         }
         Ok(c.finish())

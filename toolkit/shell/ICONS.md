@@ -224,4 +224,7 @@ replace a registry icon. Thumbnail and absolute-path app art use `Key::Image`
 (namespace, content generation, path, side): replacing a file in place must not
 reuse its old pixels. These keys use the existing eight workers, size checks,
 64 MiB budget and interest/LRU eviction; cards own only shared Asset references.
-No disk cache, independent image loader or per-notification worker pool is added.
+App icon requests include the output scale; file/named raster sides use the
+corresponding physical pixel size. The neutral glyph explicitly resolves in the reference theme, including checkout
+runs where that theme is not installed system-wide. No disk cache, independent image loader or
+per-notification worker pool is added.
