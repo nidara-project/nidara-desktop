@@ -1,0 +1,419 @@
+// SPDX-License-Identifier: LGPL-3.0-or-later
+//! Native notifications: bounded card data and the one authoritative banner stack.
+//! Presentation timers never dismiss records in the notification daemon.
+use serde::{Deserialize, Serialize};
+use serde_json::{Map, Value};
+use std::collections::VecDeque;
+
+pub const MAX_VISIBLE: usize = 4;
+pub const GAME_GRACE_MS: u64 = 3000;
+#[derive(Clone, Debug, Default, Deserialize, Serialize, PartialEq, Eq)]
+pub struct Action {
+    pub id: String,
+    pub label: String,
+}
+#[derive(Clone, Debug, Deserialize, Serialize, PartialEq)]
+pub struct Notice {
+    #[serde(default)]
+    pub revision: u64,
+    pub id: u32,
+    #[serde(default)]
+    pub app_name: String,
+    #[serde(default)]
+    pub app_icon: String,
+    #[serde(default)]
+    pub summary: String,
+    #[serde(default)]
+    pub body: String,
+    #[serde(default = "default_timeout")]
+    pub expire_timeout: i32,
+    #[serde(default)]
+    pub time: u64,
+    #[serde(default)]
+    pub hints: Map<String, Value>,
+    #[serde(default)]
+    pub actions: Vec<Action>,
+}
+fn default_timeout() -> i32 {
+    -1
+}
+impl Notice {
+    pub fn parse(json: &str) -> Result<Self, String> {
+        if json.len() > 1024 * 1024 {
+            return Err("notification record exceeds 1 MiB".into());
+        }
+        let mut n: Self = serde_json::from_str(json).map_err(|e| e.to_string())?;
+        if n.id == 0 {
+            return Err("zero notification identity".into());
+        }
+        limit(&mut n.app_name, 1024);
+        limit(&mut n.app_icon, 4096);
+        limit(&mut n.summary, 8192);
+        n.summary = plain_text(&n.summary);
+        limit(&mut n.body, 16384);
+        n.body = plain_text(&n.body);
+        for key in ["desktop-entry", "image-path", "image_path"] {
+            if n.hints
+                .get(key)
+                .and_then(Value::as_str)
+                .is_some_and(|v| v.len() > 4096)
+            {
+                n.hints.remove(key);
+            }
+        }
+        n.actions.truncate(32);
+        let mut seen = std::collections::HashSet::new();
+        n.actions
+            .retain(|a| !a.id.is_empty() && a.id.len() <= 256 && seen.insert(a.id.clone()));
+        for a in &mut n.actions {
+            limit(&mut a.label, 1024);
+        }
+        Ok(n)
+    }
+    pub fn critical(&self) -> bool {
+        self.hints.get("urgency").and_then(Value::as_u64) == Some(2)
+    }
+    pub fn has_action(&self, key: &str) -> bool {
+        self.actions.iter().any(|a| a.id == key)
+    }
+    pub fn hint(&self, key: &str) -> &str {
+        self.hints.get(key).and_then(Value::as_str).unwrap_or("")
+    }
+    pub fn duration(&self, popup_seconds: u32) -> Option<u64> {
+        if self.critical() || self.expire_timeout == 0 {
+            None
+        } else if self.expire_timeout > 0 {
+            Some(self.expire_timeout as u64)
+        } else {
+            (popup_seconds > 0).then_some(u64::from(popup_seconds) * 1000)
+        }
+    }
+}
+/// Same plain-label policy as NotificationCenter: remove tags, then decode entities
+/// once with ampersand last. A decoded '<' is text, never parsed as another tag.
+pub fn plain_text(input: &str) -> String {
+    let mut stripped = String::new();
+    let mut rest = input;
+    while let Some(open) = rest.find('<') {
+        stripped.push_str(&rest[..open]);
+        if let Some(close) = rest[open..].find('>') {
+            rest = &rest[open + close + 1..];
+        } else {
+            stripped.push_str(&rest[open..]);
+            rest = "";
+            break;
+        }
+    }
+    stripped.push_str(rest);
+    let mut decoded = String::new();
+    let mut rest = stripped.as_str();
+    while let Some(start) = rest.find("&#") {
+        decoded.push_str(&rest[..start]);
+        rest = &rest[start..];
+        let parsed = rest.find(';').filter(|end| *end <= 12).and_then(|end| {
+            let number = &rest[2..end];
+            let value = if let Some(hex) = number
+                .strip_prefix('x')
+                .or_else(|| number.strip_prefix('X'))
+            {
+                u32::from_str_radix(hex, 16).ok()
+            } else {
+                number.parse().ok()
+            };
+            Some((end, value.filter(|v| *v > 0).and_then(char::from_u32)?))
+        });
+        if let Some((end, ch)) = parsed {
+            decoded.push(ch);
+            rest = &rest[end + 1..];
+        } else {
+            decoded.push('&');
+            rest = &rest[1..];
+        }
+    }
+    decoded.push_str(rest);
+    decoded
+        .replace("&lt;", "<")
+        .replace("&gt;", ">")
+        .replace("&quot;", "\"")
+        .replace("&apos;", "'")
+        .replace("&amp;", "&")
+        .split_whitespace()
+        .collect::<Vec<_>>()
+        .join(" ")
+}
+fn limit(s: &mut String, max: usize) {
+    let mut end = s.len().min(max);
+    while !s.is_char_boundary(end) {
+        end -= 1;
+    }
+    s.truncate(end);
+}
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct Preferences {
+    pub popup_seconds: u32,
+    pub dnd: bool,
+    pub silence_games: bool,
+    pub icon_theme: String,
+}
+impl Default for Preferences {
+    fn default() -> Self {
+        Self {
+            popup_seconds: 6,
+            dnd: false,
+            silence_games: true,
+            icon_theme: String::new(),
+        }
+    }
+}
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub struct Gates {
+    pub locked: bool,
+    pub panel: bool,
+    pub game: bool,
+}
+#[derive(Clone, Debug)]
+pub struct Banner {
+    pub notice: Notice,
+    /// Never reused during the shell's lifetime; replacements retain it.
+    pub instance: u64,
+    /// Every replacement retires actions captured from the old content.
+    pub content: u64,
+    pub output: String,
+    pub deadline: Option<u64>,
+    pub hovered: bool,
+    pub error: String,
+}
+#[derive(Clone, Debug, Default)]
+pub struct Stack {
+    pub entries: VecDeque<Banner>,
+    next: u64,
+    game_until: u64,
+    game: bool,
+}
+impl Stack {
+    pub fn clear(&mut self) -> bool {
+        let had = !self.entries.is_empty();
+        self.entries.clear();
+        had
+    }
+    pub fn gates(&mut self, gates: Gates, prefs: &Preferences, now: u64) -> bool {
+        if self.game && !gates.game {
+            self.game_until = now.saturating_add(GAME_GRACE_MS);
+        }
+        self.game = gates.game;
+        let before = self.entries.len();
+        let silenced = prefs.dnd
+            || gates.panel
+            || prefs.silence_games && (gates.game || now < self.game_until);
+        self.entries
+            .retain(|e| !gates.locked && (!silenced || e.notice.critical()));
+        before != self.entries.len()
+    }
+    pub fn push(
+        &mut self,
+        notice: Notice,
+        output: String,
+        gates: Gates,
+        prefs: &Preferences,
+        now: u64,
+    ) -> bool {
+        let changed = self.gates(gates, prefs, now);
+        if gates.locked
+            || (!notice.critical()
+                && (prefs.dnd
+                    || gates.panel
+                    || prefs.silence_games && (gates.game || now < self.game_until)))
+        {
+            return self.resolve(notice.id) || changed;
+        }
+        let duration = notice.duration(prefs.popup_seconds);
+        if let Some(old) = self.entries.iter_mut().find(|e| e.notice.id == notice.id) {
+            old.content = old.content.saturating_add(1);
+            old.notice = notice;
+            old.deadline = if old.hovered {
+                None
+            } else {
+                duration.map(|d| now.saturating_add(d))
+            };
+            old.error.clear();
+            return true;
+        }
+        self.next = self.next.checked_add(1).expect("banner identity exhausted");
+        if self.entries.len() == MAX_VISIBLE {
+            self.entries.pop_front();
+        }
+        self.entries.push_back(Banner {
+            notice,
+            instance: self.next,
+            content: 1,
+            output,
+            deadline: duration.map(|d| now.saturating_add(d)),
+            hovered: false,
+            error: String::new(),
+        });
+        true
+    }
+    pub fn resolve(&mut self, id: u32) -> bool {
+        let before = self.entries.len();
+        self.entries.retain(|e| e.notice.id != id);
+        before != self.entries.len()
+    }
+    pub fn hover(&mut self, instance: u64, on: bool, prefs: &Preferences, now: u64) -> bool {
+        let Some(e) = self.entries.iter_mut().find(|e| e.instance == instance) else {
+            return false;
+        };
+        if e.hovered == on {
+            return false;
+        }
+        e.hovered = on;
+        e.deadline = if on {
+            None
+        } else {
+            e.notice
+                .duration(prefs.popup_seconds)
+                .map(|d| now.saturating_add(d))
+        };
+        true
+    }
+    pub fn expire(&mut self, now: u64) -> bool {
+        let before = self.entries.len();
+        self.entries.retain(|e| e.deadline.is_none_or(|d| d > now));
+        before != self.entries.len()
+    }
+    pub fn next_deadline(&self) -> Option<u64> {
+        self.entries.iter().filter_map(|e| e.deadline).min()
+    }
+    pub fn current(&self, instance: u64, content: u64) -> Option<&Banner> {
+        self.entries
+            .iter()
+            .find(|e| e.instance == instance && e.content == content)
+    }
+}
+#[cfg(test)]
+mod tests {
+    use super::*;
+    fn n(id: u32, timeout: i32, critical: bool) -> Notice {
+        Notice::parse(&serde_json::json!({"id":id,"summary":format!("notice{id}"),"expire_timeout":timeout,"hints":{"urgency":if critical {2}else{1}}}).to_string()).unwrap()
+    }
+    #[test]
+    fn cap_replaces_in_place_and_retires_old_action_identity() {
+        let mut s = Stack::default();
+        let p = Preferences::default();
+        let g = Gates::default();
+        for i in 1..=4 {
+            s.push(n(i, -1, false), "a".into(), g, &p, 0);
+        }
+        let key = s.entries[1].instance;
+        s.push(n(2, 1000, false), "other-output".into(), g, &p, 10);
+        assert_eq!(s.entries[1].instance, key);
+        assert_eq!(s.entries[1].output, "a");
+        assert!(s.current(key, 1).is_none());
+        s.push(n(5, -1, false), "a".into(), g, &p, 20);
+        assert_eq!(
+            s.entries.iter().map(|e| e.notice.id).collect::<Vec<_>>(),
+            [2, 3, 4, 5]
+        );
+    }
+    #[test]
+    fn local_timeout_hover_and_critical_are_independent_of_daemon_dismissal() {
+        let mut s = Stack::default();
+        let p = Preferences::default();
+        let g = Gates::default();
+        s.push(n(1, 500, false), "a".into(), g, &p, 0);
+        let key = s.entries[0].instance;
+        s.hover(key, true, &p, 400);
+        assert!(!s.expire(9999));
+        s.hover(key, false, &p, 10000);
+        assert_eq!(s.next_deadline(), Some(10500));
+        assert!(!s.expire(10499));
+        assert!(s.expire(10500));
+        s.push(n(2, 1, true), "a".into(), g, &p, 0);
+        s.push(n(3, 0, false), "a".into(), g, &p, 0);
+        assert_eq!(s.next_deadline(), None);
+        assert!(!s.expire(u64::MAX));
+    }
+    #[test]
+    fn suppression_critical_exception_and_lock() {
+        for gate in [
+            Gates {
+                panel: true,
+                ..Default::default()
+            },
+            Gates {
+                game: true,
+                ..Default::default()
+            },
+        ] {
+            let mut s = Stack::default();
+            let p = Preferences::default();
+            assert!(!s.push(n(1, -1, false), "a".into(), gate, &p, 0));
+            assert!(s.push(n(2, 1, true), "a".into(), gate, &p, 0));
+            assert!(s.gates(
+                Gates {
+                    locked: true,
+                    ..gate
+                },
+                &p,
+                1
+            ));
+            assert!(s.entries.is_empty());
+        }
+        let mut s = Stack::default();
+        let p = Preferences {
+            dnd: true,
+            ..Default::default()
+        };
+        assert!(!s.push(n(1, -1, false), "a".into(), Gates::default(), &p, 0));
+        assert!(s.push(n(2, -1, true), "a".into(), Gates::default(), &p, 0));
+    }
+    #[test]
+    fn game_exit_grace_does_not_replay_suppressed_history() {
+        let mut s = Stack::default();
+        let p = Preferences::default();
+        s.gates(
+            Gates {
+                game: true,
+                ..Default::default()
+            },
+            &p,
+            0,
+        );
+        s.gates(Gates::default(), &p, 10);
+        assert!(!s.push(n(1, -1, false), "a".into(), Gates::default(), &p, 3009));
+        assert!(s.push(n(2, -1, false), "a".into(), Gates::default(), &p, 3010));
+    }
+}
+
+#[cfg(test)]
+mod replacement_tests {
+    use super::*;
+    #[test]
+    fn suppressed_replacement_retires_the_old_critical_card() {
+        let mut stack = Stack::default();
+        let mut prefs = Preferences::default();
+        let make = |urgency| {
+            Notice::parse(&serde_json::json!({"id":9,"hints":{"urgency":urgency}}).to_string())
+                .unwrap()
+        };
+        stack.push(make(2), "a".into(), Gates::default(), &prefs, 0);
+        prefs.dnd = true;
+        assert!(stack.push(make(1), "a".into(), Gates::default(), &prefs, 1));
+        assert!(stack.entries.is_empty());
+    }
+}
+
+#[cfg(test)]
+mod text_tests {
+    use super::*;
+    #[test]
+    fn markup_is_plain_text_entities_decode_once_and_unicode_is_preserved() {
+        assert_eq!(
+            plain_text("<b>Hello</b> &lt;unsafe&gt; &amp;lt; &#x65E5;&#26412;\n  &#x1F600;"),
+            "Hello <unsafe> &lt; 日本 😀"
+        );
+        assert_eq!(
+            plain_text("literal < without end &bogus; &#0;"),
+            "literal < without end &bogus; &#0;"
+        );
+    }
+}

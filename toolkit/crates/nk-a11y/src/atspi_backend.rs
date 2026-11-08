@@ -180,6 +180,8 @@ fn role(n: &Node) -> AtRole {
         Role::Button => AtRole::Button,
         Role::ToggleButton => AtRole::ToggleButton,
         Role::Panel => AtRole::Panel,
+        Role::Notification => AtRole::Notification,
+        Role::Alert => AtRole::Alert,
         Role::List => AtRole::List,
         Role::ScrollPane => AtRole::ScrollPane,
         Role::Menu => AtRole::Menu,
@@ -856,6 +858,14 @@ impl Backend {
                         )?;
                     }
                 }
+                Event::Announcement(id, s, critical) => self.emit(
+                    id,
+                    "Announcement",
+                    "",
+                    if critical { 2 } else { 1 },
+                    0,
+                    s.as_str().into(),
+                )?,
                 Event::Name(id, s) => self.emit(
                     id,
                     "PropertyChange",

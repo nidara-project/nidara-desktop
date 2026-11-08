@@ -248,3 +248,11 @@ window's real root: an xdg toplevel (`run`) or a layer root (`run_layer`, whose
 menus attach with `get_popup`; SHELL-SURFACES.md §3), never a hidden or disguised
 toplevel. Read CONTRACT.md and the bounded-menu-probe
 example for the retained action-menu/provider composition and private test.
+
+For an explicit assistive action on a layer root, without a Button/Key serial,
+`request_focused_activation_token` accepts only the root's current compositor
+keyboard-enter serial. The caller requests keyboard focus, waits for Focus(true),
+then requests the token and releases temporary focus. Keyboard leave or capability
+loss clears this proof. A popup's enter cannot become a root grant; synthetic
+serials remain rejected. B3.1 notification actions exercise this handshake on the
+private software compositor, alongside real pointer and keyboard serials.

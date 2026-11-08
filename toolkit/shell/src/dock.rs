@@ -160,7 +160,7 @@ const LIFT: f64 = 0.5;
 /// top-right corner: out of it, it reached into the gap and up to the next slot.
 const COUNT: f64 = 0.36;
 
-fn slots(view: &View) -> Vec<Slot> {
+pub(crate) fn slots(view: &View) -> Vec<Slot> {
     view.items
         .iter()
         .map(|i| {

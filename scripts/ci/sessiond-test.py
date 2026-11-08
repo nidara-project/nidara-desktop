@@ -174,11 +174,19 @@ def main(args):
         for n in listing():
             call("Dismiss", (n["id"],), "(u)", priv=True)
         expiring = notify(timeout=80)
-        wait(lambda: (expiring, 1) in closed, "positive sender expiry resolves with reason 1")
+        time.sleep(.25)
+        pump()
+        check(any(n["id"] == expiring for n in listing()) and (expiring, 1) not in closed,
+              "positive timeout is banner metadata; daemon preserves history")
+        critical = notify(timeout=80, hints={"urgency": GLib.Variant("y", 2)})
+        time.sleep(.25)
+        pump()
+        check(any(n["id"] == critical for n in listing()) and (critical, 1) not in closed,
+              "critical notification never expires in daemon")
         timed = notify(timeout=200)
         notify(replace=timed, timeout=0)
         time.sleep(.25)
-        check(any(n["id"] == timed for n in listing()), "replacement cancels old expiry; zero never expires")
+        check(any(n["id"] == timed for n in listing()), "replacement keeps history; zero never expires")
         nonresident = notify(actions=["open", "Read", "unpaired"])
         call("InvokeAction", (nonresident, "open"), "(us)", priv=True)
         wait(lambda: (nonresident, "open") in invoked and (nonresident, 3) in closed, "nonresident action emits ActionInvoked then closes")

@@ -56,6 +56,8 @@ pub trait Shell {
     #[zbus(property)]
     fn capabilities(&self) -> zbus::Result<Vec<String>>;
     fn get_state(&self) -> Result<State, Error>;
+    /// Additive capability `notifications:banners`; do not call on older renderers.
+    fn get_notification_state(&self) -> Result<String, Error>;
     fn toggle_surface(&self, surface: &str, keyboard: bool) -> Result<(), Error>;
     fn set_island(&self, mode: &str) -> Result<(), Error>;
     fn focus_surface(&self, surface: &str) -> Result<(), Error>;

@@ -16,6 +16,13 @@ const INTEREST: Duration = Duration::from_secs(30);
 pub const STARTUP_WAIT: Duration = Duration::from_secs(2);
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub enum Key {
+    /// Versioned file art (notification replacements can overwrite the same path).
+    Image {
+        namespace: String,
+        generation: u64,
+        path: String,
+        side: u32,
+    },
     App {
         owner: String,
         epoch: u64,
@@ -433,7 +440,7 @@ fn valid(s: &State, k: &Key) -> bool {
                 })
         }),
         Key::Named { revision, .. } => *revision == s.named_revision,
-        Key::Tray { .. } => true,
+        Key::Tray { .. } | Key::Image { .. } => true,
     }
 }
 fn reusable(s: &State, key: &Key) -> Option<(Key, Arc<Asset>)> {
@@ -563,6 +570,9 @@ fn worker(inner: Arc<Inner>) {
                     id, logical, scale, ..
                 } => serde_json::json!({"id":id,"logical":logical,"scale":f64::from_bits(*scale)}),
                 Key::Named { name, side, .. } => serde_json::json!({"id":name,"side":side}),
+                Key::Image {
+                    namespace, side, ..
+                } => serde_json::json!({"id":namespace,"side":side}),
                 Key::Tray { handle, side, .. } => serde_json::json!({"id":handle,"side":side}),
             };
             let fetched = {
@@ -682,6 +692,12 @@ fn fetch(conn: &zbus::blocking::Connection, key: &Key) -> Result<Icon, FetchErro
                 .deserialize()
                 .map_err(|_| FetchError::Unavailable)?;
             (w, h, rgba)
+        }
+        Key::Image { path, side, .. } => {
+            if path.len() > 4096 || *side == 0 || *side > 1024 {
+                return Err(FetchError::Unavailable);
+            }
+            return load_named(std::path::Path::new(path), *side, key);
         }
         Key::Named {
             theme,

@@ -33,7 +33,7 @@ pub const HANG: f64 = 8.;
 const TILE_PAD: f64 = 10.;
 const TALL_PAD: f64 = 2.;
 /// The Control Center's corner: a 2×2's (owner, 2026-11-03: it stays 38).
-const SQUARE_RADIUS: f64 = 38.;
+pub const SQUARE_RADIUS: f64 = 38.;
 /// The capsule's badge and its gap to the text (`CAPSULE_ICON_SIZE`, `_GAP`), from 4 in.
 const BADGE: f64 = 44.;
 const BADGE_GAP: f64 = 8.;
@@ -1351,7 +1351,7 @@ fn style(look: &Look, size: f32, weight: f32) -> TextStyle {
 
 /// A text laid out; a weight its font has no face for falls back to the regular one
 /// (the text backend refuses synthetic bold).
-fn lay_out(
+pub(crate) fn lay_out(
     look: &mut Look,
     text: &str,
     style: &TextStyle,
