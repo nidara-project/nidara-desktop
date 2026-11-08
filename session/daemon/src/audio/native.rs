@@ -1187,10 +1187,10 @@ pub fn start(
     snapshots: watch::Sender<Graph>,
     prefs: Arc<RwLock<Preferences>>,
     streams: super::streams::Manager,
+    context: glib::MainContext,
 ) {
     std::thread::spawn(move || {
         unsafe { wp_init(3) }; // Never install a process-global GLib log writer.
-        let context = glib::MainContext::new();
         let _thread_default = context.acquire().expect("new context");
         let _ = context.with_thread_default(|| {
             let dirty = Rc::new(Cell::new(true));
@@ -1303,7 +1303,18 @@ pub fn start(
                         };
                     let _ = r.reply.send(result);
                 }
-                std::thread::sleep(Duration::from_millis(5));
+                // Sleep until PipeWire, a setting or a request (Backend::send wakes the
+                // context) needs us, not every 5 ms (#1054). Without a connection, wait
+                // for the retry deadline instead; requests are answered then.
+                if worker.is_some() {
+                    context.iteration(true);
+                } else {
+                    std::thread::sleep(
+                        retry
+                            .saturating_duration_since(std::time::Instant::now())
+                            .min(Duration::from_millis(250)),
+                    );
+                }
             }
         });
     });

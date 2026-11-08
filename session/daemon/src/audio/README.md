@@ -15,6 +15,15 @@ The negotiated channel count is decoded from SPA pods in Rust: calling
 AudioInfoRaw::parse introduced a generated-C-wrapper linker failure in the
 optimized package build, even though the development build passed.
 
+Nothing wakes at idle (#1054). The WirePlumber thread sleeps in its GLib context
+until PipeWire, a preference or a request needs it: `Backend::send` wakes the
+context after queueing a request. Without a PipeWire connection it waits for the
+reconnect deadline instead. The level-meter loop runs every 5 ms only while a peak
+subscription or a test playback exists, and sleeps until the next one starts.
+`scripts/dev/audio-wake-check.sh` proves the request wake against the real PipeWire
+(CI has none): with it a no-op SetMuted answers in milliseconds, without it the call
+times out.
+
 ## Client contract
 
 The root implements ObjectManager. Subscribe before `GetManagedObjects`, apply

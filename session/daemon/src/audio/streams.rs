@@ -64,6 +64,8 @@ pub struct Manager {
     state: Arc<Mutex<State>>,
     next: Arc<AtomicU64>,
     ids: Arc<Mutex<BTreeSet<(u32, u32)>>>,
+    /// Wakes the meter loop when a subscription or playback starts (#1054).
+    wake: Arc<tokio::sync::Notify>,
 }
 struct State {
     subscriptions: BTreeMap<String, Subscription>,
@@ -107,6 +109,7 @@ impl Manager {
             })),
             next: Arc::new(AtomicU64::new(1)),
             ids: Arc::new(Mutex::new(BTreeSet::new())),
+            wake: Arc::new(tokio::sync::Notify::new()),
         }
     }
     pub fn is_internal_client(&self, cookie: u32, id: u32) -> bool {
@@ -194,6 +197,7 @@ impl Manager {
                     peaks: [0.0; MAX_CHANNELS],
                 },
             );
+            self.wake.notify_one();
         }
         if let Err(e) = c
             .object_server()
@@ -376,6 +380,7 @@ impl Manager {
                 ids: self.ids.clone(),
             });
             s.playback.insert(key.clone(), p);
+            self.wake.notify_one();
         }
         if let Err(e) = c
             .object_server()
@@ -416,6 +421,15 @@ impl Manager {
             let mut tick = tokio::time::interval(Duration::from_millis(5));
             tick.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
             loop {
+                // Idle without meters or playback: sleep until one starts, not every 5 ms.
+                let idle = {
+                    let s = m.state.lock().unwrap();
+                    s.subscriptions.is_empty() && s.monitors.is_empty() && s.playback.is_empty()
+                };
+                if idle {
+                    m.wake.notified().await;
+                    tick.reset();
+                }
                 tick.tick().await;
                 let graph = a.snapshot();
                 let (mut peaks, mut ended, mut finished) = (vec![], vec![], vec![]);

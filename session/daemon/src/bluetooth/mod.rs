@@ -24,6 +24,12 @@ use zbus::{
 const NAME: &str = "org.nidara.Bluetooth";
 const PATH: &str = "/org/nidara/Bluetooth";
 const IFACE: &str = "org.nidara.Bluetooth1";
+/// The tick while a lease or transfer exists, and the floor between inventory reads.
+const ACTIVE_TICK: Duration = Duration::from_millis(250);
+/// A safety net for a missed signal; not how changes normally arrive (#1054).
+const RECONCILE: Duration = Duration::from_secs(30);
+/// How often a failed agent registration is retried while a provider is present.
+const AGENT_RETRY: Duration = Duration::from_secs(2);
 #[derive(Debug, zbus::DBusError)]
 #[zbus(prefix = "org.nidara.Bluetooth1.Error")]
 pub enum Error {
@@ -118,6 +124,10 @@ pub struct Bluetooth {
     operations: Arc<std::sync::Mutex<BTreeSet<String>>>,
     space: Arc<dyn files::Space>,
     obex_cache: Arc<Mutex<BTreeMap<String, Props>>>,
+    /// Wakes the inventory loop in `serve` (#1054): a provider signal.
+    wake: Arc<tokio::sync::Notify>,
+    /// Wakes the activity loop in `serve` (#1054): a lease or transfer started.
+    active: Arc<tokio::sync::Notify>,
 }
 /// OBEX restart invalidates transfer capabilities, not an unchanged BlueZ owner.
 /// Publish the invalidation immediately without falsely withdrawing its inventory.
@@ -190,6 +200,8 @@ impl Bluetooth {
             operations: Arc::new(std::sync::Mutex::new(BTreeSet::new())),
             space,
             obex_cache: Arc::new(Mutex::new(BTreeMap::new())),
+            wake: Default::default(),
+            active: Default::default(),
         }
     }
     fn writable(&self) -> Result<(), Error> {
@@ -471,6 +483,7 @@ impl Bluetooth {
             },
         );
         drop(leases);
+        self.active.notify_one();
         self.refresh(true).await?;
         Ok(id)
     }
@@ -505,6 +518,29 @@ impl Bluetooth {
         } else {
             Ok(())
         }
+    }
+    /// A provider is present but our agent is not (yet) registered with it.
+    async fn agents_pending(&self) -> bool {
+        if self.read_only {
+            return false;
+        }
+        let owners = self.state.lock().await.owners.clone();
+        let r = self.registration.lock().await;
+        (!owners.0.is_empty() && (r.bluez != owners.0 || r.default != owners.0))
+            || (!owners.1.is_empty() && r.obex != owners.1)
+    }
+    /// A lease or a live transfer needs the short tick; nothing else does.
+    async fn busy(&self) -> bool {
+        let l = self.leases.lock().await;
+        if !l.holds.is_empty() || !l.visibility.is_empty() || !l.discovery.is_empty() {
+            return true;
+        }
+        drop(l);
+        self.transfers
+            .lock()
+            .await
+            .values()
+            .any(|t| t.active() || !t.session_removed)
     }
     async fn maintain_leases(&self) {
         if self.read_only {
@@ -702,6 +738,7 @@ impl Bluetooth {
                         session_removed: true,
                     },
                 );
+                self.active.notify_one();
                 drop(transfers);
                 self.publish_transfers().await?;
                 return Err(error);
@@ -730,6 +767,7 @@ impl Bluetooth {
                 session_removed: true,
             },
         );
+        self.active.notify_one();
         drop(transfers);
         self.publish_transfers().await?;
         Ok(stage)
@@ -1123,6 +1161,7 @@ impl Bluetooth {
                 session_removed: false,
             },
         );
+        self.active.notify_one();
         self.publish_transfers().await?;
         Ok(id)
     }
@@ -1260,36 +1299,93 @@ pub async fn serve(session: &Connection, read_only: bool) -> Result<(), Error> {
     session
         .request_name_with_flags(NAME, zbus::fdo::RequestNameFlags::DoNotQueue.into())
         .await?;
-    let inventory = service.clone();
+    // What wakes this module (#1054): BlueZ's own signals and owner changes on the
+    // system bus, obex's owner and transfer signals and any lost client on the
+    // session bus. Leases and transfers keep a short tick only while one exists,
+    // and a slow reconciliation stands in for a missed signal.
+    let kick = service.wake.clone();
+    let clients = Arc::new(tokio::sync::Notify::new());
+    let rule = zbus::MatchRule::builder()
+        .msg_type(zbus::message::Type::Signal)
+        .sender(bus::BLUEZ)?
+        .build();
+    let mut bluez = zbus::MessageStream::for_match_rule(rule, &system, Some(256)).await?;
+    let mut bluez_owner = zbus::fdo::DBusProxy::new(&system)
+        .await?
+        .receive_name_owner_changed_with_args(&[(0, bus::BLUEZ)])
+        .await?;
+    let mut session_owners = zbus::fdo::DBusProxy::new(session)
+        .await?
+        .receive_name_owner_changed()
+        .await?;
+    let (k, c) = (kick.clone(), clients.clone());
     tokio::spawn(async move {
-        let mut tick = tokio::time::interval(Duration::from_millis(250));
-        tick.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
+        use futures_util::StreamExt;
         loop {
-            tick.tick().await;
-            let _ = inventory.refresh(false).await;
-            inventory.broker.check_ui().await;
-        }
-    });
-    let controls = service.clone();
-    tokio::spawn(async move {
-        let mut tick = tokio::time::interval(Duration::from_millis(250));
-        tick.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
-        let mut registration = tokio::time::Instant::now() - Duration::from_secs(3);
-        loop {
-            tick.tick().await;
-            if registration.elapsed() >= Duration::from_secs(2) {
-                controls.register_agents().await;
-                registration = tokio::time::Instant::now();
+            tokio::select! {
+                m = bluez.next() => { if m.is_none() { break; } k.notify_one(); }
+                m = bluez_owner.next() => { if m.is_none() { break; } k.notify_one(); }
+                m = session_owners.next() => {
+                    let Some(m) = m else { break };
+                    if let Ok(a) = m.args() {
+                        if a.name().as_str() == bus::OBEX {
+                            k.notify_one();
+                        } else if a.new_owner().is_none() {
+                            c.notify_one();
+                        }
+                    }
+                }
             }
-            controls.maintain_leases().await;
         }
     });
+    // Inventory and agents. Kept apart from leases and transfers: a check here can
+    // wait on a pending request, and transfers must keep moving meanwhile.
+    let inventory = service.clone();
+    let lost = clients.clone();
     tokio::spawn(async move {
-        let mut tick = tokio::time::interval(Duration::from_millis(250));
-        tick.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
+        let mut last = tokio::time::Instant::now();
+        let mut first = true;
         loop {
-            tick.tick().await;
+            let wait = if inventory.agents_pending().await {
+                AGENT_RETRY
+            } else {
+                RECONCILE
+            };
+            if !first {
+                tokio::select! {
+                    _ = kick.notified() => {}
+                    _ = lost.notified() => {
+                        inventory.broker.check_ui().await;
+                        continue;
+                    }
+                    _ = tokio::time::sleep(wait) => {}
+                }
+            }
+            first = false;
+            // At most one inventory read per ACTIVE_TICK, as the old poll had,
+            // so a burst of property changes (RSSI while scanning) coalesces.
+            tokio::time::sleep(ACTIVE_TICK.saturating_sub(last.elapsed())).await;
+            // Register first: the published snapshot reports whether agents are in.
+            inventory.register_agents().await;
+            let _ = inventory.refresh(true).await;
+            inventory.broker.check_ui().await;
+            last = tokio::time::Instant::now();
+        }
+    });
+    // Leases and transfers: a short tick only while one exists.
+    let active = service.active.clone();
+    tokio::spawn(async move {
+        loop {
+            if service.busy().await {
+                tokio::time::sleep(ACTIVE_TICK).await;
+            } else {
+                active.notified().await;
+            }
+            service.maintain_leases().await;
             service.monitor_transfers().await;
+            // The inventory no longer re-reads every 250 ms, so transfer progress
+            // is published from here; unchanged documents are not re-emitted.
+            let _ = service.publish_transfers().await;
         }
     });
     Ok(())

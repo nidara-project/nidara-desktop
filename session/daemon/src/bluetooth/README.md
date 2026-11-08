@@ -29,11 +29,16 @@ alongside them, and use the same bounded sanitization as filenames. No PIN/passk
 in snapshots, logs, command arguments or files. Audio profile selection is outside
 this service; Device1.Connect is the generic BlueZ operation.
 
-Sensor/inventory polling and full Updated documents are coalesced to at most four
-per second, with the latest state winning. Explicit user writes publish immediately;
-consent signals bypass that limiter. Inventory, registration/lease control and
-transfer monitoring have independent workers, so a stalled BlueZ call does not
-stop OBEX disk checks. Consent cleanup survives a dropped caller future; total
+Nothing polls at idle (#1054). The inventory re-reads BlueZ when BlueZ signals
+(InterfacesAdded/Removed, PropertiesChanged), when `org.bluez` or `org.bluez.obex`
+changes owner, and on a 30-second reconciliation for a lost signal; agent
+registration retries every two seconds only while a provider is present without our
+agent. Inventory reads and full Updated documents are coalesced to at most four per
+second, with the latest state winning. Explicit user writes publish immediately;
+consent signals bypass that limiter. Leases and transfers have their own worker,
+which ticks every 250 ms only while a lease or a live transfer exists and otherwise
+sleeps until one starts, so a stalled BlueZ call does not stop OBEX disk checks.
+A session client that disappears is noticed from NameOwnerChanged, not by polling. Consent cleanup survives a dropped caller future; total
 incoming authorization is bounded at 55 seconds including metadata and I/O. Terminal OBEX property signals are subscribed
 before agent registration and retained: a server can remove its completed transfer
 before the next periodic snapshot. They are authenticated by OBEX's unique owner.

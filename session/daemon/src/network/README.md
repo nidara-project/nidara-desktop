@@ -16,7 +16,9 @@ The interface grows within v1. `Snapshot() -> (t epoch, t revision, s JSON)` and
 Subscribe first, target the unique service owner, then take Snapshot. Reject older
 revisions and discard all state on owner replacement; do not replay stale buffered
 signals into a new epoch. Identical state does not advance revision. Reconciliation
-follows NM signals with a two-second fallback for lost signals and startup ordering.
+follows NM signals and NM owner changes (#1054), with a 30-second fallback for a lost
+signal; while agent registration or a snapshot read is failing it retries every two
+seconds. A lost session client is noticed from NameOwnerChanged.
 An NM owner change first clears devices, profiles and activations, withdraws pending
 questions, then reads the new owner. Every NM operation pins its unique owner.
 

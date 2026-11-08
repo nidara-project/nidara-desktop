@@ -38,6 +38,9 @@ def fake(root):
     def props(path,iface):return objects.get(path,{}).get(iface,{})
     def changed(bus,path,iface,p):
         bus.emit_signal(None,path,'org.freedesktop.DBus.Properties','PropertiesChanged',v('(sa{sv}as)',(iface,p,[])))
+    # Like BlueZ, announce objects coming and going: the daemon waits for these (#1054).
+    def added(bus,path,ifaces):bus.emit_signal(None,'/','org.freedesktop.DBus.ObjectManager','InterfacesAdded',v('(oa{sa{sv}})',(path,ifaces)))
+    def removed(bus,path,ifaces):bus.emit_signal(None,'/','org.freedesktop.DBus.ObjectManager','InterfacesRemoved',v('(oas)',(path,list(ifaces))))
     def setp(bus,path,iface,key,value):props(path,iface)[key]=value;changed(bus,path,iface,{key:value})
     def answer(inv,sig=None,args=()):inv.return_value(v(sig,args) if sig else None)
     def method_xml(name,ins=(),outs=()):return '<method name="'+name+'">'+''.join('<arg type="'+s+'" direction="in"/>' for s in ins)+''.join('<arg type="'+s+'" direction="out"/>' for s in outs)+'</method>'
@@ -80,15 +83,15 @@ def fake(root):
             for inv in held_cancels:answer(inv)
             held_cancels.clear();state['heldCancels']=0;state['holdCancel']=False;return {}
         if command=='Device':
-            if data:objects[D]=dict(removed_device)
-            else:removed_device.update(objects.pop(D))
+            if data:objects[D]=dict(removed_device);added(system,D,objects[D])
+            else:removed_device.update(objects.pop(D));removed(system,D,removed_device)
             return {}
         if command=='ExternalVisible':setp(system,A,B+'.Adapter1','Discoverable',v('b',data));setp(system,A,B+'.Adapter1','DiscoverableTimeout',v('u',0 if data else 180));return {}
         if command=='Battery':
             if data is None:
-                objects[D].pop(B+'.Battery1',None);system.unregister_object(registrations.pop((system.get_unique_name(),D,B+'.Battery1')))
+                objects[D].pop(B+'.Battery1',None);system.unregister_object(registrations.pop((system.get_unique_name(),D,B+'.Battery1')));removed(system,D,[B+'.Battery1'])
             else:
-                if B+'.Battery1'not in objects[D]:export(system,D,B+'.Battery1',(),{'Percentage':v('y',data)})
+                if B+'.Battery1'not in objects[D]:export(system,D,B+'.Battery1',(),{'Percentage':v('y',data)});added(system,D,{B+'.Battery1':objects[D][B+'.Battery1']})
                 else:setp(system,D,B+'.Battery1','Percentage',v('y',data))
             return {}
         if command=='Prompt':
@@ -156,7 +159,9 @@ def fake(root):
             if iface==B+'.Adapter1':
                 if method=='StartDiscovery':discovery_clients.setdefault(path,set()).add(sender);setp(system,path,iface,'Discovering',v('b',True))
                 elif method=='StopDiscovery':discovery_clients.setdefault(path,set()).discard(sender);setp(system,path,iface,'Discovering',v('b',bool(discovery_clients[path])))
-                elif method=='RemoveDevice':objects.pop(p[0],None)
+                elif method=='RemoveDevice':
+                    gone=objects.pop(p[0],None)
+                    if gone:removed(system,p[0],gone)
                 answer(inv);return
             if iface==B+'.Device1':
                 if method=='Pair':

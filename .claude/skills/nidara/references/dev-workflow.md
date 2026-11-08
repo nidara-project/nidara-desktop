@@ -3108,6 +3108,17 @@ this same integration to fail specifically at `replaces_id replaces the live ent
 It restores the source before the real build/lint/tests. A random startup error
 cannot count as the control catching the rule.
 
+**The daemon does not poll at idle (#1054), so a fake provider must signal.** BlueZ,
+obex, NetworkManager, tray and audio work is woken by the provider's own signals,
+owner changes and request wake-ups; only a slow reconciliation (30 s) and active
+leases/transfers/meters keep a timer. A private-bus fake that changes its state
+without emitting what the real service emits (InterfacesAdded/Removed,
+PropertiesChanged) now times out instead of being rescued by a poll, which is the
+point: the fakes in `sessiond-bluetooth-test.py` and `sessiond-network-test.py` emit
+them. Measure idle cost per thread from `/proc/<pid>/task/*/status`
+(`voluntary_ctxt_switches`); `scripts/dev/audio-wake-check.sh` covers the audio
+request wake, which CI cannot (no PipeWire).
+
 The integration sends a real `notify-send`, checks replacement (including a
 resolved id and the uint32 ceiling), public close/private dismiss signals and
 reasons, presentation-only sender expiry/history retention, resident actions, raw-image decoding,
