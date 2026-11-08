@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // The server outlives shell reloads. DnD and the user's banner timeout remain UI
-// policy. expire_timeout is presentation metadata; only explicit close/action removes history.
+// policy. Ordinary history survives presentation expiry; transient records do not.
 mod applications;
 mod audio;
 mod bluetooth;
@@ -271,6 +271,28 @@ impl ShellNotifications {
             return Err(failed("notification was replaced"));
         }
         resolve(&self.0, &mut state, conn, id, 2)
+            .await
+            .map_err(failed)
+    }
+    /// Only a current transient record can expire with its presentation.
+    async fn expire_transient(
+        &self,
+        id: u32,
+        revision: u64,
+        #[zbus(connection)] conn: &Connection,
+    ) -> zbus::fdo::Result<()> {
+        let mut state = self.0.lock().await;
+        if state.revisions.get(&id) != Some(&revision) {
+            return Err(failed("notification was replaced"));
+        }
+        if !state
+            .notifications
+            .iter()
+            .any(|n| n.id == id && truthy(n.hints.get("transient")))
+        {
+            return Err(failed("notification is not transient"));
+        }
+        resolve(&self.0, &mut state, conn, id, 1)
             .await
             .map_err(failed)
     }

@@ -82,7 +82,8 @@ pub fn watch(conn: Connection, emit: impl Fn(Update)) -> Result<(), String> {
                     )
                     .and_then(|p| p.call::<_, _, String>("Introspect", &()))
                     .is_ok_and(|xml| {
-                        xml.contains("name=\"DismissBanner\"")
+                        xml.contains("name=\"ExpireTransient\"")
+                            && xml.contains("name=\"DismissBanner\"")
                             && xml.contains("name=\"InvokeActionWithToken\"")
                     });
                     if supported {
@@ -164,6 +165,17 @@ pub fn act(
         p.call::<_, _, ()>("DismissBanner", &(id, revision))
             .map_err(err)
     }
+}
+pub fn expire_transient(
+    conn: &Connection,
+    owner: &str,
+    id: u32,
+    revision: u64,
+) -> Result<(), String> {
+    Proxy::new(conn, owner, PATH, IFACE)
+        .map_err(err)?
+        .call::<_, _, ()>("ExpireTransient", &(id, revision))
+        .map_err(err)
 }
 fn err(e: impl std::fmt::Display) -> String {
     e.to_string()

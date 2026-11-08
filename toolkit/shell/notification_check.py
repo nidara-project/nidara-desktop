@@ -8,6 +8,7 @@ import json
 import os
 from pathlib import Path
 import subprocess
+import signal
 import time
 import gi
 gi.require_version('Atspi', '2.0')
@@ -239,6 +240,10 @@ try:
     suppressed=notify('Suppressed')
     pump(.4)
     oracle('DND suppresses new normals',lambda v:suppressed not in ids(v),banners(),history())
+    # Transients leave live memory/List exactly when their presentation retires.
+    suppressed_transient=notify('Suppressed transient',hints={'transient':GLib.Variant('b',True)})
+    until('suppressed transient retired',lambda:suppressed_transient not in ids(history()))
+    oracle('suppression expires transient history only',lambda v:suppressed_transient not in ids(v) and suppressed in ids(v),history(),[{'id':suppressed_transient}])
     settings('org.nidara.notifications','do-not-disturb','false')
     clear()
     # Send through notify-send as well as the persistent action-capable sender above.
@@ -252,6 +257,15 @@ try:
     clear()
     image=RUN/'thumbnail.svg'
     image.write_text('<svg xmlns="http://www.w3.org/2000/svg" width="64" height="64"><rect width="64" height="64" fill="#ee4400"/></svg>')
+    ephemeral=notify('Timed transient',timeout=180,hints={'transient':GLib.Variant('i',1)})
+    until('timed transient visible',lambda:ephemeral in ids(banners()))
+    until('timed transient expired',lambda:ephemeral not in ids(history()))
+    oracle('banner timeout expires transient record',lambda v:ephemeral not in ids(v),history(),[{'id':ephemeral}])
+    ephemeral=notify('Capped transient',hints={'transient':GLib.Variant('b',True)})
+    for i in range(4): notify('Transient cap '+str(i))
+    until('capped transient expired',lambda:ephemeral not in ids(history()))
+    oracle('cap expires transient record',lambda v:ephemeral not in ids(v),history(),[{'id':ephemeral}])
+    clear()
     id_file=RUN/'cli-id';selected_file=RUN/'cli-action';token_file=RUN/'cli-token'
     streams=[os.open(p,os.O_CREAT|os.O_RDWR,0o600) for p in (id_file,selected_file,token_file)]
     cli=subprocess.Popen(['notify-send','--expire-time=0','--action=pick=CLI Accept',
@@ -288,6 +302,38 @@ try:
     EVENTS.clear()
     accept.get_component_iface().grab_focus()
     until('keyboard focus on action',lambda:any(n.get_name()=='Accept' and n.get_state_set().contains(Atspi.StateType.FOCUSED) for n in children(node('Actions and image'))))
+    # Withhold replies only from the disposable compositor, never a live session.
+    accept=next(x for x in children(node('Actions and image')) if x.get_name()=='Accept')
+    pid=os.getppid()
+    expected=Path(os.environ['HYALO_BIN']).resolve()
+    while pid>1 and Path(f'/proc/{pid}/exe').resolve()!=expected:
+        pid=int(next(line.split()[1] for line in Path(f'/proc/{pid}/status').read_text().splitlines() if line.startswith('PPid:')))
+    assert pid>1 and Path(f'/proc/{pid}/exe').resolve()==expected, 'private compositor ancestor missing'
+    env=Path(f'/proc/{pid}/environ').read_bytes().split(b'\0')
+    assert ('XDG_RUNTIME_DIR='+str(RUN/'runtime')).encode() in env, 'refuse non-private compositor'
+    EVENTS.clear()
+    os.kill(pid,signal.SIGSTOP)
+    try:
+        accept.get_action_iface().do_action(0)
+        until('token failure visible in canonical state',lambda:any(b['id']==actionable and b['error'] for b in banners()),timeout=8)
+        assert not any(m=='ActionInvoked' and a[0]==actionable for m,a in EVENTS)
+    finally:
+        os.kill(pid,signal.SIGCONT)
+    failed=until('token error reader description',lambda:(n:=node('Actions and image')) and 'Try again' in n.get_description() and n)
+    oracle('token failure is accessible and retryable',lambda v:'Try again' in v,failed.get_description(),'')
+    pump(.5)
+    def error_ink():
+        shot=LOG/'activation-error.png'
+        msg('screenshot',shot)
+        pix=GdkPixbuf.Pixbuf.new_from_file(str(shot));pixels=pix.get_pixels();stride=pix.get_rowstride();channels=pix.get_n_channels()
+        x,y,w,h=map(int,box(node('Actions and image')))
+        return sum(min(pixels[yy*stride+xx*channels:yy*stride+xx*channels+3])>200 for yy in range(y+h-28,y+h-8) for xx in range(x+16,x+w-16))
+    visible_error=until('activation error paints pixels',lambda:(v:=error_ink())>20 and v)
+    oracle('activation error is visibly painted',lambda v:v>20,visible_error,0)
+    next(x for x in children(failed) if x.get_name()=='Accept').get_action_iface().do_action(0)
+    until('token failure retry invokes action',lambda:any(m=='ActionInvoked' and a==(actionable,'accept') for m,a in EVENTS))
+    until('retry clears error',lambda:any(b['id']==actionable and not b['error'] for b in banners()))
+    EVENTS.clear()
     with open(os.environ['HYALO_CONTROL'],'w',buffering=1) as pipe:pipe.write('key 28\n')
     until('keyboard action',lambda:any(m=='ActionInvoked' and a==(actionable,'accept') for m,a in EVENTS))
     oracle('keyboard activation carries token',lambda v:any(m=='ActivationToken' and a[0]==actionable for m,a in v),EVENTS,[])

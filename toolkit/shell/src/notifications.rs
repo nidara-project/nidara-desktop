@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: LGPL-3.0-or-later
 //! Native notifications: bounded card data and the one authoritative banner stack.
-//! Presentation timers never dismiss records in the notification daemon.
+//! Presentation retirement preserves ordinary history; transient records expire.
 use serde::{Deserialize, Serialize};
 use serde_json::{Map, Value};
 use std::collections::VecDeque;
@@ -69,6 +69,15 @@ impl Notice {
             limit(&mut a.label, 1024);
         }
         Ok(n)
+    }
+    pub fn transient(&self) -> bool {
+        match self.hints.get("transient") {
+            Some(Value::Bool(v)) => *v,
+            Some(Value::Number(v)) => v.as_f64().is_some_and(|n| n != 0.0),
+            Some(Value::String(v)) => !v.is_empty(),
+            Some(Value::Array(_) | Value::Object(_)) => true,
+            _ => false,
+        }
     }
     pub fn critical(&self) -> bool {
         self.hints.get("urgency").and_then(Value::as_u64) == Some(2)
@@ -302,6 +311,15 @@ impl Stack {
     pub fn next_deadline(&self) -> Option<u64> {
         self.entries.iter().filter_map(|e| e.deadline).min()
     }
+    pub fn set_error(&mut self, instance: u64, content: u64, error: String) {
+        if let Some(b) = self
+            .entries
+            .iter_mut()
+            .find(|b| b.instance == instance && b.content == content)
+        {
+            b.error = error;
+        }
+    }
     pub fn current(&self, instance: u64, content: u64) -> Option<&Banner> {
         self.entries
             .iter()
@@ -313,6 +331,20 @@ mod tests {
     use super::*;
     fn n(id: u32, timeout: i32, critical: bool) -> Notice {
         Notice::parse(&serde_json::json!({"id":id,"summary":format!("notice{id}"),"expire_timeout":timeout,"hints":{"urgency":if critical {2}else{1}}}).to_string()).unwrap()
+    }
+    #[test]
+    fn errors_belong_only_to_current_content_and_can_be_cleared_for_retry() {
+        let mut s = Stack::default();
+        let p = Preferences::default();
+        s.push(n(1, 0, false), "a".into(), Gates::default(), &p, 0);
+        let b = s.entries[0].clone();
+        s.set_error(b.instance, b.content, "Could not activate".into());
+        assert!(!s.entries[0].error.is_empty());
+        s.set_error(b.instance, b.content, String::new());
+        assert!(s.entries[0].error.is_empty());
+        s.push(n(1, 0, false), "a".into(), Gates::default(), &p, 0);
+        s.set_error(b.instance, b.content, "stale".into());
+        assert!(s.entries[0].error.is_empty());
     }
     #[test]
     fn cap_replaces_in_place_and_retires_old_action_identity() {

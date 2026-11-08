@@ -99,6 +99,11 @@ pub enum Request {
         output: String,
         open: bool,
     },
+    NotificationError {
+        instance: u64,
+        content: u64,
+        message: String,
+    },
     NotificationAction {
         instance: u64,
         content: u64,
@@ -394,7 +399,14 @@ impl Hub {
     pub fn run(mut self, rx: Receiver<HubEvent>) {
         loop {
             let now = self.notification_now();
+            let retired = self
+                .notifications
+                .entries
+                .iter()
+                .map(|b| b.notice.clone())
+                .collect();
             if self.notifications.expire(now) {
+                self.retire_transients(retired);
                 self.publish();
             }
             let event = match self.notifications.next_deadline() {
@@ -410,13 +422,58 @@ impl Hub {
                     Err(_) => break,
                 },
             };
+            let mut retired: Vec<_> = self.notifications.entries.iter().filter(|b| !matches!(&event,
+                HubEvent::Notifications(crate::notification_wire::Update::Resolved(_, id)) if *id == b.notice.id)).map(|b| b.notice.clone()).collect();
+            if let HubEvent::Notifications(crate::notification_wire::Update::Notified(owner, n)) =
+                &event
+                && self.notification_owner.as_ref() == Some(owner)
+            {
+                retired.push(n.clone());
+            }
+            let owner = self.notification_owner.clone();
             if self.handle(event) {
                 let gates = self.notification_gates();
                 self.notifications
                     .gates(gates, &self.notification_prefs, self.notification_now());
+                if self.notification_owner == owner {
+                    self.retire_transients(retired);
+                }
                 self.publish();
             }
         }
+    }
+
+    fn retire_transients(&self, candidates: Vec<crate::notifications::Notice>) {
+        let (Some(conn), Some(owner)) = (self.apps_conn.clone(), self.notification_owner.clone())
+        else {
+            return;
+        };
+        let mut seen = HashSet::new();
+        let retired: Vec<_> = candidates
+            .into_iter()
+            .filter(|n| {
+                n.transient()
+                    && !self
+                        .notifications
+                        .entries
+                        .iter()
+                        .any(|b| b.notice.id == n.id)
+                    && seen.insert((n.id, n.revision))
+            })
+            .collect();
+        if retired.is_empty() {
+            return;
+        }
+        worker(move || {
+            for n in retired {
+                if let Err(e) =
+                    crate::notification_wire::expire_transient(&conn, &owner, n.id, n.revision)
+                {
+                    eprintln!("nidara-shell: transient retirement: {e}");
+                }
+            }
+            Ok(())
+        });
     }
 
     fn notification_now(&self) -> u64 {
@@ -482,7 +539,7 @@ impl Hub {
                 }
                 let outputs: Vec<_> = self.bars.values().map(|b| b.name.clone()).collect();
                 let Some(output) = focus_output(&self.windows, &outputs) else {
-                    return false;
+                    return true;
                 };
                 self.notifications.push(
                     n,
@@ -507,15 +564,15 @@ impl Hub {
                 content,
                 error,
             } => {
-                if self.notifications.current(instance, content).is_some()
-                    && let Some(b) = self
-                        .notifications
-                        .entries
-                        .iter_mut()
-                        .find(|b| b.instance == instance)
-                {
-                    b.error = error.unwrap_or_default();
-                }
+                self.notifications
+                    .set_error(instance, content, error.unwrap_or_default());
+            }
+            HubEvent::Request(Request::NotificationError {
+                instance,
+                content,
+                message,
+            }) => {
+                self.notifications.set_error(instance, content, message);
             }
             HubEvent::Request(Request::NotificationHover { instance, on }) => {
                 self.notifications.hover(
@@ -1126,7 +1183,8 @@ impl Hub {
         match request {
             Request::NotificationHover { .. }
             | Request::NotificationPanel { .. }
-            | Request::NotificationAction { .. } => {}
+            | Request::NotificationAction { .. }
+            | Request::NotificationError { .. } => {}
             Request::Window { verb, id, epoch } => {
                 // A window from an older connection, or gone since: never act on its number.
                 if epoch != self.hyalo_epoch || !self.windows.iter().any(|w| w.window.id == id) {

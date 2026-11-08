@@ -476,6 +476,15 @@ impl Bar {
             });
         }
     }
+    fn card_error(&self, instance: u64, content: u64, message: &str) {
+        if self.card_current(instance, content) {
+            let _ = self.requests.send(crate::hub::Request::NotificationError {
+                instance,
+                content,
+                message: message.into(),
+            });
+        }
+    }
     fn card_activate(
         &mut self,
         instance: u64,
@@ -513,6 +522,7 @@ impl Bar {
         if self.card_pending.is_some() || self.card_focus.is_some() {
             return;
         }
+        self.card_error(instance, content, "");
         let result = match serial {
             Some(s) => w.request_activation_token(s, None),
             None => w.request_focused_activation_token(None),
@@ -523,7 +533,10 @@ impl Bar {
                 self.card_focus = Some((instance, content, key, Instant::now()));
                 self.refresh(w);
             }
-            Err(e) => eprintln!("nidara-shell: notification activation unavailable: {e:?}"),
+            Err(e) => {
+                eprintln!("nidara-shell: notification activation unavailable: {e:?}");
+                self.card_error(instance, content, "Could not activate. Try again.");
+            }
         }
     }
     fn sync_surface(&mut self, w: &mut Window) {
@@ -1828,9 +1841,16 @@ impl Application for Bar {
                     if self.card_current(instance, content) {
                         match w.request_focused_activation_token(None) {
                             Ok(r) => self.card_pending = Some((r, instance, content, key)),
-                            Err(e) => eprintln!(
-                                "nidara-shell: assistive notification token unavailable: {e:?}"
-                            ),
+                            Err(e) => {
+                                eprintln!(
+                                    "nidara-shell: assistive notification token unavailable: {e:?}"
+                                );
+                                self.card_error(
+                                    instance,
+                                    content,
+                                    "Could not activate. Try again.",
+                                );
+                            }
                         }
                     }
                     self.refresh(w);
@@ -1852,7 +1872,8 @@ impl Application for Bar {
             }
             Event::ActivationTokenFailed { request, reason } => {
                 if self.card_pending.as_ref().is_some_and(|p| p.0 == request) {
-                    self.card_pending = None;
+                    let (_, instance, content, _) = self.card_pending.take().unwrap();
+                    self.card_error(instance, content, "Could not activate. Try again.");
                     eprintln!("nidara-shell: notification token failed: {reason:?}");
                 }
                 if let Some((r, command)) = self.pending.take() {
@@ -1901,7 +1922,8 @@ impl Application for Bar {
             .as_ref()
             .is_some_and(|p| p.3.elapsed() >= std::time::Duration::from_secs(2))
         {
-            self.card_focus = None;
+            let (instance, content, _, _) = self.card_focus.take().unwrap();
+            self.card_error(instance, content, "Could not focus. Try again.");
             self.refresh(w);
             eprintln!("nidara-shell: notification keyboard focus timed out");
         }

@@ -83,7 +83,8 @@ pub fn layout(
                 .iter()
                 .filter(|a| a.id != "default")
                 .collect();
-            let h = (if actions.is_empty() { 112_f64 } else { 152_f64 }).min(cap);
+            let error_h = if b.error.is_empty() { 0. } else { 28. };
+            let h = ((if actions.is_empty() { 112_f64 } else { 152_f64 }) + error_h).min(cap);
             let rect = [right - width, y, width, h];
             let mut buttons = vec![(
                 Target::Close,
@@ -109,7 +110,12 @@ pub fn layout(
                     buttons.push((
                         target,
                         label,
-                        [rect[0] + 16. + i as f64 * room, y + h - 40., room - 4., 28.],
+                        [
+                            rect[0] + 16. + i as f64 * room,
+                            y + h - 40. - error_h,
+                            room - 4.,
+                            28.,
+                        ],
                     ));
                 }
             }
@@ -170,7 +176,11 @@ impl Card {
             },
             format!("{}: {}", b.notice.app_name, b.notice.summary),
         );
-        n.description = b.notice.body.clone();
+        n.description = if b.error.is_empty() {
+            b.notice.body.clone()
+        } else {
+            format!("{} {}", b.notice.body, b.error)
+        };
         n.actions = vec![Action::Activate, Action::Focus];
         n.bounds = bounds(self.rect);
         for (i, (_, label, r)) in self.buttons.iter().enumerate() {
@@ -248,12 +258,26 @@ impl Card {
             1,
             1.,
         )?;
+        let body_bottom = self
+            .buttons
+            .iter()
+            .filter(|(t, _, _)| *t != Target::Close)
+            .map(|(_, _, r)| r[1] - 8.)
+            .fold(
+                r[1] + r[3] - if b.error.is_empty() { 8. } else { 28. },
+                f64::min,
+            );
         text(
             c,
             look,
             &b.notice.body,
             &style,
-            [text_x, r[1] + 54., room, 40.],
+            [
+                text_x,
+                r[1] + 54.,
+                room,
+                (body_bottom - r[1] - 54.).clamp(1., 40.),
+            ],
             2,
             0.85,
         )?;
@@ -290,7 +314,7 @@ impl Card {
                 look,
                 &b.error,
                 &style,
-                [r[0] + 16., r[1] + r[3] - 19., r[2] - 32., 16.],
+                [r[0] + 16., r[1] + r[3] - 28., r[2] - 32., 20.],
                 1,
                 1.,
             )?;
@@ -481,6 +505,26 @@ mod tests {
     use super::*;
     fn banner(id: u32) -> Banner {
         Banner {notice:crate::notifications::Notice::parse(&serde_json::json!({"id":id,"summary":"A card","hints":{"urgency":2},"actions":(0..8).map(|n|serde_json::json!({"id":format!("key{n}"),"label":format!("action{n}")})).collect::<Vec<_>>()} ).to_string()).unwrap(),instance:id as u64,content:1,output:"a".into(),deadline:None,hovered:false,error:String::new()}
+    }
+    #[test]
+    fn error_has_its_own_row_and_reader_description() {
+        let mut b = banner(1);
+        b.error = "Could not activate. Try again.".into();
+        let cards = layout(&[b], 1276., 720, &HashMap::new());
+        let c = &cards[0];
+        let error_top = c.rect[1] + c.rect[3] - 28.;
+        assert!(
+            c.buttons
+                .iter()
+                .filter(|(t, _, _)| *t != Target::Close)
+                .all(|(_, _, r)| r[1] + r[3] < error_top)
+        );
+        let mut tree = Tree {
+            root: 1,
+            nodes: std::collections::BTreeMap::from([(1, Node::new(1, Role::Window, "test"))]),
+        };
+        c.semantics(&mut tree);
+        assert!(tree.nodes[&c.node_id()].description.contains("Try again"));
     }
     #[test]
     fn right_dock_avoidance_is_shared_and_input_gaps_are_empty() {

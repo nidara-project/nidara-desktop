@@ -178,6 +178,28 @@ def main(args):
         pump()
         check(any(n["id"] == expiring for n in listing()) and (expiring, 1) not in closed,
               "positive timeout is banner metadata; daemon preserves history")
+        def revision(ident):
+            wait(lambda: any(n[0] == ident for n in notified), "notification revision received")
+            return json.loads(next(n[2] for n in reversed(notified) if n[0] == ident))["revision"]
+        ephemeral = notify(timeout=80, hints={"transient": GLib.Variant("b", True)})
+        rev = revision(ephemeral)
+        check(ephemeral in [n["id"] for n in listing()], "transient remains until renderer retires banner")
+        call("ExpireTransient", (ephemeral, rev), "(ut)", priv=True)
+        wait(lambda: (ephemeral, 1) in closed, "transient expiry emits reason 1")
+        check(not any(n["id"] == ephemeral for n in listing()), "transient leaves List on banner retirement")
+        protected = notify(hints={"transient": GLib.Variant("i", 1)})
+        old_rev = revision(protected)
+        notify(replace=protected)
+        wait(lambda: len([n for n in notified if n[0] == protected]) == 2, "replacement revision received")
+        for ident, rev in [(protected, old_rev), (expiring, revision(expiring))]:
+            try:
+                call("ExpireTransient", (ident, rev), "(ut)", priv=True)
+            except GLib.Error:
+                pass
+            else:
+                raise AssertionError("ExpireTransient accepted stale or ordinary record")
+        check(all(any(n["id"] == ident for n in listing()) for ident in (protected, expiring)),
+              "transient expiry preserves replacements and ordinary history")
         critical = notify(timeout=80, hints={"urgency": GLib.Variant("y", 2)})
         time.sleep(.25)
         pump()
