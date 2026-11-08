@@ -89,8 +89,8 @@ impl Notice {
         }
     }
 }
-/// Same plain-label policy as NotificationCenter: remove tags, then decode entities
-/// once with ampersand last. A decoded '<' is text, never parsed as another tag.
+/// Plain labels: remove tags, then decode numeric and named entities in one pass.
+/// Decoded characters are never rescanned as another entity or markup tag.
 pub fn plain_text(input: &str) -> String {
     let mut stripped = String::new();
     let mut rest = input;
@@ -107,21 +107,41 @@ pub fn plain_text(input: &str) -> String {
     stripped.push_str(rest);
     let mut decoded = String::new();
     let mut rest = stripped.as_str();
-    while let Some(start) = rest.find("&#") {
+    while let Some(start) = rest.find('&') {
         decoded.push_str(&rest[..start]);
         rest = &rest[start..];
-        let parsed = rest.find(';').filter(|end| *end <= 12).and_then(|end| {
-            let number = &rest[2..end];
-            let value = if let Some(hex) = number
-                .strip_prefix('x')
-                .or_else(|| number.strip_prefix('X'))
-            {
-                u32::from_str_radix(hex, 16).ok()
-            } else {
-                number.parse().ok()
-            };
-            Some((end, value.filter(|v| *v > 0).and_then(char::from_u32)?))
-        });
+        // Bound the scan as well as the result; repeated malformed '&' cannot
+        // make parsing quadratic. All recognized entities fit in this window.
+        let parsed = rest
+            .bytes()
+            .take(13)
+            .position(|b| b == b';')
+            .and_then(|end| {
+                let entity = &rest[1..end];
+                let ch = match entity {
+                    "lt" => Some('<'),
+                    "gt" => Some('>'),
+                    "quot" => Some('"'),
+                    "apos" => Some('\''),
+                    "amp" => Some('&'),
+                    _ => entity.strip_prefix('#').and_then(|number| {
+                        let (digits, radix) = number
+                            .strip_prefix('x')
+                            .or_else(|| number.strip_prefix('X'))
+                            .map_or((number, 10), |hex| (hex, 16));
+                        if digits.is_empty()
+                            || !digits.chars().all(|c| c.is_ascii() && c.is_digit(radix))
+                        {
+                            return None;
+                        }
+                        u32::from_str_radix(digits, radix)
+                            .ok()
+                            .filter(|n| *n > 0)
+                            .and_then(char::from_u32)
+                    }),
+                }?;
+                Some((end, ch))
+            });
         if let Some((end, ch)) = parsed {
             decoded.push(ch);
             rest = &rest[end + 1..];
@@ -131,15 +151,7 @@ pub fn plain_text(input: &str) -> String {
         }
     }
     decoded.push_str(rest);
-    decoded
-        .replace("&lt;", "<")
-        .replace("&gt;", ">")
-        .replace("&quot;", "\"")
-        .replace("&apos;", "'")
-        .replace("&amp;", "&")
-        .split_whitespace()
-        .collect::<Vec<_>>()
-        .join(" ")
+    decoded.split_whitespace().collect::<Vec<_>>().join(" ")
 }
 fn limit(s: &mut String, max: usize) {
     let mut end = s.len().min(max);
@@ -445,6 +457,17 @@ mod replacement_tests {
 #[cfg(test)]
 mod text_tests {
     use super::*;
+    #[test]
+    fn entities_decode_only_from_original_source() {
+        assert_eq!(
+            plain_text("&#38;lt; &#x26;lt; &#38;amp; &amp;lt; &#38;#60; &lt;b&gt;text&lt;/b&gt;"),
+            "&lt; &lt; &amp; &lt; &#60; <b>text</b>"
+        );
+        assert_eq!(
+            plain_text("&#xD800; &#0; &#x110000; &broken; &#+60;"),
+            "&#xD800; &#0; &#x110000; &broken; &#+60;"
+        );
+    }
     #[test]
     fn markup_is_plain_text_entities_decode_once_and_unicode_is_preserved() {
         assert_eq!(

@@ -60,6 +60,9 @@ pub fn watch(conn: Connection, emit: impl Fn(Update)) -> Result<(), String> {
             }
         })
         .map_err(err)?;
+    // Only the subscription workers keep senders. Bus loss must disconnect the
+    // inbox, so a blocking receive cannot retain stale visible banners forever.
+    drop(tx);
     let mut known = None;
     let mut attempted = None;
     let mut reconnect = true;
@@ -93,7 +96,9 @@ pub fn watch(conn: Connection, emit: impl Fn(Update)) -> Result<(), String> {
                 }
             }
         }
-        match rx.recv_timeout(std::time::Duration::from_secs(2)) {
+        // NameOwnerChanged was subscribed before the initial owner read. Waiting
+        // for it avoids periodic GetNameOwner calls while the desktop is idle.
+        match rx.recv() {
             Ok(None) => reconnect = true,
             Ok(Some(m)) => {
                 reconnect = false;
@@ -122,8 +127,10 @@ pub fn watch(conn: Connection, emit: impl Fn(Update)) -> Result<(), String> {
                     _ => {}
                 }
             }
-            Err(std::sync::mpsc::RecvTimeoutError::Timeout) => reconnect = true,
-            Err(_) => return Ok(()),
+            Err(_) => {
+                emit(Update::Reset(None));
+                return Err("notification bus disconnected".into());
+            }
         }
     }
 }

@@ -45,6 +45,7 @@ B2.3/B3.2 and installed MCP transition/acceptance remain gaps; B2.2 details are
 implemented with private validation, not installed acceptance. See
 `toolkit/shell/SESSION.md`. B3.1 banners use the bar surface and one hub stack;
 read `toolkit/shell/B3.1.md` before changing notification timers, actions or cards.
+Notification ownership is signal-driven; do not add idle GetNameOwner polling.
 Sender expiry is presentation-only; the daemon retains history. Token actions are
 revision checked and directed to the sender. App/place/tray/banner artwork uses one process-wide
 `toolkit/shell/src/icon_memory.rs`; surfaces keep shared references and never

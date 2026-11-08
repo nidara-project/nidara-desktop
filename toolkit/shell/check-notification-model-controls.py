@@ -30,6 +30,7 @@ debug=0
 incremental=false
 ''')
 MUTANTS = [
+    ('entities-decoded-twice', 'decoded.split_whitespace()', 'decoded.replace("&lt;", "<").split_whitespace()', 'entities_decode_only_from_original_source'),
     ('critical-retired-by-global-age', 'self.entries.remove(retire);', 'self.entries.pop_front();', 'saturation_preserves_critical_until_every_slot_is_critical'),
     ('wrong-retired-card', 'self.entries.remove(retire);', 'self.entries.pop_back();', 'cap_replaces_in_place_and_retires_old_action_identity'),
     ('stale-action-survives', 'old.content = old.content.saturating_add(1);', 'old.content = old.content;', 'cap_replaces_in_place_and_retires_old_action_identity'),
