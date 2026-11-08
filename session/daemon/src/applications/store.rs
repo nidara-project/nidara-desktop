@@ -9,7 +9,8 @@ use gio::prelude::*;
 use serde_json::{Value, json};
 use std::{
     collections::{BTreeMap, BTreeSet},
-    path::PathBuf,
+    ffi::OsString,
+    path::{Path, PathBuf},
     sync::Arc,
     time::{Duration, Instant},
 };
@@ -311,7 +312,7 @@ impl Store {
                 .push("root history corrupt or unreadable; pruning disabled".into());
         }
         let icon_audit = super::icon_cache::span("catalogue-icon-audit", "catalogue", 0);
-        let (icon_watches, icon_complete, mut signatures) = super::icons::watches();
+        let (icon_watches, _, mut signatures) = super::icons::watches();
         let mut assets = std::collections::BTreeMap::new();
         for a in scan.apps.values() {
             let path = assets
@@ -429,7 +430,9 @@ impl Store {
         // Watch asset trees (directory watches are not recursive), selected
         // absolute assets, defaults and the root history. Missing roots watch
         // their nearest existing ancestor so creation/remount can recover.
-        self.monitor_failed = !icon_complete;
+        // Icon trees past the traversal bounds keep their top-level watches
+        // (icons::watches), not a recovery timer (#1051).
+        self.monitor_failed = false;
         let mut watches = scan.watches;
         watches.extend(icon_watches);
         for p in assets.values().flatten() {
@@ -442,30 +445,40 @@ impl Store {
         if let Some(p) = std::env::var_os("XDG_CONFIG_HOME") {
             watches.insert(p.into());
         }
-        watches.insert(catalogue::root_history_path().parent().unwrap().to_owned());
-        let mut installed = BTreeSet::new();
-        for mut path in watches {
+        let history = catalogue::root_history_path();
+        // The history's directory also holds the usage state this store writes
+        // every 30 s: only the history file itself is a catalogue event (#1051).
+        let mut installed = BTreeMap::<PathBuf, Option<OsString>>::new();
+        for mut path in watches
+            .into_iter()
+            .chain(history.parent().map(Path::to_path_buf))
+        {
+            let only = (Some(path.as_path()) == history.parent())
+                .then(|| history.file_name().map(OsString::from))
+                .flatten();
             while !path.is_dir() {
                 if !path.pop() {
                     break;
                 }
             }
-            if !installed.insert(path.clone()) {
-                continue;
-            }
-            if installed.len() > 8192 {
-                self.monitor_failed = true;
-                break;
-            }
-            match gio::File::for_path(path).monitor_directory(
-                gio::FileMonitorFlags::WATCH_MOVES,
-                None::<&gio::Cancellable>,
-            ) {
-                Ok(m) => {
-                    let d = self.dirty.clone();
-                    m.connect_changed(move |_, _, _, _| d.notify_one());
-                    self.monitors.push(m);
+            // A directory also wanted unfiltered for another reason stays unfiltered.
+            match installed.get_mut(&path) {
+                Some(filter) => {
+                    if *filter != only {
+                        *filter = None;
+                    }
                 }
+                None => {
+                    installed.insert(path, only);
+                }
+            }
+        }
+        if installed.len() > 8192 {
+            self.monitor_failed = true;
+        }
+        for (path, only) in installed.into_iter().take(8192) {
+            match watch_directory(&path, only, self.dirty.clone()) {
+                Ok(m) => self.monitors.push(m),
                 Err(_) => self.monitor_failed = true,
             }
         }
@@ -473,6 +486,28 @@ impl Store {
     pub fn metadata(&self) -> Value {
         json!({"CatalogueRevision":self.catalogue_revision,"LayoutRevision":self.layout_revision,"UsageRevision":self.usage_revision,"LauncherRevision":self.launcher_revision,"IconRevision":self.icon_revision,"CatalogueComplete":self.healthy,"Diagnostics":self.diagnostics,"Apps":self.apps.values().map(|a|a.record.clone()).collect::<Vec<_>>(),"LayoutAvailable":self.layout_available(),"Layout":layout::records(&self.layout,&self.apps,&self.default),"DefaultDirectoryApp":self.default,"WindowMatches":self.matches,"HyaloEpoch":self.observation.epoch,"ActiveLaunches":self.launches.active(),"MatchingAvailable":self.observation.live,"UsageAvailable":self.observation.live&&self.usage.available(),"UsageReason":if self.usage.available(){&self.observation_reason}else{self.usage.unavailable_reason()},"NewAppsAvailable":self.usage.baseline_available(),"NewAppsReason":self.usage.unavailable_reason(),"LauncherAvailable":self.unity.available,"LauncherHydrationIncomplete":self.unity.incomplete,"LaunchAvailable":true,"LaunchObservationAvailable":self.observation.live})
     }
+}
+/// A directory monitor that marks the store dirty. With `only`, an event counts
+/// only when it names that file, as either side of a rename.
+fn watch_directory(
+    path: &Path,
+    only: Option<OsString>,
+    dirty: Arc<Notify>,
+) -> Result<gio::FileMonitor, glib::Error> {
+    let m = gio::File::for_path(path).monitor_directory(
+        gio::FileMonitorFlags::WATCH_MOVES,
+        None::<&gio::Cancellable>,
+    )?;
+    m.connect_changed(move |_, file, other, _| {
+        let names = |f: &gio::File| {
+            only.as_deref()
+                .is_none_or(|n| f.basename().is_some_and(|b| b.as_os_str() == n))
+        };
+        if names(file) || other.is_some_and(names) {
+            dirty.notify_one();
+        }
+    });
+    Ok(m)
 }
 type Job = Box<dyn FnOnce(&mut Store) + Send>;
 #[derive(Clone)]
@@ -835,5 +870,48 @@ mod tests {
             "Adwaita"
         );
         assert_eq!(effective_theme(None, None), "");
+    }
+
+    /// Writes `name` the way the store does (a temporary, then a rename) and says
+    /// whether the history directory's monitor marked the catalogue dirty.
+    fn dirtied_by(dir: &std::path::Path, name: &str) -> bool {
+        use futures_util::FutureExt;
+        let dirty = std::sync::Arc::new(tokio::sync::Notify::new());
+        let ctx = glib::MainContext::new();
+        ctx.with_thread_default(|| {
+            let _m = super::watch_directory(
+                dir,
+                Some("applications-roots-v1.json".into()),
+                dirty.clone(),
+            )
+            .unwrap();
+            let temp = dir.join(format!(".{name}-{}", super::super::unique()));
+            std::fs::write(&temp, b"{}").unwrap();
+            std::fs::rename(&temp, dir.join(name)).unwrap();
+            let end = std::time::Instant::now() + std::time::Duration::from_millis(400);
+            while std::time::Instant::now() < end {
+                ctx.iteration(false);
+                std::thread::sleep(std::time::Duration::from_millis(5));
+            }
+        })
+        .unwrap();
+        dirty.notified().now_or_never().is_some()
+    }
+
+    #[test]
+    fn the_store_does_not_wake_itself_with_its_own_usage_state() {
+        let dir = std::env::current_dir()
+            .unwrap()
+            .join(format!("target/a1-history-{}", super::super::unique()));
+        std::fs::create_dir_all(&dir).unwrap();
+        assert!(
+            !dirtied_by(&dir, "applications-v1.json"),
+            "a usage checkpoint refreshed the catalogue (#1051)"
+        );
+        assert!(
+            dirtied_by(&dir, "applications-roots-v1.json"),
+            "a root-history change was missed"
+        );
+        std::fs::remove_dir_all(dir).unwrap();
     }
 }
