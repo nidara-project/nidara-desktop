@@ -30,7 +30,8 @@ debug=0
 incremental=false
 ''')
 MUTANTS = [
-    ('wrong-retired-card', 'self.entries.pop_front();', 'self.entries.pop_back();', 'cap_replaces_in_place_and_retires_old_action_identity'),
+    ('critical-retired-by-global-age', 'self.entries.remove(retire);', 'self.entries.pop_front();', 'saturation_preserves_critical_until_every_slot_is_critical'),
+    ('wrong-retired-card', 'self.entries.remove(retire);', 'self.entries.pop_back();', 'cap_replaces_in_place_and_retires_old_action_identity'),
     ('stale-action-survives', 'old.content = old.content.saturating_add(1);', 'old.content = old.content;', 'cap_replaces_in_place_and_retires_old_action_identity'),
     ('critical-expires', 'if self.critical() || self.expire_timeout == 0', 'if self.expire_timeout == 0', 'local_timeout_hover_and_critical_are_independent_of_daemon_dismissal'),
     ('hover-does-not-pause', 'e.deadline = if on {\n            None', 'e.deadline = if on {\n            Some(now)', 'local_timeout_hover_and_critical_are_independent_of_daemon_dismissal'),

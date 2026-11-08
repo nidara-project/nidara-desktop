@@ -174,6 +174,18 @@ try:
     replaced=until('replacement in place',lambda:(v:=banners()) and any(n['summary']=='Replacement' for n in v) and v)
     oracle('replacement keeps position and identity',lambda v:ids(v)==order and v[1]['instance']==target['instance'] and v[1]['content']>target['content'],replaced,four)
     clear()
+    sticky=notify('Critical survives saturation',critical=True)
+    normal_ids=[notify('Ordinary burst '+str(i)) for i in range(4)]
+    expected=[sticky,*normal_ids[1:]]
+    kept=until('saturated stack keeps critical',lambda:(v:=banners()) and ids(v)==expected and v)
+    oracle('normal burst preserves critical banner',lambda v:ids(v)==expected,kept,[{'id':i} for i in normal_ids])
+    assert sticky in ids(history()) and normal_ids[0] in ids(history()),'local retirement removed history'
+    clear()
+    critical_ids=[notify('Critical burst '+str(i),critical=True) for i in range(5)]
+    capped=until('all critical cap',lambda:(v:=banners()) and ids(v)==critical_ids[1:] and v)
+    oracle('all critical stack retires oldest at four',lambda v:ids(v)==critical_ids[1:],capped,[{'id':i} for i in critical_ids[:4]])
+    assert critical_ids[0] in ids(history()),'retired critical lost history'
+    clear()
     settings('org.nidara.notifications','popup-timeout','1')
     normal=notify('Default timeout',timeout=-1)
     visible=until('default visible',lambda:(v:=banners()) and normal in ids(v) and v)
@@ -198,8 +210,8 @@ try:
     pump(1.5)
     oracle('critical and zero never expire',lambda v:critical in ids(v) and never in ids(v),banners(),[])
     until('critical alert role',lambda:node('Critical').get_role()==Atspi.Role.ALERT)
-    until('assertive critical announcement',lambda:any(e[1]==2 and 'Critical' in str(e[2]) for e in ANNOUNCEMENTS))
-    oracle('critical announcement is assertive',lambda v:any(e[1]==2 and 'Critical' in str(e[2]) for e in v),ANNOUNCEMENTS,[e for e in ANNOUNCEMENTS if e[1]!=2])
+    until('assertive critical announcement',lambda:any(e[1]==2 and str(e[2])=='B3 fixture: Critical' for e in ANNOUNCEMENTS))
+    oracle('critical announcement is assertive',lambda v:any(e[1]==2 and str(e[2])=='B3 fixture: Critical' for e in v),ANNOUNCEMENTS,[e for e in ANNOUNCEMENTS if e[1]!=2])
     settings('org.nidara.notifications','do-not-disturb','true')
     until('DND retires normal only',lambda:ids(banners())==[critical])
     oracle('DND critical exception',lambda v:critical in ids(v) and never not in ids(v),banners(),stable)

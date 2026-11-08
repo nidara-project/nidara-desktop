@@ -240,7 +240,14 @@ impl Stack {
         }
         self.next = self.next.checked_add(1).expect("banner identity exhausted");
         if self.entries.len() == MAX_VISIBLE {
-            self.entries.pop_front();
+            // Keep critical cards ahead of ordinary chatter. If every slot is
+            // critical, admit the new notice by retiring the oldest critical.
+            let retire = self
+                .entries
+                .iter()
+                .position(|e| !e.notice.critical())
+                .unwrap_or(0);
+            self.entries.remove(retire);
         }
         self.entries.push_back(Banner {
             notice,
@@ -312,6 +319,39 @@ mod tests {
         assert_eq!(
             s.entries.iter().map(|e| e.notice.id).collect::<Vec<_>>(),
             [2, 3, 4, 5]
+        );
+    }
+    #[test]
+    fn saturation_preserves_critical_until_every_slot_is_critical() {
+        let mut s = Stack::default();
+        let p = Preferences::default();
+        let g = Gates::default();
+        s.push(n(1, 0, true), "a".into(), g, &p, 0);
+        for id in 2..=5 {
+            s.push(n(id, 0, false), "a".into(), g, &p, id as u64);
+        }
+        assert_eq!(
+            s.entries.iter().map(|b| b.notice.id).collect::<Vec<_>>(),
+            [1, 3, 4, 5]
+        );
+        s.clear();
+        for id in 10..=13 {
+            s.push(n(id, 0, true), "a".into(), g, &p, id as u64);
+        }
+        s.push(n(14, 0, false), "a".into(), g, &p, 14);
+        assert_eq!(
+            s.entries.iter().map(|b| b.notice.id).collect::<Vec<_>>(),
+            [11, 12, 13, 14]
+        );
+        s.push(n(15, 0, true), "a".into(), g, &p, 15);
+        assert_eq!(
+            s.entries.iter().map(|b| b.notice.id).collect::<Vec<_>>(),
+            [11, 12, 13, 15]
+        );
+        s.push(n(16, 0, true), "a".into(), g, &p, 16);
+        assert_eq!(
+            s.entries.iter().map(|b| b.notice.id).collect::<Vec<_>>(),
+            [12, 13, 15, 16]
         );
     }
     #[test]
