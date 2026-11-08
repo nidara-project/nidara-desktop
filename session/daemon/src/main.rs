@@ -28,7 +28,6 @@ type Shared = Arc<Mutex<State>>;
 struct State {
     notifications: Vec<Notification>,
     next: u32,
-
     senders: HashMap<u32, String>,
     revisions: HashMap<u32, u64>,
     next_revision: u64,
@@ -346,7 +345,6 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let shared = Arc::new(Mutex::new(State {
         notifications,
         next,
-
         senders: HashMap::new(),
         revisions: HashMap::new(),
         next_revision: 0,
