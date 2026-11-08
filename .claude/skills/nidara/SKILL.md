@@ -48,6 +48,8 @@ read `toolkit/shell/B3.1.md` before changing notification timers, actions or car
 B3.2 adds the NC/calendar, `nc` route and journal; read `toolkit/shell/B3.2.md`
 before changing history, hydration, bulk dismissal, restoration or retention.
 History snapshots have a sequence barrier; never replay them as fresh banners.
+Notification store errors must not stop sessiond or live delivery/dismissal.
+Preserve damaged input, log write outages once and compact the live model on recovery.
 Only viewport cards are built. Hyalo applies eight positive washes per pane:
 reserve that budget for today, navigation, hover and focus, rather than declaring
 rest washes on every row of one large pane.

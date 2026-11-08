@@ -44,6 +44,9 @@ def run(label,crate,test,fail=False):
 run('history-baseline',history,'tests')
 run('viewport-baseline',shell,'nc::tests')
 mutations=[
+ ('startup-without-preservation',history,'store.rs','self\n            .preserve_input(&mut health)','Ok::<(), io::Error>(())','store::tests::startup_preserves_corrupt_input_and_can_continue_with_live_notifications'),
+ ('recovery-loses-live-model',history,'store.rs','self.compact(live)?;','self.compact(&[])?;','store::tests::refused_writes_recover_the_live_model_without_resurrecting_removed_records'),
+ ('legacy-import-skipped-after-outage',history,'store.rs','needs_publication = true;\n                    live =','needs_publication = false;\n                    live =','store::tests::failed_legacy_import_must_publish_all_live_records_before_creating_a_journal'),
  ('retired-view-reused',shell,'nc.rs','self.control_ids.clear();','/* control: retain previous view identities */','nc::tests::controls_survive_arrivals_but_never_retarget_a_new_view'),
  ('seven-days',history,'model.rs','7 * 86400','30 * 86400','model::tests::retention_seven_days_critical_and_protected_today'),
  ('safety-ceiling',history,'model.rs','saturating_sub(2000)','saturating_sub(2001)','model::tests::retention_seven_days_critical_and_protected_today'),
@@ -55,7 +58,9 @@ mutations=[
  ('expand-all-groups',shell,'nc.rs','let count = if self.expanded.contains(&key)','let count = if true','nc::tests::viewport_is_bounded_for_two_thousand_and_collapsed_group_counts'),
  ('calendar-no-leap-day',shell,'nc.rs','1..=31','1..=28','nc::tests::calendar_leap_year_and_relative_minutes'),
 ]
+selected=set(filter(None,os.environ.get('CONTROL_FILTER','').split(',')))
 for label,crate,file,before,after,test in mutations:
+    if selected and label not in selected:continue
     p=crate/'src'/file;original=p.read_text();assert before in original,label
     p.write_text(original.replace(before,after,1))
     try:run(label,crate,test,True)

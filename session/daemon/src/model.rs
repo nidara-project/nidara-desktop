@@ -155,6 +155,19 @@ pub fn today_start(now: u64) -> u64 {
         })
         .map_or(now / 86400 * 86400, |d| d.to_unix().max(0) as u64)
 }
+/// No periodic idle tick: only a retention deadline or a local day boundary.
+pub fn retention_deadline(notifications: &[Notification], now: u64) -> Option<u64> {
+    let today = today_start(now);
+    let tomorrow = glib::DateTime::from_unix_local(today as i64)
+        .ok()
+        .and_then(|d| d.add_days(1).ok())
+        .map_or(today.saturating_add(86400), |d| d.to_unix().max(0) as u64);
+    notifications
+        .iter()
+        .filter(|n| n.hints.get("urgency").and_then(Value::as_u64) != Some(2))
+        .map(|n| n.time.saturating_add(7 * 86400).max(now).min(tomorrow))
+        .min()
+}
 pub fn app_group(n: &Notification) -> String {
     // Match the bounded wire model: oversized desktop-entry hints are discarded,
     // and app labels are UTF-8 truncated at 1024 bytes by Notice::parse.
@@ -181,6 +194,19 @@ mod tests {
             serde_json::json!({"id":id,"time":time,"hints":{"urgency":if critical {2}else{1}}}),
         )
         .unwrap()
+    }
+    #[test]
+    fn retention_waits_for_deadlines_and_has_no_empty_or_critical_idle_tick() {
+        let now = 20 * 86400 + 100;
+        assert_eq!(retention_deadline(&[], now), None);
+        assert_eq!(retention_deadline(&[notice(1, 0, true)], now), None);
+        assert_eq!(
+            retention_deadline(&[notice(1, now - 7 * 86400 + 30, false)], now),
+            Some(now + 30)
+        );
+        let next_day = retention_deadline(&[notice(1, now, false)], now).unwrap();
+        assert!(next_day > now);
+        assert_eq!(today_start(next_day), next_day);
     }
     #[test]
     fn retention_seven_days_critical_and_protected_today() {

@@ -11,7 +11,7 @@ use nk_text::{Rect, TextStyle};
 use nk_wayland::{MaterialRect, Pane, StateRegion};
 use std::{
     collections::{HashMap, HashSet},
-    sync::Arc,
+    sync::{Arc, OnceLock},
 };
 pub const PANEL: u64 = 1 << 54;
 const CONTROL: u64 = PANEL + 100;
@@ -118,11 +118,60 @@ pub fn age(time: u64, now: u64) -> String {
         _ => format!("{} d", seconds / 86400),
     }
 }
+fn parse_week_start(text: &str) -> Option<usize> {
+    let mut values = text.split_whitespace();
+    let first: i32 = values.next()?.parse().ok()?;
+    let reference: i32 = values.next()?.parse().ok()?;
+    if !(1..=7).contains(&first) {
+        return None;
+    }
+    let base = glib::DateTime::from_local(
+        reference / 10000,
+        reference / 100 % 100,
+        reference % 100,
+        0,
+        0,
+        0.,
+    )
+    .ok()?
+    .day_of_week();
+    Some(((base + first - 2) % 7 + 1) as usize)
+}
+fn week_start() -> usize {
+    static FIRST: OnceLock<usize> = OnceLock::new();
+    // glibc's locale tool exposes both the reference date and relative first
+    // weekday. Read once, not on paint; no extra library dependency or FFI.
+    *FIRST.get_or_init(|| {
+        std::process::Command::new("locale")
+            .args(["first_weekday", "week-1stday"])
+            .output()
+            .ok()
+            .filter(|r| r.status.success())
+            .and_then(|r| parse_week_start(&String::from_utf8_lossy(&r.stdout)))
+            .unwrap_or(1)
+    })
+}
+fn weekday_labels() -> Vec<String> {
+    let monday = glib::DateTime::from_local(2024, 1, 1, 0, 0, 0.).unwrap();
+    (0..7)
+        .map(|i| {
+            monday
+                .add_days(((week_start() - 1 + i) % 7) as i32)
+                .ok()
+                .and_then(|d| d.format("%a").ok())
+                .map(|s| s.to_string())
+                .unwrap_or_default()
+        })
+        .collect()
+}
 pub fn calendar(year: i32, month: i32) -> Vec<(i32, usize)> {
+    calendar_with_start(year, month, week_start())
+}
+fn calendar_with_start(year: i32, month: i32, first_weekday: usize) -> Vec<(i32, usize)> {
     let Ok(first) = glib::DateTime::from_local(year, month, 1, 0, 0, 0.) else {
         return vec![];
     };
-    let offset = (first.day_of_week() - 1) as usize;
+    let offset = (first.day_of_week() as usize + 7 - first_weekday) % 7;
     (1..=31)
         .take_while(|day| glib::DateTime::from_local(year, month, *day, 0, 0, 0.).is_ok())
         .map(|day| (day, offset + day as usize - 1))
@@ -521,10 +570,7 @@ impl Center {
             1,
             1.,
         )?;
-        for (i, day) in ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"]
-            .iter()
-            .enumerate()
-        {
+        for (i, day) in weekday_labels().iter().enumerate() {
             text(
                 c,
                 look,
@@ -764,11 +810,17 @@ mod tests {
     }
     #[test]
     fn calendar_leap_year_and_relative_minutes() {
-        let leap = calendar(2024, 2);
+        let leap = calendar_with_start(2024, 2, 1);
         assert_eq!(leap.len(), 29);
         assert_eq!(leap[0], (1, 3));
-        assert_eq!(calendar(2023, 2).len(), 28);
-        assert_eq!(calendar(2024, 3)[0], (1, 4));
+        assert_eq!(calendar_with_start(2023, 2, 1).len(), 28);
+        assert_eq!(calendar_with_start(2024, 3, 1)[0], (1, 4));
+        assert_eq!(calendar_with_start(2024, 2, 7)[0], (1, 4));
+        assert_eq!(parse_week_start("1\n19971130\n"), Some(7));
+        assert_eq!(parse_week_start("2\n19971130\n"), Some(1));
+        assert_eq!(parse_week_start("1\n19971201\n"), Some(1));
+        assert_eq!(parse_week_start("8\n19971130\n"), None);
+        assert_eq!(weekday_labels().len(), 7);
         assert_eq!(age(100, 159), "now");
         assert_eq!(age(100, 160), "1 min");
         assert_eq!(age(500, 100), "now");

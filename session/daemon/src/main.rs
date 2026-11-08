@@ -34,6 +34,7 @@ struct State {
     gone_logged: std::collections::HashSet<u32>,
     sequence: u64,
     image_refs: HashMap<std::path::PathBuf, usize>,
+    maintenance_wake: Arc<tokio::sync::Notify>,
     store: store::Store,
 }
 impl State {
@@ -107,15 +108,13 @@ async fn remove_ids(
         .map(|n| n.id)
         .collect();
     if !persisted.is_empty() {
-        locked
-            .store
-            .append(
-                &store::Change::Remove { ids: persisted },
-                &locked.notifications,
-            )
-            .map_err(failed)?;
+        locked.store.record(
+            &store::Change::Remove { ids: persisted },
+            &locked.notifications,
+        );
     }
     locked.notifications.retain(|n| !ids.contains(&n.id));
+    locked.maintenance_wake.notify_one();
     let removed: Vec<_> = removing.iter().map(|n| n.id).collect();
     // Publish one canonical UI change before per-sender delivery/GC. A large
     // history must not delay the renderer's fixed-time clear animation.
@@ -260,31 +259,25 @@ impl Notifications {
         let mut event = serde_json::to_value(&n).map_err(failed)?;
         event["revision"] = revision.into();
         let json = serde_json::to_string(&event).map_err(failed)?;
-        // Commit the operation before making it visible; ephemeral replacements remove any persisted predecessor.
+        // Attempt durability independently of live availability; ephemeral replacements remove any persisted predecessor.
         if truthy(n.hints.get("transient")) {
             if state
                 .notifications
                 .iter()
                 .any(|old| old.id == id && !truthy(old.hints.get("transient")))
             {
-                state
-                    .store
-                    .append(
-                        &store::Change::Remove { ids: vec![id] },
-                        &state.notifications,
-                    )
-                    .map_err(failed)?;
+                state.store.record(
+                    &store::Change::Remove { ids: vec![id] },
+                    &state.notifications,
+                );
             }
         } else {
-            state
-                .store
-                .append(
-                    &store::Change::Put {
-                        notification: n.clone(),
-                    },
-                    &state.notifications,
-                )
-                .map_err(failed)?;
+            state.store.record(
+                &store::Change::Put {
+                    notification: n.clone(),
+                },
+                &state.notifications,
+            );
         }
         state.revisions.insert(id, revision);
         state.gone_logged.remove(&id);
@@ -298,6 +291,7 @@ impl Notifications {
         } else {
             state.notifications.push(n);
         }
+        state.maintenance_wake.notify_one();
         changed(&mut state, conn, serde_json::json!({"put":event}))
             .await
             .map_err(failed)?;
@@ -552,15 +546,8 @@ fn failed(e: impl std::fmt::Display) -> zbus::fdo::Error {
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let options = options::Options::parse(std::env::args().skip(1).collect())?;
-    let store = store::Store::new()?;
-    let mut notifications = store.restore()?;
-    let removed: std::collections::HashSet<_> =
-        model::retention(&notifications, now(), model::today_start(now()))
-            .into_iter()
-            .collect();
-    notifications.retain(|n| !removed.contains(&n.id));
-    store.compact(&notifications)?;
-    store.clean_images(&notifications)?;
+    let store = store::Store::new().unwrap_or_else(store::Store::volatile);
+    let notifications = store.startup();
     let revisions: HashMap<_, _> = notifications
         .iter()
         .enumerate()
@@ -579,6 +566,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .max()
         .filter(|n| *n < MAX_ID)
         .map_or(1, |n| n + 1);
+    let maintenance_wake = Arc::new(tokio::sync::Notify::new());
     let shared = Arc::new(Mutex::new(State {
         notifications,
         next,
@@ -588,6 +576,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         gone_logged: Default::default(),
         sequence: 0,
         image_refs,
+        maintenance_wake: maintenance_wake.clone(),
         store,
     }));
     // Install both objects before claiming names. Never queue behind somebody
@@ -639,9 +628,21 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let maintenance_state = shared.clone();
     let maintenance_conn = conn.clone();
     let maintenance = tokio::spawn(async move {
-        let mut tick = tokio::time::interval(Duration::from_secs(60));
         loop {
-            tick.tick().await;
+            // One retained permit closes the arrival/deadline calculation race.
+            let changed = maintenance_wake.notified();
+            let now = now();
+            let deadline =
+                model::retention_deadline(&maintenance_state.lock().await.notifications, now);
+            if let Some(deadline) = deadline {
+                tokio::select! {
+                    _ = changed => continue,
+                    _ = tokio::time::sleep(Duration::from_secs(deadline.saturating_sub(now))) => {},
+                }
+            } else {
+                changed.await;
+                continue;
+            }
             if let Err(e) = maintain(&mut *maintenance_state.lock().await, &maintenance_conn).await
             {
                 eprintln!("[notifd] retention: {e}");
@@ -650,6 +651,6 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     });
     let mut term = tokio::signal::unix::signal(tokio::signal::unix::SignalKind::terminate())?;
     tokio::select! { _ = term.recv() => {}, _ = tokio::signal::ctrl_c() => {} }
-    maintenance.abort(); // Every operation was already durably appended before reply.
+    maintenance.abort(); // Persistence failures never gate the live notification model.
     Ok(())
 }

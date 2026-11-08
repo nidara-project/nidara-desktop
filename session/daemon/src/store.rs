@@ -10,7 +10,7 @@ use std::{
     os::unix::fs::{DirBuilderExt, OpenOptionsExt},
     path::{Path, PathBuf},
     sync::{
-        Arc,
+        Arc, Mutex,
         atomic::{AtomicUsize, Ordering},
     },
 };
@@ -20,6 +20,14 @@ use zbus::zvariant::OwnedValue;
 pub struct Store {
     pub dir: PathBuf,
     lines: Arc<AtomicUsize>,
+    health: Arc<Mutex<Health>>,
+}
+#[derive(Default)]
+struct Health {
+    dirty: bool,
+    protect_input: bool,
+    warned: bool,
+    disabled: bool,
 }
 #[derive(Deserialize, Serialize)]
 struct History {
@@ -43,6 +51,7 @@ impl Store {
         Self {
             dir,
             lines: Arc::new(AtomicUsize::new(0)),
+            health: Default::default(),
         }
     }
     pub fn new() -> io::Result<Self> {
@@ -53,11 +62,12 @@ impl Store {
             .ok_or_else(|| io::Error::other("neither XDG_CACHE_HOME nor HOME is available"))?;
         Ok(Self::at(cache.join("nidara/notifd")))
     }
-    pub fn restore(&self) -> io::Result<Vec<Notification>> {
+    fn load(&self) -> io::Result<(Vec<Notification>, bool)> {
         private_dir(&self.dir)?;
         let path = self.dir.join("history.jsonl");
         let legacy = self.dir.join("state.json");
         let mut live: Vec<Notification> = Vec::new();
+        let mut needs_publication = false;
         match fs::File::open(&path) {
             Ok(file) => {
                 let mut reader = io::BufReader::new(file);
@@ -69,6 +79,7 @@ impl Store {
                     }
                     if !bytes.ends_with(b"\n") {
                         eprintln!("[notifd] ignored incomplete journal tail");
+                        needs_publication = true;
                         break;
                     }
                     let change: Change =
@@ -90,6 +101,9 @@ impl Store {
             }
             Err(e) if e.kind() == io::ErrorKind::NotFound => match fs::read(&legacy) {
                 Ok(bytes) => {
+                    // Until import is published, a new journal containing only
+                    // the next arrival would hide the legacy history on restart.
+                    needs_publication = true;
                     live = serde_json::from_slice::<History>(&bytes)
                         .map_err(io::Error::other)?
                         .notifications
@@ -100,13 +114,130 @@ impl Store {
             Err(e) => return Err(e),
         }
         live.retain(|n| !truthy(n.hints.get("transient")));
+        Ok((live, needs_publication))
+    }
+    #[cfg(test)]
+    pub fn restore(&self) -> io::Result<Vec<Notification>> {
+        let (live, _) = self.load()?;
         self.compact(&live)?;
-        match fs::remove_file(legacy) {
+        self.remove_legacy()?;
+        Ok(live)
+    }
+    fn remove_legacy(&self) -> io::Result<()> {
+        match fs::remove_file(self.dir.join("state.json")) {
             Ok(()) => {}
             Err(e) if e.kind() == io::ErrorKind::NotFound => {}
             Err(e) => return Err(e),
         }
-        Ok(live)
+        Ok(())
+    }
+    pub fn volatile(error: impl std::fmt::Display) -> Self {
+        let store = Self::at(PathBuf::new());
+        let mut health = store.health.lock().unwrap();
+        health.disabled = true;
+        Self::warn(&mut health, error);
+        drop(health);
+        store
+    }
+    fn warn(health: &mut Health, error: impl std::fmt::Display) {
+        if !health.warned {
+            eprintln!(
+                "[notifd] history is not durable; notifications remain available in memory: {error}"
+            );
+            health.warned = true;
+        }
+    }
+    // A damaged input must never be overwritten by recovery. Failed renames keep
+    // writes disabled until the original can be preserved, even across retries.
+    fn preserve_input(&self, health: &mut Health) -> io::Result<()> {
+        if health.protect_input {
+            let stamp = std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap_or_default()
+                .as_nanos();
+            for name in ["history.jsonl", "state.json"] {
+                let path = self.dir.join(name);
+                match fs::rename(&path, self.dir.join(format!("{name}.broken-{stamp}"))) {
+                    Ok(()) => {}
+                    Err(e) if e.kind() == io::ErrorKind::NotFound => {}
+                    Err(e) => return Err(e),
+                }
+            }
+            health.protect_input = false;
+        }
+        Ok(())
+    }
+    /// Notification storage never prevents the other session services starting.
+    pub fn startup(&self) -> Vec<Notification> {
+        let mut health = self.health.lock().unwrap();
+        if health.disabled {
+            return vec![];
+        }
+        let (mut live, needs_publication) = match self.load() {
+            Ok(rows) => rows,
+            Err(e) => {
+                Self::warn(&mut health, e);
+                health.protect_input = true;
+                health.dirty = true;
+                (vec![], false)
+            }
+        };
+        let now = crate::model::now();
+        let expired: HashSet<_> =
+            crate::model::retention(&live, now, crate::model::today_start(now))
+                .into_iter()
+                .collect();
+        live.retain(|n| !expired.contains(&n.id));
+        // An optional startup compaction may fail while a valid journal still
+        // accepts appends. A partial/corrupt/legacy input needs publication first.
+        health.dirty |= needs_publication;
+        let published = self
+            .preserve_input(&mut health)
+            .and_then(|()| self.compact(&live));
+        match published {
+            Ok(()) => {
+                health.dirty = false;
+                if let Err(e) = self.remove_legacy() {
+                    Self::warn(&mut health, e);
+                }
+            }
+            Err(e) => Self::warn(&mut health, e),
+        }
+        // Never collect images against an unknown/damaged history.
+        if !health.dirty
+            && let Err(e) = self.clean_images(&live)
+        {
+            Self::warn(&mut health, e);
+        }
+        live
+    }
+    /// Best-effort durability. The caller always commits the live model/signals.
+    /// After a gap, publish that live model before appending the next operation.
+    pub fn record(&self, change: &Change, live: &[Notification]) {
+        let mut health = self.health.lock().unwrap();
+        if health.disabled {
+            return;
+        }
+        let result = (|| {
+            if health.dirty {
+                self.preserve_input(&mut health)?;
+                self.compact(live)?;
+            }
+            self.append(change, live)
+        })();
+        match result {
+            Ok(()) => {
+                health.dirty = false;
+                if health.warned {
+                    eprintln!("[notifd] notification history is durable again");
+                    health.warned = false;
+                }
+            }
+            Err(e) => {
+                health.dirty = true;
+                Self::warn(&mut health, e);
+            }
+        }
     }
     pub fn append(&self, change: &Change, live: &[Notification]) -> io::Result<()> {
         // Amortized compaction, before the next operation, never N calls for a bulk removal.
@@ -122,8 +253,9 @@ impl Store {
             .open(self.dir.join("history.jsonl"))?;
         let before = file.metadata()?.len();
         if let Err(e) = file.write_all(&bytes).and_then(|_| file.sync_data()) {
-            file.set_len(before)?;
-            file.sync_data()?;
+            // Preserve the original disk error even if rollback also fails.
+            // record() then requires a full recovery before any later append.
+            let _ = file.set_len(before).and_then(|()| file.sync_data());
             return Err(e);
         }
         self.lines.fetch_add(1, Ordering::Relaxed);
@@ -155,6 +287,9 @@ impl Store {
         Ok(())
     }
     pub fn owned_image(&self, n: &Notification) -> Option<PathBuf> {
+        if !self.dir.is_absolute() {
+            return None;
+        }
         let raw = n
             .hints
             .get("image-path")
@@ -200,6 +335,9 @@ impl Store {
         Ok(())
     }
     pub fn image(&self, hints: &HashMap<String, OwnedValue>) -> Option<String> {
+        if !self.dir.is_absolute() {
+            return None;
+        }
         let raw = hints.get("image-data")?;
         match self.decode_image(raw) {
             Ok(path) => Some(path.to_string_lossy().into_owned()),
@@ -301,6 +439,103 @@ mod tests {
     fn n(id: u32) -> Notification {
         serde_json::from_value(serde_json::json!({"id":id,"summary":"bounded record","time":123}))
             .unwrap()
+    }
+    #[test]
+    fn startup_preserves_corrupt_input_and_can_continue_with_live_notifications() {
+        let store = scratch("startup-corrupt");
+        let bytes =
+            b"{\"op\":\"remove\",\"ids\":[]}\nbroken interior\n{\"op\":\"remove\",\"ids\":[]}\n";
+        fs::write(store.dir.join("history.jsonl"), bytes).unwrap();
+        assert!(store.startup().is_empty());
+        let saved = fs::read_dir(&store.dir)
+            .unwrap()
+            .map(|e| e.unwrap().path())
+            .find(|p| {
+                p.file_name()
+                    .unwrap()
+                    .to_string_lossy()
+                    .starts_with("history.jsonl.broken-")
+            })
+            .unwrap();
+        assert_eq!(fs::read(saved).unwrap(), bytes);
+        store.record(&Change::Put { notification: n(7) }, &[]);
+        assert_eq!(store.restore().unwrap()[0].id, 7);
+        fs::remove_dir_all(store.dir).unwrap();
+    }
+    #[test]
+    fn startup_compaction_failure_does_not_prevent_a_valid_journal_append() {
+        let store = scratch("startup-full");
+        let mut first = n(1);
+        first.hints.insert("urgency".into(), 2.into());
+        store.compact(std::slice::from_ref(&first)).unwrap();
+        fs::create_dir(store.dir.join("history.jsonl.tmp")).unwrap();
+        let live = store.startup();
+        assert_eq!(live.len(), 1);
+        store.record(&Change::Put { notification: n(2) }, &live);
+        assert_eq!(store.load().unwrap().0.len(), 2);
+        fs::remove_dir_all(store.dir).unwrap();
+    }
+    #[test]
+    fn failed_legacy_import_must_publish_all_live_records_before_creating_a_journal() {
+        let store = scratch("legacy-full");
+        let mut first = n(1);
+        first.hints.insert("urgency".into(), 2.into());
+        fs::write(
+            store.dir.join("state.json"),
+            serde_json::to_vec(&History {
+                version: 1,
+                notifications: vec![first],
+            })
+            .unwrap(),
+        )
+        .unwrap();
+        let blocked = store.dir.join("history.jsonl.tmp");
+        fs::create_dir(&blocked).unwrap();
+        let mut live = store.startup();
+        assert_eq!(live.len(), 1);
+        store.record(&Change::Put { notification: n(2) }, &live);
+        live.push(n(2));
+        assert!(!store.dir.join("history.jsonl").exists());
+        assert!(store.dir.join("state.json").exists());
+        fs::remove_dir(blocked).unwrap();
+        store.record(&Change::Put { notification: n(3) }, &live);
+        assert_eq!(
+            store
+                .restore()
+                .unwrap()
+                .iter()
+                .map(|n| n.id)
+                .collect::<Vec<_>>(),
+            vec![1, 2, 3]
+        );
+        fs::remove_dir_all(store.dir).unwrap();
+    }
+    #[test]
+    fn refused_writes_recover_the_live_model_without_resurrecting_removed_records() {
+        use std::os::unix::fs::PermissionsExt;
+        let store = scratch("unwritable");
+        store.compact(&[n(1)]).unwrap();
+        let journal = store.dir.join("history.jsonl");
+        fs::set_permissions(&journal, fs::Permissions::from_mode(0o400)).unwrap();
+        fs::set_permissions(&store.dir, fs::Permissions::from_mode(0o500)).unwrap();
+        store.record(&Change::Put { notification: n(2) }, &[n(1)]);
+        store.record(&Change::Remove { ids: vec![1] }, &[n(1), n(2)]);
+        assert!(store.health.lock().unwrap().dirty);
+        assert!(store.health.lock().unwrap().warned);
+        fs::set_permissions(&store.dir, fs::Permissions::from_mode(0o700)).unwrap();
+        fs::set_permissions(&journal, fs::Permissions::from_mode(0o600)).unwrap();
+        store.record(&Change::Put { notification: n(3) }, &[n(2)]);
+        assert!(!store.health.lock().unwrap().dirty);
+        assert_eq!(
+            store
+                .restore()
+                .unwrap()
+                .iter()
+                .map(|n| n.id)
+                .collect::<Vec<_>>(),
+            vec![2, 3]
+        );
+        fs::remove_dir_all(store.dir).unwrap();
     }
     #[test]
     fn failed_compaction_never_replaces_the_journal_or_removes_legacy_input() {

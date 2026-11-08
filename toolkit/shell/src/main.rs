@@ -171,6 +171,21 @@ fn start(
 }
 
 fn main() {
+    // This Linux session has no GTK startup to initialize the C time locale.
+    // GLib's date formatting uses LC_TIME for both the clock and calendar.
+    // SAFETY: run once before creating any threads; the empty string selects
+    // the environment locale. LC_TIME is 2 in the Linux libc ABI (locale.h).
+    unsafe {
+        unsafe extern "C" {
+            fn setlocale(
+                category: std::ffi::c_int,
+                locale: *const std::ffi::c_char,
+            ) -> *mut std::ffi::c_char;
+        }
+        if setlocale(2, c"".as_ptr()).is_null() {
+            eprintln!("nidara-shell: invalid LC_TIME locale; using the C date format");
+        }
+    }
     let (hub_tx, hub_rx) = channel();
     let tokens = material::load()
         .map(Arc::new)
