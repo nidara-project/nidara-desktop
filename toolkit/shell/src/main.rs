@@ -210,6 +210,20 @@ fn main() {
         .map_err(|e| eprintln!("nidara-shell: Shell1 not served: {e}"))
         .ok();
     if bar_wanted() {
+        let t = hub_tx.clone();
+        spawn("notification-policy", move || {
+            prefs::watch_notifications(move |p| drop(t.send(hub::HubEvent::NotificationPrefs(p))))
+        });
+        if let Some(conn) = apps_conn.clone() {
+            let t = hub_tx.clone();
+            spawn("notifications", move || {
+                if let Err(e) = nidara_shell::notification_wire::watch(conn, move |u| {
+                    drop(t.send(hub::HubEvent::Notifications(u)))
+                }) {
+                    eprintln!("nidara-shell: notification source failed: {e}");
+                }
+            });
+        }
         if let Some(conn) = &apps_conn {
             let (tx, rx) = channel();
             nidara_shell::status::watch(conn, tx);
@@ -244,16 +258,6 @@ fn main() {
                     prefs::Cc::Night(n) => hub::HubEvent::Widgets(Update::Night(n)),
                     prefs::Cc::Layout(l) => hub::HubEvent::CcLayout(l),
                 }))
-            })
-        });
-        let t = hub_tx.clone();
-        spawn("dnd", move || {
-            prefs::watch_dnd(move |on| {
-                drop(
-                    t.send(hub::HubEvent::Widgets(nidara_shell::status::Update::Dnd(
-                        on,
-                    ))),
-                )
             })
         });
     }

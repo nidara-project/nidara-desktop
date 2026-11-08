@@ -17,6 +17,8 @@ pub type Result<T> = std::result::Result<T, String>;
 pub type NodeId = u64;
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Role {
+    Notification,
+    Alert,
     Window,
     Dialog,
     Label,
@@ -316,6 +318,7 @@ impl Snapshot {
 }
 #[derive(Clone, Debug, PartialEq)]
 pub enum Event {
+    Announcement(NodeId, String, bool),
     Focus(NodeId, bool),
     Name(NodeId, String),
     Description(NodeId, String),
@@ -355,6 +358,16 @@ pub fn diff(old: Option<&Tree>, new: &Tree) -> Result<Vec<Event>> {
     let mut activations = 0;
     for n in new.nodes.values() {
         let before = old.and_then(|t| t.nodes.get(&n.id));
+        if matches!(n.role, Role::Notification | Role::Alert)
+            && !n.states.hidden
+            && before.is_none_or(|b| b.states.hidden)
+        {
+            out.push(Event::Announcement(
+                n.id,
+                n.name.clone(),
+                n.role == Role::Alert,
+            ));
+        }
         let s = before.map(|n| n.states.clone()).unwrap_or_default();
         if s.focused != n.states.focused {
             out.push(Event::Focus(n.id, n.states.focused));
@@ -636,5 +649,47 @@ mod tests {
         filtered.validate().unwrap();
         tree.nodes.get_mut(&1).unwrap().active_descendant = Some(1);
         assert!(tree.validate().is_err());
+    }
+}
+
+#[cfg(test)]
+mod notification_tests {
+    use super::*;
+    #[test]
+    fn arrival_announces_once_replacement_does_not_repeat_and_critical_is_assertive() {
+        let mut root = Node::new(1, Role::Window, "Bar");
+        root.children.push(2);
+        let mut card = Node::new(2, Role::Notification, "Mail: Hello");
+        card.description = "body".into();
+        let first = Tree {
+            root: 1,
+            nodes: BTreeMap::from([(1, root), (2, card)]),
+        };
+        assert!(diff(None, &first).unwrap().contains(&Event::Announcement(
+            2,
+            "Mail: Hello".into(),
+            false
+        )));
+        let mut replacement = first.clone();
+        replacement.nodes.get_mut(&2).unwrap().name = "Mail: Updated".into();
+        assert!(
+            !diff(Some(&first), &replacement)
+                .unwrap()
+                .iter()
+                .any(|e| matches!(e, Event::Announcement(..)))
+        );
+        replacement.nodes.get_mut(&2).unwrap().role = Role::Alert;
+        assert!(
+            diff(None, &replacement)
+                .unwrap()
+                .contains(&Event::Announcement(2, "Mail: Updated".into(), true))
+        );
+        replacement.nodes.get_mut(&2).unwrap().states.hidden = true;
+        assert!(
+            !diff(None, &replacement)
+                .unwrap()
+                .iter()
+                .any(|e| matches!(e, Event::Announcement(..)))
+        );
     }
 }

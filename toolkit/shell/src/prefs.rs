@@ -205,6 +205,46 @@ pub fn watch_dnd(emit: impl Fn(bool) + 'static) {
     });
 }
 
+/// All banner policy keys, observed on one GLib context without polling.
+pub fn watch_notifications(emit: impl Fn(crate::notifications::Preferences) + 'static) {
+    let ctx = glib::MainContext::new();
+    let _guard = ctx.acquire();
+    let _ = ctx.with_thread_default(|| {
+        let n = settings(NOTIFICATIONS, "popup-timeout");
+        let g = settings("org.nidara.gaming", "silence-notifications");
+        let i = settings(INTERFACE, "icon-theme");
+        let read = std::rc::Rc::new(move || crate::notifications::Preferences {
+            popup_seconds: n
+                .as_ref()
+                .map_or(6, |s| s.int("popup-timeout").max(0) as u32),
+            dnd: n.as_ref().is_some_and(|s| s.boolean("do-not-disturb")),
+            silence_games: g
+                .as_ref()
+                .is_none_or(|s| s.boolean("silence-notifications")),
+            icon_theme: i
+                .as_ref()
+                .map_or_else(String::new, |s| s.string("icon-theme").to_string()),
+        });
+        let emit = std::rc::Rc::new(emit);
+        emit(read());
+        let mut held = vec![];
+        for (schema, key) in [
+            (NOTIFICATIONS, "popup-timeout"),
+            (NOTIFICATIONS, "do-not-disturb"),
+            ("org.nidara.gaming", "silence-notifications"),
+            (INTERFACE, "icon-theme"),
+        ] {
+            if let Some(s) = settings(schema, key) {
+                let (read, emit) = (read.clone(), emit.clone());
+                s.connect_changed(Some(key), move |_, _| emit(read()));
+                held.push(s);
+            }
+        }
+        glib::MainLoop::new(Some(&ctx), false).run();
+        drop(held);
+    });
+}
+
 pub const NIGHT: &str = "org.nidara.night-light";
 pub const CONTROL_CENTER: &str = "org.nidara.control-center";
 pub const WIDGETS: &str = "org.nidara.widgets";

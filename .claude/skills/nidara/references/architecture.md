@@ -899,12 +899,17 @@ The compatibility rules now live in `session/daemon/src/{model,store,main}.rs`:
 - Adopt nonzero `replaces_id` through `0x7fffffff` even after it was resolved;
   preserve insertion order for a live replacement, advance the sequence, and
   wrap into unused lower ids at the bound rather than overflowing uint32.
-- Only a positive **sender** timeout expires a notification (reason 1); 0 and
-  negative values keep the card. Replacing cancels its old timer. Restored
-  history has no rearmed timers, as with the GJS server. The user's banner timeout
-  and Do Not Disturb stay shell policies in `NotifConfig`.
+- Since B3.1 (#1050), all sender timeouts are presentation metadata. The daemon
+  never expires history: positive milliseconds override the user's banner timeout;
+  zero and critical never expire; negative uses the configured default. Hover/DND/
+  cap retirement belongs to the native hub and never deletes history. No daemon
+  timer or host-registration mode exists. See `toolkit/shell/B3.1.md`.
 - Invoke emits `ActionInvoked` before resolving (reason 3), unless `resident`.
   Dismiss resolves with reason 2; sender close with 3. Already-gone ids are no-ops.
+  Additive `DismissBanner(id, revision)` and `InvokeActionWithToken(id, key, token,
+  revision)` check the runtime revision in fresh Notified JSON. The latter emits
+  directed ActivationToken before directed ActionInvoked, never broadcasting the
+  token. Legacy InvokeAction and the persisted record shape remain unchanged.
 - The debounced, atomically replaced store is still
   `~/.cache/nidara/notifd/state.json`, `{version:1, notifications:[…]}`;
   `transient` is live but excluded from disk. Graceful termination flushes the

@@ -91,6 +91,25 @@ impl Frame {
 /// What a dock asks for.
 #[derive(Clone, Debug, PartialEq)]
 pub enum Request {
+    NotificationHover {
+        instance: u64,
+        on: bool,
+    },
+    NotificationPanel {
+        output: String,
+        open: bool,
+    },
+    NotificationError {
+        instance: u64,
+        content: u64,
+        message: String,
+    },
+    NotificationAction {
+        instance: u64,
+        content: u64,
+        key: Option<String>,
+        token: Option<String>,
+    },
     /// A Hyalo window command, valid only under the connection epoch it was made in.
     Window {
         verb: &'static str,
@@ -144,6 +163,13 @@ pub enum Request {
 }
 
 pub enum HubEvent {
+    Notifications(crate::notification_wire::Update),
+    NotificationPrefs(crate::notifications::Preferences),
+    NotificationDone {
+        instance: u64,
+        content: u64,
+        error: Option<String>,
+    },
     Apps(AppsUpdate),
     IconsChanged,
     /// None: the Trash's fill cannot be told.
@@ -216,6 +242,11 @@ struct PendingUnpin {
 }
 
 pub struct Hub {
+    notifications: crate::notifications::Stack,
+    notification_prefs: crate::notifications::Preferences,
+    notification_owner: Option<String>,
+    notification_panels: HashSet<String>,
+    started: std::time::Instant,
     model: Model,
     pending_unpins: Vec<PendingUnpin>,
     apps: Option<AppsState>,
@@ -292,6 +323,11 @@ impl Hub {
         shell1: Option<zbus::blocking::Connection>,
     ) -> Self {
         Hub {
+            notifications: Default::default(),
+            notification_prefs: Default::default(),
+            notification_owner: None,
+            notification_panels: Default::default(),
+            started: std::time::Instant::now(),
             model: Model::default(),
             pending_unpins: vec![],
             apps: None,
@@ -361,16 +397,204 @@ impl Hub {
     }
 
     pub fn run(mut self, rx: Receiver<HubEvent>) {
-        for event in rx {
-            let refresh = self.handle(event);
-            if refresh {
+        loop {
+            let now = self.notification_now();
+            let retired = self
+                .notifications
+                .entries
+                .iter()
+                .map(|b| b.notice.clone())
+                .collect();
+            if self.notifications.expire(now) {
+                self.retire_transients(retired);
+                self.publish();
+            }
+            let event = match self.notifications.next_deadline() {
+                Some(at) => match rx.recv_timeout(std::time::Duration::from_millis(
+                    at.saturating_sub(self.notification_now()),
+                )) {
+                    Ok(e) => e,
+                    Err(std::sync::mpsc::RecvTimeoutError::Timeout) => continue,
+                    Err(_) => break,
+                },
+                None => match rx.recv() {
+                    Ok(e) => e,
+                    Err(_) => break,
+                },
+            };
+            let mut retired: Vec<_> = self.notifications.entries.iter().filter(|b| !matches!(&event,
+                HubEvent::Notifications(crate::notification_wire::Update::Resolved(_, id)) if *id == b.notice.id)).map(|b| b.notice.clone()).collect();
+            if let HubEvent::Notifications(crate::notification_wire::Update::Notified(owner, n)) =
+                &event
+                && self.notification_owner.as_ref() == Some(owner)
+            {
+                retired.push(n.clone());
+            }
+            let owner = self.notification_owner.clone();
+            if self.handle(event) {
+                let gates = self.notification_gates();
+                self.notifications
+                    .gates(gates, &self.notification_prefs, self.notification_now());
+                if self.notification_owner == owner {
+                    self.retire_transients(retired);
+                }
                 self.publish();
             }
         }
     }
 
+    fn retire_transients(&self, candidates: Vec<crate::notifications::Notice>) {
+        let (Some(conn), Some(owner)) = (self.apps_conn.clone(), self.notification_owner.clone())
+        else {
+            return;
+        };
+        let mut seen = HashSet::new();
+        let retired: Vec<_> = candidates
+            .into_iter()
+            .filter(|n| {
+                n.transient()
+                    && !self
+                        .notifications
+                        .entries
+                        .iter()
+                        .any(|b| b.notice.id == n.id)
+                    && seen.insert((n.id, n.revision))
+            })
+            .collect();
+        if retired.is_empty() {
+            return;
+        }
+        worker(move || {
+            for n in retired {
+                if let Err(e) =
+                    crate::notification_wire::expire_transient(&conn, &owner, n.id, n.revision)
+                {
+                    eprintln!("nidara-shell: transient retirement: {e}");
+                }
+            }
+            Ok(())
+        });
+    }
+
+    fn notification_now(&self) -> u64 {
+        self.started.elapsed().as_millis().min(u64::MAX as u128) as u64
+    }
+    fn notification_gates(&self) -> crate::notifications::Gates {
+        crate::notifications::Gates {
+            locked: self.locked,
+            panel: !self.notification_panels.is_empty(),
+            game: self
+                .workspaces
+                .iter()
+                .any(|w| w.name == "gamespace" && w.windows > 0),
+        }
+    }
+    fn notification_action(
+        &self,
+        instance: u64,
+        content: u64,
+        key: Option<String>,
+        token: Option<String>,
+    ) {
+        let (Some(b), Some(owner), Some(conn), Some(inbox)) = (
+            self.notifications.current(instance, content),
+            self.notification_owner.clone(),
+            self.apps_conn.clone(),
+            self.inbox.clone(),
+        ) else {
+            return;
+        };
+        if key.as_ref().is_some_and(|k| !b.notice.has_action(k)) {
+            return;
+        }
+        let id = b.notice.id;
+        let revision = b.notice.revision;
+        worker(move || {
+            let error = crate::notification_wire::act(
+                &conn,
+                &owner,
+                id,
+                revision,
+                key.as_deref(),
+                token.as_deref(),
+            )
+            .err();
+            let _ = inbox.send(HubEvent::NotificationDone {
+                instance,
+                content,
+                error,
+            });
+            Ok(())
+        });
+    }
     fn handle(&mut self, event: HubEvent) -> bool {
         match event {
+            HubEvent::Notifications(crate::notification_wire::Update::Reset(owner)) => {
+                self.notification_owner = owner;
+                self.notifications.clear();
+            }
+            HubEvent::Notifications(crate::notification_wire::Update::Notified(owner, n)) => {
+                if self.notification_owner.as_ref() != Some(&owner) {
+                    return false;
+                }
+                let outputs: Vec<_> = self.bars.values().map(|b| b.name.clone()).collect();
+                let Some(output) = focus_output(&self.windows, &outputs) else {
+                    return true;
+                };
+                self.notifications.push(
+                    n,
+                    output.to_string(),
+                    self.notification_gates(),
+                    &self.notification_prefs,
+                    self.notification_now(),
+                );
+            }
+            HubEvent::Notifications(crate::notification_wire::Update::Resolved(owner, id)) => {
+                if self.notification_owner.as_ref() != Some(&owner) {
+                    return false;
+                }
+                self.notifications.resolve(id);
+            }
+            HubEvent::NotificationPrefs(p) => {
+                self.widgets.dnd = p.dnd;
+                self.notification_prefs = p;
+            }
+            HubEvent::NotificationDone {
+                instance,
+                content,
+                error,
+            } => {
+                self.notifications
+                    .set_error(instance, content, error.unwrap_or_default());
+            }
+            HubEvent::Request(Request::NotificationError {
+                instance,
+                content,
+                message,
+            }) => {
+                self.notifications.set_error(instance, content, message);
+            }
+            HubEvent::Request(Request::NotificationHover { instance, on }) => {
+                self.notifications.hover(
+                    instance,
+                    on,
+                    &self.notification_prefs,
+                    self.notification_now(),
+                );
+            }
+            HubEvent::Request(Request::NotificationPanel { output, open }) => {
+                if open {
+                    self.notification_panels.insert(output);
+                } else {
+                    self.notification_panels.remove(&output);
+                }
+            }
+            HubEvent::Request(Request::NotificationAction {
+                instance,
+                content,
+                key,
+                token,
+            }) => self.notification_action(instance, content, key, token),
             HubEvent::IconsChanged => {
                 self.request_icons();
             }
@@ -491,6 +715,9 @@ impl Hub {
                 );
             }
             HubEvent::BarDown(id) => {
+                if let Some(bar) = self.bars.get(&id) {
+                    self.notification_panels.remove(&bar.name);
+                }
                 self.bars.remove(&id);
             }
             HubEvent::Region(r) => self.region = r,
@@ -860,6 +1087,25 @@ impl Hub {
                 let _ = dock.waker.wake();
             }
         }
+        let outputs: Vec<_> = self.bars.values().map(|b| b.name.clone()).collect();
+        if let Some(fallback) = focus_output(&self.windows, &outputs) {
+            for banner in &mut self.notifications.entries {
+                if !outputs.contains(&banner.output) {
+                    banner.output = fallback.to_string();
+                    banner.hovered = false;
+                    banner.deadline = banner
+                        .notice
+                        .duration(self.notification_prefs.popup_seconds)
+                        .map(|d| self.started.elapsed().as_millis() as u64 + d);
+                }
+            }
+        } else {
+            self.notifications.clear();
+        }
+        *self.status.notifications.lock().unwrap() = serde_json::json!({
+            "available":self.notification_owner.is_some(),
+            "banners":self.notifications.entries.iter().map(|b| serde_json::json!({"id":b.notice.id,"instance":b.instance,"content":b.content,"output":b.output,"summary":b.notice.summary,"critical":b.notice.critical(),"hovered":b.hovered,"deadline":b.deadline,"error":b.error})).collect::<Vec<_>>()
+        }).to_string();
         for bar in self.bars.values() {
             let mine = |w: &&HyaloWindow| w.output == bar.name;
             // The app of the window that holds the focus, when it is on this output.
@@ -879,6 +1125,20 @@ impl Hub {
                 .any(|w| w.fullscreen && !w.window.minimized);
             let frame = Arc::new(crate::bar::BarFrame {
                 app,
+                banners: Arc::new(
+                    self.notifications
+                        .entries
+                        .iter()
+                        .filter(|b| b.output == bar.name)
+                        .cloned()
+                        .collect(),
+                ),
+                notification_theme: self.notification_prefs.icon_theme.clone(),
+                catalogue: catalogue.clone(),
+                dock_prefs: self.prefs,
+                dock_slots: crate::dock::slots(&view),
+                locked: self.locked,
+                output_size: sizes.get(&bar.name).copied().unwrap_or_default(),
                 workspaces: self.workspaces.clone(),
                 tokens: self.tokens.clone(),
                 reduce_transparency: self.prefs.reduce_transparency,
@@ -921,6 +1181,10 @@ impl Hub {
 
     fn act(&self, request: Request) {
         match request {
+            Request::NotificationHover { .. }
+            | Request::NotificationPanel { .. }
+            | Request::NotificationAction { .. }
+            | Request::NotificationError { .. } => {}
             Request::Window { verb, id, epoch } => {
                 // A window from an older connection, or gone since: never act on its number.
                 if epoch != self.hyalo_epoch || !self.windows.iter().any(|w| w.window.id == id) {

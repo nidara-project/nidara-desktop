@@ -47,6 +47,13 @@ const DOT_EMPTY: f32 = 0.18;
 /// What the hub tells one bar.
 #[derive(Clone, Debug, Default)]
 pub struct BarFrame {
+    pub banners: Arc<Vec<crate::notifications::Banner>>,
+    pub notification_theme: String,
+    pub catalogue: Arc<std::collections::HashMap<String, crate::model::App>>,
+    pub dock_prefs: crate::prefs::Prefs,
+    pub dock_slots: Vec<crate::geometry::Slot>,
+    pub locked: bool,
+    pub output_size: (u32, u32),
     /// The focused window's app, when that window is on this output.
     pub app: Option<String>,
     pub workspaces: Arc<Vec<crate::hyalo::Workspace>>,
@@ -127,7 +134,25 @@ struct Layout {
     dots: Vec<Dot>,
 }
 
+struct CardPress {
+    instance: u64,
+    content: u64,
+    target: crate::notification_card::Target,
+    start: (f64, f64),
+    serial: u32,
+}
 pub struct Bar {
+    cards: Vec<crate::notification_card::Card>,
+    card_pages: std::collections::HashMap<u64, usize>,
+    card_shape: Vec<(u64, u64, usize)>,
+    card_hover: Option<u64>,
+    pointer_inside: bool,
+    card_keyboard: Option<u64>,
+    card_keyboard_active: bool,
+    card_press: Option<CardPress>,
+    card_pending: Option<(nk_wayland::TokenRequest, u64, u64, String)>,
+    card_focus: Option<(u64, u64, String, Instant)>,
+    surface_mode: Option<(u32, bool, bool, bool)>,
     name: String,
     frames: Receiver<Arc<BarFrame>>,
     frame: Arc<BarFrame>,
@@ -208,6 +233,17 @@ impl Bar {
             .and_then(|d| d.format("%x").ok())
             .map_or(m::Order::DayFirst, |s| m::order_of(&s));
         Self {
+            cards: vec![],
+            card_pages: Default::default(),
+            card_shape: vec![],
+            card_hover: None,
+            pointer_inside: false,
+            card_keyboard: None,
+            card_keyboard_active: false,
+            card_press: None,
+            card_pending: None,
+            card_focus: None,
+            surface_mode: None,
             name,
             frames,
             frame: Arc::new(BarFrame::default()),
@@ -359,14 +395,177 @@ impl Bar {
         if self.cc_open {
             self.cc.detail_height = self.output_height as f64;
             self.cc.place(
-                right[0] + right[2],
+                self.panel_right(),
                 m::TOP + m::CAPSULE_H,
                 &self.frame.status,
                 &self.frame.cc_layout,
             );
         }
+        if self
+            .card_keyboard
+            .is_some_and(|id| !self.cards.iter().any(|c| c.target_for(id).is_some()))
+        {
+            self.card_keyboard = None;
+        }
+        self.card_pages
+            .retain(|id, _| self.frame.banners.iter().any(|b| b.instance == *id));
+        self.cards = crate::notification_card::layout(
+            &self.frame.banners,
+            self.panel_right(),
+            self.output_height,
+            &self.card_pages,
+        );
+        if self
+            .card_keyboard
+            .is_some_and(|id| !self.cards.iter().any(|c| c.target_for(id).is_some()))
+        {
+            self.card_keyboard = None;
+        }
     }
 
+    fn panel_right(&self) -> f64 {
+        crate::notification_card::right_edge(
+            self.width,
+            self.output_height,
+            &self.frame.dock_prefs,
+            if self.frame.hidden {
+                &[]
+            } else {
+                &self.frame.dock_slots
+            },
+        )
+    }
+    fn card_at(&self, p: (f64, f64)) -> Option<(u64, u64, crate::notification_card::Target)> {
+        self.cards
+            .iter()
+            .rev()
+            .find_map(|c| c.hit(p).map(|t| (c.banner.instance, c.banner.content, t)))
+    }
+    fn card_current(&self, instance: u64, content: u64) -> bool {
+        !self.frame.locked
+            && self
+                .frame
+                .banners
+                .iter()
+                .any(|b| b.instance == instance && b.content == content)
+    }
+    fn card_hover(&mut self, on: Option<u64>) {
+        if self.card_hover == on {
+            return;
+        }
+        if let Some(instance) = self.card_hover.take() {
+            let _ = self.requests.send(crate::hub::Request::NotificationHover {
+                instance,
+                on: false,
+            });
+        }
+        self.card_hover = on;
+        if let Some(instance) = on {
+            let _ = self
+                .requests
+                .send(crate::hub::Request::NotificationHover { instance, on: true });
+        }
+    }
+    fn card_send(&self, instance: u64, content: u64, key: Option<String>, token: Option<String>) {
+        if self.card_current(instance, content) {
+            let _ = self.requests.send(crate::hub::Request::NotificationAction {
+                instance,
+                content,
+                key,
+                token,
+            });
+        }
+    }
+    fn card_error(&self, instance: u64, content: u64, message: &str) {
+        if self.card_current(instance, content) {
+            let _ = self.requests.send(crate::hub::Request::NotificationError {
+                instance,
+                content,
+                message: message.into(),
+            });
+        }
+    }
+    fn card_activate(
+        &mut self,
+        instance: u64,
+        content: u64,
+        target: crate::notification_card::Target,
+        serial: Option<u32>,
+        w: &mut Window,
+    ) {
+        use crate::notification_card::Target;
+        let Some(b) = self
+            .frame
+            .banners
+            .iter()
+            .find(|b| b.instance == instance && b.content == content)
+        else {
+            return;
+        };
+        let key = match target {
+            Target::More => {
+                *self.card_pages.entry(instance).or_default() += 1;
+                self.refresh(w);
+                return;
+            }
+            Target::Close => None,
+            Target::Body => b
+                .notice
+                .has_action("default")
+                .then(|| "default".to_string()),
+            Target::Action(k) => Some(k),
+        };
+        let Some(key) = key else {
+            self.card_send(instance, content, None, None);
+            return;
+        };
+        if self.card_pending.is_some() || self.card_focus.is_some() {
+            return;
+        }
+        self.card_error(instance, content, "");
+        let result = match serial {
+            Some(s) => w.request_activation_token(s, None),
+            None => w.request_focused_activation_token(None),
+        };
+        match result {
+            Ok(r) => self.card_pending = Some((r, instance, content, key)),
+            Err(nk_wayland::TokenFailure::UndeliveredSerial) if serial.is_none() => {
+                self.card_focus = Some((instance, content, key, Instant::now()));
+                self.refresh(w);
+            }
+            Err(e) => {
+                eprintln!("nidara-shell: notification activation unavailable: {e:?}");
+                self.card_error(instance, content, "Could not activate. Try again.");
+            }
+        }
+    }
+    fn sync_surface(&mut self, w: &mut Window) {
+        let banners = !self.cards.is_empty() && !self.frame.locked;
+        let focus = self.card_focus.is_some() || self.card_keyboard.is_some();
+        let height = if self.cc_open || banners || focus {
+            self.output_height
+        } else {
+            HEIGHT
+        };
+        let mode = (height, self.cc_open, banners, focus);
+        if self.surface_mode != Some(mode) {
+            let mut p = placement(height, self.cc_open);
+            if focus {
+                p.keyboard = KeyboardMode::Exclusive;
+            }
+            if let Err(e) = w.set_layer_placement(p) {
+                eprintln!("nidara-shell: banner surface: {e}");
+            }
+            if let Err(e) = w.set_layer_level(if banners {
+                LayerLevel::Overlay
+            } else {
+                LayerLevel::Top
+            }) {
+                eprintln!("nidara-shell: banner stacking: {e}");
+            }
+            self.surface_mode = Some(mode);
+        }
+    }
     fn item_at(&self, (x, y): (f64, f64)) -> Option<Item> {
         self.layout
             .items
@@ -379,7 +578,7 @@ impl Bar {
     fn sync_input(&mut self, w: &mut Window) {
         // While the Control Center is open the whole surface takes input (None below).
         const WHOLE: [i32; 4] = [-1; 4];
-        let input: Vec<[i32; 4]> = if self.frame.hidden {
+        let input: Vec<[i32; 4]> = if self.frame.locked {
             vec![]
         } else if self.cc_open {
             vec![WHOLE]
@@ -387,6 +586,8 @@ impl Bar {
             self.layout
                 .glass
                 .iter()
+                .filter(|_| !self.frame.hidden)
+                .chain(self.cards.iter().map(|c| &c.rect))
                 .map(|g| {
                     [
                         g[0] as i32,
@@ -713,11 +914,10 @@ impl Bar {
         if !open {
             self.cc.back();
         }
-        let placement = placement(if open { self.output_height } else { HEIGHT }, open);
-        if let Err(e) = w.set_layer_placement(placement) {
-            eprintln!("nidara-shell: the Control Center cannot open: {e}");
-            self.cc_open = false;
-        }
+        let _ = self.requests.send(crate::hub::Request::NotificationPanel {
+            output: self.name.clone(),
+            open,
+        });
         self.refresh(w);
     }
 
@@ -856,6 +1056,12 @@ impl Bar {
         }
 
         self.relayout();
+        self.sync_surface(w);
+        self.card_hover(if self.pointer_inside {
+            self.card_at(self.pointer).map(|(id, _, _)| id)
+        } else {
+            None
+        });
         self.sync_input(w);
         w.redraw();
         self.publish_semantics(w);
@@ -900,6 +1106,23 @@ impl Bar {
             }
             tree.nodes.insert(CC_PANEL, group);
         }
+        if !self.frame.locked {
+            if let Some(root) = tree.nodes.get_mut(&tree.root) {
+                root.bounds.height = self.output_height as f64;
+                root.states.hidden = false;
+            }
+            for c in &self.cards {
+                c.semantics(&mut tree);
+            }
+            if let Some(id) = self.card_keyboard.filter(|_| self.card_keyboard_active) {
+                if let Some(n) = tree.nodes.get_mut(&id) {
+                    n.states.focused = true;
+                }
+                if let Some(n) = tree.nodes.get_mut(&tree.root) {
+                    n.states.active = true;
+                }
+            }
+        }
         if let Some(menu) = self.popup.as_mut().and_then(|p| p.semantics(w)) {
             for node in tree.nodes.values_mut() {
                 node.actions.clear();
@@ -919,7 +1142,22 @@ impl Bar {
             .values()
             .map(|n| (n.id, n.role, n.actions.clone(), n.name.clone()))
             .collect();
-        if shape != self.shape || self.revision == 0 {
+        let cards: Vec<_> = self
+            .cards
+            .iter()
+            .map(|c| {
+                (
+                    c.banner.instance,
+                    c.banner.content,
+                    self.card_pages
+                        .get(&c.banner.instance)
+                        .copied()
+                        .unwrap_or(0),
+                )
+            })
+            .collect();
+        if shape != self.shape || cards != self.card_shape || self.revision == 0 {
+            self.card_shape = cards;
             self.shape = shape;
             self.revision += 1;
         }
@@ -1044,6 +1282,19 @@ impl Bar {
                 continue;
             };
             let activate = matches!(request, nk_a11y::Request::Activate(_));
+            if let Some((instance, content, target)) = self.cards.iter().find_map(|c| {
+                c.target_for(id)
+                    .map(|t| (c.banner.instance, c.banner.content, t))
+            }) {
+                if activate {
+                    self.card_activate(instance, content, target, None, w);
+                } else {
+                    self.card_keyboard = Some(id);
+                    self.card_hover(Some(instance));
+                    self.refresh(w);
+                }
+                continue;
+            }
             if let Some(target) = self.cc_target(id) {
                 if !activate {
                     self.cc.focus(target);
@@ -1308,6 +1559,28 @@ impl Application for Bar {
                 }
                 if let Some(f) = latest {
                     self.frame = f;
+                    if self.frame.output_size.1 > 0 {
+                        self.output_height = self.frame.output_size.1;
+                    }
+                    if self
+                        .card_focus
+                        .as_ref()
+                        .is_some_and(|p| !self.card_current(p.0, p.1))
+                    {
+                        self.card_focus = None;
+                    }
+                    if self
+                        .card_pending
+                        .as_ref()
+                        .is_some_and(|p| !self.card_current(p.1, p.2))
+                        && let Some((request, _, _, _)) = self.card_pending.take()
+                    {
+                        w.cancel_activation_token(request);
+                    }
+                    if self.frame.locked {
+                        self.card_keyboard = None;
+                        self.card_press = None;
+                    }
                     Arc::make_mut(&mut self.frame).status.capture = crate::capture::state();
                     // Locked, or a fullscreen window: the Control Center goes with the bar.
                     if self.frame.hidden && self.cc_open {
@@ -1321,6 +1594,8 @@ impl Application for Bar {
             Event::Closed => w.close(),
             Event::Motion(x, y) => {
                 self.pointer = (x, y);
+                self.pointer_inside = true;
+                self.card_hover(self.card_at((x, y)).map(|(id, _, _)| id));
                 if self.cc_open {
                     let (changed, act) = self.cc.motion((x, y), &self.frame.status);
                     if let Some(act) = act {
@@ -1338,6 +1613,9 @@ impl Application for Bar {
                 }
             }
             Event::PointerLeave => {
+                self.pointer_inside = false;
+                self.card_hover(None);
+                self.card_press = None;
                 let cc = self.cc.leave();
                 if self.hover.take().is_some() || cc {
                     w.redraw();
@@ -1350,7 +1628,15 @@ impl Application for Bar {
                 ..
             } => {
                 let p = self.pointer;
-                if self.cc_open && self.cc.contains(p) {
+                if let Some((id, content, target)) = self.card_at(p) {
+                    self.card_press = Some(CardPress {
+                        instance: id,
+                        content,
+                        target,
+                        start: p,
+                        serial,
+                    });
+                } else if self.cc_open && self.cc.contains(p) {
                     if let Some(act) = self.cc.press(p, &self.frame.status) {
                         self.act(act, w);
                     }
@@ -1370,8 +1656,59 @@ impl Application for Bar {
                 pressed: false,
                 ..
             } => {
+                if let Some(CardPress {
+                    instance,
+                    content,
+                    target,
+                    start,
+                    serial,
+                }) = self.card_press.take()
+                {
+                    if (self.pointer.0 - start.0).abs() > 80.
+                        && (self.pointer.1 - start.1).abs() < 60.
+                    {
+                        self.card_send(instance, content, None, None);
+                    } else if self.card_at(self.pointer)
+                        == Some((instance, content, target.clone()))
+                    {
+                        self.card_activate(instance, content, target, Some(serial), w);
+                    }
+                }
                 if self.cc.release() {
                     self.refresh(w);
+                }
+            }
+            Event::Key(key) if self.card_keyboard.is_some() => {
+                if key.sym == ESCAPE {
+                    self.card_keyboard = None;
+                    self.card_hover(None);
+                    self.refresh(w);
+                } else if key.sym == 0xff09 {
+                    let ids: Vec<_> = self
+                        .cards
+                        .iter()
+                        .flat_map(|c| {
+                            std::iter::once(c.node_id())
+                                .chain((0..c.buttons.len()).map(|i| c.node_id() + 1 + i as u64))
+                        })
+                        .collect();
+                    if let Some(at) = ids.iter().position(|id| Some(*id) == self.card_keyboard) {
+                        let next = if key.shift {
+                            (at + ids.len() - 1) % ids.len()
+                        } else {
+                            (at + 1) % ids.len()
+                        };
+                        self.card_keyboard = Some(ids[next]);
+                        self.refresh(w);
+                    }
+                } else if matches!(key.sym, 0xff0d | 0x20)
+                    && let Some(id) = self.card_keyboard
+                    && let Some((instance, content, target)) = self.cards.iter().find_map(|c| {
+                        c.target_for(id)
+                            .map(|t| (c.banner.instance, c.banner.content, t))
+                    })
+                {
+                    self.card_activate(instance, content, target, key.serial, w);
                 }
             }
             Event::Key(key)
@@ -1490,7 +1827,41 @@ impl Application for Bar {
                     self.popup_outcome(w, outcome);
                 }
             }
+            Event::Focus(focused) if self.card_focus.is_none() => {
+                self.card_keyboard_active = focused;
+                if !focused && self.card_keyboard.take().is_some() {
+                    self.card_hover(None);
+                    self.refresh(w);
+                } else {
+                    self.publish_semantics(w);
+                }
+            }
+            Event::Focus(true) if self.card_focus.is_some() => {
+                if let Some((instance, content, key, _)) = self.card_focus.take() {
+                    if self.card_current(instance, content) {
+                        match w.request_focused_activation_token(None) {
+                            Ok(r) => self.card_pending = Some((r, instance, content, key)),
+                            Err(e) => {
+                                eprintln!(
+                                    "nidara-shell: assistive notification token unavailable: {e:?}"
+                                );
+                                self.card_error(
+                                    instance,
+                                    content,
+                                    "Could not activate. Try again.",
+                                );
+                            }
+                        }
+                    }
+                    self.refresh(w);
+                }
+            }
             Event::ActivationToken { request, token } => {
+                if self.card_pending.as_ref().is_some_and(|p| p.0 == request) {
+                    let (_, instance, content, key) = self.card_pending.take().unwrap();
+                    self.card_send(instance, content, Some(key), Some(token.into_string()));
+                    return Ok(());
+                }
                 if let Some((r, command)) = self.pending.take() {
                     if r == request {
                         self.send(command, Some(token.into_string()));
@@ -1499,7 +1870,12 @@ impl Application for Bar {
                     }
                 }
             }
-            Event::ActivationTokenFailed { request, .. } => {
+            Event::ActivationTokenFailed { request, reason } => {
+                if self.card_pending.as_ref().is_some_and(|p| p.0 == request) {
+                    let (_, instance, content, _) = self.card_pending.take().unwrap();
+                    self.card_error(instance, content, "Could not activate. Try again.");
+                    eprintln!("nidara-shell: notification token failed: {reason:?}");
+                }
                 if let Some((r, command)) = self.pending.take() {
                     if r == request {
                         self.send(command, None);
@@ -1541,6 +1917,16 @@ impl Application for Bar {
 
     fn idle(&mut self, w: &mut Window) -> nk_wayland::Result<()> {
         self.auth_events(w);
+        if self
+            .card_focus
+            .as_ref()
+            .is_some_and(|p| p.3.elapsed() >= std::time::Duration::from_secs(2))
+        {
+            let (instance, content, _, _) = self.card_focus.take().unwrap();
+            self.card_error(instance, content, "Could not focus. Try again.");
+            self.refresh(w);
+            eprintln!("nidara-shell: notification keyboard focus timed out");
+        }
         if self.cc_open
             && self.cc.detail.as_ref().is_some_and(|d| d.page == "media")
             && self.frame.status.media.as_ref().is_some_and(|m| m.playing)
@@ -1563,93 +1949,95 @@ impl Application for Bar {
 
     fn paint(&mut self, f: nk_wayland::Frame) -> nk_wayland::Result<Vec<u8>> {
         let mut c = Canvas::new(f.pixel_width, f.pixel_height, f.scale);
-        if self.frame.hidden || self.look.is_none() {
+        if self.frame.locked || self.look.is_none() {
             return Ok(c.finish());
         }
-        if !f.material {
-            // No compositor glass: the capsules' own opaque base (D5).
-            let base = self.look.as_ref().unwrap().style.row.background;
-            for g in &self.layout.glass {
-                c.rounded_rect(rect(*g), g[3] / 2., base);
-            }
-        }
-        for (item, b) in self.layout.items.clone() {
-            if item == Item::Island {
-                continue;
-            }
-            let lit = self.hover == Some(item);
-            if lit {
-                let p = m::pill(b);
-                c.rounded_rect(rect(p), p[3] / 2., ink(HOVER));
-            }
-            let icon_box = |b: [f64; 4]| Rect {
-                x: (b[0] + m::ICON_PAD) as f32,
-                y: (b[1] + (b[3] - m::ICON) / 2.) as f32,
-                width: m::ICON as f32,
-                height: m::ICON as f32,
-            };
-            match item {
-                Item::Logo => {
-                    if let Some(logo) = &self.logo {
-                        c.icon(logo, icon_box(b), ink(1.));
-                    }
+        if !self.frame.hidden {
+            if !f.material {
+                // No compositor glass: the capsules' own opaque base (D5).
+                let base = self.look.as_ref().unwrap().style.row.background;
+                for g in &self.layout.glass {
+                    c.rounded_rect(rect(*g), g[3] / 2., base);
                 }
-                Item::ControlCenter => {
-                    if let Some(cc) = &self.cc_icon {
-                        c.icon(cc, icon_box(b), ink(1.));
-                    }
+            }
+            for (item, b) in self.layout.items.clone() {
+                if item == Item::Island {
+                    continue;
                 }
-                Item::Widget(Widget::Battery) => {
-                    if let Some(battery) = self.frame.status.battery {
-                        paint_battery(&mut c, icon_box(b), battery);
-                    }
+                let lit = self.hover == Some(item);
+                if lit {
+                    let p = m::pill(b);
+                    c.rounded_rect(rect(p), p[3] / 2., ink(HOVER));
                 }
-                Item::Widget(w) => {
-                    if let Some(name) = widget_icon(w, &self.frame.status) {
-                        let icons = &mut self.icons;
-                        let icon = self
-                            .glyphs
-                            .entry(name)
-                            .or_insert_with(|| {
-                                icons.as_mut().and_then(|i| {
-                                    i.get(name, 18)
-                                        .map_err(|e| eprintln!("nidara-shell: no {name}: {e}"))
-                                        .ok()
-                                })
-                            })
-                            .clone();
-                        if let Some(icon) = icon {
-                            c.icon(&icon, icon_box(b), ink(1.));
+                let icon_box = |b: [f64; 4]| Rect {
+                    x: (b[0] + m::ICON_PAD) as f32,
+                    y: (b[1] + (b[3] - m::ICON) / 2.) as f32,
+                    width: m::ICON as f32,
+                    height: m::ICON as f32,
+                };
+                match item {
+                    Item::Logo => {
+                        if let Some(logo) = &self.logo {
+                            c.icon(logo, icon_box(b), ink(1.));
                         }
                     }
-                }
-                Item::Title | Item::Clock => {
-                    let text = if item == Item::Title {
-                        self.layout.title.clone()
-                    } else {
-                        self.layout.clock.clone()
-                    };
-                    let style = self.style().unwrap();
-                    let look = self.look.as_mut().unwrap();
-                    if let Ok(layout) = look.text.layout(&text, &style, f32::MAX) {
-                        let h = f64::from(layout.measured_size().height);
-                        let at = (
-                            (b[0] + m::TEXT_PAD) as f32,
-                            (b[1] + (b[3] - h) / 2.).round() as f32,
-                        );
-                        c.layout(&layout, at, ink(1.))?;
+                    Item::ControlCenter => {
+                        if let Some(cc) = &self.cc_icon {
+                            c.icon(cc, icon_box(b), ink(1.));
+                        }
                     }
-                }
-                Item::Island => {}
-                Item::Tray(i) => {
-                    if let Some(p) = self
-                        .frame
-                        .tray
-                        .get(i)
-                        .and_then(|t| t.icon.as_ref())
-                        .and_then(|p| p.asset())
-                    {
-                        c.image(&p.raster, icon_box(b), ImageFit::Contain);
+                    Item::Widget(Widget::Battery) => {
+                        if let Some(battery) = self.frame.status.battery {
+                            paint_battery(&mut c, icon_box(b), battery);
+                        }
+                    }
+                    Item::Widget(w) => {
+                        if let Some(name) = widget_icon(w, &self.frame.status) {
+                            let icons = &mut self.icons;
+                            let icon = self
+                                .glyphs
+                                .entry(name)
+                                .or_insert_with(|| {
+                                    icons.as_mut().and_then(|i| {
+                                        i.get(name, 18)
+                                            .map_err(|e| eprintln!("nidara-shell: no {name}: {e}"))
+                                            .ok()
+                                    })
+                                })
+                                .clone();
+                            if let Some(icon) = icon {
+                                c.icon(&icon, icon_box(b), ink(1.));
+                            }
+                        }
+                    }
+                    Item::Title | Item::Clock => {
+                        let text = if item == Item::Title {
+                            self.layout.title.clone()
+                        } else {
+                            self.layout.clock.clone()
+                        };
+                        let style = self.style().unwrap();
+                        let look = self.look.as_mut().unwrap();
+                        if let Ok(layout) = look.text.layout(&text, &style, f32::MAX) {
+                            let h = f64::from(layout.measured_size().height);
+                            let at = (
+                                (b[0] + m::TEXT_PAD) as f32,
+                                (b[1] + (b[3] - h) / 2.).round() as f32,
+                            );
+                            c.layout(&layout, at, ink(1.))?;
+                        }
+                    }
+                    Item::Island => {}
+                    Item::Tray(i) => {
+                        if let Some(p) = self
+                            .frame
+                            .tray
+                            .get(i)
+                            .and_then(|t| t.icon.as_ref())
+                            .and_then(|p| p.asset())
+                        {
+                            c.image(&p.raster, icon_box(b), ImageFit::Contain);
+                        }
                     }
                 }
             }
@@ -1660,29 +2048,49 @@ impl Application for Bar {
             self.cc.paint(&mut c, look, &self.frame.status, fallback)?;
         }
         // The dots, centred in the island's capsule.
-        let island = self.layout.glass[1];
-        let mut x = island[0] + m::PILL_PAD;
-        let y = island[1] + (island[3] - m::DOT) / 2.;
-        for d in &self.layout.dots {
-            let (wd, alpha) = match d {
-                Dot::Active => (m::DOT_ACTIVE, 1.),
-                Dot::Occupied => (m::DOT, DOT_OCCUPIED),
-                Dot::Empty => (m::DOT, DOT_EMPTY),
-            };
-            c.rounded_rect(rect([x, y, wd, m::DOT]), m::DOT / 2., ink(alpha));
-            x += wd + m::DOT_GAP;
+        if !self.frame.hidden {
+            let island = self.layout.glass[1];
+            let mut x = island[0] + m::PILL_PAD;
+            let y = island[1] + (island[3] - m::DOT) / 2.;
+            for d in &self.layout.dots {
+                let (wd, alpha) = match d {
+                    Dot::Active => (m::DOT_ACTIVE, 1.),
+                    Dot::Occupied => (m::DOT, DOT_OCCUPIED),
+                    Dot::Empty => (m::DOT, DOT_EMPTY),
+                };
+                c.rounded_rect(rect([x, y, wd, m::DOT]), m::DOT / 2., ink(alpha));
+                x += wd + m::DOT_GAP;
+            }
+        }
+        let look = self.look.as_mut().unwrap();
+        for card in &self.cards {
+            card.paint(
+                &mut c,
+                look,
+                f.material,
+                &crate::notification_card::Artwork {
+                    theme: &self.frame.notification_theme,
+                    catalogue: &self.frame.catalogue,
+                    namespace: &self.name,
+                    scale: f.scale,
+                },
+            )?;
         }
         Ok(c.finish())
     }
 
     fn material(&self) -> Option<Material> {
-        if self.frame.hidden || self.layout.glass.is_empty() {
+        if self.frame.locked
+            || self.layout.glass.is_empty()
+            || self.frame.hidden && self.cards.is_empty()
+        {
             return None;
         }
-        let panes: Vec<Pane> = self
+        let mut panes: Vec<Pane> = self
             .layout
             .glass
             .iter()
+            .filter(|_| !self.frame.hidden)
             .map(|g| Pane {
                 x: g[0],
                 y: g[1],
@@ -1693,10 +2101,18 @@ impl Application for Bar {
                 pointer: None,
             })
             .collect();
+        let cards: Vec<_> = self.cards.iter().map(|c| c.pane()).collect();
+        if self.frame.hidden {
+            panes = cards.clone();
+        }
         let tokens = self.frame.tokens.as_ref()?;
         let mut material = crate::material::piece(
             tokens,
-            "control",
+            if self.frame.hidden {
+                "controlCenter"
+            } else {
+                "control"
+            },
             true,
             self.frame.reduce_transparency,
             panes[0],
@@ -1707,6 +2123,22 @@ impl Application for Bar {
             material.groups = groups;
             material.veils = veils;
             material.states = self.cc.states(&self.frame.status);
+        }
+        if !self.frame.hidden
+            && let Some(pane) = cards.first()
+            && let Some(card) = crate::material::piece(
+                tokens,
+                "controlCenter",
+                true,
+                self.frame.reduce_transparency,
+                *pane,
+            )
+        {
+            material.groups.push(nk_wayland::Group {
+                tone: card.tone,
+                shadow: card.shadow,
+                shapes: cards,
+            });
         }
         Some(material)
     }

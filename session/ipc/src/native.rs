@@ -521,7 +521,17 @@ pub fn run(client: &Client, argv: &[String]) -> Result<String, Fault> {
             // A missing renderer is explicit, not a fabricated all-closed shell.
             let shell = match client.shell() {
                 Ok(s) => {
-                    json!({"available":s.available()?,"capabilities":s.capabilities()?,"state":s.get_state().map_err(shell_error)?})
+                    let capabilities = s.capabilities()?;
+                    let notifications = if capabilities.iter().any(|c| c == "notifications:banners")
+                    {
+                        serde_json::from_str::<Value>(
+                            &s.get_notification_state().map_err(shell_error)?,
+                        )
+                        .map_err(|e| Fault::new("Failed", e.to_string()))?
+                    } else {
+                        Value::Null
+                    };
+                    json!({"available":s.available()?,"capabilities":capabilities,"state":s.get_state().map_err(shell_error)?,"notifications":notifications})
                 }
                 Err(e) if e.code == "Unavailable" => {
                     json!({"available":false,"capabilities":[],"state":null})

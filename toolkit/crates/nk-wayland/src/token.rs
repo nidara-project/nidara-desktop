@@ -175,6 +175,20 @@ impl<P: Handle> Tokens<P> {
 }
 
 impl Window {
+    /// For an explicit assistive action after the compositor granted keyboard focus
+    /// to this root. No synthetic input serial is accepted; leaving focus revokes it.
+    pub fn request_focused_activation_token(
+        &mut self,
+        app_id: Option<&str>,
+    ) -> Result<TokenRequest, TokenFailure> {
+        let serial = self
+            .keyboard
+            .root_enter
+            .ok_or(TokenFailure::UndeliveredSerial)?;
+        self.tokens.delivered(serial);
+        self.request_activation_token(serial, app_id)
+    }
+
     /// Ask for a token tied to `serial`, which must be from a `Button` or `Key` event
     /// this window delivered. `app_id` is the launched app's id (DesktopId without
     /// `.desktop`). The answer is exactly one `ActivationToken` or

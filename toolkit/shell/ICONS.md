@@ -214,3 +214,17 @@ In the debug warm sample, about 128 ms loads appearance, 126 ms builds content
 and 123 ms finishes the CPU canvas; catalogue sorting is below 0.1 ms and there
 is no GetApps RPC on reopen. Release results, rather than those unoptimized
 costs, determine the remaining user-visible limitation.
+
+## Notification artwork (B3.1)
+
+The banner card is another consumer of this same memory. App art first uses
+`current_app` for desktop-entry or one unambiguous registry match, then the
+non-generic declared name, then a neutral glyph. Generic placeholders never
+replace a registry icon. Thumbnail and absolute-path app art use `Key::Image`
+(namespace, content generation, path, side): replacing a file in place must not
+reuse its old pixels. These keys use the existing eight workers, size checks,
+64 MiB budget and interest/LRU eviction; cards own only shared Asset references.
+App icon requests include the output scale; file/named raster sides use the
+corresponding physical pixel size. The neutral glyph explicitly resolves in the reference theme, including checkout
+runs where that theme is not installed system-wide. No disk cache, independent image loader or
+per-notification worker pool is added.

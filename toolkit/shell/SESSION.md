@@ -40,7 +40,9 @@ This is only the frozen boot floor, not new TS/Rust parity work.
 - B2.2 details and capture controls are implemented by #1015; installed physical-session
   acceptance and hardware validation remain pending.
 - B2.3: CC edit mode, remaining widgets (battery, clipboard, CPU/memory, Ethernet, VPN).
-- B3 and later: Notification Center and the other unported shell panels. In particular
+- B3.1 notification banners are implemented in `B3.1.md`; installed physical-session
+  acceptance is pending. Sender expiry is presentation metadata, preserving history.
+- B3.2 and later: Notification Center and the other unported shell panels. In particular
   NC, Prism, agent, overview and bar-overlay shortcuts may return Unavailable;
   the native capability list is authoritative. There is no hidden TS panel.
 - MCP transition gap: the observed installed CLI defaulted to legacy

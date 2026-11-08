@@ -16,6 +16,7 @@ pub struct Key {
     pub alt: bool,
 }
 pub struct Keyboard {
+    pub root_enter: Option<u32>,
     pub context: xkb::Context,
     pub state: Option<xkb::State>,
     pub compose: Option<compose::State>,
@@ -40,6 +41,7 @@ impl Keyboard {
         .ok()
         .map(|t| compose::State::new(&t, compose::STATE_NO_FLAGS));
         Self {
+            root_enter: None,
             context,
             state: None,
             compose,

@@ -15,7 +15,7 @@ material (the shell is always dark: white ink). Each is a true capsule, circular
 |---|---|---|
 | Left | Nidara's mark · the focused app's name, or the desktop's ("Desktop 3") | mark: the system menu |
 | Centre | the island: five workspace dots (active wide, occupied dim, empty faint) | the desktops' overview, once the Rust shell has one; nothing until then |
-| Right | tray icons · focus · battery · Wi-Fi · volume · Control Center · clock | tray: below; focus: Do Not Disturb off; Control Center: its panel (`CC.md`); the rest open nothing until B3 |
+| Right | tray icons · focus · battery · Wi-Fi · volume · Control Center · clock | tray: below; focus: Do Not Disturb off; Control Center: its panel (`CC.md`); the clock/other pending routes remain unavailable (B3.2) |
 
 Left out of B1 (the owner's list): the overflow `»`, editing and reordering, the island's
 other modes, the search icon (Prism is not in the Rust shell). The person's `bar-order`,
@@ -51,6 +51,17 @@ nothing and retries, backing off; a failed read is logged once ("the bar shows n
 
 Focus's click writes the key directly: it is the flag's only home (the TS NotifService's
 rule), and the Rust Config1 has no `notifications.*` key.
+
+## Notification banners (B3.1, #1050)
+
+`notifications.rs` owns the bounded stack in the hub; `notification_wire.rs` subscribes
+only to fresh events. `notification_card.rs` is the reusable card component, painted
+on this bar's surface, with declared controlCenter glass. The surface grows while
+banners are present; only card/bar glass takes input, never the gaps. Its Overlay
+level permits banners above fullscreen while the bar row stays hidden. Lock removes
+all cards and pending activations. The CC and banners share right-dock avoidance.
+See `B3.1.md` for timer/history/action semantics, accessibility and local validation.
+No Notification Center, calendar or clock route is added in B3.1.
 
 ## The tray
 

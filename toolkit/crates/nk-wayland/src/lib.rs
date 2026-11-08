@@ -1830,6 +1830,7 @@ impl Dispatch<wl_seat::WlSeat, ()> for Window {
                 }
             } else if let Some(k) = w.keyboard_proxy.take() {
                 k.release();
+                w.keyboard.root_enter = None;
                 w.keyboard.reset();
                 w.events.push(Event::Focus(false));
             }
@@ -1884,11 +1885,19 @@ impl Dispatch<wl_keyboard::WlKeyboard, ()> for Window {
                     w.events.push(Event::Error("invalid XKB keymap".into()));
                 }
             }
-            wl_keyboard::Event::Enter { serial, .. } => {
+            wl_keyboard::Event::Enter {
+                serial, surface, ..
+            } => {
+                w.keyboard.root_enter = w
+                    .surface
+                    .as_ref()
+                    .filter(|s| **s == surface)
+                    .map(|_| serial);
                 w.serial = serial;
                 w.events.push(Event::Focus(true));
             }
             wl_keyboard::Event::Leave { .. } => {
+                w.keyboard.root_enter = None;
                 w.keyboard.reset();
                 w.events.push(Event::Focus(false));
             }

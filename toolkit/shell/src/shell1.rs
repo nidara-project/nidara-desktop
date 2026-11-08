@@ -14,7 +14,7 @@ use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 use std::sync::mpsc::Sender;
 use zbus::blocking::Connection;
 
-pub const CAPABILITIES: &[&str] = &["focus:dock", "surface:app-grid"];
+pub const CAPABILITIES: &[&str] = &["focus:dock", "surface:app-grid", "notifications:banners"];
 const SURFACES: &[&str] = &[
     "cc",
     "nc",
@@ -30,6 +30,7 @@ const SURFACES: &[&str] = &[
 /// What the hub knows and the service answers from.
 #[derive(Default)]
 pub struct Status {
+    pub notifications: std::sync::Mutex<String>,
     pub locked: AtomicBool,
     pub docks: AtomicUsize,
     /// Apps is open.
@@ -82,6 +83,16 @@ impl Shell1 {
     #[zbus(property)]
     fn capabilities(&self) -> Vec<&str> {
         CAPABILITIES.to_vec()
+    }
+    fn get_notification_state(&self) -> String {
+        {
+            let s = self.status.notifications.lock().unwrap();
+            if s.is_empty() {
+                "{\"available\":false,\"banners\":[]}".into()
+            } else {
+                s.clone()
+            }
+        }
     }
     fn get_state(&self) -> State {
         state(

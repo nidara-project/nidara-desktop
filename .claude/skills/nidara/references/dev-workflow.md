@@ -3110,7 +3110,7 @@ cannot count as the control catching the rule.
 
 The integration sends a real `notify-send`, checks replacement (including a
 resolved id and the uint32 ceiling), public close/private dismiss signals and
-reasons, expiry/cancelled timers, resident actions, raw-image decoding,
+reasons, presentation-only sender expiry/history retention, resident actions, raw-image decoding,
 deduplication, privacy permissions and the 150-file cap. It seeds an old GJS
 serialize-shaped store and restarts the Rust process to verify history and
 transient exclusion. The GJS probe imports the **actual shell client**: it checks

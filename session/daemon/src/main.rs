@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // The server outlives shell reloads. DnD and the user's banner timeout remain UI
-// policy; only the sender's positive expire_timeout belongs here (#819).
+// policy. Ordinary history survives presentation expiry; transient records do not.
 mod applications;
 mod audio;
 mod bluetooth;
@@ -28,16 +28,14 @@ type Shared = Arc<Mutex<State>>;
 struct State {
     notifications: Vec<Notification>,
     next: u32,
-    timers: HashMap<u32, AbortHandle>,
+    senders: HashMap<u32, String>,
+    revisions: HashMap<u32, u64>,
+    next_revision: u64,
+    gone_logged: std::collections::HashSet<u32>,
     flush: Option<AbortHandle>,
     store: store::Store,
 }
 impl State {
-    fn clear_timer(&mut self, id: u32) {
-        if let Some(handle) = self.timers.remove(&id) {
-            handle.abort();
-        }
-    }
     fn persist(&self) {
         if let Err(e) = self.store.flush(&self.notifications) {
             eprintln!("[notifd] could not write the store: {e}");
@@ -70,7 +68,10 @@ async fn resolve(
         return Ok(());
     };
     locked.notifications.remove(index);
-    locked.clear_timer(id);
+    locked.senders.remove(&id);
+    locked.revisions.remove(&id);
+    locked.gone_logged.remove(&id);
+
     queue_flush(state, locked);
     conn.emit_signal(
         None::<&str>,
@@ -112,6 +113,7 @@ impl Notifications {
         hints: HashMap<String, OwnedValue>,
         expire_timeout: i32,
         #[zbus(connection)] conn: &Connection,
+        #[zbus(header)] header: zbus::message::Header<'_>,
     ) -> zbus::fdo::Result<u32> {
         let mut state = self.0.lock().await;
         let mut unpacked = scalar_hints(&hints);
@@ -136,8 +138,19 @@ impl Notifications {
             hints: unpacked,
             actions: actions(actions_flat),
         };
-        let json = serde_json::to_string(&n).map_err(failed)?;
-        state.clear_timer(id);
+        state.next_revision = state
+            .next_revision
+            .checked_add(1)
+            .ok_or_else(|| failed("notification revision exhausted"))?;
+        let revision = state.next_revision;
+        state.revisions.insert(id, revision);
+        state.gone_logged.remove(&id);
+        let mut event = serde_json::to_value(&n).map_err(failed)?;
+        event["revision"] = revision.into();
+        let json = serde_json::to_string(&event).map_err(failed)?;
+        if let Some(sender) = header.sender() {
+            state.senders.insert(id, sender.to_string());
+        }
         // Replacements keep their position, like Map.set on an existing JS key.
         if let Some(index) = state.notifications.iter().position(|old| old.id == id) {
             state.notifications[index] = n;
@@ -154,21 +167,8 @@ impl Notifications {
         )
         .await
         .map_err(failed)?;
-        // 0 = never, negative = server decides: keep it in the NC. The user's
-        // popup timeout lives only in the shell. Replacing cancels the old timer.
-        if expire_timeout > 0 {
-            let shared = self.0.clone();
-            let connection = conn.clone();
-            let task = tokio::spawn(async move {
-                tokio::time::sleep(Duration::from_millis(expire_timeout as u64)).await;
-                let mut state = shared.lock().await;
-                state.timers.remove(&id); // Don't abort this task inside resolve.
-                if let Err(e) = resolve(&shared, &mut state, &connection, id, 1).await {
-                    eprintln!("[notifd] expire: {e}");
-                }
-            });
-            state.timers.insert(id, task.abort_handle());
-        }
+        // Positive milliseconds, zero (never), and negative (user default) are
+        // banner metadata. Expiry/hover/DND never removes notification history.
         Ok(id)
     }
     async fn close_notification(
@@ -180,6 +180,12 @@ impl Notifications {
             .await
             .map_err(failed)
     }
+    #[zbus(signal)]
+    async fn activation_token(
+        emitter: &zbus::object_server::SignalEmitter<'_>,
+        id: u32,
+        activation_token: &str,
+    ) -> zbus::Result<()>;
     #[zbus(signal)]
     async fn notification_closed(
         emitter: &zbus::object_server::SignalEmitter<'_>,
@@ -196,6 +202,100 @@ impl Notifications {
 struct ShellNotifications(Shared);
 #[zbus::interface(name = "org.nidara.Notifications1")]
 impl ShellNotifications {
+    /// Additive to InvokeAction: the token is directed only to the original sender.
+    async fn invoke_action_with_token(
+        &self,
+        id: u32,
+        action_key: String,
+        token: String,
+        revision: u64,
+        #[zbus(connection)] conn: &Connection,
+    ) -> zbus::fdo::Result<()> {
+        let mut state = self.0.lock().await;
+        if state.revisions.get(&id) != Some(&revision) {
+            return Err(failed("notification was replaced"));
+        }
+        let n = state
+            .notifications
+            .iter()
+            .find(|n| n.id == id)
+            .ok_or_else(|| failed("notification no longer exists"))?;
+        if !n.actions.iter().any(|a| a.id == action_key) || token.is_empty() || token.len() > 4096 {
+            return Err(failed("invalid action or activation token"));
+        }
+        let resident = truthy(n.hints.get("resident"));
+        let sender = state
+            .senders
+            .get(&id)
+            .ok_or_else(|| failed("notification sender is gone"))?;
+        let bus = zbus::fdo::DBusProxy::new(conn).await.map_err(failed)?;
+        let name = zbus::names::BusName::try_from(sender.as_str()).map_err(failed)?;
+        if bus.name_has_owner(name).await.map_err(failed)? {
+            conn.emit_signal(
+                Some(sender.as_str()),
+                PUBLIC_PATH,
+                PUBLIC_IFACE,
+                "ActivationToken",
+                &(id, token),
+            )
+            .await
+            .map_err(failed)?;
+            conn.emit_signal(
+                Some(sender.as_str()),
+                PUBLIC_PATH,
+                PUBLIC_IFACE,
+                "ActionInvoked",
+                &(id, action_key),
+            )
+            .await
+            .map_err(failed)?;
+        } else if state.gone_logged.insert(id) {
+            eprintln!("[notifd] action {id}: notification sender disconnected");
+        }
+        if !resident {
+            resolve(&self.0, &mut state, conn, id, 3)
+                .await
+                .map_err(failed)?;
+        }
+        Ok(())
+    }
+    /// Revision-checked equivalent of Dismiss for a freshly rendered banner.
+    async fn dismiss_banner(
+        &self,
+        id: u32,
+        revision: u64,
+        #[zbus(connection)] conn: &Connection,
+    ) -> zbus::fdo::Result<()> {
+        let mut state = self.0.lock().await;
+        if state.revisions.get(&id) != Some(&revision) {
+            return Err(failed("notification was replaced"));
+        }
+        resolve(&self.0, &mut state, conn, id, 2)
+            .await
+            .map_err(failed)
+    }
+    /// Only a current transient record can expire with its presentation.
+    async fn expire_transient(
+        &self,
+        id: u32,
+        revision: u64,
+        #[zbus(connection)] conn: &Connection,
+    ) -> zbus::fdo::Result<()> {
+        let mut state = self.0.lock().await;
+        if state.revisions.get(&id) != Some(&revision) {
+            return Err(failed("notification was replaced"));
+        }
+        if !state
+            .notifications
+            .iter()
+            .any(|n| n.id == id && truthy(n.hints.get("transient")))
+        {
+            return Err(failed("notification is not transient"));
+        }
+        resolve(&self.0, &mut state, conn, id, 1)
+            .await
+            .map_err(failed)
+    }
     async fn list(&self) -> zbus::fdo::Result<String> {
         serde_json::to_string(&self.0.lock().await.notifications).map_err(failed)
     }
@@ -267,7 +367,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let shared = Arc::new(Mutex::new(State {
         notifications,
         next,
-        timers: HashMap::new(),
+        senders: HashMap::new(),
+        revisions: HashMap::new(),
+        next_revision: 0,
+        gone_logged: Default::default(),
         flush: None,
         store,
     }));
