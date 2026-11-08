@@ -16,7 +16,7 @@ mod tray;
 
 use model::{CAPABILITIES, MAX_ID, Notification, actions, allocate, now, scalar_hints, truthy};
 use std::{collections::HashMap, sync::Arc, time::Duration};
-use tokio::{sync::Mutex, task::AbortHandle};
+use tokio::sync::Mutex;
 use zbus::{Connection, zvariant::OwnedValue};
 
 const PUBLIC_PATH: &str = "/org/freedesktop/Notifications";
@@ -32,63 +32,176 @@ struct State {
     revisions: HashMap<u32, u64>,
     next_revision: u64,
     gone_logged: std::collections::HashSet<u32>,
-    flush: Option<AbortHandle>,
+    sequence: u64,
+    image_refs: HashMap<std::path::PathBuf, usize>,
+    maintenance_wake: Arc<tokio::sync::Notify>,
     store: store::Store,
 }
 impl State {
-    fn persist(&self) {
-        if let Err(e) = self.store.flush(&self.notifications) {
-            eprintln!("[notifd] could not write the store: {e}");
+    fn list(&self) -> Result<serde_json::Value, serde_json::Error> {
+        self.notifications
+            .iter()
+            .map(|n| {
+                let mut value = serde_json::to_value(n)?;
+                value["revision"] = self
+                    .revisions
+                    .get(&n.id)
+                    .copied()
+                    .unwrap_or_default()
+                    .into();
+                Ok(value)
+            })
+            .collect::<Result<Vec<_>, _>>()
+            .map(serde_json::Value::from)
+    }
+    fn image_ref(&mut self, n: &Notification, add: bool) {
+        if let Some(path) = self.store.owned_image(n) {
+            if add {
+                *self.image_refs.entry(path).or_default() += 1;
+            } else if let Some(count) = self.image_refs.get_mut(&path) {
+                *count -= 1;
+                if *count == 0 {
+                    self.image_refs.remove(&path);
+                    if let Err(e) = std::fs::remove_file(&path) {
+                        eprintln!("[notifd] image retirement: {e}");
+                    }
+                }
+            }
         }
     }
 }
-fn queue_flush(state: &Shared, locked: &mut State) {
-    if let Some(handle) = locked.flush.take() {
-        handle.abort();
-    }
-    let shared = state.clone();
-    locked.flush = Some(
-        tokio::spawn(async move {
-            tokio::time::sleep(Duration::from_millis(100)).await;
-            let mut state = shared.lock().await;
-            state.flush = None;
-            state.persist();
-        })
-        .abort_handle(),
-    );
-}
-async fn resolve(
-    state: &Shared,
-    locked: &mut State,
+async fn changed(
+    state: &mut State,
     conn: &Connection,
-    id: u32,
-    reason: u32,
+    value: serde_json::Value,
 ) -> zbus::Result<()> {
-    let Some(index) = locked.notifications.iter().position(|n| n.id == id) else {
-        return Ok(());
-    };
-    locked.notifications.remove(index);
-    locked.senders.remove(&id);
-    locked.revisions.remove(&id);
-    locked.gone_logged.remove(&id);
-
-    queue_flush(state, locked);
-    conn.emit_signal(
-        None::<&str>,
-        PUBLIC_PATH,
-        PUBLIC_IFACE,
-        "NotificationClosed",
-        &(id, reason),
-    )
-    .await?;
+    state.sequence += 1;
     conn.emit_signal(
         None::<&str>,
         PRIVATE_PATH,
         PRIVATE_IFACE,
-        "Resolved",
-        &(id, reason),
+        "Changed",
+        &(state.sequence, value.to_string()),
     )
     .await
+}
+async fn remove_ids(
+    locked: &mut State,
+    conn: &Connection,
+    ids: Vec<u32>,
+    reason: u32,
+    batch: bool,
+) -> zbus::fdo::Result<()> {
+    let ids: std::collections::HashSet<_> = ids.into_iter().collect();
+    let removing: Vec<_> = locked
+        .notifications
+        .iter()
+        .filter(|n| ids.contains(&n.id))
+        .cloned()
+        .collect();
+    if removing.is_empty() {
+        return Ok(());
+    }
+    let persisted: Vec<_> = removing
+        .iter()
+        .filter(|n| !truthy(n.hints.get("transient")))
+        .map(|n| n.id)
+        .collect();
+    if !persisted.is_empty() {
+        locked.store.record(
+            &store::Change::Remove { ids: persisted },
+            &locked.notifications,
+        );
+    }
+    locked.notifications.retain(|n| !ids.contains(&n.id));
+    locked.maintenance_wake.notify_one();
+    let removed: Vec<_> = removing.iter().map(|n| n.id).collect();
+    // Publish one canonical UI change before per-sender delivery/GC. A large
+    // history must not delay the renderer's fixed-time clear animation.
+    let mut error = None;
+    if batch {
+        if let Err(e) = conn
+            .emit_signal(
+                None::<&str>,
+                PRIVATE_PATH,
+                PRIVATE_IFACE,
+                "ResolvedBatch",
+                &(removed.clone(), reason),
+            )
+            .await
+        {
+            error = Some(e);
+        }
+        if let Err(e) = changed(
+            locked,
+            conn,
+            serde_json::json!({"removed":removed,"reason":reason}),
+        )
+        .await
+        {
+            error.get_or_insert(e);
+        }
+    }
+    for n in &removing {
+        locked.image_ref(n, false);
+        let sender = locked.senders.remove(&n.id);
+        locked.revisions.remove(&n.id);
+        locked.gone_logged.remove(&n.id);
+        if let Err(e) = conn
+            .emit_signal(
+                sender.as_deref(),
+                PUBLIC_PATH,
+                PUBLIC_IFACE,
+                "NotificationClosed",
+                &(n.id, reason),
+            )
+            .await
+        {
+            error.get_or_insert(e);
+        }
+        if !batch
+            && let Err(e) = conn
+                .emit_signal(
+                    None::<&str>,
+                    PRIVATE_PATH,
+                    PRIVATE_IFACE,
+                    "Resolved",
+                    &(n.id, reason),
+                )
+                .await
+        {
+            error.get_or_insert(e);
+        }
+    }
+    if !batch
+        && let Err(e) = changed(
+            locked,
+            conn,
+            serde_json::json!({"removed":removed,"reason":reason}),
+        )
+        .await
+    {
+        error.get_or_insert(e);
+    }
+    match error {
+        Some(e) => Err(failed(e)),
+        None => Ok(()),
+    }
+}
+
+async fn resolve(
+    _state: &Shared,
+    locked: &mut State,
+    conn: &Connection,
+    id: u32,
+    reason: u32,
+) -> zbus::fdo::Result<()> {
+    remove_ids(locked, conn, vec![id], reason, false).await
+}
+async fn maintain(locked: &mut State, conn: &Connection) -> zbus::fdo::Result<()> {
+    let now = now();
+    let ids = model::retention(&locked.notifications, now, model::today_start(now));
+    remove_ids(locked, conn, ids, 1, true).await
 }
 
 struct Notifications(Shared);
@@ -143,21 +256,45 @@ impl Notifications {
             .checked_add(1)
             .ok_or_else(|| failed("notification revision exhausted"))?;
         let revision = state.next_revision;
-        state.revisions.insert(id, revision);
-        state.gone_logged.remove(&id);
         let mut event = serde_json::to_value(&n).map_err(failed)?;
         event["revision"] = revision.into();
         let json = serde_json::to_string(&event).map_err(failed)?;
+        // Attempt durability independently of live availability; ephemeral replacements remove any persisted predecessor.
+        if truthy(n.hints.get("transient")) {
+            if state
+                .notifications
+                .iter()
+                .any(|old| old.id == id && !truthy(old.hints.get("transient")))
+            {
+                state.store.record(
+                    &store::Change::Remove { ids: vec![id] },
+                    &state.notifications,
+                );
+            }
+        } else {
+            state.store.record(
+                &store::Change::Put {
+                    notification: n.clone(),
+                },
+                &state.notifications,
+            );
+        }
+        state.revisions.insert(id, revision);
+        state.gone_logged.remove(&id);
         if let Some(sender) = header.sender() {
             state.senders.insert(id, sender.to_string());
         }
-        // Replacements keep their position, like Map.set on an existing JS key.
+        state.image_ref(&n, true);
         if let Some(index) = state.notifications.iter().position(|old| old.id == id) {
-            state.notifications[index] = n;
+            let old = std::mem::replace(&mut state.notifications[index], n);
+            state.image_ref(&old, false);
         } else {
             state.notifications.push(n);
         }
-        queue_flush(&self.0, &mut state);
+        state.maintenance_wake.notify_one();
+        changed(&mut state, conn, serde_json::json!({"put":event}))
+            .await
+            .map_err(failed)?;
         conn.emit_signal(
             None::<&str>,
             PRIVATE_PATH,
@@ -167,8 +304,7 @@ impl Notifications {
         )
         .await
         .map_err(failed)?;
-        // Positive milliseconds, zero (never), and negative (user default) are
-        // banner metadata. Expiry/hover/DND never removes notification history.
+        maintain(&mut state, conn).await?;
         Ok(id)
     }
     async fn close_notification(
@@ -224,15 +360,18 @@ impl ShellNotifications {
             return Err(failed("invalid action or activation token"));
         }
         let resident = truthy(n.hints.get("resident"));
-        let sender = state
-            .senders
-            .get(&id)
-            .ok_or_else(|| failed("notification sender is gone"))?;
-        let bus = zbus::fdo::DBusProxy::new(conn).await.map_err(failed)?;
-        let name = zbus::names::BusName::try_from(sender.as_str()).map_err(failed)?;
-        if bus.name_has_owner(name).await.map_err(failed)? {
+        let sender = state.senders.get(&id).cloned();
+        let alive = if let Some(sender) = &sender {
+            let bus = zbus::fdo::DBusProxy::new(conn).await.map_err(failed)?;
+            bus.name_has_owner(zbus::names::BusName::try_from(sender.as_str()).map_err(failed)?)
+                .await
+                .map_err(failed)?
+        } else {
+            false
+        };
+        if alive {
             conn.emit_signal(
-                Some(sender.as_str()),
+                sender.as_deref(),
                 PUBLIC_PATH,
                 PUBLIC_IFACE,
                 "ActivationToken",
@@ -241,7 +380,7 @@ impl ShellNotifications {
             .await
             .map_err(failed)?;
             conn.emit_signal(
-                Some(sender.as_str()),
+                sender.as_deref(),
                 PUBLIC_PATH,
                 PUBLIC_IFACE,
                 "ActionInvoked",
@@ -250,9 +389,9 @@ impl ShellNotifications {
             .await
             .map_err(failed)?;
         } else if state.gone_logged.insert(id) {
-            eprintln!("[notifd] action {id}: notification sender disconnected");
+            eprintln!("[notifd] action {id}: notification sender unknown or disconnected");
         }
-        if !resident {
+        if !resident || !alive {
             resolve(&self.0, &mut state, conn, id, 3)
                 .await
                 .map_err(failed)?;
@@ -297,7 +436,46 @@ impl ShellNotifications {
             .map_err(failed)
     }
     async fn list(&self) -> zbus::fdo::Result<String> {
-        serde_json::to_string(&self.0.lock().await.notifications).map_err(failed)
+        self.0
+            .lock()
+            .await
+            .list()
+            .and_then(|v| serde_json::to_string(&v))
+            .map_err(failed)
+    }
+    async fn snapshot(&self) -> zbus::fdo::Result<(u64, String)> {
+        let state = self.0.lock().await;
+        Ok((
+            state.sequence,
+            state
+                .list()
+                .and_then(|v| serde_json::to_string(&v))
+                .map_err(failed)?,
+        ))
+    }
+    async fn dismiss_group(
+        &self,
+        group: String,
+        #[zbus(connection)] conn: &Connection,
+    ) -> zbus::fdo::Result<()> {
+        let mut state = self.0.lock().await;
+        let ids = state
+            .notifications
+            .iter()
+            .filter(|n| model::app_group(n) == group && !truthy(n.hints.get("transient")))
+            .map(|n| n.id)
+            .collect();
+        remove_ids(&mut state, conn, ids, 2, true).await
+    }
+    async fn dismiss_all(&self, #[zbus(connection)] conn: &Connection) -> zbus::fdo::Result<()> {
+        let mut state = self.0.lock().await;
+        let ids = state
+            .notifications
+            .iter()
+            .filter(|n| !truthy(n.hints.get("transient")))
+            .map(|n| n.id)
+            .collect();
+        remove_ids(&mut state, conn, ids, 2, true).await
     }
     async fn dismiss(
         &self,
@@ -336,6 +514,18 @@ impl ShellNotifications {
         Ok(())
     }
     #[zbus(signal)]
+    async fn changed(
+        emitter: &zbus::object_server::SignalEmitter<'_>,
+        sequence: u64,
+        json: &str,
+    ) -> zbus::Result<()>;
+    #[zbus(signal)]
+    async fn resolved_batch(
+        emitter: &zbus::object_server::SignalEmitter<'_>,
+        ids: Vec<u32>,
+        reason: u32,
+    ) -> zbus::Result<()>;
+    #[zbus(signal)]
     async fn notified(
         emitter: &zbus::object_server::SignalEmitter<'_>,
         id: u32,
@@ -356,22 +546,37 @@ fn failed(e: impl std::fmt::Display) -> zbus::fdo::Error {
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let options = options::Options::parse(std::env::args().skip(1).collect())?;
-    let store = store::Store::new()?;
-    let notifications = store.restore();
+    let store = store::Store::new().unwrap_or_else(store::Store::volatile);
+    let notifications = store.startup();
+    let revisions: HashMap<_, _> = notifications
+        .iter()
+        .enumerate()
+        .map(|(i, n)| (n.id, i as u64 + 1))
+        .collect();
+    let next_revision = revisions.len() as u64;
+    let mut image_refs = HashMap::new();
+    for n in &notifications {
+        if let Some(p) = store.owned_image(n) {
+            *image_refs.entry(p).or_insert(0) += 1;
+        }
+    }
     let next = notifications
         .iter()
         .map(|n| n.id)
         .max()
         .filter(|n| *n < MAX_ID)
         .map_or(1, |n| n + 1);
+    let maintenance_wake = Arc::new(tokio::sync::Notify::new());
     let shared = Arc::new(Mutex::new(State {
         notifications,
         next,
         senders: HashMap::new(),
-        revisions: HashMap::new(),
-        next_revision: 0,
+        revisions,
+        next_revision,
         gone_logged: Default::default(),
-        flush: None,
+        sequence: 0,
+        image_refs,
+        maintenance_wake: maintenance_wake.clone(),
         store,
     }));
     // Install both objects before claiming names. Never queue behind somebody
@@ -420,9 +625,32 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     )
     .await?;
     eprintln!("[sessiond] ready");
+    let maintenance_state = shared.clone();
+    let maintenance_conn = conn.clone();
+    let maintenance = tokio::spawn(async move {
+        loop {
+            // One retained permit closes the arrival/deadline calculation race.
+            let changed = maintenance_wake.notified();
+            let now = now();
+            let deadline =
+                model::retention_deadline(&maintenance_state.lock().await.notifications, now);
+            if let Some(deadline) = deadline {
+                tokio::select! {
+                    _ = changed => continue,
+                    _ = tokio::time::sleep(Duration::from_secs(deadline.saturating_sub(now))) => {},
+                }
+            } else {
+                changed.await;
+                continue;
+            }
+            if let Err(e) = maintain(&mut *maintenance_state.lock().await, &maintenance_conn).await
+            {
+                eprintln!("[notifd] retention: {e}");
+            }
+        }
+    });
     let mut term = tokio::signal::unix::signal(tokio::signal::unix::SignalKind::terminate())?;
     tokio::select! { _ = term.recv() => {}, _ = tokio::signal::ctrl_c() => {} }
-    // systemd's SIGTERM must not lose the last 100 ms of a burst.
-    shared.lock().await.persist();
+    maintenance.abort(); // Persistence failures never gate the live notification model.
     Ok(())
 }

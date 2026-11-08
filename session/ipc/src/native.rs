@@ -19,6 +19,7 @@ const SURFACES: &[(&str, &str)] = &[
     ("toggleCC", "cc"),
     ("toggleControlCenter", "cc"),
     ("toggleNC", "nc"),
+    ("nc", "nc"),
     ("toggleNotificationCenter", "nc"),
     ("togglePrism", "prism"),
     ("toggleSearch", "prism"),

@@ -112,3 +112,6 @@ Unsupported panels return Unavailable, without starting or contacting TS.
 Explicit `--session=ts` remains available for the frozen Hyprland shell.
 See `toolkit/shell/SESSION.md` for pending surfaces, MCP gaps and temporary override cleanup.
 No installed/live-session acceptance is claimed by these private tests.
+
+B3.2: `nc` is the direct alias of `toggleNC`/`toggleNotificationCenter` and requires
+Shell1 `surface:nc`. It never falls back to TS. GetState reports NC visibility.

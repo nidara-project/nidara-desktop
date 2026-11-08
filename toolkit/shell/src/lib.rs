@@ -26,6 +26,7 @@ pub mod launcher;
 pub mod material;
 pub mod menu;
 pub mod model;
+pub mod nc;
 pub mod notification_card;
 pub mod notification_wire;
 pub mod notifications;

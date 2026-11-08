@@ -65,8 +65,11 @@ def main(args):
                              GLib.Variant(signature, values) if signature else None,
                              None, Gio.DBusCallFlags.NO_AUTO_START, 3000, None).unpack()
 
-    def listing():
-        return json.loads(call("List", priv=True)[0])
+    def listing(with_revision=False):
+        rows=json.loads(call("List", priv=True)[0])
+        if with_revision:
+            return rows
+        return [{k:v for k,v in n.items() if k!="revision"} for n in rows]
 
     def notify(replace=0, summary="summary", hints=None, timeout=-1, actions=None):
         return call("Notify", ("probe", replace, "icon", summary, "body", actions or [], hints or {}, timeout),
@@ -228,13 +231,17 @@ def main(args):
         entry = next(n for n in listing() if n["id"] == image_id)
         image_path = Path(entry["hints"]["image-path"])
         check(image_path.name == hashlib.sha256(raw).hexdigest()[:32] + ".png" and image_path.read_bytes()[:8] == b"\x89PNG\r\n\x1a\n", "image-data decoded to content-addressed PNG")
-        notify(hints={"image-data": image})
+        duplicate_image_id = notify(hints={"image-data": image})
         check(len(list((cache / "images").iterdir())) == 1, "identical image data is deduplicated")
         check(entry["hints"]["urgency"] == 2 and set(entry["hints"]) == {"image-path", "urgency"}, "scalar hints only; int64 urgency and deprecated image hints")
         check((cache.stat().st_mode & 0o777) == 0o700 and ((cache / "images").stat().st_mode & 0o777) == 0o700, "private cache and image directories are 0700")
         for i in range(151):
             notify(hints={"image-data": GLib.Variant("(iiibiiay)", (1, 1, 3, False, 8, 3, bytes([i, 0, 0])))})
-        check(len(list((cache / "images").iterdir())) == 150, "image cache capped at 150 files")
+        check(len(list((cache / "images").iterdir())) == 152, "live image references survive beyond the old 150-file cap")
+        call("Dismiss", (image_id,), "(u)", priv=True)
+        check(image_path.exists(), "shared image survives its first record")
+        call("Dismiss", (duplicate_image_id,), "(u)", priv=True)
+        check(not image_path.exists(), "image leaves with its last record")
         malformed = notify(hints={"image-data": GLib.Variant("(iiibiiay)", (1, 2, 4, False, 8, 3, b"x")),
                                   "image_path": GLib.Variant("s", "/legacy.png")})
         check(next(n for n in listing() if n["id"] == malformed)["hints"] == {"image_path": "/legacy.png"}, "malformed pixels preserve legacy image path without crashing")
@@ -251,7 +258,15 @@ def main(args):
             wait(lambda: len(c.snapshot()["notifications"]) == len(listing()), "shell restart recovers all arrivals")
             check(c.snapshot()["notified"] == [], "shell restart has no banner flood")
         stop()
-        check(json.loads((cache / "state.json").read_text()) == {"version": 1, "notifications": expected}, "store retains exact serialize shape and excludes transient")
+        check(not (cache / "state.json").exists(), "legacy snapshot imported once then removed")
+        replay={}
+        for line in (cache / "history.jsonl").read_text().splitlines():
+            event=json.loads(line)
+            if event["op"]=="put":
+                n=event["notification"]; replay[n["id"]]=n
+            else:
+                for ident in event["ids"]: replay.pop(ident,None)
+        check(list(replay.values()) == expected, "journal replays the same history and excludes transient")
         if c:
             wait(lambda: c.snapshot()["notifications"] == [], "client clears on daemon loss")
         start()
@@ -263,6 +278,16 @@ def main(args):
             last = expected[-1]["id"]
             c.snapshot(method="dismiss", id=last)
             wait(lambda: all(n["id"] != last for n in listing()), "Notification.dismiss reaches daemon")
+        restored=next(n for n in listing(True) if n["id"]==resident)
+        check(restored["revision"]>0, "restored notification has a runtime revision in List")
+        call("InvokeActionWithToken", (resident,"open","private-restart-test-token",restored["revision"]), "(usst)", priv=True)
+        check(not any(n["id"]==resident for n in listing()), "restored action resolves even without a known sender")
+        ordinary=notify(summary="bulk group")
+        other=call("Notify", ("other",0,"","other app","",[],{},0), "(susssasa{sv}i)")[0]
+        call("DismissGroup", ("probe",), "(s)", priv=True)
+        check(other in [n["id"] for n in listing()] and ordinary not in [n["id"] for n in listing()], "bulk group keeps other apps")
+        call("DismissAll", priv=True)
+        check(listing()==[], "bulk all clears history in one call")
         stop()
         print("sessiond integration: all checks passed", flush=True)
     finally:

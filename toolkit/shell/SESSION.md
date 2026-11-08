@@ -42,8 +42,9 @@ This is only the frozen boot floor, not new TS/Rust parity work.
 - B2.3: CC edit mode, remaining widgets (battery, clipboard, CPU/memory, Ethernet, VPN).
 - B3.1 notification banners are implemented in `B3.1.md`; installed physical-session
   acceptance is pending. Sender expiry is presentation metadata, preserving history.
-- B3.2 and later: Notification Center and the other unported shell panels. In particular
-  NC, Prism, agent, overview and bar-overlay shortcuts may return Unavailable;
+- B3.2 adds the Notification Center/calendar, `nc` route and durable notification
+  journal/retention (`B3.2.md`). Installed physical-session acceptance remains pending.
+- Later: Prism, agent, overview and bar-overlay shortcuts may return Unavailable;
   the native capability list is authoritative. There is no hidden TS panel.
 - MCP transition gap: the observed installed CLI defaulted to legacy
   org.nidara.Shell.Request, unavailable after TS was stopped. In current source,
