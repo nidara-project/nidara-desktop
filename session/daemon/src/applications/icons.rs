@@ -64,16 +64,42 @@ pub fn watches() -> (BTreeSet<PathBuf>, bool, String) {
             .into_iter()
             .map(|p| (p.join("pixmaps"), 0)),
     );
-    let mut seen = BTreeSet::new();
+    watches_within(pending, 4096, 65536)
+}
+/// Every root and each theme directory directly in it are always watched: a
+/// theme's index.theme and icon-theme.cache live there, and package updates
+/// rewrite that cache. The recursive walk adds deeper directories up to the
+/// bounds; a tree past them (a large /usr/share/icons) is `complete == false`
+/// but still watched at that level, never polled (#1051).
+fn watches_within(
+    roots: Vec<(PathBuf, usize)>,
+    max_dirs: usize,
+    max_entries: usize,
+) -> (BTreeSet<PathBuf>, bool, String) {
     let mut watches = BTreeSet::new();
+    for (root, _) in &roots {
+        watches.insert(root.clone());
+        let Ok(entries) = fs::read_dir(root) else {
+            continue;
+        };
+        for e in entries.flatten() {
+            if fs::metadata(e.path()).is_ok_and(|m| m.is_dir()) {
+                watches.insert(e.path());
+            }
+        }
+    }
+    let mut pending = roots;
+    let mut seen = BTreeSet::new();
+    let mut walked = 0;
     let mut complete = true;
     let mut inspected = 0;
     let mut signatures = Vec::new();
     while let Some((p, depth)) = pending.pop() {
-        if watches.len() >= 4096 || depth > 16 || inspected >= 65536 {
+        if walked >= max_dirs || depth > 16 || inspected >= max_entries {
             complete = false;
             break;
         }
+        walked += 1;
         watches.insert(p.clone());
         let real = match p.canonicalize() {
             Ok(p) => p,
@@ -96,7 +122,7 @@ pub fn watches() -> (BTreeSet<PathBuf>, bool, String) {
         };
         for e in entries {
             inspected += 1;
-            if inspected > 65536 {
+            if inspected > max_entries {
                 complete = false;
                 break;
             }
@@ -574,6 +600,24 @@ pub fn write_override(id: &str, bytes: &[u8]) -> Result<(), Error> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn a_tree_past_the_bounds_keeps_every_theme_watched() {
+        let root = std::env::current_dir()
+            .unwrap()
+            .join(format!("target/a1-bounds-{}", super::super::unique()));
+        for d in ["A/16/apps", "A/32/apps", "B/16/apps", "C/scalable/apps"] {
+            fs::create_dir_all(root.join(d)).unwrap();
+        }
+        let (watches, complete, _) = watches_within(vec![(root.clone(), 0)], 2, 65536);
+        assert!(!complete, "the bounds were not reached");
+        for theme in ["", "A", "B", "C"] {
+            assert!(
+                watches.contains(&root.join(theme)),
+                "{theme:?} is unwatched past the bounds (#1051)"
+            );
+        }
+        fs::remove_dir_all(root).unwrap();
+    }
     #[test]
     fn theme_scale_inheritance_and_cycles() {
         let root = std::env::current_dir()

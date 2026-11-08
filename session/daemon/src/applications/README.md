@@ -42,8 +42,16 @@ A healthy, fully monitored catalogue has no periodic rescan or 5 ms loop. Failed
 scans/monitor installation use recovery backoff from 1 to 60 seconds; jobs do not
 reset its deadline. Recursive bounded icon watches and resolved asset parents
 cover artwork changes, including non-selected sizes. Icon traversal is bounded
-to 4096 directories/65536 entries/16 levels; combined installed directory watches
-are capped at 8192, with the same recovery backoff if coverage is incomplete. AppInfo/volume notifications
+to 4096 directories/65536 entries/16 levels. Every icon root and each theme
+directly in it stay watched whatever the bounds: a theme's index.theme and
+icon-theme.cache live there and package updates rewrite that cache. A tree past
+the bounds (a normal /usr/share/icons with Papirus has ~7900 directories) is
+therefore watched at that level, never polled; a deeper change in a theme without
+a cache is only seen at the next real event (#1051). Combined installed directory
+watches are capped at 8192, with the recovery backoff if that cap is passed. The
+root-history directory also holds the usage state written every 30 s, so its
+watch counts only events naming the history file: the store never wakes itself
+with its own checkpoints (#1051). AppInfo/volume notifications
 cover default-handler/mount changes. A scan failure/degraded root preserves the previous complete
 in-process catalogue. Initial partial metadata is labelled incomplete. There is
 no empty-success claim or pruning on failed/partial/unmounted roots.
