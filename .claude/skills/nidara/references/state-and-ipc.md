@@ -104,6 +104,16 @@ agent and UI introspection routes lacking an implementation also explicitly refu
 not promise the helpers/MCP or full TS dumpState schema in Rust. See `session/ipc/README.md`
 for the exhaustive route inventory and `crates/nidara-shell-ipc/README.md` for the wire members.
 
+B3.2 (`toolkit/shell/B3.2.md`) adds Shell1 `surface:nc`: `nidara-ipc nc`,
+`toggleNC` and `toggleNotificationCenter` use that capability. The bar's clock
+uses the same hub state. GetState includes NC visibility; GetNotificationState
+also reports the selected output and history count (redacted while locked).
+Notifications1 Snapshot pairs List metadata with an ordered Changed sequence;
+register signals first, hydrate once, and discard queued changes at/before the
+snapshot barrier. Historical hydration never announces fresh popups. Runtime
+revisions and unique daemon ownership guard all actions, including restored ones.
+Bulk dismissal is one call and one removal operation, not a per-row call cascade.
+
 Native errors exit 1 with AccessDenied/Unavailable/Invalid/Failed on stderr; CLI usage exits 2.
 Successful payloads remain on stdout. TS retains its existing reply/exit behavior. Each bus
 or socket reply has a 15 s deadline, socket replies are capped at 4 MiB, and no timeout causes

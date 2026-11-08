@@ -41,10 +41,16 @@ gtk4-layer-shell ⇒ no bar, no dock, nothing in the log). See `references/archi
 ⚠️ **Hyalo starts the Rust shell by default** (#1017, owner 2026-11-05):
 `nidara-rust-shell.service` runs `nidara-shell --bar` after the full session daemon.
 No TS shell or separate dock in Hyalo; `nidara-ipc` defaults to native routes.
-B2.3/B3.2 and installed MCP transition/acceptance remain gaps; B2.2 details are
+B2.3 and installed MCP transition/acceptance remain gaps; B2.2 details are
 implemented with private validation, not installed acceptance. See
 `toolkit/shell/SESSION.md`. B3.1 banners use the bar surface and one hub stack;
 read `toolkit/shell/B3.1.md` before changing notification timers, actions or cards.
+B3.2 adds the NC/calendar, `nc` route and journal; read `toolkit/shell/B3.2.md`
+before changing history, hydration, bulk dismissal, restoration or retention.
+History snapshots have a sequence barrier; never replay them as fresh banners.
+Only viewport cards are built. Hyalo applies eight positive washes per pane:
+reserve that budget for today, navigation, hover and focus, rather than declaring
+rest washes on every row of one large pane.
 Notification ownership is signal-driven; do not add idle GetNameOwner polling.
 Sender expiry is presentation-only for ordinary records; transient records expire with their banner. Token actions are
 revision checked and directed to the sender. App/place/tray/banner artwork uses one process-wide

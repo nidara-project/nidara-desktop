@@ -91,6 +91,14 @@ impl Frame {
 /// What a dock asks for.
 #[derive(Clone, Debug, PartialEq)]
 pub enum Request {
+    CloseNc,
+    ToggleNc {
+        output: Option<String>,
+    },
+    NotificationBulk {
+        view: u64,
+        group: Option<String>,
+    },
     NotificationHover {
         instance: u64,
         on: bool,
@@ -164,6 +172,10 @@ pub enum Request {
 
 pub enum HubEvent {
     Notifications(crate::notification_wire::Update),
+    NotificationBulkDone {
+        view: u64,
+        error: String,
+    },
     NotificationPrefs(crate::notifications::Preferences),
     NotificationDone {
         instance: u64,
@@ -242,6 +254,10 @@ struct PendingUnpin {
 }
 
 pub struct Hub {
+    history: crate::notifications::History,
+    nc_output: Option<String>,
+    nc_generation: u64,
+    nc_error: String,
     notifications: crate::notifications::Stack,
     notification_prefs: crate::notifications::Preferences,
     notification_owner: Option<String>,
@@ -323,6 +339,10 @@ impl Hub {
         shell1: Option<zbus::blocking::Connection>,
     ) -> Self {
         Hub {
+            history: Default::default(),
+            nc_output: None,
+            nc_generation: 0,
+            nc_error: String::new(),
             notifications: Default::default(),
             notification_prefs: Default::default(),
             notification_owner: None,
@@ -423,7 +443,7 @@ impl Hub {
                 },
             };
             let mut retired: Vec<_> = self.notifications.entries.iter().filter(|b| !matches!(&event,
-                HubEvent::Notifications(crate::notification_wire::Update::Resolved(_, id)) if *id == b.notice.id)).map(|b| b.notice.clone()).collect();
+                HubEvent::Notifications(crate::notification_wire::Update::Removed(_, ids)) if ids.contains(&b.notice.id))).map(|b| b.notice.clone()).collect();
             if let HubEvent::Notifications(crate::notification_wire::Update::Notified(owner, n)) =
                 &event
                 && self.notification_owner.as_ref() == Some(owner)
@@ -482,7 +502,7 @@ impl Hub {
     fn notification_gates(&self) -> crate::notifications::Gates {
         crate::notifications::Gates {
             locked: self.locked,
-            panel: !self.notification_panels.is_empty(),
+            panel: !self.notification_panels.is_empty() || self.nc_output.is_some(),
             game: self
                 .workspaces
                 .iter()
@@ -497,7 +517,9 @@ impl Hub {
         token: Option<String>,
     ) {
         let (Some(b), Some(owner), Some(conn), Some(inbox)) = (
-            self.notifications.current(instance, content),
+            self.notifications
+                .current(instance, content)
+                .or_else(|| self.history.current(instance, content)),
             self.notification_owner.clone(),
             self.apps_conn.clone(),
             self.inbox.clone(),
@@ -531,12 +553,26 @@ impl Hub {
         match event {
             HubEvent::Notifications(crate::notification_wire::Update::Reset(owner)) => {
                 self.notification_owner = owner;
+                self.nc_generation += 1;
+                self.nc_error.clear();
                 self.notifications.clear();
+                self.history.clear();
+            }
+            HubEvent::Notifications(crate::notification_wire::Update::Snapshot(owner, records)) => {
+                if self.notification_owner.as_ref() != Some(&owner) {
+                    return false;
+                }
+                let transient: Vec<_> = records.iter().filter(|n| n.transient()).cloned().collect();
+                for n in records {
+                    self.history.put(n);
+                }
+                self.retire_transients(transient);
             }
             HubEvent::Notifications(crate::notification_wire::Update::Notified(owner, n)) => {
                 if self.notification_owner.as_ref() != Some(&owner) {
                     return false;
                 }
+                self.history.put(n.clone());
                 let outputs: Vec<_> = self.bars.values().map(|b| b.name.clone()).collect();
                 let Some(output) = focus_output(&self.windows, &outputs) else {
                     return true;
@@ -549,11 +585,64 @@ impl Hub {
                     self.notification_now(),
                 );
             }
-            HubEvent::Notifications(crate::notification_wire::Update::Resolved(owner, id)) => {
+            HubEvent::Notifications(crate::notification_wire::Update::Removed(owner, ids)) => {
                 if self.notification_owner.as_ref() != Some(&owner) {
                     return false;
                 }
-                self.notifications.resolve(id);
+                crate::icon_metrics::emit(
+                    "nc-history-removed",
+                    serde_json::json!({"count":ids.len()}),
+                );
+                for id in &ids {
+                    self.notifications.resolve(*id);
+                }
+                self.history.remove(&ids);
+            }
+            HubEvent::Request(Request::CloseNc) => {
+                self.nc_output = None;
+                self.nc_generation += 1;
+                self.nc_error.clear();
+            }
+            HubEvent::Request(Request::ToggleNc { output }) => {
+                if self.locked {
+                    return false;
+                }
+                let outputs: Vec<_> = self.bars.values().map(|b| b.name.clone()).collect();
+                let target =
+                    output.or_else(|| focus_output(&self.windows, &outputs).map(str::to_string));
+                if target.as_ref().is_none_or(|name| !outputs.contains(name)) {
+                    return false;
+                }
+                self.nc_output = if self.nc_output == target {
+                    None
+                } else {
+                    target
+                };
+                self.nc_generation += 1;
+                self.nc_error.clear();
+            }
+            HubEvent::Request(Request::NotificationBulk { view, group }) => {
+                if self.locked || self.nc_output.is_none() || self.nc_generation != view {
+                    return false;
+                }
+                if let (Some(conn), Some(owner), Some(inbox)) = (
+                    self.apps_conn.clone(),
+                    self.notification_owner.clone(),
+                    self.inbox.clone(),
+                ) {
+                    worker(move || {
+                        let error = crate::notification_wire::bulk(&conn, &owner, group.as_deref())
+                            .err()
+                            .unwrap_or_default();
+                        let _ = inbox.send(HubEvent::NotificationBulkDone { view, error });
+                        Ok(())
+                    });
+                }
+            }
+            HubEvent::NotificationBulkDone { view, error } => {
+                if self.nc_generation == view {
+                    self.nc_error = error;
+                }
             }
             HubEvent::NotificationPrefs(p) => {
                 self.widgets.dnd = p.dnd;
@@ -564,15 +653,19 @@ impl Hub {
                 content,
                 error,
             } => {
+                let error = error.unwrap_or_default();
                 self.notifications
-                    .set_error(instance, content, error.unwrap_or_default());
+                    .set_error(instance, content, error.clone());
+                self.history.set_error(instance, content, error);
             }
             HubEvent::Request(Request::NotificationError {
                 instance,
                 content,
                 message,
             }) => {
-                self.notifications.set_error(instance, content, message);
+                self.notifications
+                    .set_error(instance, content, message.clone());
+                self.history.set_error(instance, content, message);
             }
             HubEvent::Request(Request::NotificationHover { instance, on }) => {
                 self.notifications.hover(
@@ -717,6 +810,10 @@ impl Hub {
             HubEvent::BarDown(id) => {
                 if let Some(bar) = self.bars.get(&id) {
                     self.notification_panels.remove(&bar.name);
+                    if self.nc_output.as_ref() == Some(&bar.name) {
+                        self.nc_output = None;
+                        self.nc_generation += 1;
+                    }
                 }
                 self.bars.remove(&id);
             }
@@ -783,7 +880,12 @@ impl Hub {
 
     fn state_changed(&self) {
         if let Some(conn) = &self.shell1 {
-            shell1::changed(conn, self.locked, self.launcher.is_some());
+            shell1::changed(
+                conn,
+                self.locked,
+                self.launcher.is_some(),
+                self.nc_output.is_some(),
+            );
         }
     }
 
@@ -1102,8 +1204,21 @@ impl Hub {
         } else {
             self.notifications.clear();
         }
+        if self.locked && self.nc_output.take().is_some() {
+            self.nc_generation += 1;
+        }
+        if self
+            .status
+            .nc
+            .swap(self.nc_output.is_some(), Ordering::AcqRel)
+            != self.nc_output.is_some()
+        {
+            self.state_changed();
+        }
+        self.status.bars.store(self.bars.len(), Ordering::Release);
         *self.status.notifications.lock().unwrap() = serde_json::json!({
             "available":self.notification_owner.is_some(),
+            "nc":self.nc_output,"historyCount":if self.locked {0}else{self.history.entries.len()},
             "banners":self.notifications.entries.iter().map(|b| serde_json::json!({"id":b.notice.id,"instance":b.instance,"content":b.content,"output":b.output,"summary":b.notice.summary,"critical":b.notice.critical(),"hovered":b.hovered,"deadline":b.deadline,"error":b.error})).collect::<Vec<_>>()
         }).to_string();
         for bar in self.bars.values() {
@@ -1125,6 +1240,15 @@ impl Hub {
                 .any(|w| w.fullscreen && !w.window.minimized);
             let frame = Arc::new(crate::bar::BarFrame {
                 app,
+                history: if self.locked {
+                    Arc::default()
+                } else {
+                    self.history.entries.clone()
+                },
+                nc_open: self.nc_output.as_ref() == Some(&bar.name),
+                nc_active: self.nc_output.is_some(),
+                nc_generation: self.nc_generation,
+                nc_error: self.nc_error.clone(),
                 banners: Arc::new(
                     self.notifications
                         .entries
@@ -1184,7 +1308,10 @@ impl Hub {
             Request::NotificationHover { .. }
             | Request::NotificationPanel { .. }
             | Request::NotificationAction { .. }
-            | Request::NotificationError { .. } => {}
+            | Request::NotificationError { .. }
+            | Request::NotificationBulk { .. }
+            | Request::ToggleNc { .. }
+            | Request::CloseNc => {}
             Request::Window { verb, id, epoch } => {
                 // A window from an older connection, or gone since: never act on its number.
                 if epoch != self.hyalo_epoch || !self.windows.iter().any(|w| w.window.id == id) {

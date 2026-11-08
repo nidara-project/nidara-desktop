@@ -47,6 +47,11 @@ const DOT_EMPTY: f32 = 0.18;
 /// What the hub tells one bar.
 #[derive(Clone, Debug, Default)]
 pub struct BarFrame {
+    pub history: Arc<Vec<crate::notifications::Banner>>,
+    pub nc_open: bool,
+    pub nc_active: bool,
+    pub nc_generation: u64,
+    pub nc_error: String,
     pub banners: Arc<Vec<crate::notifications::Banner>>,
     pub notification_theme: String,
     pub catalogue: Arc<std::collections::HashMap<String, crate::model::App>>,
@@ -191,6 +196,10 @@ pub struct Bar {
     /// The Control Center, drawn while `cc_open`.
     cc: crate::cc::Cc,
     cc_open: bool,
+    nc: crate::nc::Center,
+    nc_open: bool,
+    nc_generation: u64,
+    nc_ghost: Option<(nk_wayland::LayerId, Instant, u8)>,
     cc_writer: Option<crate::cc::Writer>,
     cc_auth: Option<crate::ccauth::Auth>,
     cc_paste: Option<(u64, (u64, usize, u64))>,
@@ -276,6 +285,10 @@ impl Bar {
             tray_replies: std::sync::mpsc::channel(),
             cc: crate::cc::Cc::new(),
             cc_open: false,
+            nc: Default::default(),
+            nc_open: false,
+            nc_generation: 0,
+            nc_ghost: None,
             cc_writer: None,
             cc_auth: None,
             cc_paste: None,
@@ -407,14 +420,31 @@ impl Bar {
         {
             self.card_keyboard = None;
         }
-        self.card_pages
-            .retain(|id, _| self.frame.banners.iter().any(|b| b.instance == *id));
+        self.card_pages.retain(|id, _| {
+            self.frame
+                .banners
+                .iter()
+                .chain(self.frame.history.iter())
+                .any(|b| b.instance == *id)
+        });
         self.cards = crate::notification_card::layout(
             &self.frame.banners,
-            self.panel_right(),
+            if self.nc_open {
+                (self.panel_right() - crate::notification_card::WIDTH - 16.)
+                    .max(crate::notification_card::WIDTH + 4.)
+            } else {
+                self.panel_right()
+            },
             self.output_height,
             &self.card_pages,
         );
+        if self.nc_open {
+            self.nc.set_history(self.frame.history.clone());
+            self.nc.error = self.frame.nc_error.clone();
+            self.nc
+                .place(self.panel_right(), self.output_height, &self.card_pages);
+            self.cards.extend(self.nc.cards.iter().cloned());
+        }
         if self
             .card_keyboard
             .is_some_and(|id| !self.cards.iter().any(|c| c.target_for(id).is_some()))
@@ -439,15 +469,22 @@ impl Bar {
         self.cards
             .iter()
             .rev()
+            .filter(|c| c.age.is_none() || self.nc_open && inside(self.nc.viewport, p))
             .find_map(|c| c.hit(p).map(|t| (c.banner.instance, c.banner.content, t)))
     }
     fn card_current(&self, instance: u64, content: u64) -> bool {
         !self.frame.locked
-            && self
+            && (self
                 .frame
                 .banners
                 .iter()
                 .any(|b| b.instance == instance && b.content == content)
+                || self.nc_open
+                    && self
+                        .frame
+                        .history
+                        .iter()
+                        .any(|b| b.instance == instance && b.content == content))
     }
     fn card_hover(&mut self, on: Option<u64>) {
         if self.card_hover == on {
@@ -498,6 +535,7 @@ impl Bar {
             .frame
             .banners
             .iter()
+            .chain(self.frame.history.iter())
             .find(|b| b.instance == instance && b.content == content)
         else {
             return;
@@ -542,21 +580,21 @@ impl Bar {
     fn sync_surface(&mut self, w: &mut Window) {
         let banners = !self.cards.is_empty() && !self.frame.locked;
         let focus = self.card_focus.is_some() || self.card_keyboard.is_some();
-        let height = if self.cc_open || banners || focus {
+        let height = if self.cc_open || self.nc_open || banners || focus {
             self.output_height
         } else {
             HEIGHT
         };
-        let mode = (height, self.cc_open, banners, focus);
+        let mode = (height, self.cc_open || self.nc_open, banners, focus);
         if self.surface_mode != Some(mode) {
-            let mut p = placement(height, self.cc_open);
-            if focus {
+            let mut p = placement(height, self.cc_open || self.nc_open);
+            if focus || self.nc_open {
                 p.keyboard = KeyboardMode::Exclusive;
             }
             if let Err(e) = w.set_layer_placement(p) {
                 eprintln!("nidara-shell: banner surface: {e}");
             }
-            if let Err(e) = w.set_layer_level(if banners {
+            if let Err(e) = w.set_layer_level(if banners || self.nc_open {
                 LayerLevel::Overlay
             } else {
                 LayerLevel::Top
@@ -580,7 +618,7 @@ impl Bar {
         const WHOLE: [i32; 4] = [-1; 4];
         let input: Vec<[i32; 4]> = if self.frame.locked {
             vec![]
-        } else if self.cc_open {
+        } else if self.cc_open || self.nc_open {
             vec![WHOLE]
         } else {
             self.layout
@@ -895,6 +933,7 @@ impl Bar {
                     });
             }
             Item::ControlCenter => self.toggle_cc(w),
+            Item::Clock => self.toggle_nc(w),
             other => eprintln!("nidara-shell: the bar's {other:?} opens nothing yet"),
         }
     }
@@ -908,6 +947,10 @@ impl Bar {
         if open {
             self.close_popup(w);
             self.end_tray_menu();
+            if self.frame.nc_active {
+                self.nc_open = false;
+                let _ = self.requests.send(crate::hub::Request::CloseNc);
+            }
         }
         self.cc_open = open;
         self.cc.release();
@@ -921,6 +964,176 @@ impl Bar {
         self.refresh(w);
     }
 
+    fn toggle_nc(&mut self, w: &mut Window) {
+        if self.frame.locked {
+            return;
+        }
+        // Close locally at once; opening waits for the hub's chosen output/generation.
+        if self.nc_open {
+            self.nc_open = false;
+            self.nc.clearing = false;
+            self.card_keyboard = None;
+            self.nc.focus = None;
+            if let Some((layer, _, _)) = self.nc_ghost.take() {
+                let _ = w.destroy_layer(layer);
+            }
+            if self.card_pending.as_ref().is_some_and(|p| p.1 >= 1 << 32)
+                && let Some((request, _, _, _)) = self.card_pending.take()
+            {
+                w.cancel_activation_token(request);
+            }
+            if self.card_focus.as_ref().is_some_and(|p| p.0 >= 1 << 32) {
+                self.card_focus = None;
+            }
+        }
+        let _ = self.requests.send(crate::hub::Request::ToggleNc {
+            output: Some(self.name.clone()),
+        });
+        self.refresh(w);
+    }
+    fn nc_act(&mut self, target: crate::nc::Target, w: &mut Window) {
+        if let Some(group) = self.nc.change(&target) {
+            crate::icon_metrics::emit(
+                "nc-clear-request",
+                serde_json::json!({"view":self.nc_generation}),
+            );
+            let _ = self.requests.send(crate::hub::Request::NotificationBulk {
+                view: self.nc_generation,
+                group,
+            });
+        }
+        self.refresh(w);
+    }
+    fn nc_key(&mut self, key: &nk_wayland::Key, w: &mut Window) {
+        if key.sym == ESCAPE {
+            self.toggle_nc(w);
+            return;
+        }
+        if key.sym == 0xff55 || key.sym == 0xff56 {
+            self.nc
+                .scroll(self.nc.viewport[3] * if key.sym == 0xff55 { -0.8 } else { 0.8 });
+            self.refresh(w);
+            return;
+        }
+        let mut ids: Vec<_> = self.nc.controls.iter().map(|c| c.id).collect();
+        ids.extend(self.cards.iter().flat_map(|c| {
+            std::iter::once(c.node_id())
+                .chain((0..c.buttons.len()).map(|i| c.node_id() + 1 + i as u64))
+        }));
+        if matches!(key.sym, 0xff09 | 0xfe20) && !ids.is_empty() {
+            let old = self.nc.focus.or(self.card_keyboard);
+            let at = ids.iter().position(|id| Some(*id) == old);
+            let next = at.map_or(
+                if key.shift || key.sym == 0xfe20 {
+                    ids.len() - 1
+                } else {
+                    0
+                },
+                |i| {
+                    if key.shift || key.sym == 0xfe20 {
+                        (i + ids.len() - 1) % ids.len()
+                    } else {
+                        (i + 1) % ids.len()
+                    }
+                },
+            );
+            let id = ids[next];
+            if self.nc.control(id).is_some() {
+                self.nc.focus = Some(id);
+                self.card_keyboard = None;
+            } else {
+                self.card_keyboard = Some(id);
+                if let Some(c) = self.cards.iter().find(|c| c.target_for(id).is_some()) {
+                    self.nc.reveal(c.banner.instance);
+                }
+                self.nc.focus = None;
+            }
+            self.refresh(w);
+        } else if matches!(key.sym, 0xff0d | 0x20) {
+            if let Some(t) = self.nc.focus.and_then(|id| self.nc.control(id)) {
+                self.nc_act(t, w);
+            } else if let Some((instance, content, target)) = self.card_keyboard.and_then(|id| {
+                self.cards.iter().find_map(|c| {
+                    c.target_for(id)
+                        .map(|t| (c.banner.instance, c.banner.content, t))
+                })
+            }) {
+                self.card_activate(instance, content, target, key.serial, w);
+            }
+        }
+    }
+    fn finish_nc_clear(&mut self, w: &mut Window) {
+        crate::icon_metrics::emit(
+            "nc-clear-finished",
+            serde_json::json!({"stage":self.nc_ghost.map(|(_,_,s)|s),"elapsed_us":self.nc_ghost.map(|(_,t,_)|t.elapsed().as_micros())}),
+        );
+        if let Some((layer, _, _)) = self.nc_ghost.take() {
+            let _ = w.destroy_layer(layer);
+        }
+        self.nc.clearing = false;
+        self.refresh(w);
+    }
+    fn nc_clear_animation(
+        &mut self,
+        next: &Arc<Vec<crate::notifications::Banner>>,
+        w: &mut Window,
+    ) {
+        if !self.nc_open || Arc::ptr_eq(next, &self.frame.history) || !w.supports_layers() {
+            return;
+        }
+        let mut cards: Vec<_> = self
+            .cards
+            .iter()
+            .filter(|c| c.age.is_some() && !next.iter().any(|b| b.instance == c.banner.instance))
+            .cloned()
+            .collect();
+        if cards.is_empty() {
+            return;
+        }
+        crate::icon_metrics::emit(
+            "nc-clear-capture",
+            serde_json::json!({"visible":cards.len()}),
+        );
+        let r = self.nc.viewport;
+        for c in &mut cards {
+            c.translate(-r[0], -r[1]);
+        }
+        let Some(look) = self.look.as_mut() else {
+            return;
+        };
+        let result = (|| -> nk_wayland::Result<nk_wayland::LayerId> {
+            let layer = w.create_layer((r[2].ceil().max(1.) as u32, r[3].ceil().max(1.) as u32))?;
+            w.set_layer_input_region(layer, Some(&[]))?;
+            w.set_position(layer, r[0], r[1])?;
+            let art = crate::notification_card::Artwork {
+                theme: &self.frame.notification_theme,
+                catalogue: &self.frame.catalogue,
+                namespace: &self.name,
+                scale: w.scale(),
+            };
+            w.paint_layer(layer, |f| {
+                let mut c = Canvas::new(f.pixel_width, f.pixel_height, f.scale);
+                for card in &cards {
+                    card.paint(&mut c, look, true, &art)?;
+                }
+                Ok(c.finish())
+            })?;
+            w.set_opacity(layer, 1.)?;
+            w.redraw();
+            Ok(layer)
+        })();
+        match result {
+            Ok(layer) => {
+                if let Some((old, _, _)) = self.nc_ghost.take() {
+                    let _ = w.destroy_layer(old);
+                }
+                // The first commit establishes opacity 1; idle arms the compositor transition.
+                self.nc_ghost = Some((layer, Instant::now(), 0));
+                self.nc.clearing = true;
+            }
+            Err(e) => eprintln!("nidara-shell: clear animation: {e}"),
+        }
+    }
     /// A Control Center act, to its service off the bar's thread.
     fn act(&mut self, act: crate::cc::Act, w: &mut Window) {
         match act {
@@ -1085,6 +1298,17 @@ impl Bar {
             &self.frame.tray,
             self.cc_open,
         );
+        if let Some(id) = id_of(Item::Clock)
+            && let Some(n) = tree.nodes.get_mut(&id)
+        {
+            n.states.expanded = self.nc_open;
+        }
+        if self.nc_open {
+            self.nc.semantics(&mut tree);
+            if let Some(root) = tree.nodes.get_mut(&tree.root) {
+                root.states.active = self.card_keyboard_active;
+            }
+        }
         if self.cc_open {
             let panel = self.cc.panel();
             let mut group = Node::new(CC_PANEL, Role::Panel, "Control Center");
@@ -1112,7 +1336,44 @@ impl Bar {
                 root.states.hidden = false;
             }
             for c in &self.cards {
+                let root = tree.root;
+                if c.age.is_some() {
+                    tree.root = crate::nc::PANEL;
+                }
                 c.semantics(&mut tree);
+                tree.root = root;
+                if c.age.is_some() {
+                    let ids = std::iter::once(c.node_id())
+                        .chain((0..c.buttons.len()).map(|i| c.node_id() + 1 + i as u64));
+                    for id in ids {
+                        if let Some(n) = tree.nodes.get_mut(&id) {
+                            let b = n.bounds;
+                            let r = crate::nc::intersection(
+                                [b.x, b.y, b.width, b.height],
+                                self.nc.viewport,
+                            );
+                            n.bounds = Bounds {
+                                x: r[0],
+                                y: r[1],
+                                width: r[2],
+                                height: r[3],
+                            };
+                            n.states.offscreen = r[2] == 0. || r[3] == 0.;
+                            if n.states.offscreen {
+                                n.actions = vec![Action::Focus];
+                            }
+                        }
+                    }
+                }
+            }
+            if self.nc_open
+                && let Some(id) = self.nc.focus
+                && let Some(n) = tree.nodes.get_mut(&id)
+            {
+                n.states.focused = true;
+                if let Some(root) = tree.nodes.get_mut(&tree.root) {
+                    root.states.active = self.card_keyboard_active;
+                }
             }
             if let Some(id) = self.card_keyboard.filter(|_| self.card_keyboard_active) {
                 if let Some(n) = tree.nodes.get_mut(&id) {
@@ -1219,7 +1480,17 @@ impl Bar {
         let requests: Vec<_> = rx.try_iter().collect();
         for (revision, request) in requests {
             if revision != self.revision {
-                continue;
+                // A header remains the same command while cards arrive. Its id is
+                // retired on every view/owner change, independently of tree revisions.
+                let current_nc = match &request {
+                    nk_a11y::Request::Activate(id) | nk_a11y::Request::Focus(id) => {
+                        self.nc_open && self.nc.control(*id).is_some()
+                    }
+                    _ => false,
+                };
+                if !current_nc {
+                    continue;
+                }
             }
             if let nk_a11y::Request::SetText(id, ref value) = request {
                 if let Some(crate::cc::Target::Detail(row)) = self.cc_target(id) {
@@ -1282,6 +1553,18 @@ impl Bar {
                 continue;
             };
             let activate = matches!(request, nk_a11y::Request::Activate(_));
+            if self.nc_open
+                && let Some(target) = self.nc.control(id)
+            {
+                if activate {
+                    self.nc_act(target, w);
+                } else {
+                    self.nc.focus = Some(id);
+                    self.card_keyboard = None;
+                    self.refresh(w);
+                }
+                continue;
+            }
             if let Some((instance, content, target)) = self.cards.iter().find_map(|c| {
                 c.target_for(id)
                     .map(|t| (c.banner.instance, c.banner.content, t))
@@ -1290,6 +1573,8 @@ impl Bar {
                     self.card_activate(instance, content, target, None, w);
                 } else {
                     self.card_keyboard = Some(id);
+                    self.nc.reveal(instance);
+                    self.nc.focus = None;
                     self.card_hover(Some(instance));
                     self.refresh(w);
                 }
@@ -1434,10 +1719,10 @@ fn tree(
                 n.states.expanded = cc_open;
                 n
             }
-            // B3 gives it the notifications; until then it does nothing.
+            // The clock opens the Notification Center/calendar.
             Item::Clock => {
                 let mut n = Node::new(id, Role::Button, &layout.clock);
-                n.states.disabled = true;
+                n.states.expandable = true;
                 n
             }
             Item::Tray(i) => Node::new(
@@ -1456,7 +1741,11 @@ fn tree(
         };
         if matches!(
             item,
-            Item::Logo | Item::Tray(_) | Item::Widget(Widget::Focus) | Item::ControlCenter
+            Item::Logo
+                | Item::Tray(_)
+                | Item::Widget(Widget::Focus)
+                | Item::ControlCenter
+                | Item::Clock
         ) {
             node.actions = vec![Action::Activate];
         }
@@ -1529,8 +1818,28 @@ fn rect(r: [f64; 4]) -> Rect {
 }
 
 impl Application for Bar {
+    fn poll_interval_ms(&self) -> u32 {
+        match self.nc_ghost {
+            Some((_, start, 2)) => (crate::nc::CLEAR_MS + 50)
+                .saturating_sub(start.elapsed().as_millis().min(u32::MAX as u128) as u32)
+                .clamp(1, 1000),
+            Some(_) => 8,
+            None => 1000,
+        }
+    }
     fn event(&mut self, event: Event, w: &mut Window) -> nk_wayland::Result<()> {
         match event {
+            Event::Layer {
+                id,
+                event:
+                    nk_wayland::LayerEvent::Done { serial: 1, .. }
+                    | nk_wayland::LayerEvent::Cancelled { serial: 1 },
+            } if self
+                .nc_ghost
+                .is_some_and(|(layer, _, stage)| layer == id && stage == 2) =>
+            {
+                self.finish_nc_clear(w)
+            }
             Event::Configure => {
                 self.width = f64::from(w.size().0);
                 if !self.tried_look {
@@ -1558,6 +1867,31 @@ impl Application for Bar {
                     }
                 }
                 if let Some(f) = latest {
+                    self.nc_clear_animation(&f.history, w);
+                    if f.nc_generation != self.nc_generation {
+                        self.nc_generation = f.nc_generation;
+                        self.nc.retire_view();
+                        self.nc_open = f.nc_open && !f.locked;
+                        if f.nc_active && self.cc_open {
+                            self.toggle_cc(w);
+                        }
+                        if self.nc_open {
+                            self.close_popup(w);
+                            self.end_tray_menu();
+                        } else {
+                            self.nc.clearing = false;
+                            if let Some((layer, _, _)) = self.nc_ghost.take() {
+                                let _ = w.destroy_layer(layer);
+                            }
+                        }
+                    }
+                    if f.locked {
+                        self.nc_open = false;
+                        self.nc.focus = None;
+                        if let Some((layer, _, _)) = self.nc_ghost.take() {
+                            let _ = w.destroy_layer(layer);
+                        }
+                    }
                     self.frame = f;
                     if self.frame.output_size.1 > 0 {
                         self.output_height = self.frame.output_size.1;
@@ -1595,6 +1929,9 @@ impl Application for Bar {
             Event::Motion(x, y) => {
                 self.pointer = (x, y);
                 self.pointer_inside = true;
+                if self.nc_open && self.nc.motion((x, y)) {
+                    w.redraw();
+                }
                 self.card_hover(self.card_at((x, y)).map(|(id, _, _)| id));
                 if self.cc_open {
                     let (changed, act) = self.cc.motion((x, y), &self.frame.status);
@@ -1614,6 +1951,7 @@ impl Application for Bar {
             }
             Event::PointerLeave => {
                 self.pointer_inside = false;
+                self.nc.hover = None;
                 self.card_hover(None);
                 self.card_press = None;
                 let cc = self.cc.leave();
@@ -1628,6 +1966,10 @@ impl Application for Bar {
                 ..
             } => {
                 let p = self.pointer;
+                crate::icon_metrics::emit(
+                    "nc-pointer-press",
+                    serde_json::json!({"point":[p.0,p.1],"nc":self.nc_open,"whole":self.input==[[-1;4]]}),
+                );
                 if let Some((id, content, target)) = self.card_at(p) {
                     self.card_press = Some(CardPress {
                         instance: id,
@@ -1636,16 +1978,25 @@ impl Application for Bar {
                         start: p,
                         serial,
                     });
+                } else if self.nc_open && self.nc.contains(p) {
+                    if let Some(target) = self.nc.hit(p) {
+                        self.nc_act(target, w);
+                    }
                 } else if self.cc_open && self.cc.contains(p) {
                     if let Some(act) = self.cc.press(p, &self.frame.status) {
                         self.act(act, w);
                     }
                     self.refresh(w);
                 } else if let Some(item) = self.item_at(p) {
+                    if self.nc_open && item != Item::Clock {
+                        self.toggle_nc(w);
+                    }
                     if self.cc_open && item != Item::ControlCenter {
                         self.toggle_cc(w);
                     }
                     self.click(item, Some(serial), w);
+                } else if self.nc_open {
+                    self.toggle_nc(w);
                 } else if self.cc_open {
                     // Outside the panel and the bar's glass: the Control Center closes.
                     self.toggle_cc(w);
@@ -1678,6 +2029,7 @@ impl Application for Bar {
                     self.refresh(w);
                 }
             }
+            Event::Key(key) if self.nc_open => self.nc_key(&key, w),
             Event::Key(key) if self.card_keyboard.is_some() => {
                 if key.sym == ESCAPE {
                     self.card_keyboard = None;
@@ -1814,7 +2166,10 @@ impl Application for Bar {
                 }
             }
             Event::Scroll(delta) => {
-                if self.cc_open && self.cc.scroll_detail(delta) {
+                if self.nc_open {
+                    self.nc.scroll(delta * 32.);
+                    self.refresh(w);
+                } else if self.cc_open && self.cc.scroll_detail(delta) {
                     self.refresh(w);
                 } else {
                     self.tray_scroll(delta, false);
@@ -1917,6 +2272,40 @@ impl Application for Bar {
 
     fn idle(&mut self, w: &mut Window) -> nk_wayland::Result<()> {
         self.auth_events(w);
+        if let Some((layer, start, stage)) = self.nc_ghost {
+            if stage == 2
+                && start.elapsed()
+                    >= std::time::Duration::from_millis(crate::nc::CLEAR_MS as u64 + 50)
+            {
+                crate::icon_metrics::emit("nc-clear-fallback", serde_json::json!({}));
+                self.finish_nc_clear(w);
+            } else if stage == 1 {
+                crate::icon_metrics::emit("nc-clear-armed", serde_json::json!({}));
+                let _ = w.set_transition(
+                    layer,
+                    nk_wayland::Property::Opacity,
+                    1,
+                    nk_wayland::Curve::Bezier {
+                        x1: 0.2,
+                        y1: 0.,
+                        x2: 0.2,
+                        y2: 1.,
+                        duration_ms: crate::nc::CLEAR_MS,
+                    },
+                );
+                let _ = w.set_opacity(layer, 0.);
+                self.nc_ghost = Some((layer, Instant::now(), 2));
+                // The pending child state commits without repainting the root.
+            }
+        }
+        let minute = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap_or_default()
+            .as_secs()
+            / 60;
+        if self.nc_open && minute != self.nc.minute {
+            self.refresh(w);
+        }
         if self
             .card_focus
             .as_ref()
@@ -2047,6 +2436,10 @@ impl Application for Bar {
             let look = self.look.as_mut().unwrap();
             self.cc.paint(&mut c, look, &self.frame.status, fallback)?;
         }
+        if self.nc_open {
+            self.nc
+                .paint(&mut c, self.look.as_mut().unwrap(), f.material)?;
+        }
         // The dots, centred in the island's capsule.
         if !self.frame.hidden {
             let island = self.layout.glass[1];
@@ -2064,10 +2457,13 @@ impl Application for Bar {
         }
         let look = self.look.as_mut().unwrap();
         for card in &self.cards {
+            if card.age.is_some() {
+                c.clip(rect(self.nc.viewport));
+            }
             card.paint(
                 &mut c,
                 look,
-                f.material,
+                f.material || card.age.is_some(),
                 &crate::notification_card::Artwork {
                     theme: &self.frame.notification_theme,
                     catalogue: &self.frame.catalogue,
@@ -2075,6 +2471,13 @@ impl Application for Bar {
                     scale: f.scale,
                 },
             )?;
+            if card.age.is_some() {
+                c.pop_clip();
+            }
+        }
+        if let Some((layer, _, 0)) = self.nc_ghost {
+            crate::icon_metrics::emit("nc-clear-first-commit", serde_json::json!({}));
+            self.nc_ghost = Some((layer, Instant::now(), 1));
         }
         Ok(c.finish())
     }
@@ -2082,7 +2485,7 @@ impl Application for Bar {
     fn material(&self) -> Option<Material> {
         if self.frame.locked
             || self.layout.glass.is_empty()
-            || self.frame.hidden && self.cards.is_empty()
+            || self.frame.hidden && self.cards.is_empty() && !self.nc_open
         {
             return None;
         }
@@ -2101,9 +2504,17 @@ impl Application for Bar {
                 pointer: None,
             })
             .collect();
-        let cards: Vec<_> = self.cards.iter().map(|c| c.pane()).collect();
+        let cards: Vec<_> = self
+            .cards
+            .iter()
+            .filter(|c| c.age.is_none())
+            .map(|c| c.pane())
+            .collect();
         if self.frame.hidden {
             panes = cards.clone();
+            if self.nc_open {
+                panes.push(self.nc.pane());
+            }
         }
         let tokens = self.frame.tokens.as_ref()?;
         let mut material = crate::material::piece(
@@ -2139,6 +2550,24 @@ impl Application for Bar {
                 shadow: card.shadow,
                 shapes: cards,
             });
+        }
+        if self.nc_open
+            && let Some(nc) = crate::material::piece(
+                tokens,
+                "controlCenter",
+                true,
+                self.frame.reduce_transparency,
+                self.nc.pane(),
+            )
+        {
+            if !self.frame.hidden {
+                material.groups.push(nk_wayland::Group {
+                    tone: nc.tone,
+                    shadow: nc.shadow,
+                    shapes: vec![self.nc.pane()],
+                });
+            }
+            material.states.extend(self.nc.states());
         }
         Some(material)
     }
@@ -2182,4 +2611,8 @@ pub fn run(bar: Bar, output: LayerOutput, wake: WakeSource) -> nk_wayland::Resul
         Some(wake),
         Instant::now(),
     )
+}
+
+fn inside(r: [f64; 4], p: (f64, f64)) -> bool {
+    p.0 >= r[0] && p.0 < r[0] + r[2] && p.1 >= r[1] && p.1 < r[1] + r[3]
 }

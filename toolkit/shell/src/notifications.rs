@@ -326,6 +326,69 @@ impl Stack {
             .find(|e| e.instance == instance && e.content == content)
     }
 }
+/// Hydrated history is separate from presentation and never replays as a banner.
+#[derive(Clone, Debug)]
+pub struct History {
+    pub entries: std::sync::Arc<Vec<Banner>>,
+    next: u64,
+}
+impl Default for History {
+    fn default() -> Self {
+        Self {
+            entries: Default::default(),
+            next: 1 << 32,
+        }
+    }
+}
+impl History {
+    pub fn clear(&mut self) {
+        self.entries = Default::default();
+    }
+    pub fn put(&mut self, notice: Notice) {
+        if notice.transient() {
+            self.remove(&[notice.id]);
+            return;
+        }
+        let entries = std::sync::Arc::make_mut(&mut self.entries);
+        if let Some(b) = entries.iter_mut().find(|b| b.notice.id == notice.id) {
+            b.content = notice.revision;
+            b.notice = notice;
+            b.error.clear();
+        } else {
+            self.next += 1;
+            entries.push(Banner {
+                content: notice.revision,
+                notice,
+                instance: self.next,
+                output: String::new(),
+                deadline: None,
+                hovered: false,
+                error: String::new(),
+            });
+        }
+    }
+    pub fn remove(&mut self, ids: &[u32]) {
+        let ids: std::collections::HashSet<_> = ids.iter().copied().collect();
+        if !self.entries.iter().any(|b| ids.contains(&b.notice.id)) {
+            return;
+        }
+        std::sync::Arc::make_mut(&mut self.entries).retain(|b| !ids.contains(&b.notice.id));
+    }
+    pub fn current(&self, instance: u64, content: u64) -> Option<&Banner> {
+        self.entries
+            .iter()
+            .find(|b| b.instance == instance && b.content == content)
+    }
+    pub fn set_error(&mut self, instance: u64, content: u64, error: String) {
+        if self.current(instance, content).is_some()
+            && let Some(b) = std::sync::Arc::make_mut(&mut self.entries)
+                .iter_mut()
+                .find(|b| b.instance == instance)
+        {
+            b.error = error;
+        }
+    }
+}
 #[cfg(test)]
 mod tests {
     use super::*;

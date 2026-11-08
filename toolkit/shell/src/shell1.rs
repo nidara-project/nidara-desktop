@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: LGPL-3.0-or-later
 //! Shell1 (`crates/nidara-shell-ipc`), served by the process that paints the Rust shell.
-//! Today that is the dock and Apps (launcher.rs), so the capabilities are `focus:dock`
-//! and `surface:app-grid`; every other member answers Unavailable (or Invalid outside
+//! Implemented surfaces are the dock, Apps and the Notification Center. Other
+//! members answer Unavailable (or Invalid outside
 //! the vocabulary) and is never a no-op. The state is the hub's: locked, Apps open or
 //! not, no island.
 //!
@@ -14,7 +14,12 @@ use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 use std::sync::mpsc::Sender;
 use zbus::blocking::Connection;
 
-pub const CAPABILITIES: &[&str] = &["focus:dock", "surface:app-grid", "notifications:banners"];
+pub const CAPABILITIES: &[&str] = &[
+    "focus:dock",
+    "surface:app-grid",
+    "notifications:banners",
+    "surface:nc",
+];
 const SURFACES: &[&str] = &[
     "cc",
     "nc",
@@ -30,6 +35,8 @@ const SURFACES: &[&str] = &[
 /// What the hub knows and the service answers from.
 #[derive(Default)]
 pub struct Status {
+    pub nc: AtomicBool,
+    pub bars: AtomicUsize,
     pub notifications: std::sync::Mutex<String>,
     pub locked: AtomicBool,
     pub docks: AtomicUsize,
@@ -37,13 +44,19 @@ pub struct Status {
     pub apps: AtomicBool,
 }
 
-pub fn state(locked: bool, apps: bool) -> State {
+pub fn state(locked: bool, apps: bool, nc: bool) -> State {
     State {
         locked,
-        surfaces: vec![SurfaceState {
-            name: "app-grid".into(),
-            visible: apps,
-        }],
+        surfaces: vec![
+            SurfaceState {
+                name: "app-grid".into(),
+                visible: apps,
+            },
+            SurfaceState {
+                name: "nc".into(),
+                visible: nc,
+            },
+        ],
         island: String::new(),
     }
 }
@@ -51,8 +64,8 @@ pub fn state(locked: bool, apps: bool) -> State {
 /// Whether a toggle request can be carried out now.
 pub fn toggle(surface: &str, locked: bool) -> Result<(), Error> {
     match surface {
-        "app-grid" if locked => Err(Error::Unavailable("the session is locked".into())),
-        "app-grid" => Ok(()),
+        "app-grid" | "nc" if locked => Err(Error::Unavailable("the session is locked".into())),
+        "app-grid" | "nc" => Ok(()),
         s if SURFACES.contains(&s) => Err(Error::Unavailable(format!("this shell has no {s} yet"))),
         other => Err(Error::Invalid(format!("unknown surface {other:?}"))),
     }
@@ -98,6 +111,7 @@ impl Shell1 {
         state(
             self.status.locked.load(Ordering::Acquire),
             self.status.apps.load(Ordering::Acquire),
+            self.status.nc.load(Ordering::Acquire),
         )
     }
     fn focus_surface(&self, surface: &str) -> Result<(), Error> {
@@ -113,7 +127,14 @@ impl Shell1 {
     fn toggle_surface(&self, surface: &str, _keyboard: bool) -> Result<(), Error> {
         toggle(surface, self.status.locked.load(Ordering::Acquire))?;
         self.hub
-            .send(HubEvent::Request(Request::ToggleApps))
+            .send(HubEvent::Request(if surface == "nc" {
+                if self.status.bars.load(Ordering::Acquire) == 0 {
+                    return Err(Error::Unavailable("no bar is shown".into()));
+                }
+                Request::ToggleNc { output: None }
+            } else {
+                Request::ToggleApps
+            }))
             .map_err(|_| Error::Failed("the shell is shutting down".into()))
     }
     fn set_island(&self, _mode: &str) -> Result<(), Error> {
@@ -144,13 +165,13 @@ pub fn serve(status: Arc<Status>, hub: Sender<HubEvent>) -> Result<Connection, S
         .map_err(|e| e.to_string())
 }
 
-pub fn changed(conn: &Connection, locked: bool, apps: bool) {
+pub fn changed(conn: &Connection, locked: bool, apps: bool, nc: bool) {
     if let Err(e) = conn.emit_signal(
         None::<&str>,
         PATH,
         INTERFACE,
         "StateChanged",
-        &(state(locked, apps),),
+        &(state(locked, apps, nc),),
     ) {
         eprintln!("nidara-shell: StateChanged not sent: {e}");
     }
@@ -178,6 +199,8 @@ mod tests {
             toggle("app-grid", true),
             Err(Error::Unavailable(_))
         ));
+        assert!(toggle("nc", false).is_ok());
+        assert!(matches!(toggle("nc", true), Err(Error::Unavailable(_))));
         assert!(matches!(toggle("cc", false), Err(Error::Unavailable(_))));
         assert!(matches!(toggle("grid", false), Err(Error::Invalid(_))));
     }

@@ -122,9 +122,95 @@ pub fn allocate(notifications: &[Notification], next: &mut u32, replaces_id: u32
     id
 }
 
+/// Protected records make the safety ceiling soft: never remove today's or critical entries.
+pub fn retention(notifications: &[Notification], now: u64, today: u64) -> Vec<u32> {
+    let mut eligible: Vec<_> = notifications
+        .iter()
+        .filter(|n| n.hints.get("urgency").and_then(Value::as_u64) != Some(2) && n.time < today)
+        .collect();
+    eligible.sort_by_key(|n| (n.time, n.id));
+    let expired = eligible
+        .iter()
+        .take_while(|n| n.time.saturating_add(7 * 86400) <= now)
+        .count();
+    let count = expired
+        .max(notifications.len().saturating_sub(2000))
+        .min(eligible.len());
+    eligible.into_iter().take(count).map(|n| n.id).collect()
+}
+pub fn today_start(now: u64) -> u64 {
+    glib::DateTime::from_unix_local(now as i64)
+        .ok()
+        .and_then(|d| {
+            glib::DateTime::new(
+                &glib::TimeZone::local(),
+                d.year(),
+                d.month(),
+                d.day_of_month(),
+                0,
+                0,
+                0.,
+            )
+            .ok()
+        })
+        .map_or(now / 86400 * 86400, |d| d.to_unix().max(0) as u64)
+}
+pub fn app_group(n: &Notification) -> String {
+    // Match the bounded wire model: oversized desktop-entry hints are discarded,
+    // and app labels are UTF-8 truncated at 1024 bytes by Notice::parse.
+    if let Some(id) = n
+        .hints
+        .get("desktop-entry")
+        .and_then(Value::as_str)
+        .filter(|id| !id.is_empty() && id.len() <= 4096)
+    {
+        return id.to_owned();
+    }
+    let mut end = n.app_name.len().min(1024);
+    while !n.app_name.is_char_boundary(end) {
+        end -= 1;
+    }
+    n.app_name[..end].to_owned()
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+    fn notice(id: u32, time: u64, critical: bool) -> Notification {
+        serde_json::from_value(
+            serde_json::json!({"id":id,"time":time,"hints":{"urgency":if critical {2}else{1}}}),
+        )
+        .unwrap()
+    }
+    #[test]
+    fn retention_seven_days_critical_and_protected_today() {
+        let now = 20 * 86400;
+        let today = now;
+        let rows = vec![
+            notice(1, now - 7 * 86400, false),
+            notice(2, now - 7 * 86400 + 1, false),
+            notice(3, 0, true),
+            notice(4, now, false),
+        ];
+        assert_eq!(retention(&rows, now, today), vec![1]);
+        let mut rows: Vec<_> = (0..2001).map(|i| notice(i + 1, now - 1, false)).collect();
+        assert_eq!(retention(&rows, now, today), vec![1]);
+        for n in &mut rows {
+            n.time = now;
+        }
+        assert!(
+            retention(&rows, now, today).is_empty(),
+            "today wins over the safety ceiling"
+        );
+        for n in &mut rows {
+            n.time = 0;
+            n.hints.insert("urgency".into(), 2.into());
+        }
+        assert!(
+            retention(&rows, now, today).is_empty(),
+            "critical wins over age and safety ceiling"
+        );
+    }
     #[test]
     fn adopts_resolved_ids_and_wraps_without_overflow() {
         let mut next = 1;

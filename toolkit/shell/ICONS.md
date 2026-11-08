@@ -4,8 +4,8 @@
 process. Dock and Apps/search request keys and keep shared `Arc<Raster>`
 references. Tray descriptors reuse unambiguous application artwork or ask the
 same memory for themed/pixmap assets. `cycle.rs` currently selects windows without
-painting icons. Native Notification Center and desktop/login surfaces are still
-missing; this component is their app-icon API. Interface glyphs and album/window
+painting icons. The Notification Center uses this component for visible cards only; desktop/login
+surfaces remain future consumers of the same app-icon API. Interface glyphs and album/window
 pictures are different resources. No artwork or theme has changed.
 
 Install once after connecting Applications1; subscribe with an RAII callback,
@@ -228,3 +228,7 @@ App icon requests include the output scale; file/named raster sides use the
 corresponding physical pixel size. The neutral glyph explicitly resolves in the reference theme, including checkout
 runs where that theme is not installed system-wide. No disk cache, independent image loader or
 per-notification worker pool is added.
+
+B3.2 history reuses `notification_card.rs`. It requests artwork only for the
+indexed viewport, including partially visible cards; expanding 2000 records does
+not create 2000 icon consumers. Historical cards are not fresh announcements.

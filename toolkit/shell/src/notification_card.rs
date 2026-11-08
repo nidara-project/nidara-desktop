@@ -20,6 +20,7 @@ pub enum Target {
 #[derive(Clone, Debug)]
 pub struct Card {
     pub banner: Banner,
+    pub age: Option<String>,
     pub rect: [f64; 4],
     pub buttons: Vec<(Target, String, [f64; 4])>,
 }
@@ -122,6 +123,7 @@ pub fn layout(
             y += h + 16.;
             Card {
                 banner: b.clone(),
+                age: None,
                 rect,
                 buttons,
             }
@@ -129,6 +131,15 @@ pub fn layout(
         .collect()
 }
 impl Card {
+    pub fn translate(&mut self, x: f64, y: f64) {
+        self.rect[0] += x;
+        self.rect[1] += y;
+        for (_, _, r) in &mut self.buttons {
+            r[0] += x;
+            r[1] += y;
+        }
+    }
+
     pub fn pane(&self) -> Pane {
         Pane {
             x: self.rect[0],
@@ -169,7 +180,9 @@ impl Card {
         let b = &self.banner;
         let mut n = Node::new(
             self.node_id(),
-            if b.notice.critical() {
+            if self.age.is_some() {
+                Role::Panel
+            } else if b.notice.critical() {
                 Role::Alert
             } else {
                 Role::Notification
@@ -181,6 +194,9 @@ impl Card {
         } else {
             format!("{} {}", b.notice.body, b.error)
         };
+        if let Some(age) = &self.age {
+            n.description = format!("{} {age}", n.description);
+        }
         n.actions = vec![Action::Activate, Action::Focus];
         n.bounds = bounds(self.rect);
         for (i, (_, label, r)) in self.buttons.iter().enumerate() {
@@ -242,10 +258,29 @@ impl Card {
                 size: 11.,
                 ..style.clone()
             },
-            [text_x, r[1] + 12., room - 20., 16.],
+            [
+                text_x,
+                r[1] + 12.,
+                room - if self.age.is_some() { 80. } else { 20. },
+                16.,
+            ],
             1,
             0.65,
         )?;
+        if let Some(age) = &self.age {
+            text(
+                c,
+                look,
+                age,
+                &TextStyle {
+                    size: 11.,
+                    ..style.clone()
+                },
+                [r[0] + r[2] - 100., r[1] + 12., 60., 16.],
+                1,
+                0.65,
+            )?;
+        }
         text(
             c,
             look,
@@ -432,7 +467,7 @@ fn app_asset(art: &Artwork<'_>, b: &Banner) -> Option<Arc<crate::icon_memory::As
     m.request(key.clone());
     m.get(&key)
 }
-fn text(
+pub(crate) fn text(
     c: &mut Canvas,
     look: &mut Look,
     s: &str,

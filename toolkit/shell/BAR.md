@@ -15,7 +15,7 @@ material (the shell is always dark: white ink). Each is a true capsule, circular
 |---|---|---|
 | Left | Nidara's mark · the focused app's name, or the desktop's ("Desktop 3") | mark: the system menu |
 | Centre | the island: five workspace dots (active wide, occupied dim, empty faint) | the desktops' overview, once the Rust shell has one; nothing until then |
-| Right | tray icons · focus · battery · Wi-Fi · volume · Control Center · clock | tray: below; focus: Do Not Disturb off; Control Center: its panel (`CC.md`); the clock/other pending routes remain unavailable (B3.2) |
+| Right | tray icons · focus · battery · Wi-Fi · volume · Control Center · clock | tray: below; focus: Do Not Disturb off; Control Center: its panel (`CC.md`); clock: Notification Center/calendar (`B3.2.md`) |
 
 Left out of B1 (the owner's list): the overflow `»`, editing and reordering, the island's
 other modes, the search icon (Prism is not in the Rust shell). The person's `bar-order`,
@@ -114,7 +114,7 @@ suspend`, `uwsm stop`, `systemctl reboot`, `systemctl poweroff`.
 A window "Bar" with its items in the order drawn: the mark ("System menu"), the title (a
 label), the island ("Desktops", "desktop N of 5"), each tray item by its title, each
 widget with its state ("Wi-Fi", "connected, signal 3 of 3"), the Control Center (its
-panel and tiles, `CC.md`) and the clock (disabled until its panel). An open menu's rows join under the root, as on the
+panel and tiles, `CC.md`) and the clock (Notification Center/calendar). An open menu's rows join under the root, as on the
 dock (#971). Activate does what a click does, without a token.
 
 ## Evidence
@@ -130,3 +130,13 @@ place and the row clicked through dbusmenu. Shots land in `$NK_WIDGETS_LOG` (`ba
 What it cannot cover: the battery and volume in a real session (no battery here, no
 PipeWire in the harness); their reading is unit-tested, and the battery glyph was checked
 drawn offscreen.
+
+## Notification Center (B3.2, #1050)
+
+The clock and `nidara-ipc nc` toggle one NC on this surface. CC and NC exclude one
+another across outputs; output loss closes the NC. Escape/outside close, lock
+redacts it. The one Card component serves fresh banners and history, with history
+roles rather than announcing the archive. Only visible cards are laid out/painted
+and exposed to AT-SPI. Group disclosure, scrolling, month navigation and all clear
+operations have reader and keyboard targets. See `B3.2.md` for hydration, journal,
+retention, token actions, bounded rendering, clear animation and reproduction.
