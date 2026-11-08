@@ -69,7 +69,8 @@ pub fn migrate(old: &[String], apps: &BTreeMap<String, App>) -> Vec<String> {
 /// The TS dock kept a pin as the desktop ID lowercased with every `.desktop` cut off
 /// (`org.telegram` for `org.telegram.desktop.desktop`, `chrome-…-default` for
 /// `chrome-…-Default.desktop`), so the catalogue entry it names is the one that reads the
-/// same that way. An exact ID wins; with no entry, the ID as written (`prune` decides).
+/// same that way. An exact ID wins; with no entry, the ID as written, kept like any
+/// pin whose app is not installed (#1053).
 fn resolve_legacy(id: &str, apps: &BTreeMap<String, App>) -> String {
     let exact = if id.ends_with(".desktop") {
         id.to_string()
@@ -106,14 +107,6 @@ pub fn validate(raw: &[String]) -> Result<Vec<String>, Error> {
             Ok(s)
         })
         .collect()
-}
-pub fn prune(layout: &mut Vec<String>, apps: &BTreeMap<String, App>, healthy: bool) {
-    if healthy {
-        layout.retain(|t| {
-            t.strip_prefix("app:")
-                .is_none_or(|id| apps.contains_key(id))
-        });
-    }
 }
 pub fn edit(
     old: &[String],
@@ -216,14 +209,10 @@ pub fn records(layout: &[String], apps: &BTreeMap<String, App>, default: &str) -
 mod tests {
     use super::*;
     #[test]
-    fn migration_and_health() {
+    fn migration_and_validation() {
         let apps = BTreeMap::new();
-        let mut l = migrate(&["pinned-kitty".into()], &apps);
+        let l = migrate(&["pinned-kitty".into()], &apps);
         assert_eq!(l, [DEFAULT, "app:kitty.desktop"]);
-        prune(&mut l, &apps, false);
-        assert_eq!(l.len(), 2);
-        prune(&mut l, &apps, true);
-        assert_eq!(l, [DEFAULT]);
         assert!(validate(&[DEFAULT.into(), DEFAULT.into()]).is_err());
         assert!(canonical("app:../../bad.desktop").is_err());
         assert!(canonical("folder:file://remote/tmp").is_err());
@@ -288,8 +277,7 @@ mod tests {
             "gone",
         ]
         .map(String::from);
-        let mut l = migrate(&old, &apps);
-        prune(&mut l, &apps, true);
+        let l = migrate(&old, &apps);
         assert_eq!(
             l,
             [
@@ -298,6 +286,7 @@ mod tests {
                 "app:io.missioncenter.MissionCenter.desktop",
                 "app:chrome-abc-Default.desktop",
                 "app:kitty.desktop",
+                "app:gone.desktop",
             ]
         );
     }

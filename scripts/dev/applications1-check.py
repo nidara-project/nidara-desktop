@@ -121,7 +121,8 @@ def inside(binary, out):
         assert 'nested-Tool.desktop' in apps
         assert 'TryMissing.desktop' in apps and not apps['TryMissing.desktop']['EntryAvailable'] and not apps['TryMissing.desktop']['Visible']
         assert apps['Sample.desktop']['Origin']=='flatpak'
-        assert [x['Key'] for x in s['Layout']]==['default-handler:inode/directory','app:Sample.desktop','app:Case.desktop'],s['Layout']
+        # A migrated pin to an absent app is kept, unavailable: the dock hides it (#1053).
+        assert [x['Key'] for x in s['Layout']]==['default-handler:inode/directory','app:Sample.desktop','app:deleted.desktop','app:Case.desktop'],s['Layout']
         def dock_get(key):
             return subprocess.run(['gsettings','get','org.nidara.dock',key],capture_output=True,text=True,check=True).stdout.strip()
         def dock_set(key,value):
@@ -191,7 +192,7 @@ def inside(binary, out):
             ctx.iteration(False);time.sleep(.002)
         bus.signal_unsubscribe(sub)
         assert got and got[0]-t0<.09,f'Changed {(got[0]-t0)*1000 if got else -1:.0f} ms after an edit: held behind a refresh'
-        # Healthy uninstall removes a pin; lost root must preserve it, including restart.
+        # A lost root preserves a pin, including restart.
         saved=appdir.with_name('applications-offline');appdir.rename(saved)
         wait(lambda:not snap()[2]['CatalogueComplete'],'provider/root outage degrades catalogue')
         assert 'app:Added.desktop' in [x['Key'] for x in snap()[2]['Layout']]
@@ -202,9 +203,15 @@ def inside(binary, out):
         saved.rename(appdir)
         wait(lambda:snap()[2]['CatalogueComplete'],'root recovery')
         previous_gen=all_apps()[3]['Added.desktop']['Generation']
+        # An uninstall, or an upgrade that unlinks and rewrites the entry, keeps the pin;
+        # it is only unavailable until the entry is back (#1053).
+        added=lambda:[x for x in snap()[2]['Layout'] if x['Key']=='app:Added.desktop']
         (appdir/'Added.desktop').unlink()
-        wait(lambda:'app:Added.desktop' not in [x['Key'] for x in snap()[2]['Layout']],'healthy uninstall prunes pin')
+        wait(lambda:'Added.desktop' not in all_apps()[3],'entry gone from a healthy catalogue')
+        time.sleep(.5)
+        assert added() and not added()[0]['Available'],'a healthy uninstall keeps the pin, unavailable'
         desktop(appdir,'Added.desktop','Recreated')
+        wait(lambda:added() and added()[0]['Available'],'a reinstall brings the pin back')
         wait(lambda:all_apps()[3].get('Added.desktop',{}).get('Generation',0)>previous_gen,'recreated ID has a fresh generation')
         e=e2;_,_,s,apps=all_apps();sample=apps['Sample.desktop'];g=sample['Generation']
         token,w,h,rgba=call('GetIcon','(tstud)',(e,'Sample.desktop',g,32,1.25))
@@ -277,7 +284,7 @@ def inside(binary, out):
         fe,_,fs=snap()
         fail('EditLayout','(tta{sv})',(fe,fs['LayoutRevision'],edit),'Unavailable')
         assert dock_get('layout-version')=='uint32 2' and ast.literal_eval(dock_get('pinned'))==['case']
-        print('PASS Applications1: opt-in/name conflict, XDG precedence/case/hidden/nested IDs, >300 apps + caller-bound immutable pages, search tiers, canonical layout migration/CAS/folder, consent+revocation, root outage+restart retention and healthy-only pruning, PNG/RGBA/SVG text + overrides, stale epochs/generations, TS/native key isolation+empty restart+future version, portal ReadOne/signals/owner/spoof; no launches or live session')
+        print('PASS Applications1: opt-in/name conflict, XDG precedence/case/hidden/nested IDs, >300 apps + caller-bound immutable pages, search tiers, canonical layout migration/CAS/folder, consent+revocation, root outage+restart retention and pins kept across uninstall/reinstall, PNG/RGBA/SVG text + overrides, stale epochs/generations, TS/native key isolation+empty restart+future version, portal ReadOne/signals/owner/spoof; no launches or live session')
     finally:
         stop();log.close();second.close_sync(None)
         if portal:portal.close()

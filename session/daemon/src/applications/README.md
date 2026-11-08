@@ -86,8 +86,7 @@ serviced before each job, so a stream of reads cannot starve consent updates.
 Catalogue bounds: 64 roots, 16 directory levels, 4096 monitored directories,
 65536 directory entries, 16384 desktop IDs, 256 KiB input per desktop file,
 64 desktop actions, 32 KiB per metadata record and 32 MiB total serialized
-metadata. Rejected limits/entries produce incomplete diagnostics and prohibit
-pruning. Metadata has no Exec argv, activation token or image payloads.
+metadata. Rejected limits/entries produce incomplete diagnostics. Metadata has no Exec argv, activation token or image payloads.
 
 Search uses the existing TS field weights (name1, id0.85, executable0.78,
 keyword0.65) and exact/prefix/word-prefix/substring/acronym/rescue tiers. IDs
@@ -106,8 +105,8 @@ order. Sharing `pinned` would let the TS orphan-pruner erase typed tokens.
 Version0 imports known legacy prefixes once, preserves
 order, maps each legacy ID to its catalogue entry the way the TS dock wrote it
 (lowercased, every `.desktop` cut: `org.telegram` is
-`org.telegram.desktop.desktop`; an exact ID wins; read literally, those pins were
-pruned as unknown apps), prepends the movable dynamic default-directory target and includes
+`org.telegram.desktop.desktop`; an exact ID wins; read literally, those pins would
+name no installed app), prepends the movable dynamic default-directory target and includes
 Apps only when its real entry ships. Version1 accepts `app:<DesktopId>`,
 `default-handler:inode/directory` and `folder:<absolute-local-file-URI>`.
 An intentional version1 empty layout stays empty. Future versions are read-only;
@@ -119,9 +118,11 @@ EditLayout(epoch,expectedLayoutRevision,edit) edits stable keys using insert-app
 insert-folder, move or remove. Unknown keys/types and duplicates fail before a
 write. Inserts without BeforeKey append; already pinned targets are no-ops.
 CAS conflicts never replace another client's layout. All callers, including
-external writers of the native keys, feed the same validated native state. Only after a
-complete healthy catalogue proves an app ID absent is its pin pruned (including
-migrated pins); folders and unresolved dynamic defaults are not uninstalled apps.
+external writers of the native keys, feed the same validated native state. A pin
+whose app is not installed is never pruned, including migrated pins: its record has
+`Available` false and the dock hides it (#1053). An upgrade unlinks and rewrites a
+desktop entry, and a refresh in that gap must not lose the pin; a reinstall brings
+it back in its place.
 Every actual layout change advances LayoutRevision; unrelated icon changes do not.
 
 D-Bus mutations authenticate the unique sender's real PID/UID, cache only pinned
@@ -187,7 +188,7 @@ The integration fixture (`scripts/dev/applications1-check.py`) uses a bus with
 no service autoactivation, local GIO, private XDG roots/settings, no system bus,
 and >300 fake desktop entries. It covers opt-in/conflicting owner, immutable
 caller-bound pages, generations/search, layout/CAS/consent, actual root loss and
-restart, healthy uninstall pruning, RGBA/SVG text/overrides and revocation.
+restart, pins kept across uninstall and reinstall, RGBA/SVG text/overrides and revocation.
 It also checks TS/native key isolation, intentional empty layout after restart,
 and portal initial read/signals/owner restart/spoof rejection.
 Logs remain in target/applications1; only short-lived runtime sockets use /tmp.

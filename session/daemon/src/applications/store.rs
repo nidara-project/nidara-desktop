@@ -402,8 +402,9 @@ impl Store {
         });
         if let Some(pending) = pending {
             match pending {
-                Ok(mut next) => {
-                    layout::prune(&mut next, &self.apps, self.healthy);
+                // A pin whose app is not installed stays: the dock hides it, and an
+                // upgrade that briefly removes the entry or a reinstall finds it (#1053).
+                Ok(next) => {
                     if let Err(e) = self.save_layout(next) {
                         self.diagnostics.push(e.to_string());
                     }
