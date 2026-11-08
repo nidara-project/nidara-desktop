@@ -515,19 +515,50 @@ pub async fn serve(
             .at(agent::PATH_NM, agent.clone())
             .await?;
     }
-    // Subscribe before the initial snapshot. Periodic reconciliation also covers a lost
-    // signal and retries agent registration after NM/polkit startup ordering failures.
+    // Subscribe before the initial snapshot. NM's own signals, its owner changing and a
+    // lost session client wake this loop (#1054). A slow reconciliation covers a lost
+    // signal; agent registration retries every RETRY only while it is failing.
     let rule = zbus::MatchRule::builder()
         .msg_type(zbus::message::Type::Signal)
         .path_namespace(nm::ROOT)?
         .build();
     let mut stream = zbus::MessageStream::for_match_rule(rule, &system, Some(256)).await?;
+    let mut owners = zbus::fdo::DBusProxy::new(&system)
+        .await?
+        .receive_name_owner_changed_with_args(&[(0, nm::NAME)])
+        .await?;
+    let mut clients = zbus::fdo::DBusProxy::new(session)
+        .await?
+        .receive_name_owner_changed()
+        .await?;
     tokio::spawn(async move {
         use futures_util::StreamExt;
-        let mut tick = tokio::time::interval(Duration::from_secs(2));
+        const RECONCILE: Duration = Duration::from_secs(30);
+        const RETRY: Duration = Duration::from_secs(2);
         let mut registered = String::new();
+        let mut wait = Duration::ZERO;
         loop {
-            tokio::select! {_ = tick.tick()=>{},msg=stream.next()=>{if msg.is_none(){let _=network.refresh().await;agent.withdraw("bus-disconnected").await;break;}tokio::time::sleep(Duration::from_millis(30)).await;}}
+            tokio::select! {
+                _ = tokio::time::sleep(wait) => {},
+                msg = stream.next() => {
+                    if msg.is_none() {
+                        let _ = network.refresh().await;
+                        agent.withdraw("bus-disconnected").await;
+                        break;
+                    }
+                    tokio::time::sleep(Duration::from_millis(30)).await;
+                }
+                m = owners.next() => if m.is_none() { break },
+                m = clients.next() => {
+                    let Some(m) = m else { break };
+                    // Only a lost client matters, and only to the UI check.
+                    if m.args().is_ok_and(|a| a.new_owner().is_none()) {
+                        agent.check_ui().await;
+                    }
+                    continue;
+                }
+            }
+            wait = RECONCILE;
             agent.check_ui().await;
             if let Ok(nm) = Nm::current(&system).await {
                 if !read_only && registered != nm.owner {
@@ -541,12 +572,15 @@ pub async fn serve(
                         .await;
                     if result.is_ok() {
                         registered = nm.owner;
+                    } else {
+                        wait = RETRY;
                     }
                 }
             } else {
                 registered.clear();
             }
             if network.refresh().await.is_err() {
+                wait = RETRY;
                 eprintln!("[network] snapshot unavailable; retrying");
             }
         }

@@ -853,6 +853,13 @@ impl Service {
         self.enqueue(device.id, device.epoch, base, Some(direction))
             .await
     }
+    fn has_panels(&self) -> bool {
+        self.state.lock().unwrap().entries.values().any(|e| {
+            e.device.available
+                && e.link.output.powered
+                && matches!(e.link.channel, Channel::Panel { .. })
+        })
+    }
     async fn panels(&self) {
         let targets = {
             let s = self.state.lock().unwrap();
@@ -981,7 +988,8 @@ async fn start(power: Power, paths: Paths) -> zbus::Result<Service> {
                 _=power.brightness_wake.notified()=>{let _=service.refresh(true).await;},
                 _=service.recovery_notify.notified()=>{},
                 _=retry=>service.recover_due(Instant::now()).await,
-                _=interval.tick()=>service.panels().await,
+                // A panel's level is read back once a second only while one is lit (#1054).
+                _=interval.tick(), if service.has_panels()=>service.panels().await,
             }
         }
     });

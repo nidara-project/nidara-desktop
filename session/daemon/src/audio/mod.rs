@@ -59,6 +59,8 @@ pub struct Request {
 #[derive(Clone)]
 pub struct Backend {
     pub commands: std::sync::mpsc::Sender<Request>,
+    /// The worker's GLib context: it sleeps there until a request wakes it (#1054).
+    pub wake: glib::MainContext,
 }
 impl Backend {
     async fn send(
@@ -78,6 +80,7 @@ impl Backend {
                 reply: tx,
             })
             .map_err(|_| Error::Unavailable("audio worker stopped".into()))?;
+        self.wake.wakeup();
         tokio::time::timeout(Duration::from_secs(5), rx)
             .await
             .map_err(|_| Error::Timeout("audio worker did not answer".into()))?
@@ -286,11 +289,18 @@ pub fn path(s: &str) -> Path {
 pub async fn serve(conn: &Connection) -> Result<(), Box<dyn std::error::Error>> {
     let (snapshots_tx, mut snapshots) = watch::channel(Graph::default());
     let (commands, rx) = std::sync::mpsc::channel();
+    let wake = glib::MainContext::new();
     let prefs = Arc::new(RwLock::new(Preferences::default()));
     #[cfg(feature = "audio-native")]
     let streams = streams::Manager::new();
     #[cfg(feature = "audio-native")]
-    native::start(rx, snapshots_tx, prefs.clone(), streams.clone());
+    native::start(
+        rx,
+        snapshots_tx,
+        prefs.clone(),
+        streams.clone(),
+        wake.clone(),
+    );
     #[cfg(not(feature = "audio-native"))]
     {
         let _ = snapshots_tx.send(Graph {
@@ -307,7 +317,7 @@ pub async fn serve(conn: &Connection) -> Result<(), Box<dyn std::error::Error>> 
     let audio = Audio {
         graph: Arc::new(RwLock::new(Graph::default())),
         prefs,
-        backend: Backend { commands },
+        backend: Backend { commands, wake },
         changed: Arc::new(Notify::new()),
         sequence: Arc::new(AtomicU64::new(1)),
         announced_root: Arc::new(std::sync::Mutex::new(BTreeMap::new())),
@@ -400,7 +410,10 @@ mod tests {
             let a = Audio {
                 graph: Arc::new(RwLock::new(Graph::default())),
                 prefs: Arc::new(RwLock::new(Preferences::default())),
-                backend: Backend { commands: tx },
+                backend: Backend {
+                    commands: tx,
+                    wake: glib::MainContext::new(),
+                },
                 changed: Arc::new(Notify::new()),
                 sequence: Arc::new(AtomicU64::new(1)),
                 announced_root: Arc::new(std::sync::Mutex::new(BTreeMap::new())),

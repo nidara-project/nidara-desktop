@@ -113,6 +113,8 @@ struct Tray {
     registrations: Arc<Mutex<()>>,
     registration_workers: Arc<Semaphore>,
     registration_queue: Arc<Semaphore>,
+    /// Wakes the refresh worker when a job may have become runnable (#1054).
+    jobs: Arc<tokio::sync::Notify>,
 }
 impl Tray {
     fn item(&self, handle: &str, generation: u64) -> Result<Item, Error> {
@@ -348,6 +350,7 @@ impl Tray {
                         i.props.extend(signals);
                         i.apply(icons.into_iter().map(|(k, v)| (k, val(v))).collect(), other);
                         i.ready = true;
+                        self.jobs.notify_one();
                         Some(i.registration.clone())
                     } else {
                         None
@@ -526,6 +529,7 @@ impl Tray {
             }
         }
         self.state.write().unwrap().busy.remove(&handle);
+        self.jobs.notify_one();
     }
 }
 fn signal_rules() -> zbus::Result<Vec<zbus::MatchRule<'static>>> {
@@ -563,6 +567,7 @@ pub async fn serve(conn: &Connection) -> zbus::Result<()> {
         registrations: Default::default(),
         registration_workers: Arc::new(Semaphore::new(8)),
         registration_queue: Arc::new(Semaphore::new(model::MAX_ITEMS)),
+        jobs: Default::default(),
     };
     conn.object_server()
         .at(ROOT, bus::Root(tray.clone()))
@@ -622,6 +627,7 @@ pub async fn serve(conn: &Connection) -> zbus::Result<()> {
                         let mut s=observed.state.write().unwrap();
                         let keys=s.items.keys().cloned().collect::<Vec<_>>();
                         for k in keys {s.pending.entry(k).or_default().extend(FIELDS.iter().map(|f|f.to_string()));}
+                        observed.jobs.notify_one();
                         continue;
                     };
                     let h=msg.header();
@@ -666,6 +672,7 @@ pub async fn serve(conn: &Connection) -> zbus::Result<()> {
                             if let Some(pending)=s.pending.get_mut(&k) {for field in inline.keys() {pending.remove(field);}}
                             if !fields.is_empty() {s.pending.entry(k).or_default().extend(fields.clone());}
                         }
+                        if !fields.is_empty() {observed.jobs.notify_one();}
                         updated
                     };
                     if updated {observed.changed().await;}
@@ -677,10 +684,8 @@ pub async fn serve(conn: &Connection) -> zbus::Result<()> {
     });
     let worker = tray.clone();
     tokio::spawn(async move {
-        let mut tick = tokio::time::interval(Duration::from_millis(25));
-        tick.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
+        // Event-driven: a queued field, a hydrated item, or a finished call wakes it.
         loop {
-            tick.tick().await;
             loop {
                 let Ok(slot) = worker.slot() else { break };
                 let job = {
@@ -699,10 +704,13 @@ pub async fn serve(conn: &Connection) -> zbus::Result<()> {
                 let Some((k, fields)) = job else { break };
                 let t = worker.clone();
                 tokio::spawn(async move {
-                    let _slot = slot;
                     t.refresh(k, fields).await;
+                    // The call slot is free only now; refresh's own wake can come too early.
+                    drop(slot);
+                    t.jobs.notify_one();
                 });
             }
+            worker.jobs.notified().await;
         }
     });
     tray.changed().await;

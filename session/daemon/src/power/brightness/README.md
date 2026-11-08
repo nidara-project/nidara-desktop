@@ -71,7 +71,8 @@ port/EDID match still applies. The candidate set and absence of an associated ra
 are rechecked before/after I/O, and fresh Display1 state must still contain only
 one internal output. Writes use the already resolved
 logind Session.SetBrightness("backlight", name, raw). Readback uses actual_brightness
-when available; panel observations are polled once per second, without writes.
+when available; panel observations are polled once per second, without writes, only while a lit
+internal panel exists (#1054); a machine without one does not wake for it.
 
 For an external output, use only its sysfs `ddc` I2C link and an accessible read/write
 `/dev/i2c-N`. Opening checks permission but sends no transaction. A successful VCP

@@ -152,6 +152,7 @@ def fake():
         else:
             return False
         calls.append(['Set', path, key, value.unpack()])
+        nm_bus.emit_signal(None, ROOT, 'org.freedesktop.DBus.Properties', 'PropertiesChanged', v('(sa{sv}as)', ('org.freedesktop.NetworkManager', {}, [])))
         return True
     def answer(inv, signature='()', args=()):
         inv.return_value(v(signature, args))
@@ -171,7 +172,19 @@ def fake():
         if (item,SS+'.Item') not in objects:
             export(item, SS+'.Item', [('Delete',(),('o',))], {'Attributes':'a{ss}', 'Locked':'b', 'Modified':'t'})
         answer(inv, '(oo)', (item,'/'))
+    # Calls that change what NetworkManager reports. Reads never signal: the
+    # daemon reads in reply to a signal, so a read that signalled would loop.
+    CHANGES = {'ActivateConnection', 'AddAndActivateConnection', 'AddConnection', 'Delete',
+               'Disconnect', 'DeactivateConnection', 'Update', 'Update2', 'Reapply', 'RequestScan',
+               'Set', 'Seed', 'StorageFixture', 'StorageBinary', 'StorageWep', 'StorageCopies',
+               'LateStorageSave', 'ReleaseStores', 'Save', 'Ask', 'Cancel', 'Restore'}
     def dispatch(bus, sender, path, iface, method, parameters, inv):
+        handle(bus, sender, path, iface, method, parameters, inv)
+        # Like NetworkManager, announce a change after anything that is not a read:
+        # the daemon waits for signals instead of polling (#1054).
+        if method in CHANGES:
+            nm_bus.emit_signal(None, ROOT, 'org.freedesktop.DBus.Properties', 'PropertiesChanged', v('(sa{sv}as)', ('org.freedesktop.NetworkManager', {}, [])))
+    def handle(bus, sender, path, iface, method, parameters, inv):
         try:
             p = parameters.unpack()
             if iface == 'org.nidara.NetworkTest':

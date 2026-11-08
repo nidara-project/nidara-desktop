@@ -106,7 +106,8 @@ workers and bounded admission of 256 waiting/running registrations, so ordinary
 startup bursts wait instead of losing icons with Busy or starving actions. The
 registration mutex covers resolution/reservation only, not app hydration. No
 unbounded work queue is created. Property refresh
-requests coalesce by item/field and are debounced 25 ms. RPCs and whole refresh
+requests coalesce by item/field; the refresh worker sleeps until a field is
+queued, an item becomes ready or a call slot frees (#1054). RPCs and whole refresh
 batches have a two-second deadline. Item strings are at most 4096 UTF-8 bytes.
 At most 16 pixmaps/property, each <=512x512 with exact checked byte length;
 retained pixmaps <=4 MiB/item and 32 MiB total. Menus: eight tokens/host,
