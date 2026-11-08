@@ -467,7 +467,9 @@ empty directories. Canonical snapshot completeness requires all configured
 catalogue roots to have a successful scan or a verified healthy absence, rather
 than an I/O or mount failure. If health is uncertain, defer pruning. The same
 rule applies to migrated pins: import first, prune only with that evidence, not
-against a partial startup cache. A fresh healthy absence removes the pin in the
+against a partial startup cache. The absence must also outlast a 60 s grace, since
+a package upgrade unlinks and rewrites the entry in place (#1053); during the grace
+the pin stays, unavailable. A healthy absence past the grace removes the pin in the
 shared layout transaction and publishes its new LayoutRevision, so an in-flight
 drag receives Conflict rather than restoring a stale pin. Folder entries retain
 the distinct missing-folder behavior above; a dynamic default-directory pin is
@@ -838,7 +840,7 @@ not a claim that any runtime test has been performed for this design.
 | 20 Apps ordinary app | real .desktop/app-id, visible in own grid, movable/removable, factory pin in former launcher's relative position |
 | 21 Files default app | inode/directory resolver, replace handler without dock source change, actual app windows grouped, movable/removable |
 | 22 Trash fixed | final slot alone fixed, disabled unsupported backend reports why, no reorder/remove/deletion via data payload |
-| 23 pin placement/factory | menu pin at pinned-section end, drag at drop, Files→Apps→rest, intentional empty layout survives; uninstalled exact-ID pins (including migrated) pruned only after complete healthy catalogue |
+| 23 pin placement/factory | menu pin at pinned-section end, drag at drop, Files→Apps→rest, intentional empty layout survives; uninstalled exact-ID pins (including migrated) pruned only after complete healthy catalogue and a 60 s grace (#1053) |
 | 24 folders now | typed persistent URI, current default manager opens, missing folder removable, no fan/grid stack yet |
 | 25 no surface recreation | same Wayland surface identity and focus/input/material lifecycle across bottom/left/right; snap now, #966 later |
 

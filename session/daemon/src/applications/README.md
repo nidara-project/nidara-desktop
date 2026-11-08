@@ -122,6 +122,11 @@ CAS conflicts never replace another client's layout. All callers, including
 external writers of the native keys, feed the same validated native state. Only after a
 complete healthy catalogue proves an app ID absent is its pin pruned (including
 migrated pins); folders and unresolved dynamic defaults are not uninstalled apps.
+The absence must also last `layout::PRUNE_GRACE` (60 s): a package upgrade unlinks
+and rewrites a desktop entry, and a refresh in that gap must not unpin it (#1053).
+Meanwhile the pin stays, unavailable; a timer prunes it when the grace ends, and an
+app back before then clears the grace. The integration check shortens the grace
+with `NIDARA_APPLICATIONS_PRUNE_GRACE_MS`.
 Every actual layout change advances LayoutRevision; unrelated icon changes do not.
 
 D-Bus mutations authenticate the unique sender's real PID/UID, cache only pinned

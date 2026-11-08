@@ -7,7 +7,24 @@ use serde_json::{Value, json};
 use std::{
     collections::{BTreeMap, BTreeSet},
     path::Path,
+    time::{Duration, Instant},
 };
+/// How long a pinned app may be missing from a healthy catalogue before its pin goes.
+/// A package upgrade replaces a desktop entry by unlinking and rewriting it, and a
+/// refresh can land in that gap; only an app still missing past this is uninstalled
+/// (#1053). Meanwhile the dock shows the pin unavailable.
+pub const PRUNE_GRACE: Duration = Duration::from_secs(60);
+/// `PRUNE_GRACE`, unless the integration check shortens it with
+/// `NIDARA_APPLICATIONS_PRUNE_GRACE_MS`.
+pub fn prune_grace() -> Duration {
+    static GRACE: std::sync::OnceLock<Duration> = std::sync::OnceLock::new();
+    *GRACE.get_or_init(|| {
+        std::env::var("NIDARA_APPLICATIONS_PRUNE_GRACE_MS")
+            .ok()
+            .and_then(|v| v.parse().ok())
+            .map_or(PRUNE_GRACE, Duration::from_millis)
+    })
+}
 const DEFAULT: &str = "default-handler:inode/directory";
 pub fn canonical(token: &str) -> Result<String, Error> {
     if token.len() > 8192 {
@@ -107,13 +124,36 @@ pub fn validate(raw: &[String]) -> Result<Vec<String>, Error> {
         })
         .collect()
 }
-pub fn prune(layout: &mut Vec<String>, apps: &BTreeMap<String, App>, healthy: bool) {
-    if healthy {
-        layout.retain(|t| {
-            t.strip_prefix("app:")
-                .is_none_or(|id| apps.contains_key(id))
-        });
+/// Drops the `app:` targets missing from a healthy catalogue for `prune_grace()`.
+/// `missing` holds when each pinned app was first seen missing; an app that is back, or
+/// no longer pinned, leaves it.
+pub fn prune(
+    layout: &mut Vec<String>,
+    apps: &BTreeMap<String, App>,
+    healthy: bool,
+    missing: &mut BTreeMap<String, Instant>,
+    now: Instant,
+) {
+    if !healthy {
+        return;
     }
+    let absent = |t: &String| {
+        t.strip_prefix("app:")
+            .filter(|id| !apps.contains_key(*id))
+            .map(str::to_owned)
+    };
+    let pinned = layout.iter().filter_map(absent).collect::<BTreeSet<_>>();
+    missing.retain(|id, _| pinned.contains(id));
+    layout.retain(|t| {
+        absent(t).is_none_or(|id| {
+            let since = *missing.entry(id.clone()).or_insert(now);
+            let keep = now.saturating_duration_since(since) < prune_grace();
+            if !keep {
+                missing.remove(&id);
+            }
+            keep
+        })
+    });
 }
 pub fn edit(
     old: &[String],
@@ -220,13 +260,55 @@ mod tests {
         let apps = BTreeMap::new();
         let mut l = migrate(&["pinned-kitty".into()], &apps);
         assert_eq!(l, [DEFAULT, "app:kitty.desktop"]);
-        prune(&mut l, &apps, false);
+        let (mut missing, now) = (BTreeMap::new(), Instant::now());
+        prune(&mut l, &apps, false, &mut missing, now);
         assert_eq!(l.len(), 2);
-        prune(&mut l, &apps, true);
+        prune(&mut l, &apps, true, &mut missing, now);
+        assert_eq!(l.len(), 2, "a first absence only starts the grace");
+        prune(&mut l, &apps, true, &mut missing, now + PRUNE_GRACE);
         assert_eq!(l, [DEFAULT]);
+        assert!(missing.is_empty());
         assert!(validate(&[DEFAULT.into(), DEFAULT.into()]).is_err());
         assert!(canonical("app:../../bad.desktop").is_err());
         assert!(canonical("folder:file://remote/tmp").is_err());
+    }
+    #[test]
+    fn a_pin_outlives_an_entry_rewritten_by_an_upgrade() {
+        let app = App {
+            id: "chatgpt.desktop".into(),
+            generation: 1,
+            digest: String::new(),
+            source_hash: String::new(),
+            exec_hash: String::new(),
+            record: json!({}),
+            executable: String::new(),
+            keywords: vec![],
+            icon: String::new(),
+        };
+        let present = BTreeMap::from([(app.id.clone(), app)]);
+        let gone = BTreeMap::new();
+        let pin = vec!["app:chatgpt.desktop".to_string()];
+        let (mut l, mut missing, t) = (pin.clone(), BTreeMap::new(), Instant::now());
+        // The refresh lands in the gap, then the rewritten entry is back.
+        prune(&mut l, &gone, true, &mut missing, t);
+        prune(&mut l, &present, true, &mut missing, t + PRUNE_GRACE / 2);
+        assert!(missing.is_empty(), "an app that is back clears its grace");
+        // A later absence starts a fresh grace rather than inheriting the old one.
+        prune(
+            &mut l,
+            &gone,
+            true,
+            &mut missing,
+            t + PRUNE_GRACE + PRUNE_GRACE / 2,
+        );
+        assert_eq!(l, pin);
+        prune(&mut l, &gone, true, &mut missing, t + PRUNE_GRACE * 2);
+        assert_eq!(l, pin, "still within the fresh grace");
+        prune(&mut l, &gone, true, &mut missing, t + PRUNE_GRACE * 3);
+        assert!(
+            l.is_empty(),
+            "an app still missing past the grace is unpinned"
+        );
     }
     #[test]
     fn a_file_is_pinned_like_a_folder() {
@@ -289,7 +371,9 @@ mod tests {
         ]
         .map(String::from);
         let mut l = migrate(&old, &apps);
-        prune(&mut l, &apps, true);
+        let (mut missing, now) = (BTreeMap::new(), Instant::now());
+        prune(&mut l, &apps, true, &mut missing, now);
+        prune(&mut l, &apps, true, &mut missing, now + PRUNE_GRACE);
         assert_eq!(
             l,
             [
