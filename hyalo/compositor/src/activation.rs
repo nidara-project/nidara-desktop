@@ -142,6 +142,23 @@ fn from_the_user(data: &XdgActivationTokenData) -> bool {
     first && data.user_data.get::<FromTheUser>().is_some_and(|v| v.0) && data.timestamp.elapsed() < ACTIVATION_TIMEOUT
 }
 
+impl Hyalo {
+    /// An X11 window shown with a startup id that is a token Hyalo made (`_NET_STARTUP_ID`,
+    /// which a launcher sets from the token): the token, used up, and whether it came from the
+    /// user, and its deadline. A classic startup-notification id Hyalo did not make is not one.
+    pub fn take_x11_startup(&mut self, window: &smithay::desktop::Window) -> Option<(String, bool, std::time::Instant)> {
+        let id = window.x11_surface()?.startup_id()?;
+        let token = XdgActivationToken::from(id);
+        let data = self.activation_state.data_for_token(&token)?;
+        // Xwayland shares one Wayland connection between independent X11 clients.
+        // Startup IDs remain single-use; never reuse a Wayland app's token here.
+        if data.user_data.get::<IdentityClient>().is_some() { return None; }
+        let (valid, deadline) = (from_the_user(data), data.timestamp + ACTIVATION_TIMEOUT);
+        self.activation_state.remove_token(&token);
+        Some((token.into(), valid, deadline))
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -171,22 +188,5 @@ mod tests {
         assert!(identity_client(&data, &a.id()));
         assert!(!identity_client(&data, &b.id()));
         assert!(identity_client(&data, &a.id()));
-    }
-}
-
-impl Hyalo {
-    /// An X11 window shown with a startup id that is a token Hyalo made (`_NET_STARTUP_ID`,
-    /// which a launcher sets from the token): the token, used up, and whether it came from the
-    /// user, and its deadline. A classic startup-notification id Hyalo did not make is not one.
-    pub fn take_x11_startup(&mut self, window: &smithay::desktop::Window) -> Option<(String, bool, std::time::Instant)> {
-        let id = window.x11_surface()?.startup_id()?;
-        let token = XdgActivationToken::from(id);
-        let data = self.activation_state.data_for_token(&token)?;
-        // Xwayland shares one Wayland connection between independent X11 clients.
-        // Startup IDs remain single-use; never reuse a Wayland app's token here.
-        if data.user_data.get::<IdentityClient>().is_some() { return None; }
-        let (valid, deadline) = (from_the_user(data), data.timestamp + ACTIVATION_TIMEOUT);
-        self.activation_state.remove_token(&token);
-        Some((token.into(), valid, deadline))
     }
 }

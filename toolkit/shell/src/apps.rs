@@ -25,7 +25,7 @@ pub struct AppsState {
     pub owner: String,
     pub hyalo_epoch: String,
     pub matching_available: bool,
-    pub window_matches: HashMap<u64, String>,
+    pub window_matches: Box<HashMap<u64, String>>,
     pub epoch: u64,
     pub revision: u64,
     pub apps: Vec<App>,
@@ -289,14 +289,16 @@ fn snapshot_data(conn: &Connection) -> Result<AppsState, String> {
         let _: () = call(conn, "CloseSnapshot", &(epoch, close.as_str()))?;
     }
     let mut parsed = parse(epoch, revision, &state, &apps, capabilities);
-    parsed.window_matches = matching
-        .iter()
-        .filter_map(|m| {
-            let id = number(m, "WindowId");
-            let app = text(m, "DesktopId");
-            (text(m, "HyaloEpoch") == parsed.hyalo_epoch).then_some((id, app))
-        })
-        .collect();
+    parsed.window_matches = Box::new(
+        matching
+            .iter()
+            .filter_map(|m| {
+                let id = number(m, "WindowId");
+                let app = text(m, "DesktopId");
+                (text(m, "HyaloEpoch") == parsed.hyalo_epoch).then_some((id, app))
+            })
+            .collect(),
+    );
     Ok(parsed)
 }
 
@@ -384,7 +386,7 @@ fn parse(
         owner: String::new(),
         hyalo_epoch: text(state, "HyaloEpoch"),
         matching_available: flag(state, "MatchingAvailable"),
-        window_matches: HashMap::new(),
+        window_matches: Box::default(),
         epoch,
         revision,
         apps,
