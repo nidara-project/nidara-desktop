@@ -449,9 +449,9 @@ impl Store {
         }
         self.index = super::observation::Index::new(&self.apps);
         self.identity_dirty.notify_one();
-        if !self.refresh_matches() {
-            return;
-        }
+        // Unchanged matches must not end the refresh: the asset monitors below are
+        // rebuilt for every catalogue scan, windows or not.
+        self.refresh_matches();
         self.usage.boundary(
             self.observation.eligible(&self.index),
             monotonic_us(),
