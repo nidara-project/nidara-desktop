@@ -18,8 +18,9 @@
     transform and gives pointer coordinates in the layer's own space, and
     maps a text-input cursor rectangle of the layer's surface the same way.
 
-    Phase 0 draft (#818, toolkit/CONTRACT.md). It stays at version 1 until it
-    is published: requests are appended, never versioned.
+    Unpublished draft (#818, toolkit/CONTRACT.md). Requests are appended into
+    version 1 without since attributes. Hyalo and its clients ship together;
+    there is no per-request capability negotiation or mixed-version support.
   </description>
 
   <interface name="nidara_layers_manager_v1" version="1">
@@ -146,6 +147,21 @@
     <request name="set_opacity">
       <description summary="pending: the model opacity, 0..1"/>
       <arg name="opacity" type="fixed"/>
+    </request>
+
+    <request name="set_parent_clip">
+      <description summary="pending: clip the subtree in its parent's space">
+        x, y, width and height are parent-local logical pixels. Positive sizes
+        clip this layer and every descendant's ink, glass, shadow and input.
+        The clip follows the parent's presented transform, independently of
+        this layer's position and scale. Ancestor clips intersect. Both sizes
+        zero clear it; a negative size or exactly one zero is invalid_value.
+        The clip is initially absent and is double buffered with the surface.
+      </description>
+      <arg name="x" type="int"/>
+      <arg name="y" type="int"/>
+      <arg name="width" type="int"/>
+      <arg name="height" type="int"/>
     </request>
 
     <event name="done">

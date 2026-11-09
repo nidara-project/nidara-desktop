@@ -153,6 +153,7 @@ mod tests {
             scale: 1.,
             anchor: [0., 0.],
             opacity: 1.,
+            parent_clip: None,
         }
     }
     #[test]

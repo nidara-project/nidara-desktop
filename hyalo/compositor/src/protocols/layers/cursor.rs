@@ -119,6 +119,7 @@ fn mapped(root: &WlSurface, when: Instant) -> Option<Rectangle<i32, Logical>> {
         at: (0., 0.).into(),
         scale: 1.,
         alpha: 1.,
+        clip: None,
     };
     with_surface_tree_downward(
         root,

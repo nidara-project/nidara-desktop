@@ -421,44 +421,75 @@ impl Component {
     }
 }
 struct Actions(Object);
+impl Actions {
+    fn declared(&self) -> Vec<Action> {
+        self.0
+            .node()
+            .map(|n| {
+                n.actions
+                    .into_iter()
+                    .filter(|a| matches!(a, Action::Activate | Action::Named(_)))
+                    .collect()
+            })
+            .unwrap_or_default()
+    }
+    fn named(&self, index: i32) -> Option<Action> {
+        self.declared().get(usize::try_from(index).ok()?).cloned()
+    }
+}
 #[interface(name = "org.a11y.atspi.Action")]
 impl Actions {
     #[zbus(property)]
     fn n_actions(&self) -> i32 {
-        i32::from(
-            self.0
-                .node()
-                .is_ok_and(|n| n.actions.contains(&Action::Activate)),
-        )
+        self.declared().len() as i32
     }
-    fn get_name(&self, index: i32) -> &str {
-        if index == 0 && self.n_actions() > 0 {
-            "click"
-        } else {
-            ""
+    fn get_name(&self, index: i32) -> String {
+        match self.named(index) {
+            Some(Action::Activate) => "click".into(),
+            Some(Action::Named(name)) => name.into(),
+            _ => String::new(),
         }
     }
-    fn get_localized_name(&self, index: i32) -> &str {
-        self.get_name(index)
+    fn get_localized_name(&self, index: i32) -> String {
+        let name = self.get_name(index);
+        if name.is_empty() {
+            return name;
+        }
+        self.0
+            .node()
+            .ok()
+            .and_then(|n| n.action_labels.get(&name).cloned())
+            .unwrap_or(name)
     }
-    fn get_description(&self, index: i32) -> &str {
-        self.get_name(index)
+    fn get_description(&self, index: i32) -> String {
+        self.get_localized_name(index)
     }
     fn get_key_binding(&self, _index: i32) -> &str {
         ""
     }
     fn get_actions(&self) -> Vec<(String, String, String)> {
-        if self.n_actions() > 0 {
-            vec![("click".into(), "Activate".into(), "".into())]
-        } else {
-            vec![]
-        }
+        (0..self.n_actions())
+            .map(|i| {
+                let name = self.get_name(i);
+                let description = if name == "click" {
+                    "Activate".into()
+                } else {
+                    self.get_description(i)
+                };
+                (name, description, String::new())
+            })
+            .collect()
     }
     fn do_action(&self, index: i32) -> bool {
-        index == 0
-            && self
+        match self.named(index) {
+            Some(Action::Activate) => self
                 .0
-                .request(Action::Activate, Request::Activate(self.0.id))
+                .request(Action::Activate, Request::Activate(self.0.id)),
+            Some(Action::Named(name)) => self
+                .0
+                .request(Action::Named(name), Request::Named(self.0.id, name.into())),
+            _ => false,
+        }
     }
 }
 /// Read from the tree; choosing goes through the app (`Request::Activate` on the option),
@@ -980,6 +1011,70 @@ impl A11yBackend for Backend {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn named_actions_keep_declared_order_and_reject_disabled_or_retired_nodes() {
+        let mut node = Node::new(1, Role::Button, "Tile");
+        node.actions = vec![
+            Action::Focus,
+            Action::Named("Move up"),
+            Action::Activate,
+            Action::Named("Remove"),
+        ];
+        node.action_labels
+            .insert("Move up".into(), "Mover arriba".into());
+        node.action_labels
+            .insert("Remove".into(), "Eliminar".into());
+        let tree = Arc::new(Mutex::new(Tree {
+            root: 1,
+            nodes: [(1, node)].into(),
+        }));
+        let seen = Arc::new(Mutex::new(Vec::new()));
+        let received = seen.clone();
+        let actions = Actions(Object {
+            id: 1,
+            tree: tree.clone(),
+            bus: String::new(),
+            revision: Arc::new(AtomicU64::new(42)),
+            callback: Arc::new(move |version, request| {
+                received.lock().unwrap().push((version, request))
+            }),
+        });
+        assert_eq!(actions.n_actions(), 3);
+        assert_eq!(actions.get_name(0), "Move up");
+        assert_eq!(actions.get_name(1), "click");
+        assert_eq!(actions.get_name(2), "Remove");
+        assert_eq!(actions.get_localized_name(0), "Mover arriba");
+        assert_eq!(actions.get_description(2), "Eliminar");
+        assert_eq!(actions.get_actions()[2].1, "Eliminar");
+        assert!(actions.get_localized_name(-1).is_empty());
+        tree.lock()
+            .unwrap()
+            .nodes
+            .get_mut(&1)
+            .unwrap()
+            .action_labels
+            .insert("Remove".into(), "Quitar".into());
+        assert_eq!(actions.get_description(2), "Quitar");
+        assert!(!actions.do_action(-1));
+        assert!(!actions.do_action(3));
+        assert!(actions.do_action(2));
+        assert_eq!(
+            *seen.lock().unwrap(),
+            vec![(42, Request::Named(1, "Remove".into()))]
+        );
+        tree.lock()
+            .unwrap()
+            .nodes
+            .get_mut(&1)
+            .unwrap()
+            .states
+            .disabled = true;
+        assert!(!actions.do_action(2));
+        tree.lock().unwrap().nodes.remove(&1);
+        assert!(!actions.do_action(0));
+        assert_eq!(seen.lock().unwrap().len(), 1);
+    }
+
     #[test]
     fn selecting_a_modal_option_checks_its_action_and_both_nodes_under_one_snapshot() {
         let mut combo = Node::new(1, Role::ComboBox, "Language");

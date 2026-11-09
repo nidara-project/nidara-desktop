@@ -72,6 +72,7 @@ pub struct States {
 }
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Action {
+    Named(&'static str),
     Focus,
     Activate,
     SetText,
@@ -128,6 +129,8 @@ pub struct Node {
     pub description: String,
     pub states: States,
     pub actions: Vec<Action>,
+    /// Translated labels keyed by stable AT-SPI action name.
+    pub action_labels: BTreeMap<String, String>,
     pub bounds: Bounds,
     pub text: Option<TextInfo>,
     pub value: Option<ValueInfo>,
@@ -145,6 +148,7 @@ impl Node {
             description: String::new(),
             states: States::default(),
             actions: vec![],
+            action_labels: BTreeMap::new(),
             bounds: Bounds::default(),
             text: None,
             value: None,
@@ -283,6 +287,7 @@ impl TextInfo {
 }
 #[derive(Clone, Debug, PartialEq)]
 pub enum Request {
+    Named(NodeId, String),
     Focus(NodeId),
     Activate(NodeId),
     SetText(NodeId, String),

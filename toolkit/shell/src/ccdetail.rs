@@ -6,6 +6,16 @@ use serde_json::Value;
 
 #[derive(Clone, Debug, PartialEq)]
 pub enum Action {
+    WiredPower(String, bool),
+    Deactivate(String),
+    ClipboardList,
+    ClipboardConfirm(bool),
+    Clipboard {
+        id: Option<String>,
+        revision: u64,
+        remove: bool,
+        wipe: bool,
+    },
     Call {
         owner: String,
         action: Box<Action>,
@@ -94,6 +104,7 @@ pub struct Row {
     max_write: Option<f64>,
     owner: String,
     pub id: u64,
+    thumbnail: Option<(u64, String)>,
 }
 impl Row {
     fn new(key: impl Into<String>, label: Label, action: Option<Action>) -> Self {
@@ -108,6 +119,7 @@ impl Row {
             max_write: None,
             owner: String::new(),
             id: 0,
+            thumbnail: None,
         }
     }
     fn button(key: impl Into<String>, label: impl Into<String>, action: Action) -> Self {
@@ -165,6 +177,7 @@ pub struct Detail {
     pub offset: usize,
     pub mode: &'static str,
     pub audio: bool,
+    pub clipboard_confirm: bool,
     pub error: String,
     pub max_height: f64,
     limit: usize,
@@ -190,6 +203,7 @@ impl Detail {
                 "screen"
             },
             audio: false,
+            clipboard_confirm: false,
             error: String::new(),
             max_height: 1080.,
             limit: 8,
@@ -239,6 +253,22 @@ impl Detail {
         } else {
             rows(self.page, status, self.mode, self.audio)
         };
+        if self.page == "clipboard" && self.clipboard_confirm {
+            rows.retain(|r| !matches!(r.action, Some(Action::ClipboardConfirm(_))));
+            rows.push(Row::key(
+                "widget.clipboard.clear.cancel",
+                Action::ClipboardConfirm(false),
+            ));
+            rows.push(Row::key(
+                "widget.clipboard.clear.confirm",
+                Action::Clipboard {
+                    id: None,
+                    revision: status.aux.clip_revision,
+                    remove: false,
+                    wipe: true,
+                },
+            ));
+        }
         if self.page == "wifi" && !self.auth_ready {
             for r in &mut rows {
                 if matches!(r.action, Some(Action::Connect { .. } | Action::Activate(_))) {
@@ -328,6 +358,9 @@ impl Detail {
                 row.id,
                 Some(value + if key.sym == 0xff51 { -step } else { step }),
             );
+        }
+        if key.sym == 0xffff {
+            return self.named(row.id, "Remove");
         }
         if [0xff0d, 0x20].contains(&key.sym) {
             return self.action(row.id, None);
@@ -463,6 +496,14 @@ impl Detail {
             };
         }
         match a {
+            Action::ClipboardConfirm(on) => {
+                self.clipboard_confirm = on;
+                None
+            }
+            Action::Clipboard { wipe: true, .. } => {
+                self.clipboard_confirm = false;
+                Some(a)
+            }
             Action::SecretFocus(index) => {
                 if let Some(form) = &mut self.form {
                     form.focus(index);
@@ -487,8 +528,35 @@ impl Detail {
             }),
         }
     }
+    pub fn named(&mut self, id: u64, name: &str) -> Option<Action> {
+        let row = self.rows.iter().find(|r| r.id == id)?;
+        match (&row.action, name) {
+            (Some(Action::Clipboard { id, revision, .. }), "Remove") => Some(Action::Clipboard {
+                id: id.clone(),
+                revision: *revision,
+                remove: true,
+                wipe: false,
+            }),
+            _ => None,
+        }
+    }
     pub fn pointer_action(&mut self, id: u64, p: (f64, f64)) -> Option<Action> {
         let (row, r) = self.visible().find(|(row, _)| row.id == id)?;
+        if let Some(Action::Clipboard {
+            id,
+            revision,
+            remove: false,
+            wipe: false,
+        }) = &row.action
+            && p.0 > r[0] + r[2] - 32.
+        {
+            return Some(Action::Clipboard {
+                id: id.clone(),
+                revision: *revision,
+                remove: true,
+                wipe: false,
+            });
+        }
         let value = row
             .value
             .map(|(min, max, _)| min + (max - min) * ((p.0 - r[0]) / r[2]).clamp(0., 1.));
@@ -520,6 +588,42 @@ impl Detail {
         let style = style(look, TEXT, 400.);
         for (row, r) in self.visible() {
             let label = row.label(Some(look));
+            let image_row = row.thumbnail.is_some();
+            if let Some((revision, id)) = &row.thumbnail
+                && let Some(image) = crate::ccaux::thumbnail(*revision, id)
+            {
+                c.image(
+                    &image,
+                    rect([r[0] + 8., r[1] + 4., 32., 32.]),
+                    ImageFit::Contain,
+                );
+            }
+            let clip_row = matches!(
+                row.action,
+                Some(Action::Clipboard {
+                    wipe: false,
+                    remove: false,
+                    ..
+                })
+            );
+            if matches!(
+                row.action,
+                Some(Action::Clipboard {
+                    wipe: false,
+                    remove: false,
+                    ..
+                })
+            ) {
+                crate::notification_card::text(
+                    c,
+                    look,
+                    "×",
+                    &style,
+                    [r[0] + r[2] - 28., r[1] + 12., 20., 24.],
+                    1,
+                    1.,
+                )?;
+            }
             if let Some(checked) = row.checked {
                 let b = rect([r[0] + 8., r[1] + 13., 10., 10.]);
                 if checked {
@@ -532,7 +636,9 @@ impl Detail {
                 look,
                 &label,
                 &style,
-                r[2] - if row.value.is_some() {
+                r[2] - if clip_row {
+                    if image_row { 86. } else { 46. }
+                } else if row.value.is_some() {
                     80.
                 } else if row.checked.is_some() {
                     34.
@@ -544,7 +650,14 @@ impl Detail {
             c.layout(
                 &layout,
                 (
-                    (r[0] + if row.checked.is_some() { 26. } else { 8. }) as f32,
+                    (r[0]
+                        + if image_row {
+                            48.
+                        } else if row.checked.is_some() {
+                            26.
+                        } else {
+                            8.
+                        }) as f32,
                     (r[1] + 8.) as f32,
                 ),
                 ink(1.),
@@ -689,6 +802,20 @@ impl Detail {
                         format!("{current:.0}")
                     },
                 });
+                if matches!(
+                    row.action,
+                    Some(Action::Clipboard {
+                        wipe: false,
+                        remove: false,
+                        ..
+                    })
+                ) {
+                    n.actions.push(nk_a11y::Action::Named("Remove"));
+                    n.action_labels.insert(
+                        "Remove".into(),
+                        super::edit::Editor::action_label("Remove", look),
+                    );
+                }
                 (n, Target::Detail(row.id))
             })
             .collect()
@@ -706,6 +833,115 @@ fn array<'a>(v: &'a Value, k: &str) -> impl Iterator<Item = &'a Value> {
 fn rows(page: &str, s: &Status, mode: &'static str, audio: bool) -> Vec<Row> {
     let mut out = vec![];
     match page {
+        "battery" => {
+            if let Some(b) = s.battery {
+                out.push(Row::new(
+                    "battery-value",
+                    Label::Text(format!("{:.0}%", b.fraction * 100.)),
+                    None,
+                ));
+                let state = match s.battery_state {
+                    1 | 5 => "Charging",
+                    2 | 6 => "Discharging",
+                    4 => "Fully charged",
+                    3 => "Empty",
+                    _ => "Unknown",
+                };
+                let time = s
+                    .battery_time
+                    .map(|seconds| format!(" · {}h {:02}m", seconds / 3600, seconds % 3600 / 60))
+                    .unwrap_or_default();
+                out.push(Row::new(
+                    "battery-state",
+                    Label::Text(format!("{state}{time}")),
+                    None,
+                ));
+            }
+        }
+        "clipboard" => {
+            out.push(Row::key("cc.detail.refresh", Action::ClipboardList));
+            for entry in s.aux.clips.iter() {
+                let mut row = Row::button(
+                    format!("clip:{}:{}", s.aux.clip_revision, entry.id),
+                    if entry.image {
+                        format!("Image · {}", entry.label)
+                    } else {
+                        entry.label.clone()
+                    },
+                    Action::Clipboard {
+                        id: Some(entry.id.clone()),
+                        revision: s.aux.clip_revision,
+                        remove: false,
+                        wipe: false,
+                    },
+                );
+                if entry.image {
+                    row.thumbnail = Some((s.aux.clip_revision, entry.id.clone()));
+                }
+                out.push(row);
+            }
+            if s.aux.clips.is_empty() {
+                out.push(Row::new(
+                    "clipboard-empty",
+                    Label::Key("widget.clipboard.empty"),
+                    None,
+                ));
+            } else {
+                out.push(Row::key(
+                    "widget.clipboard.clear",
+                    Action::ClipboardConfirm(true),
+                ));
+            }
+        }
+        "ethernet" => {
+            if let Some(d) = wired(s) {
+                out.push(
+                    Row::key(
+                        "cc.ethernet.name",
+                        Action::WiredPower(text(d, "path"), d["wiredEnabled"] != true),
+                    )
+                    .toggle(d["wiredEnabled"] == true),
+                );
+                for (key, value) in [
+                    (
+                        "Status",
+                        if d["state"] == 100 {
+                            "Connected".into()
+                        } else {
+                            "Disconnected".into()
+                        },
+                    ),
+                    ("Interface", text(d, "interface")),
+                    (
+                        "IP",
+                        d["ip4"]["addresses"][0]["address"]
+                            .as_str()
+                            .unwrap_or("—")
+                            .into(),
+                    ),
+                    (
+                        "Gateway",
+                        d["ip4"]["gateway"].as_str().unwrap_or("—").into(),
+                    ),
+                ] {
+                    out.push(Row::new(key, Label::Text(format!("{key} · {value}")), None));
+                }
+            }
+        }
+        "vpn" => {
+            for p in vpn_profiles(s) {
+                let uuid = text(p, "uuid");
+                let active = vpn_active(s).find(|a| a["uuid"] == uuid);
+                let action = active.map_or_else(
+                    || Action::Activate(uuid.clone()),
+                    |a| Action::Deactivate(text(a, "path")),
+                );
+                out.push(
+                    Row::button(format!("vpn:{uuid}"), text(p, "name"), action)
+                        .toggle(active.is_some()),
+                );
+            }
+        }
         "wifi" => {
             if let Some(n) = &s.details.network {
                 out.push(
@@ -1111,7 +1347,7 @@ fn rows(page: &str, s: &Status, mode: &'static str, audio: bool) -> Vec<Row> {
         _ => {}
     }
     let owner = match page {
-        "wifi" => s.details.network.as_ref().map(|n| text(n, "_serviceOwner")),
+        "wifi" | "ethernet" | "vpn" => s.details.network.as_ref().map(|n| text(n, "_serviceOwner")),
         "bt" => s
             .details
             .bluetooth
@@ -1123,7 +1359,7 @@ fn rows(page: &str, s: &Status, mode: &'static str, audio: bool) -> Vec<Row> {
     };
     if let Some(owner) = owner {
         let epoch = match page {
-            "wifi" => s
+            "wifi" | "ethernet" | "vpn" => s
                 .details
                 .network
                 .as_ref()
@@ -1179,6 +1415,29 @@ fn write_to(
             }
             write_to(conn, action, Some(owner))
         }
+        Action::ClipboardList => crate::ccaux::refresh_clipboard(),
+        Action::Clipboard {
+            id,
+            revision,
+            remove,
+            wipe,
+        } => crate::ccaux::clipboard(id.as_deref(), *revision, *remove, *wipe),
+        Action::WiredPower(device, on) => call(
+            conn,
+            dest("org.nidara.Network"),
+            "/org/nidara/Network",
+            "org.nidara.Network1",
+            "SetWiredEnabled",
+            &(path(device)?, *on),
+        ),
+        Action::Deactivate(active) => call(
+            conn,
+            dest("org.nidara.Network"),
+            "/org/nidara/Network",
+            "org.nidara.Network1",
+            "Deactivate",
+            &(path(active)?,),
+        ),
         Action::WifiPower(on) => call(
             conn,
             dest("org.nidara.Network"),
@@ -1329,6 +1588,7 @@ fn write_to(
             Err("capture requires its current bar surface".into())
         }
         Action::Back
+        | Action::ClipboardConfirm(_)
         | Action::SetMode(_)
         | Action::ToggleAudio
         | Action::SecretFocus(_)

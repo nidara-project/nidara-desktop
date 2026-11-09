@@ -126,6 +126,13 @@ void main() {
 pub struct AtScale<E> {
     pub inner: E,
     pub scale: Scale<f64>,
+    pub clip: Option<Rectangle<i32, Physical>>,
+}
+
+impl<E: Element> AtScale<E> {
+    fn cropped(&self) -> Option<smithay::backend::renderer::element::utils::CropRenderElement<&E>> {
+        smithay::backend::renderer::element::utils::CropRenderElement::from_element(&self.inner, self.scale, self.clip?)
+    }
 }
 
 impl<E: Element> Element for AtScale<E> {
@@ -136,22 +143,22 @@ impl<E: Element> Element for AtScale<E> {
         self.inner.current_commit()
     }
     fn location(&self, _scale: Scale<f64>) -> Point<i32, Physical> {
-        self.inner.location(self.scale)
+        if self.clip.is_some() { self.geometry(self.scale).loc } else { self.inner.location(self.scale) }
     }
     fn src(&self) -> Rectangle<f64, BufferCoords> {
-        self.inner.src()
+        if self.clip.is_some() { self.cropped().map(|e| e.src()).unwrap_or_default() } else { self.inner.src() }
     }
     fn transform(&self) -> Transform {
         self.inner.transform()
     }
     fn geometry(&self, _scale: Scale<f64>) -> Rectangle<i32, Physical> {
-        self.inner.geometry(self.scale)
+        if self.clip.is_some() { self.cropped().map(|e| e.geometry(self.scale)).unwrap_or_default() } else { self.inner.geometry(self.scale) }
     }
     fn damage_since(&self, _scale: Scale<f64>, commit: Option<CommitCounter>) -> DamageSet<i32, Physical> {
-        self.inner.damage_since(self.scale, commit)
+        if self.clip.is_some() { self.cropped().map(|e| e.damage_since(self.scale, commit)).unwrap_or_default() } else { self.inner.damage_since(self.scale, commit) }
     }
     fn opaque_regions(&self, _scale: Scale<f64>) -> OpaqueRegions<i32, Physical> {
-        self.inner.opaque_regions(self.scale)
+        if self.clip.is_some() { self.cropped().map(|e| e.opaque_regions(self.scale)).unwrap_or_default() } else { self.inner.opaque_regions(self.scale) }
     }
     fn alpha(&self) -> f32 {
         self.inner.alpha()
@@ -176,7 +183,7 @@ impl<R: smithay::backend::renderer::Renderer, E: RenderElement<R>> RenderElement
 
     /// Passed on: a fullscreen window still goes straight to the display (direct scan-out).
     fn underlying_storage(&self, renderer: &mut R) -> Option<UnderlyingStorage<'_>> {
-        self.inner.underlying_storage(renderer)
+        if self.clip.is_some() { None } else { self.inner.underlying_storage(renderer) }
     }
 }
 
@@ -721,7 +728,7 @@ pub fn push<R: HyaloRenderer>(
                 None => out.extend(
                     render_elements_from_surface_tree(renderer, &surface, location, scale, 1.0, Kind::Unspecified)
                         .into_iter()
-                        .map(|inner| rounded(AtScale { inner, scale })),
+                        .map(|inner| rounded(AtScale { inner, scale, clip: None })),
                 ),
             }
             super::push_material(out, &surface, location, scale, output_size, when);

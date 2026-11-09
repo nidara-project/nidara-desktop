@@ -120,6 +120,9 @@ pub struct Status {
     pub wifi_name: String,
     pub volume: Option<Volume>,
     pub battery: Option<Battery>,
+    pub battery_state: u32,
+    pub battery_time: Option<i64>,
+    pub aux: crate::ccaux::Snapshot,
     /// Do Not Disturb (`org.nidara.notifications do-not-disturb`): the focus widget
     /// shows only while it is on.
     pub dnd: bool,
@@ -152,6 +155,7 @@ pub enum Update {
     Wifi(Option<Wifi>, String),
     Volume(Option<Volume>),
     Battery(Option<Battery>),
+    BatteryInfo(Option<Battery>, u32, Option<i64>),
     Dnd(bool),
     Dark(bool),
     Night(Option<Night>),
@@ -197,7 +201,16 @@ impl Status {
                 self.details.audio = Default::default();
                 self.details.default_output.clear();
             }
-            Update::Battery(b) => self.battery = b,
+            Update::Battery(b) => {
+                self.battery = b;
+                self.battery_time = None;
+                self.battery_state = 0;
+            }
+            Update::BatteryInfo(b, state, time) => {
+                self.battery = b;
+                self.battery_state = state;
+                self.battery_time = time;
+            }
             Update::Dnd(d) => self.dnd = d,
             Update::Dark(d) => self.dark = d,
             Update::Night(n) => self.night = n,
@@ -662,14 +675,15 @@ fn read_volume(conn: &Connection) -> Result<Update, String> {
 }
 
 fn read_battery(conn: &Connection) -> Result<Update, String> {
-    let root = proxy(conn, SESSION, POWER_PATH, "org.nidara.Power1")?;
+    let owner = service_owner(conn, SESSION)?;
+    let root = proxy(conn, &owner, POWER_PATH, "org.nidara.Power1")?;
     let display: OwnedObjectPath = root
         .get_property("DisplayDevice")
         .map_err(|e| e.to_string())?;
     if display.as_str() == "/" {
         return Ok(Update::Battery(None));
     }
-    let d = proxy(conn, SESSION, display.as_str(), "org.nidara.PowerDevice1")?;
+    let d = proxy(conn, &owner, display.as_str(), "org.nidara.PowerDevice1")?;
     let get = |name: &str| -> Result<OwnedValue, String> {
         d.get_property(name).map_err(|e| e.to_string())
     };
@@ -677,9 +691,23 @@ fn read_battery(conn: &Connection) -> Result<Update, String> {
     let known = bool::try_from(get("PercentageKnown")?).map_err(|e| e.to_string())?;
     let percentage = f64::try_from(get("Percentage")?).map_err(|e| e.to_string())?;
     let state = u32::try_from(get("State")?).map_err(|e| e.to_string())?;
-    Ok(Update::Battery(battery_of(
-        present, known, percentage, state,
-    )))
+    let (known_key, time_key) = if matches!(state, 1 | 5) {
+        ("TimeToFullKnown", "TimeToFull")
+    } else {
+        ("TimeToEmptyKnown", "TimeToEmpty")
+    };
+    let time = get(known_key)
+        .ok()
+        .and_then(|v| bool::try_from(v).ok())
+        .filter(|v| *v)
+        .and_then(|_| get(time_key).ok())
+        .and_then(|v| i64::try_from(v).ok())
+        .filter(|v| *v > 0);
+    Ok(Update::BatteryInfo(
+        battery_of(present, known, percentage, state),
+        state,
+        time,
+    ))
 }
 
 fn read_brightness(conn: &Connection) -> Result<Update, String> {

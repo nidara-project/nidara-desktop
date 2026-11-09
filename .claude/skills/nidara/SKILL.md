@@ -41,7 +41,7 @@ gtk4-layer-shell ⇒ no bar, no dock, nothing in the log). See `references/archi
 ⚠️ **Hyalo starts the Rust shell by default** (#1017, owner 2026-11-05):
 `nidara-rust-shell.service` runs `nidara-shell --bar` after the full session daemon.
 No TS shell or separate dock in Hyalo; `nidara-ipc` defaults to native routes.
-B2.3 and installed MCP transition/acceptance remain gaps; B2.2 details are
+B2.3 is implemented with private validation; installed MCP transition/acceptance remains a gap. B2.2 details are
 implemented with private validation, not installed acceptance. See
 `toolkit/shell/SESSION.md`. B3.1 banners use the bar surface and one hub stack;
 read `toolkit/shell/B3.1.md` before changing notification timers, actions or cards.
@@ -400,6 +400,17 @@ Never put a password in Debug, accessibility text or IME surrounding text. The
 capture controller owns its recorder child, signals only that child and preserves
 recording preferences; screenshot and Stop use independent lanes. The extended
 private check is check-cc-headless.sh; export settings **and** tokens for it.
+B2.3 editing uses pure cclayout operations, a write barrier released by echo or
+acknowledgement (including concurrent external changes), and
+parent-space clipping appended into unpublished layers v1 (update both ends together).
+Membership and geometry use two ordered
+schema applies, never a claimed cross-schema transaction. Clipboard children and
+visible thumbnail decoding run off the surface/control lanes; CPU reads stop
+when its grid tile is unmapped. Read CC.md before modifying any of these. The
+private edit/widget walk is check-cc-edit-headless.sh. Stable Named action IDs
+stay in English; Node::action_labels supplies localized reader names/descriptions.
+Layout write diagnostics stay in the log, with translated messages in the view.
+Out-of-grid moves are no-op/rollback; only capacity refusals use cc.menu.size-full.
 
 - A tray item that registers with a SYNCHRONOUS call blocks its own main loop while the
   watcher reads its properties back: the registration fails with "No such interface".

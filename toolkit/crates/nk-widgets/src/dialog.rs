@@ -84,6 +84,7 @@ impl<'a> DialogTree<'a> {
             return Err("stale dialog publication".into());
         }
         match request {
+            Request::Named(..) => Err("no named action declared by this dialog".into()),
             Request::Focus(id) => self.view.dispatch(self.view.target(id), Command::Focus),
             Request::Activate(id) => self.view.dispatch(self.view.target(id), Command::Activate),
             Request::SetValue(id, value) => {

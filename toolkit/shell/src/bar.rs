@@ -146,6 +146,7 @@ struct CardPress {
     start: (f64, f64),
     serial: u32,
 }
+type CcLayer = (nk_wayland::LayerId, (u32, u32), [f64; 4]);
 pub struct Bar {
     cards: Vec<crate::notification_card::Card>,
     card_pages: std::collections::HashMap<u64, usize>,
@@ -157,7 +158,7 @@ pub struct Bar {
     card_press: Option<CardPress>,
     card_pending: Option<(nk_wayland::TokenRequest, u64, u64, String)>,
     card_focus: Option<(u64, u64, String, Instant)>,
-    surface_mode: Option<(u32, bool, bool, bool)>,
+    surface_mode: Option<(u32, bool, bool, bool, bool)>,
     name: String,
     frames: Receiver<Arc<BarFrame>>,
     frame: Arc<BarFrame>,
@@ -196,6 +197,10 @@ pub struct Bar {
     /// The Control Center, drawn while `cc_open`.
     cc: crate::cc::Cc,
     cc_open: bool,
+    cc_layers: std::collections::HashMap<&'static str, CcLayer>,
+    cc_menu_layer: Option<(nk_wayland::LayerId, [f64; 4])>,
+    cc_motion_serial: u32,
+    cc_resources_visible: bool,
     nc: crate::nc::Center,
     nc_open: bool,
     nc_generation: u64,
@@ -285,6 +290,10 @@ impl Bar {
             tray_replies: std::sync::mpsc::channel(),
             cc: crate::cc::Cc::new(),
             cc_open: false,
+            cc_layers: Default::default(),
+            cc_menu_layer: None,
+            cc_motion_serial: 10,
+            cc_resources_visible: false,
             nc: Default::default(),
             nc_open: false,
             nc_generation: 0,
@@ -585,10 +594,16 @@ impl Bar {
         } else {
             HEIGHT
         };
-        let mode = (height, self.cc_open || self.nc_open, banners, focus);
+        let mode = (
+            height,
+            self.cc_open || self.nc_open,
+            banners,
+            focus,
+            self.cc.editor.active,
+        );
         if self.surface_mode != Some(mode) {
             let mut p = placement(height, self.cc_open || self.nc_open);
-            if focus || self.nc_open {
+            if focus || self.nc_open || self.cc.editor.active {
                 p.keyboard = KeyboardMode::Exclusive;
             }
             if let Err(e) = w.set_layer_placement(p) {
@@ -956,6 +971,7 @@ impl Bar {
         self.cc.release();
         if !open {
             self.cc.back();
+            self.cc.editor.close();
         }
         let _ = self.requests.send(crate::hub::Request::NotificationPanel {
             output: self.name.clone(),
@@ -1142,6 +1158,20 @@ impl Bar {
                     return;
                 }
                 self.cc.open_detail(page, &self.frame.status);
+                if page == "clipboard" {
+                    if self.cc_writer.is_none() {
+                        self.cc_writer = self
+                            .bus
+                            .clone()
+                            .map(|conn| crate::cc::Writer::new(conn, self.waker.clone()));
+                    }
+                    if let Some(writer) = &self.cc_writer {
+                        writer.send(
+                            self.cc.view_id(),
+                            crate::cc::Act::Detail(crate::cc::detail::Action::ClipboardList),
+                        );
+                    }
+                }
                 self.cc_auth = None;
                 if page == "wifi" {
                     self.cc_auth = Some(crate::ccauth::Auth::new(self.waker.clone()));
@@ -1223,7 +1253,14 @@ impl Bar {
                 .map(|conn| crate::cc::Writer::new(conn, self.waker.clone()));
         }
         match &self.cc_writer {
-            Some(writer) => writer.send(self.cc.view_id(), act),
+            Some(writer) => writer.send(
+                if matches!(act, crate::cc::Act::Layout(..)) {
+                    (1u64 << 63) | self.cc.editor.write_serial
+                } else {
+                    self.cc.view_id()
+                },
+                act,
+            ),
             None => eprintln!("nidara-shell: no session bus for the Control Center's {act:?}"),
         }
     }
@@ -1263,12 +1300,277 @@ impl Bar {
             self.refresh(w);
         }
     }
+    fn clear_cc_layers(&mut self, w: &mut Window) {
+        for (_, (id, _, _)) in self.cc_layers.drain() {
+            let _ = w.destroy_layer(id);
+        }
+        if let Some((id, _)) = self.cc_menu_layer.take() {
+            let _ = w.destroy_layer(id);
+        }
+        self.cc.editor.layered = false;
+        self.cc.editor.menu_layered = false;
+    }
+    fn sync_cc_layers(&mut self, w: &mut Window) -> nk_wayland::Result<()> {
+        if !self.cc_open
+            || !self.cc.editor.active
+            || !w.supports_layers()
+            || self.look.is_none()
+            || self.frame.tokens.is_none()
+        {
+            self.clear_cc_layers(w);
+            return Ok(());
+        }
+        let tiles = self.cc.edit_tiles();
+        let viewport = self.cc.editor.viewport;
+        let dead: Vec<_> = self
+            .cc_layers
+            .keys()
+            .filter(|id| !tiles.iter().any(|t| t.0 == **id))
+            .copied()
+            .collect();
+        for id in dead {
+            if let Some((layer, _, _)) = self.cc_layers.remove(id) {
+                w.destroy_layer(layer)?;
+            }
+        }
+        for (id, r, size) in tiles {
+            let pixels = (r[2].ceil() as u32 + 12, r[3].ceil() as u32 + 12);
+            if self.cc_layers.get(id).is_some_and(|old| old.1 != pixels) {
+                let (old, _, _) = self.cc_layers.remove(id).unwrap();
+                w.destroy_layer(old)?;
+            }
+            let existing = self.cc_layers.get(id).copied();
+            let layer = if let Some((layer, _, _)) = existing {
+                layer
+            } else {
+                let layer = w.create_layer(pixels)?;
+                w.set_layer_input_region(layer, Some(&[]))?;
+                layer
+            };
+            let changed = existing.is_some_and(|old| old.2 != r);
+            if changed || existing.is_none() {
+                self.cc_motion_serial = self.cc_motion_serial.wrapping_add(1).max(10);
+                let animate = existing.is_some() && self.cc.editor.held() != Some(id);
+                w.set_transition(
+                    layer,
+                    nk_wayland::Property::Position,
+                    self.cc_motion_serial,
+                    nk_wayland::Curve::Bezier {
+                        x1: 0.2,
+                        y1: 0.,
+                        x2: 0.2,
+                        y2: 1.,
+                        duration_ms: if animate { 180 } else { 0 },
+                    },
+                )?;
+                w.set_position(layer, r[0] - 6., r[1] - 6.)?;
+                if animate {
+                    self.cc.editor.settling =
+                        Some(Instant::now() + std::time::Duration::from_millis(190));
+                }
+            }
+            let radius = match size {
+                crate::cclayout::Size::Square => 38.,
+                crate::cclayout::Size::FullWidth => 24.,
+                _ => r[2].min(r[3]) / 2.,
+            };
+            let pane = Pane {
+                x: 6.,
+                y: 6.,
+                width: r[2],
+                height: r[3],
+                radius,
+                exponent: 2.,
+                pointer: None,
+            };
+            let mut material = crate::material::piece(
+                self.frame.tokens.as_ref().unwrap(),
+                "controlCenter",
+                true,
+                self.frame.reduce_transparency,
+                pane,
+            )
+            .ok_or("missing CC material")?;
+            material.groups = vec![nk_wayland::Group {
+                tone: material.tone,
+                shadow: material.shadow,
+                shapes: std::mem::take(&mut material.shapes),
+                opacity: 1.,
+                clip: None,
+            }];
+            w.set_layer_parent_clip(
+                layer,
+                Some((
+                    viewport[0].round() as i32,
+                    viewport[1].round() as i32,
+                    viewport[2].round() as i32,
+                    viewport[3].round() as i32,
+                )),
+            )?;
+            if !crate::cclayout::meta_of(id).unwrap().fixed {
+                material.groups[0].shapes.push(Pane {
+                    x: r[2] - 19.,
+                    y: 3.,
+                    width: 28.,
+                    height: 28.,
+                    radius: 14.,
+                    exponent: 2.,
+                    pointer: None,
+                });
+            }
+            if self.cc.editor.focus == Some(crate::cc::edit::Target::Tile(id)) {
+                material.states.push(nk_wayland::StateRegion {
+                    id: 1,
+                    bounds: nk_wayland::MaterialRect {
+                        x: 6.,
+                        y: 6.,
+                        width: r[2],
+                        height: r[3],
+                    },
+                    radius,
+                    wash: [1., 1., 1., 0.12],
+                    fade_ms: 150,
+                });
+            }
+            w.set_layer_material(layer, Some(&material))?;
+            let look = self.look.as_mut().unwrap();
+            w.paint_layer(layer, |frame| {
+                let mut c = Canvas::new(frame.pixel_width, frame.pixel_height, frame.scale);
+                self.cc
+                    .paint_edit_layer(id, &mut c, look, &self.frame.status)?;
+                Ok(c.finish())
+            })?;
+            self.cc_layers.insert(id, (layer, pixels, r));
+        }
+        self.cc.editor.layered = true;
+        if self.cc.editor.menu.is_some() {
+            let controls: Vec<_> = self
+                .cc
+                .editor
+                .controls
+                .iter()
+                .filter(|c| c.target != crate::cc::edit::Target::Toggle)
+                .cloned()
+                .collect();
+            if let Some(first) = controls.first() {
+                let r = [
+                    first.rect[0],
+                    first.rect[1],
+                    180.,
+                    controls.len() as f64 * 34.,
+                ];
+                if self.cc_menu_layer.is_some_and(|(_, old)| old != r) {
+                    let (id, _) = self.cc_menu_layer.take().unwrap();
+                    w.destroy_layer(id)?;
+                }
+                let layer = if let Some((id, _)) = self.cc_menu_layer {
+                    id
+                } else {
+                    let id = w.create_layer((r[2] as u32, r[3] as u32))?;
+                    w.set_layer_input_region(id, Some(&[]))?;
+                    w.set_position(id, r[0], r[1])?;
+                    self.cc_menu_layer = Some((id, r));
+                    id
+                };
+                let pane = Pane {
+                    x: 0.,
+                    y: 0.,
+                    width: r[2],
+                    height: r[3],
+                    radius: 16.,
+                    exponent: 2.,
+                    pointer: None,
+                };
+                let material = crate::material::piece(
+                    self.frame.tokens.as_ref().unwrap(),
+                    "controlCenter",
+                    true,
+                    self.frame.reduce_transparency,
+                    pane,
+                )
+                .ok_or("missing menu material")?;
+                w.set_layer_material(layer, Some(&material))?;
+                let look = self.look.as_mut().unwrap();
+                w.paint_layer(layer, |frame| {
+                    let mut c = Canvas::new(frame.pixel_width, frame.pixel_height, frame.scale);
+                    for item in controls {
+                        let label = self.cc.editor.label(&item, Some(look));
+                        let label = if item.checked {
+                            format!("✓ {label}")
+                        } else {
+                            label
+                        };
+                        crate::notification_card::text(
+                            &mut c,
+                            look,
+                            &label,
+                            &nk_text::TextStyle {
+                                size: 13.,
+                                ..look.styles.text.clone()
+                            },
+                            [
+                                8.,
+                                item.rect[1] - r[1] + if item.disabled { 2. } else { 6. },
+                                164.,
+                                if item.disabled { 18. } else { 24. },
+                            ],
+                            1,
+                            if item.disabled { 0.4 } else { 1. },
+                        )?;
+                        if item.disabled {
+                            let reason = crate::cc::edit::Editor::full_text(Some(look));
+                            crate::notification_card::text(
+                                &mut c,
+                                look,
+                                &reason,
+                                &nk_text::TextStyle {
+                                    size: 10.,
+                                    ..look.styles.text.clone()
+                                },
+                                [8., item.rect[1] - r[1] + 19., 164., 14.],
+                                1,
+                                0.65,
+                            )?;
+                        }
+                    }
+                    Ok(c.finish())
+                })?;
+                self.cc.editor.menu_layered = true;
+            }
+        } else {
+            if let Some((id, _)) = self.cc_menu_layer.take() {
+                w.destroy_layer(id)?;
+            }
+            self.cc.editor.menu_layered = false;
+        }
+        Ok(())
+    }
+
     fn refresh(&mut self, w: &mut Window) {
         if self.cc.detail.as_ref().is_none_or(|d| d.page != "wifi") {
             self.cc_auth = None;
         }
 
         self.relayout();
+        let viewport = self.cc.editor.viewport;
+        let resources = self.cc_open
+            && self.cc.detail.is_none()
+            && self.cc.edit_tiles().iter().any(|t| {
+                let r = t.1;
+                t.0 == "cpu_memory"
+                    && r[0] < viewport[0] + viewport[2]
+                    && r[0] + r[2] > viewport[0]
+                    && r[1] < viewport[1] + viewport[3]
+                    && r[1] + r[3] > viewport[1]
+            });
+        if resources != self.cc_resources_visible {
+            self.cc_resources_visible = resources;
+            crate::ccaux::mapped(&self.name, resources);
+        }
+        if let Err(error) = self.sync_cc_layers(w) {
+            eprintln!("nidara-shell: CC layers: {error}");
+            self.clear_cc_layers(w);
+        }
         self.sync_surface(w);
         self.card_hover(if self.pointer_inside {
             self.card_at(self.pointer).map(|(id, _, _)| id)
@@ -1312,6 +1614,14 @@ impl Bar {
         if self.cc_open {
             let panel = self.cc.panel();
             let mut group = Node::new(CC_PANEL, Role::Panel, "Control Center");
+            group.description = if self.cc.editor.active {
+                self.cc.editor.description(self.look.as_ref())
+            } else {
+                String::new()
+            };
+            if let Some(root) = tree.nodes.get_mut(&tree.root) {
+                root.states.active = self.card_keyboard_active;
+            }
             group.bounds = Bounds {
                 x: panel[0],
                 y: panel[1],
@@ -1549,6 +1859,15 @@ impl Bar {
                 }
                 continue;
             }
+            if let nk_a11y::Request::Named(id, ref name) = request {
+                if let Some(target) = self.cc_target(id)
+                    && let Some(act) = self.cc.named(target, name, &self.frame.status)
+                {
+                    self.act(act, w);
+                }
+                self.refresh(w);
+                continue;
+            }
             let (nk_a11y::Request::Activate(id) | nk_a11y::Request::Focus(id)) = request else {
                 continue;
             };
@@ -1766,7 +2085,7 @@ fn tree(
 /// The battery glyph: `nd-battery-symbolic.svg` redrawn (24-unit grid; body 1,6
 /// 18.5×12 r2 stroke 2, nub 22,9 2×6), filled in proportion to the charge — green on AC,
 /// red at 15 % and below (the semantic status colours, never the accent).
-fn paint_battery(c: &mut Canvas, r: Rect, b: crate::status::Battery) {
+pub(crate) fn paint_battery(c: &mut Canvas, r: Rect, b: crate::status::Battery) {
     const LOW: f64 = 0.15;
     let (x0, y0) = (f64::from(r.x), f64::from(r.y));
     let u = |n: f64| n * f64::from(r.width) / 24.;
@@ -1939,8 +2258,12 @@ impl Application for Bar {
                         self.act(act, w);
                     }
                     if changed {
-                        w.redraw();
-                        self.publish_semantics(w);
+                        if self.cc.editor.active {
+                            self.refresh(w);
+                        } else {
+                            w.redraw();
+                            self.publish_semantics(w);
+                        }
                     }
                 }
                 let hover = self.item_at((x, y));
@@ -2025,7 +2348,12 @@ impl Application for Bar {
                         self.card_activate(instance, content, target, Some(serial), w);
                     }
                 }
-                if self.cc.release() {
+                let editing = self.cc.editor.active;
+                if let Some(act) = self.cc.release_edit(&self.frame.status) {
+                    self.act(act, w);
+                }
+                if self.cc.release() || editing {
+                    // A rejected/outside drop has no Act but must still restore its layers.
                     self.refresh(w);
                 }
             }
@@ -2137,7 +2465,10 @@ impl Application for Bar {
                 self.refresh(w);
             }
             Event::Key(key) if self.cc_open && key.sym == ESCAPE => {
-                if self.cc.back() {
+                if self.cc.editor.active {
+                    self.cc.key(&key, &self.frame.status);
+                    self.refresh(w);
+                } else if self.cc.back() {
                     self.refresh(w);
                 } else {
                     self.toggle_cc(w);
@@ -2155,11 +2486,10 @@ impl Application for Bar {
                 serial,
                 ..
             } => {
-                if self.cc_open
-                    && button == RIGHT_BUTTON
-                    && let Some(page) = self.cc.detail_at(self.pointer)
-                {
-                    self.act(crate::cc::Act::OpenDetail(page), w);
+                if self.cc_open && button == RIGHT_BUTTON && self.cc.contains(self.pointer) {
+                    if let Some(act) = self.cc.context(self.pointer, &self.frame.status) {
+                        self.act(act, w);
+                    }
                     self.refresh(w);
                 } else if let Some(Item::Tray(i)) = self.item_at(self.pointer) {
                     self.tray_click(i, button, Some(serial), w);
@@ -2169,7 +2499,7 @@ impl Application for Bar {
                 if self.nc_open {
                     self.nc.scroll(delta * 32.);
                     self.refresh(w);
-                } else if self.cc_open && self.cc.scroll_detail(delta) {
+                } else if self.cc_open && self.cc.scroll_detail(delta, &self.frame.status) {
                     self.refresh(w);
                 } else {
                     self.tray_scroll(delta, false);
@@ -2241,6 +2571,11 @@ impl Application for Bar {
             }
             _ => {}
         }
+        let aux = crate::ccaux::snapshot();
+        if self.frame.status.aux != aux {
+            Arc::make_mut(&mut self.frame).status.aux = aux;
+            self.refresh(w);
+        }
         self.auth_events(w);
         self.a11y(w);
         let results: Vec<_> = self
@@ -2249,11 +2584,21 @@ impl Application for Bar {
             .map(|writer| writer.replies.try_iter().collect())
             .unwrap_or_default();
         for (version, result) in results {
+            if version & (1u64 << 63) != 0 {
+                if self
+                    .cc
+                    .editor
+                    .write_finished(version & !(1u64 << 63), result)
+                {
+                    self.refresh(w);
+                }
+                continue;
+            }
             if version != self.cc.view_id() {
                 continue;
             }
             if let Some(d) = &mut self.cc.detail {
-                d.error = result.err().unwrap_or_default();
+                d.error = result.clone().err().unwrap_or_default();
             }
             self.refresh(w);
         }
@@ -2546,6 +2891,8 @@ impl Application for Bar {
             )
         {
             material.groups.push(nk_wayland::Group {
+                clip: None,
+                opacity: 1.,
                 tone: card.tone,
                 shadow: card.shadow,
                 shapes: cards,
@@ -2562,6 +2909,8 @@ impl Application for Bar {
         {
             if !self.frame.hidden {
                 material.groups.push(nk_wayland::Group {
+                    clip: None,
+                    opacity: 1.,
                     tone: nc.tone,
                     shadow: nc.shadow,
                     shapes: vec![self.nc.pane()],
@@ -2615,4 +2964,10 @@ pub fn run(bar: Bar, output: LayerOutput, wake: WakeSource) -> nk_wayland::Resul
 
 fn inside(r: [f64; 4], p: (f64, f64)) -> bool {
     p.0 >= r[0] && p.0 < r[0] + r[2] && p.1 >= r[1] && p.1 < r[1] + r[3]
+}
+
+impl Drop for Bar {
+    fn drop(&mut self) {
+        crate::ccaux::mapped(&self.name, false);
+    }
 }

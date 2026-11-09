@@ -102,6 +102,24 @@ Owns everything between a string and positioned glyphs, and the editing model on
 
 ## nk-a11y
 
+`nk-render::Canvas::progress_arc` draws the content arc of a resource meter from
+the top clockwise, with app-supplied geometry, fraction and ink. It does not draw
+glass, a state wash or a control background.
+
+- `Action::Named(&'static str)` exposes an application-owned action through AT-SPI
+  Action, alongside the existing `click`. Its callback is `Request::Named(id, name)`;
+  only actions declared by the current, enabled node may be invoked. Hosts validate
+  the view and identity again before applying it. B2.3 uses this for tile Move,
+  Resize and Remove without inventing text/value edits or synthetic key presses.
+  `Node::action_labels` maps stable action names to application-translated text.
+  The backend keeps `get_name` and callbacks stable, and uses the current node's
+  label for `get_localized_name`, descriptions and GetActions descriptions.
+
+Control Center edit views may clip a material `Group` to a logical viewport and
+set its formation opacity. nk-wayland forwards these through the existing
+`add_shape_clipped`/pointed requests; clipping never changes the pane's corner
+geometry. A group with no clip and opacity 1 retains the original transport.
+
 - A **semantic tree** owned by the window: `Node { id, role, name, description, states,
   actions, bounds, text: Option<TextInfo> }`. `id` is stable for the node's life and never
   reused within the window. `bounds` are window coordinates of the MODEL (the final values,
@@ -1593,3 +1611,18 @@ it floating and centered even in tiling. PKGBUILD and install.sh build/install
 only the standalone selector, not native Settings. The isolated rust-session.sh
 uses the same factory configuration, with exact binary overrides and child
 tracking. There is no TS bridge or global Settings takeover.
+
+### B2.3 fixed parent clip (unpublished layers v1)
+
+`nidara_layer_v1.set_parent_clip(x,y,width,height)` is double buffered with
+the layer, in its parent's logical coordinates. Positive dimensions clip the
+layer and all descendants (ink, glass, shadows and input); both zero clear it.
+Negative dimensions or only one zero are invalid. The rectangle follows the
+parent's presented transform, never the layer's own motion or scale. Ancestor
+clips intersect, including an empty intersection. Destruction clears the clip.
+The manager and layer remain version 1. The request is appended without `since`,
+preserving all existing request/event opcodes. There is no capability negotiation
+or version gate: the toolkit and Hyalo must be updated together. A newer client
+on an older unpublished server may fail with an unknown-opcode protocol error.
+B2.3 uses the clip to animate a dragged tile back through the fixed grid viewport;
+no client paints replacement glass.

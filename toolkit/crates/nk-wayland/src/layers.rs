@@ -117,6 +117,23 @@ pub(super) fn fixed(values: &[f64]) -> Result<()> {
     }
 }
 impl Window {
+    /// Clip ink, material, shadows and input in the parent's logical space.
+    /// None clears the clip. Staged with the synchronized parent commit.
+    /// Unpublished v1 request: the host and Hyalo must be updated together.
+    pub fn set_layer_parent_clip(
+        &mut self,
+        id: LayerId,
+        rect: Option<(i32, i32, i32, i32)>,
+    ) -> Result<()> {
+        let (x, y, w, h) = rect.unwrap_or((0, 0, 0, 0));
+        if rect.is_some() && (w <= 0 || h <= 0) {
+            return Err("parent clip requires positive dimensions".into());
+        }
+        let layer = self.layer(id)?;
+        layer.proxy.set_parent_clip(x, y, w, h);
+        layer.pending = true;
+        Ok(())
+    }
     pub fn supports_layers(&self) -> bool {
         self.layers_manager.is_some()
             && self.subcompositor.is_some()

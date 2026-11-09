@@ -256,3 +256,80 @@ fn audio_choices_use_real_wire_types_and_cannot_retarget_a_replacement_service()
     );
     assert!(replacement.lock().unwrap().calls.is_empty());
 }
+
+#[derive(Clone)]
+struct PowerFixture(Arc<Mutex<(bool, u32, bool, i64)>>);
+struct PowerRoot;
+#[zbus::interface(name = "org.nidara.Power1")]
+impl PowerRoot {
+    #[zbus(property)]
+    fn display_device(&self) -> Path {
+        "/org/nidara/Power/devices/display".try_into().unwrap()
+    }
+}
+#[zbus::interface(name = "org.nidara.PowerDevice1")]
+impl PowerFixture {
+    #[zbus(property)]
+    fn present(&self) -> bool {
+        self.0.lock().unwrap().0
+    }
+    #[zbus(property)]
+    fn percentage_known(&self) -> bool {
+        true
+    }
+    #[zbus(property)]
+    fn percentage(&self) -> f64 {
+        42.
+    }
+    #[zbus(property)]
+    fn state(&self) -> u32 {
+        self.0.lock().unwrap().1
+    }
+    #[zbus(property)]
+    fn time_to_full_known(&self) -> bool {
+        self.0.lock().unwrap().2
+    }
+    #[zbus(property)]
+    fn time_to_empty_known(&self) -> bool {
+        self.0.lock().unwrap().2
+    }
+    #[zbus(property)]
+    fn time_to_full(&self) -> i64 {
+        self.0.lock().unwrap().3
+    }
+    #[zbus(property)]
+    fn time_to_empty(&self) -> i64 {
+        self.0.lock().unwrap().3
+    }
+}
+#[test]
+fn battery_reads_typed_power_state_known_time_and_hardware_loss_on_a_private_bus() {
+    let bus = Bus::new();
+    let values = Arc::new(Mutex::new((true, 1, true, 3600i64)));
+    let server = zbus::blocking::connection::Builder::address(bus.address.as_str())
+        .unwrap()
+        .serve_at(POWER_PATH, PowerRoot)
+        .unwrap()
+        .serve_at(
+            "/org/nidara/Power/devices/display",
+            PowerFixture(values.clone()),
+        )
+        .unwrap()
+        .name(SESSION)
+        .unwrap()
+        .build()
+        .unwrap();
+    let client = bus.client();
+    let mut status = Status::default();
+    status.apply(read_battery(&client).unwrap());
+    assert_eq!(status.battery.unwrap().fraction, 0.42);
+    assert_eq!((status.battery_state, status.battery_time), (1, Some(3600)));
+    *values.lock().unwrap() = (true, 2, false, 9999);
+    status.apply(read_battery(&client).unwrap());
+    assert_eq!((status.battery_state, status.battery_time), (2, None));
+    *values.lock().unwrap() = (false, 2, true, 3600);
+    status.apply(read_battery(&client).unwrap());
+    assert!(status.battery.is_none());
+    drop(server);
+    assert!(read_battery(&client).is_err());
+}

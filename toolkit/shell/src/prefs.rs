@@ -318,9 +318,21 @@ pub fn watch_cc(emit: impl Fn(Cc) + 'static) {
                 }
             });
         }
+        let queued = std::rc::Rc::new(std::cell::Cell::new(false));
         for s in [&cc, &widgets].into_iter().flatten() {
-            let (emit, stored) = (emit.clone(), stored.clone());
-            s.connect_changed(None, move |_, _| emit(stored()));
+            let (emit, stored, queued, ctx) =
+                (emit.clone(), stored.clone(), queued.clone(), ctx.clone());
+            s.connect_changed(None, move |_, _| {
+                if queued.replace(true) {
+                    return;
+                }
+                let (emit, stored, queued) = (emit.clone(), stored.clone(), queued.clone());
+                // Run once after this batch of key notifications, on this watcher context.
+                ctx.spawn_local(async move {
+                    queued.set(false);
+                    emit(stored());
+                });
+            });
         }
         glib::MainLoop::new(Some(&ctx), false).run();
         drop((interface, night, cc, widgets));
@@ -358,6 +370,74 @@ pub fn apply(
     )
     .map(|_| ())
     .map_err(|e| format!("Config1 Apply {key}: {e}"))
+}
+
+/// One committed edit. GSettings delay/apply is per schema, not across schemas.
+/// Removal membership precedes geometry; addition membership follows geometry.
+/// All interim grids remain valid. Echo or write acknowledgement releases editing.
+pub fn write_cc(
+    before: &crate::cclayout::Stored,
+    after: &crate::cclayout::Stored,
+) -> Result<(), String> {
+    use glib::variant::ToVariant;
+    let cc = settings(CONTROL_CENTER, "positions").ok_or("no control-center schema")?;
+    let widgets = settings(WIDGETS, "placement").ok_or("no widgets schema")?;
+    let positions = cc
+        .value("positions")
+        .get::<std::collections::BTreeMap<String, (i32, i32)>>()
+        .ok_or("invalid positions")?;
+    let sizes = cc
+        .value("sizes")
+        .get::<std::collections::BTreeMap<String, String>>()
+        .ok_or("invalid sizes")?;
+    let current = widgets
+        .value("placement")
+        .get::<std::collections::BTreeMap<String, (bool, bool)>>()
+        .ok_or("invalid placement")?;
+    let mut current = crate::cclayout::Stored {
+        positions,
+        sizes,
+        placement: current,
+    };
+    let phases = crate::cclayout::write_phases(before, after, &current)?;
+    if phases.iter().any(|s| s.placement != current.placement) && !widgets.is_writable("placement")
+        || phases
+            .iter()
+            .any(|s| s.positions != current.positions || s.sizes != current.sizes)
+            && (!cc.is_writable("positions") || !cc.is_writable("sizes"))
+    {
+        return Err("Control Center layout is read-only".into());
+    }
+    for state in phases {
+        if state.placement != current.placement {
+            if !widgets.is_writable("placement") {
+                return Err("Control Center layout is read-only".into());
+            }
+            widgets.delay();
+            if let Err(e) = widgets.set_value("placement", &state.placement.to_variant()) {
+                widgets.revert();
+                return Err(e.to_string());
+            }
+            widgets.apply();
+        }
+        if state.positions != current.positions || state.sizes != current.sizes {
+            if !cc.is_writable("positions") || !cc.is_writable("sizes") {
+                return Err("Control Center layout is read-only".into());
+            }
+            cc.delay();
+            if let Err(e) = cc
+                .set_value("positions", &state.positions.to_variant())
+                .and_then(|()| cc.set_value("sizes", &state.sizes.to_variant()))
+            {
+                cc.revert();
+                return Err(e.to_string());
+            }
+            cc.apply();
+        }
+        current = state;
+    }
+    gio::Settings::sync();
+    Ok(())
 }
 
 #[cfg(test)]

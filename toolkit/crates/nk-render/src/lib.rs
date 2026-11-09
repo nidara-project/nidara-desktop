@@ -128,6 +128,47 @@ impl Canvas {
     pub fn clip(&mut self, r: Rect) {
         self.context.push_clip_rect(&rect(r));
     }
+    /// Content, not material: a clockwise meter arc with round stroke ends.
+    pub fn progress_arc(
+        &mut self,
+        center: (f64, f64),
+        radius: f64,
+        width: f64,
+        fraction: f64,
+        color: Color,
+    ) {
+        if ![center.0, center.1, radius, width, fraction]
+            .iter()
+            .all(|n| n.is_finite())
+            || radius <= 0.
+            || width <= 0.
+        {
+            return;
+        }
+        let fraction = fraction.clamp(0., 1.);
+        if fraction == 0. {
+            return;
+        }
+        let count = (fraction * 192.).ceil().max(2.) as usize;
+        let mut path = BezPath::new();
+        for i in 0..=count {
+            let angle = std::f64::consts::TAU * fraction * i as f64 / count as f64
+                - std::f64::consts::FRAC_PI_2;
+            let p = (
+                center.0 + radius * angle.cos(),
+                center.1 + radius * angle.sin(),
+            );
+            if i == 0 {
+                path.move_to(p);
+            } else {
+                path.line_to(p);
+            }
+        }
+        self.context
+            .set_stroke(Stroke::new(width).with_caps(Cap::Round));
+        self.context.set_paint(color);
+        self.context.stroke_path(&path);
+    }
     pub fn clip_rounded_rect(&mut self, r: Rect, radius: f64) {
         self.context
             .push_clip_path(&corner_path(rect(r), radius, self.scale));
@@ -425,3 +466,22 @@ mod tests {
 
 mod window_glyph;
 pub use window_glyph::{WindowGlyph, WindowGlyphStyle};
+
+#[cfg(test)]
+mod progress_tests {
+    use super::*;
+    #[test]
+    fn a_quarter_progress_arc_is_clockwise_from_top_and_an_empty_arc_paints_nothing() {
+        let mut canvas = Canvas::new(64, 64, 1.);
+        canvas.progress_arc((32., 32.), 20., 4., 0.25, rgba(255, 255, 255, 255));
+        let pixels = canvas.finish();
+        let alpha = |x: usize, y: usize| pixels[(y * 64 + x) * 4 + 3];
+        assert!(alpha(32, 12) > 0 && alpha(52, 32) > 0);
+        assert_eq!(alpha(12, 32), 0);
+        assert_eq!(alpha(32, 52), 0);
+        assert_eq!(alpha(32, 32), 0);
+        let mut canvas = Canvas::new(64, 64, 1.);
+        canvas.progress_arc((32., 32.), 20., 4., 0., rgba(255, 255, 255, 255));
+        assert!(canvas.finish().iter().all(|b| *b == 0));
+    }
+}
