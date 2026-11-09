@@ -731,7 +731,7 @@ pub struct LayersGlobal;
 pub struct LayerData(Weak<WlSurface>);
 
 pub fn init(dh: &DisplayHandle) {
-    dh.create_global::<Hyalo, NidaraLayersManagerV1, _>(2, LayersGlobal);
+    dh.create_global::<Hyalo, NidaraLayersManagerV1, _>(1, LayersGlobal);
 }
 
 impl GlobalDispatch2<NidaraLayersManagerV1, Hyalo> for LayersGlobal {

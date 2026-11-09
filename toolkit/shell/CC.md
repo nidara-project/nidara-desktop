@@ -205,12 +205,13 @@ intermediate layout remains valid. Removal with lift can have a valid intermedia
 position distinct from both endpoints. Watchers coalesce key notifications; the
 editor retains its pending model until the final echo rather than showing phases.
 
-Hyalo moves both ink and material in synchronized tile layers. Layers version 2
-adds a parent-space clip, fixed to the viewport while the tile moves, for glass,
-ink, shadows and input including descendants. Old/new model positions can cross
+Hyalo moves both ink and material in synchronized tile layers. The unpublished
+layers v1 protocol appends a parent-space clip, fixed to the viewport while the tile
+moves, for glass, ink, shadows and input including descendants. Old/new model positions can cross
 the viewport edge during a return. Layer identity survives preview retargeting;
-no client timer paints glass or drives motion. Version-1 compositors retain static
-client clipping and cannot provide this edge animation. See toolkit/CONTRACT.md.
+no client timer paints glass or drives motion. Both interfaces stay at v1 with no
+capability/version gate; Hyalo and the toolkit must be updated together. See
+toolkit/CONTRACT.md.
 
 ### Additional sources
 

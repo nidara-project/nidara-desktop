@@ -401,7 +401,8 @@ capture controller owns its recorder child, signals only that child and preserve
 recording preferences; screenshot and Stop use independent lanes. The extended
 private check is check-cc-headless.sh; export settings **and** tokens for it.
 B2.3 editing uses pure cclayout operations, pending final settings echoes and
-version-2 parent-space layer clipping. Membership and geometry use two ordered
+parent-space clipping appended into unpublished layers v1 (update both ends together).
+Membership and geometry use two ordered
 schema applies, never a claimed cross-schema transaction. Clipboard children and
 visible thumbnail decoding run off the surface/control lanes; CPU reads stop
 when its grid tile is unmapped. Read CC.md before modifying any of these. The

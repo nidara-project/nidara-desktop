@@ -1333,12 +1333,6 @@ impl Bar {
                 w.destroy_layer(layer)?;
             }
         }
-        let inside = |r: [f64; 4]| {
-            r[0] >= viewport[0]
-                && r[1] >= viewport[1]
-                && r[0] + r[2] <= viewport[0] + viewport[2]
-                && r[1] + r[3] <= viewport[1] + viewport[3]
-        };
         for (id, r, size) in tiles {
             let pixels = (r[2].ceil() as u32 + 12, r[3].ceil() as u32 + 12);
             if self.cc_layers.get(id).is_some_and(|old| old.1 != pixels) {
@@ -1356,9 +1350,7 @@ impl Bar {
             let changed = existing.is_some_and(|old| old.2 != r);
             if changed || existing.is_none() {
                 self.cc_motion_serial = self.cc_motion_serial.wrapping_add(1).max(10);
-                let animate = existing
-                    .is_some_and(|old| w.supports_layer_clip() || (inside(old.2) && inside(r)))
-                    && self.cc.editor.held() != Some(id);
+                let animate = existing.is_some() && self.cc.editor.held() != Some(id);
                 w.set_transition(
                     layer,
                     nk_wayland::Property::Position,
@@ -1404,26 +1396,17 @@ impl Bar {
                 shadow: material.shadow,
                 shapes: std::mem::take(&mut material.shapes),
                 opacity: 1.,
-                clip: Some(nk_wayland::MaterialRect {
-                    x: viewport[0] - r[0] + 6.,
-                    y: viewport[1] - r[1] + 6.,
-                    width: viewport[2],
-                    height: viewport[3],
-                }),
+                clip: None,
             }];
-            let fixed_clip = w.supports_layer_clip();
-            if fixed_clip {
-                w.set_layer_parent_clip(
-                    layer,
-                    Some((
-                        viewport[0].round() as i32,
-                        viewport[1].round() as i32,
-                        viewport[2].round() as i32,
-                        viewport[3].round() as i32,
-                    )),
-                )?;
-                material.groups[0].clip = None;
-            }
+            w.set_layer_parent_clip(
+                layer,
+                Some((
+                    viewport[0].round() as i32,
+                    viewport[1].round() as i32,
+                    viewport[2].round() as i32,
+                    viewport[3].round() as i32,
+                )),
+            )?;
             if !crate::cclayout::meta_of(id).unwrap().fixed {
                 material.groups[0].shapes.push(Pane {
                     x: r[2] - 19.,
@@ -1453,19 +1436,8 @@ impl Bar {
             let look = self.look.as_mut().unwrap();
             w.paint_layer(layer, |frame| {
                 let mut c = Canvas::new(frame.pixel_width, frame.pixel_height, frame.scale);
-                if !fixed_clip {
-                    c.clip(rect([
-                        viewport[0] - r[0] + 6.,
-                        viewport[1] - r[1] + 6.,
-                        viewport[2],
-                        viewport[3],
-                    ]));
-                }
                 self.cc
                     .paint_edit_layer(id, &mut c, look, &self.frame.status)?;
-                if !fixed_clip {
-                    c.pop_clip();
-                }
                 Ok(c.finish())
             })?;
             self.cc_layers.insert(id, (layer, pixels, r));

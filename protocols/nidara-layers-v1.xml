@@ -18,11 +18,12 @@
     transform and gives pointer coordinates in the layer's own space, and
     maps a text-input cursor rectangle of the layer's surface the same way.
 
-    Version 2 adds a fixed parent-space clip for animated viewports (#1016).
-    Version 1 requests keep their original meaning.
+    Unpublished draft (#818, toolkit/CONTRACT.md). Requests are appended into
+    version 1 without since attributes. Hyalo and its clients ship together;
+    there is no per-request capability negotiation or mixed-version support.
   </description>
 
-  <interface name="nidara_layers_manager_v1" version="2">
+  <interface name="nidara_layers_manager_v1" version="1">
     <enum name="error">
       <entry name="not_subsurface" value="0" summary="the surface has no wl_subsurface role"/>
       <entry name="already_layer" value="1" summary="the surface already has a layer object"/>
@@ -70,7 +71,7 @@
     </request>
   </interface>
 
-  <interface name="nidara_layer_v1" version="2">
+  <interface name="nidara_layer_v1" version="1">
     <description summary="one animated layer">
       Every request is double-buffered and applied with the surface's
       commit — for a subsurface in sync mode, with its parent's, so a
@@ -148,7 +149,7 @@
       <arg name="opacity" type="fixed"/>
     </request>
 
-    <request name="set_parent_clip" since="2">
+    <request name="set_parent_clip">
       <description summary="pending: clip the subtree in its parent's space">
         x, y, width and height are parent-local logical pixels. Positive sizes
         clip this layer and every descendant's ink, glass, shadow and input.

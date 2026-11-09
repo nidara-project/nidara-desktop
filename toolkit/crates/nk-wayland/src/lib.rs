@@ -1286,7 +1286,7 @@ fn run_inner(
         1
     );
     w.subcompositor = bind!(wl_subcompositor::WlSubcompositor, 1);
-    w.layers_manager = bind!(nidara_layers_manager_v1::NidaraLayersManagerV1, 2);
+    w.layers_manager = bind!(nidara_layers_manager_v1::NidaraLayersManagerV1, 1);
     w.controls.manager = bind!(
         controls::nidara_window_controls_manager_v1::NidaraWindowControlsManagerV1,
         1

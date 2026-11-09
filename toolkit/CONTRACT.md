@@ -1609,7 +1609,7 @@ only the standalone selector, not native Settings. The isolated rust-session.sh
 uses the same factory configuration, with exact binary overrides and child
 tracking. There is no TS bridge or global Settings takeover.
 
-### B2.3 fixed parent clip (layers version 2)
+### B2.3 fixed parent clip (unpublished layers v1)
 
 `nidara_layer_v1.set_parent_clip(x,y,width,height)` is double buffered with
 the layer, in its parent's logical coordinates. Positive dimensions clip the
@@ -1617,8 +1617,9 @@ layer and all descendants (ink, glass, shadows and input); both zero clear it.
 Negative dimensions or only one zero are invalid. The rectangle follows the
 parent's presented transform, never the layer's own motion or scale. Ancestor
 clips intersect, including an empty intersection. Destruction clears the clip.
-The manager and layer advertise version 2. Existing version-1 requests retain
-their semantics; clients check `supports_layer_clip()` before sending this request.
-B2.3 uses it to animate a dragged tile back through the fixed grid viewport.
-Older compositors retain client-clipped static tiles and cannot provide this
-animated edge behavior; no client paints replacement glass.
+The manager and layer remain version 1. The request is appended without `since`,
+preserving all existing request/event opcodes. There is no capability negotiation
+or version gate: the toolkit and Hyalo must be updated together. A newer client
+on an older unpublished server may fail with an unknown-opcode protocol error.
+B2.3 uses the clip to animate a dragged tile back through the fixed grid viewport;
+no client paints replacement glass.

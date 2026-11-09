@@ -2882,12 +2882,14 @@ an unapplied mutation, infrastructure failure or previous utterance as evidence.
 
 ## Fixed animated viewport clipping (#1016)
 
-nidara-layers-v1 version 2 adds set_parent_clip. It is synchronized surface state,
+nidara-layers-v1 appends set_parent_clip into its unpublished version 1. It is synchronized surface state,
 in the parent's logical coordinates, applied before the child's position/scale.
 The scene walk intersects ancestor clips and preserves an empty intersection.
 Ink uses Smithay's CropRenderElement geometry/source/damage; material and shadows
 use the same physical intersection. Hit testing uses the displayed Look's clip,
 so a request changing the pending model never changes input ahead of presentation.
 Both zero dimensions clear; negative/one-zero sizes fail with invalid_value.
-Version-1 clients keep existing behavior. The Rust host checks supports_layer_clip
-before using it. See toolkit/CONTRACT.md and toolkit/shell/CC.md.
+Both interfaces stay at v1, with existing request/event opcodes preserved and no
+since attribute, capability negotiation or version gate. Update Hyalo and its
+clients together; a newer client may be rejected by an older unpublished server.
+See toolkit/CONTRACT.md and toolkit/shell/CC.md.
