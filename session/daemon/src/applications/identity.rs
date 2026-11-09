@@ -771,7 +771,11 @@ mod tests {
             "usr/share/applications/chatgpt.desktop",
             "[Desktop Entry]\nExec=ChatGPT\n",
         );
-        put(&r, "db/glibc-1/files", "%FILES%\nusr/bin/ldd\nusr/lib/libc.so.6\n");
+        put(
+            &r,
+            "db/glibc-1/files",
+            "%FILES%\nusr/bin/ldd\nusr/lib/libc.so.6\n",
+        );
         put(
             &r,
             "db/chromium-1/files",
