@@ -23,8 +23,6 @@ pub struct Store {
     pub index: super::observation::Index,
     identity_dirty: Arc<Notify>,
     _identity_monitor: Option<gio::FileMonitor>,
-    package_monitors: Vec<gio::FileMonitor>,
-    package_watch_revision: u64,
     package_revision: Arc<std::sync::atomic::AtomicU64>,
     identity_launches: BTreeMap<u64, (String, Instant)>,
     identity_pending: BTreeMap<u64, (String, Instant)>,
@@ -34,7 +32,6 @@ pub struct Store {
     matches: Vec<Value>,
     matching_cache: BTreeMap<u64, (String, Value)>,
     logged_windows: BTreeSet<u64>,
-    package_watch_paths: Vec<PathBuf>,
     observation_reason: String,
     unity_publish_at: Option<Instant>,
     persist_at: Option<Instant>,
@@ -149,8 +146,6 @@ impl Store {
             index: super::observation::Index::default(),
             identity_dirty,
             _identity_monitor,
-            package_monitors: Vec::new(),
-            package_watch_revision: 0,
             package_revision,
             identity_launches: BTreeMap::new(),
             identity_pending: BTreeMap::new(),
@@ -160,7 +155,6 @@ impl Store {
             matches: vec![],
             matching_cache: BTreeMap::new(),
             logged_windows: BTreeSet::new(),
-            package_watch_paths: Vec::new(),
             observation_reason: "H1 not connected".into(),
             unity_publish_at: None,
             persist_at: None,
@@ -752,29 +746,6 @@ impl Store {
             wall(),
         );
         self.project_usage();
-    }
-    pub(super) fn monitor_packages(&mut self, revision: u64, paths: Vec<PathBuf>) {
-        if self.package_watch_revision == revision && self.package_watch_paths == paths {
-            return;
-        }
-        for m in self.package_monitors.drain(..) {
-            m.cancel();
-        }
-        self.package_watch_paths = paths.clone();
-        for path in paths {
-            if let Ok(m) = gio::File::for_path(path)
-                .monitor_file(gio::FileMonitorFlags::NONE, gio::Cancellable::NONE)
-            {
-                let dirty = self.identity_dirty.clone();
-                let version = self.package_revision.clone();
-                m.connect_changed(move |_, _, _, _| {
-                    version.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
-                    dirty.notify_one();
-                });
-                self.package_monitors.push(m);
-            }
-        }
-        self.package_watch_revision = revision;
     }
     pub fn window_match(&self, id: u64) -> Option<&Value> {
         self.matches.iter().find(|v| v["WindowId"] == id)

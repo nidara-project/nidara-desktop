@@ -53,11 +53,6 @@ pub fn spawn(store: super::store::Handle) {
             if evidence.values().any(|e| e.pending) {
                 store.identity_dirty.notify_one();
             }
-            let watches = collector
-                .packages
-                .as_ref()
-                .map(|p| p.watches.clone())
-                .unwrap_or_default();
             let package_revision = store.package_revision.clone();
             let applied = store
                 .call(move |s| {
@@ -66,7 +61,6 @@ pub fn spawn(store: super::store::Handle) {
                     {
                         return Ok(());
                     }
-                    s.monitor_packages(version, watches);
                     apply_evidence(&mut s.observation, &epoch, &windows, evidence);
                     s.identity_applied();
                     Ok(())
@@ -136,35 +130,33 @@ struct Packages {
     browsers: BTreeSet<String>,
     uncertain: BTreeSet<String>,
     cache: BTreeMap<String, Vec<String>>,
-    watches: Vec<PathBuf>,
 }
 impl Packages {
+    /// Only packages that install a launcher can answer, so only their files are indexed:
+    /// on a desktop that is a few dozen of over a thousand packages.
     fn load(db: &Path, root: &Path) -> Option<Self> {
         let mut p = Self::default();
-        for entry in std::fs::read_dir(db).ok()? {
-            let dir = entry.ok()?.path();
+        for entry in std::fs::read_dir(db).ok()?.flatten() {
+            let dir = entry.path();
+            let Some(package) = dir.file_name().and_then(|n| n.to_str()).map(str::to_owned) else {
+                continue;
+            };
             let Some(files) = read(dir.join("files")) else {
                 continue;
             };
-            let package = dir.file_name()?.to_str()?.to_owned();
-            p.watches.push(dir.join("files"));
             let mut in_files = false;
-            for line in files.lines() {
-                if line.starts_with('%') {
-                    in_files = line == "%FILES%";
-                    continue;
-                }
-                if !in_files || line.is_empty() || line.ends_with('/') {
-                    continue;
-                }
-                let path = format!("/{}", line.trim_start_matches('/'));
-                p.owners
-                    .entry(path.clone())
-                    .or_default()
-                    .insert(package.clone());
-                if p.owners.len() > 2_000_000 {
-                    return None;
-                }
+            let paths: Vec<String> = files
+                .lines()
+                .filter(|line| {
+                    if line.starts_with('%') {
+                        in_files = *line == "%FILES%";
+                        return false;
+                    }
+                    in_files && !line.is_empty() && !line.ends_with('/')
+                })
+                .map(|line| format!("/{}", line.trim_start_matches('/')))
+                .collect();
+            for path in &paths {
                 if path.starts_with("/usr/share/applications/") && path.ends_with(".desktop") {
                     p.desktops
                         .entry(package.clone())
@@ -183,6 +175,20 @@ impl Packages {
                         p.browsers.insert(package.clone());
                     }
                 }
+            }
+            // A browser or an unreadable launcher never qualifies (for_exe), so its files
+            // need not be indexed either.
+            if !p.desktops.contains_key(&package)
+                || p.browsers.contains(&package)
+                || p.uncertain.contains(&package)
+            {
+                continue;
+            }
+            for path in paths {
+                p.owners.entry(path).or_default().insert(package.clone());
+            }
+            if p.owners.len() > 2_000_000 {
+                return None;
             }
         }
         Some(p)
@@ -751,6 +757,39 @@ mod tests {
         assert!(c.collect("e", 1, &window(11))[&1].packages.is_empty());
         process(&r, 12, 1, "/unowned/chatgpt", "");
         assert!(c.collect("e", 1, &window(12))[&1].packages.is_empty());
+    }
+    #[test]
+    fn only_packages_with_a_launcher_are_indexed_and_a_bad_entry_skips_only_itself() {
+        let (r, _) = fixture();
+        put(
+            &r,
+            "db/chatgpt-bin-1/files",
+            "%FILES%\nusr/lib/chatgpt/ChatGPT\nusr/share/applications/chatgpt.desktop\n",
+        );
+        put(
+            &r,
+            "usr/share/applications/chatgpt.desktop",
+            "[Desktop Entry]\nExec=ChatGPT\n",
+        );
+        put(&r, "db/glibc-1/files", "%FILES%\nusr/bin/ldd\nusr/lib/libc.so.6\n");
+        put(
+            &r,
+            "db/chromium-1/files",
+            "%FILES%\nopt/chromium/chrome\nusr/share/applications/chromium.desktop\n",
+        );
+        put(
+            &r,
+            "usr/share/applications/chromium.desktop",
+            "[Desktop Entry]\nMimeType=x-scheme-handler/http;\n",
+        );
+        // A package directory without its file list, and a stray file beside them.
+        std::fs::create_dir_all(r.join("db/broken-1")).unwrap();
+        put(&r, "db/ALPM_DB_VERSION", "9\n");
+        let p = Packages::load(&r.join("db"), &r).unwrap();
+        assert!(p.owners.contains_key("/usr/lib/chatgpt/ChatGPT"));
+        assert!(!p.owners.contains_key("/usr/bin/ldd"));
+        assert!(!p.owners.contains_key("/opt/chromium/chrome"));
+        assert_eq!(p.owners.len(), 2);
     }
     #[test]
     fn proc_sandbox_unit_and_migrated_main_pid_use_kernel_tree_not_inherited_markers() {
