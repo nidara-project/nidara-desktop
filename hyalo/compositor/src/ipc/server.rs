@@ -428,6 +428,7 @@ impl Hyalo {
                     initial_app_id: m.initial_app_id.clone(),
                     initial_title: m.initial_title.clone(),
                     pid,
+                    steam_app: m.steam_app,
                     xwayland: m.window.x11_surface().is_some(),
                     parent,
                     workspace: m.workspace,

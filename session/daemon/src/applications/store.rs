@@ -21,15 +21,26 @@ pub struct Store {
     pub unity: super::unity::Unity,
     pub observation: super::observation::Model,
     pub index: super::observation::Index,
+    identity_dirty: Arc<Notify>,
+    _identity_monitor: Option<gio::FileMonitor>,
+    package_monitors: Vec<gio::FileMonitor>,
+    package_watch_revision: u64,
+    package_revision: Arc<std::sync::atomic::AtomicU64>,
+    identity_launches: BTreeMap<u64, (String, Instant)>,
+    identity_pending: BTreeMap<u64, (String, Instant)>,
+    pub identity_units: BTreeMap<String, String>,
     pub usage_revision: u64,
     pub launcher_revision: u64,
     matches: Vec<Value>,
+    matching_cache: BTreeMap<u64, (String, Value)>,
+    logged_windows: BTreeSet<u64>,
+    package_watch_paths: Vec<PathBuf>,
     observation_reason: String,
     unity_publish_at: Option<Instant>,
     persist_at: Option<Instant>,
     last_persist: Instant,
     decay_at: Instant,
-    early_outcomes: BTreeMap<u64, (Instant, Value)>,
+    early_outcomes: BTreeMap<u64, (Instant, Vec<Value>)>,
     pub epoch: u64,
     pub revision: u64,
     pub catalogue_revision: u64,
@@ -65,7 +76,23 @@ pub struct Store {
     domains: BTreeSet<String>,
 }
 impl Store {
-    fn new(notify: Arc<Notify>, icon_view: Arc<super::icon_view::Published>) -> Self {
+    fn new(
+        notify: Arc<Notify>,
+        icon_view: Arc<super::icon_view::Published>,
+        identity_dirty: Arc<Notify>,
+        package_revision: Arc<std::sync::atomic::AtomicU64>,
+    ) -> Self {
+        let _identity_monitor = gio::File::for_path("/var/lib/pacman/local")
+            .monitor_directory(gio::FileMonitorFlags::NONE, gio::Cancellable::NONE)
+            .ok();
+        if let Some(m) = &_identity_monitor {
+            let dirty = identity_dirty.clone();
+            let package_revision = package_revision.clone();
+            m.connect_changed(move |_, _, _, _| {
+                package_revision.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+                dirty.notify_one();
+            });
+        }
         let schema = gio::SettingsSchemaSource::default()
             .and_then(|s| s.lookup("org.nidara.dock", true))
             .filter(|s| s.has_key("pinned") && s.has_key("layout") && s.has_key("layout-version"));
@@ -120,9 +147,20 @@ impl Store {
             unity: super::unity::Unity::default(),
             observation: super::observation::Model::default(),
             index: super::observation::Index::default(),
+            identity_dirty,
+            _identity_monitor,
+            package_monitors: Vec::new(),
+            package_watch_revision: 0,
+            package_revision,
+            identity_launches: BTreeMap::new(),
+            identity_pending: BTreeMap::new(),
+            identity_units: BTreeMap::new(),
             usage_revision: 1,
             launcher_revision: 1,
             matches: vec![],
+            matching_cache: BTreeMap::new(),
+            logged_windows: BTreeSet::new(),
+            package_watch_paths: Vec::new(),
             observation_reason: "H1 not connected".into(),
             unity_publish_at: None,
             persist_at: None,
@@ -416,7 +454,10 @@ impl Store {
             self.mark("catalogue");
         }
         self.index = super::observation::Index::new(&self.apps);
-        self.refresh_matches();
+        self.identity_dirty.notify_one();
+        if !self.refresh_matches() {
+            return;
+        }
         self.usage.boundary(
             self.observation.eligible(&self.index),
             monotonic_us(),
@@ -514,6 +555,8 @@ type Job = Box<dyn FnOnce(&mut Store) + Send>;
 #[derive(Clone)]
 pub struct Handle {
     icon_view: Arc<super::icon_view::Published>,
+    pub identity_dirty: Arc<Notify>,
+    pub package_revision: Arc<std::sync::atomic::AtomicU64>,
     tx: tokio::sync::mpsc::Sender<Job>,
 }
 impl Handle {
@@ -530,6 +573,8 @@ impl Handle {
         (
             Self {
                 tx,
+                identity_dirty: Arc::default(),
+                package_revision: Arc::default(),
                 icon_view: icon_view.clone(),
             },
             rx,
@@ -563,6 +608,10 @@ pub async fn spawn() -> Result<(Handle, Arc<Notify>), Error> {
     let (ready_tx, ready_rx) = oneshot::channel();
     let notify = Arc::new(Notify::new());
     let icon_view = Arc::new(super::icon_view::Published::default());
+    let identity_dirty = Arc::new(Notify::new());
+    let package_revision = Arc::new(std::sync::atomic::AtomicU64::new(1));
+    let identity_wake = identity_dirty.clone();
+    let package_version = package_revision.clone();
     let published = icon_view.clone();
     let n = notify.clone();
     std::thread::Builder::new()
@@ -571,7 +620,7 @@ pub async fn spawn() -> Result<(Handle, Arc<Notify>), Error> {
             let _icons_lifetime = super::icon_view::Lifetime(published.clone());
             let ctx = glib::MainContext::new();
             let _ = ctx.with_thread_default(|| {
-                let mut store = Store::new(n, published);
+                let mut store = Store::new(n, published, identity_wake, package_version);
                 store.refresh();
                 store.publish_icons();
                 let _ = ready_tx.send(());
@@ -629,7 +678,14 @@ pub async fn spawn() -> Result<(Handle, Arc<Notify>), Error> {
         .await
         .map_err(|_| Error::Timeout("catalogue startup".into()))?
         .map_err(|_| Error::Unavailable("catalogue worker failed".into()))?;
-    Ok((Handle { tx, icon_view }, notify))
+    let handle = Handle {
+        tx,
+        icon_view,
+        identity_dirty,
+        package_revision,
+    };
+    super::identity::spawn(handle.clone());
+    Ok((handle, notify))
 }
 
 /// The portal's answer while it gives one; else the setting it would publish; else none
@@ -678,24 +734,120 @@ impl Store {
                 Some((self.last_persist + Duration::from_secs(1)).max(Instant::now()));
         }
     }
-    fn refresh_matches(&mut self) {
+    pub fn record_identity_unit(&mut self, unit: String, exe: String) {
+        if self.identity_units.len() < 4096 {
+            self.identity_units.insert(unit, exe);
+            self.identity_dirty.notify_one();
+        }
+    }
+    pub(super) fn identity_applied(&mut self) {
+        if !self.refresh_matches() {
+            return;
+        }
+        self.usage.boundary(
+            self.observation.eligible(&self.index),
+            monotonic_us(),
+            false,
+            false,
+            wall(),
+        );
+        self.project_usage();
+    }
+    pub(super) fn monitor_packages(&mut self, revision: u64, paths: Vec<PathBuf>) {
+        if self.package_watch_revision == revision && self.package_watch_paths == paths {
+            return;
+        }
+        for m in self.package_monitors.drain(..) {
+            m.cancel();
+        }
+        self.package_watch_paths = paths.clone();
+        for path in paths {
+            if let Ok(m) = gio::File::for_path(path)
+                .monitor_file(gio::FileMonitorFlags::NONE, gio::Cancellable::NONE)
+            {
+                let dirty = self.identity_dirty.clone();
+                let version = self.package_revision.clone();
+                m.connect_changed(move |_, _, _, _| {
+                    version.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+                    dirty.notify_one();
+                });
+                self.package_monitors.push(m);
+            }
+        }
+        self.package_watch_revision = revision;
+    }
+    pub fn window_match(&self, id: u64) -> Option<&Value> {
+        self.matches.iter().find(|v| v["WindowId"] == id)
+    }
+    pub(super) fn refresh_matches(&mut self) -> bool {
+        self.logged_windows
+            .retain(|id| self.observation.windows.contains_key(id));
+        self.matching_cache
+            .retain(|id, _| self.observation.live && self.observation.windows.contains_key(id));
         let next = if self.observation.live {
-            self.observation.matches(&self.index)
+            self.observation
+                .windows
+                .keys()
+                .map(|id| {
+                    let mut key = format!("{}:{}", self.catalogue_revision, self.observation.epoch);
+                    let mut seen = BTreeSet::new();
+                    let mut current = Some(*id);
+                    while let Some(w) = current.and_then(|id| self.observation.windows.get(&id)) {
+                        if seen.len() >= 32 || !seen.insert(w.id) {
+                            break;
+                        }
+                        use std::fmt::Write;
+                        let _ = write!(
+                            &mut key,
+                            "{:?}",
+                            (w.identity(), &w.evidence, w.evidence_ready, &w.token_app)
+                        );
+                        current = w.parent;
+                    }
+                    if !self
+                        .matching_cache
+                        .get(id)
+                        .is_some_and(|(old, _)| *old == key)
+                    {
+                        self.matching_cache
+                            .insert(*id, (key, self.observation.resolve(&self.index, *id)));
+                    }
+                    self.matching_cache[id].1.clone()
+                })
+                .collect()
         } else {
             vec![]
         };
         if next != self.matches {
+            for v in &next {
+                if v["DesktopId"].as_str().is_some_and(|s| !s.is_empty())
+                    && v["WindowId"]
+                        .as_u64()
+                        .is_some_and(|id| self.logged_windows.insert(id))
+                {
+                    eprintln!(
+                        "[applications] window {} resolved to {} ({})",
+                        v["WindowId"], v["DesktopId"], v["MatchKind"]
+                    );
+                }
+            }
             self.matches = next;
             self.mark("matching");
+            return true;
         }
+        false
     }
     pub fn observation_start(&mut self, snapshot: Value) -> Result<(), Error> {
         self.usage.disconnect();
         self.early_outcomes.clear();
+        self.identity_launches.clear();
+        self.identity_pending.clear();
+        self.logged_windows.clear();
         self.observation
             .bootstrap(snapshot)
             .map_err(Error::Unavailable)?;
         self.observation_reason.clear();
+        self.identity_dirty.notify_one();
         self.refresh_matches();
         self.mark("matching");
         self.mark("usage");
@@ -710,7 +862,21 @@ impl Store {
         Ok(())
     }
     pub fn observation_event(&mut self, event: Value) -> Result<(), Error> {
+        let identity_changed = matches!(
+            event["event"].as_str(),
+            Some("windows_changed" | "focus_transition")
+        );
         let effect = self.observation.event(event).map_err(Error::Unavailable)?;
+        if identity_changed {
+            self.identity_pending.retain(|id, (app, at)| {
+                if let Some(w) = self.observation.windows.get_mut(id) {
+                    w.token_app = app.clone();
+                    return false;
+                }
+                at.elapsed() < Duration::from_secs(10)
+            });
+            self.identity_dirty.notify_one();
+        }
         if effect.boundary {
             self.refresh_matches();
             self.usage.boundary(
@@ -822,6 +988,22 @@ impl Store {
         }
     }
     fn launch_outcome(&mut self, number: u64, outcome: Value) {
+        self.identity_launches
+            .retain(|_, (_, at)| at.elapsed() < Duration::from_secs(60));
+        if matches!(
+            outcome["outcome"].as_str(),
+            Some("window" | "activated" | "refused")
+        ) && let Some((app, _)) = self.identity_launches.get(&number)
+            && let Some(id) = outcome["window"].as_u64()
+        {
+            if let Some(w) = self.observation.windows.get_mut(&id) {
+                w.token_app = app.clone();
+            } else if self.identity_pending.len() < 4096 {
+                self.identity_pending
+                    .insert(id, (app.clone(), Instant::now()));
+            }
+            self.refresh_matches();
+        }
         self.early_outcomes
             .retain(|_, (at, _)| at.elapsed() < Duration::from_secs(10));
         if self.launches.outcome(
@@ -831,9 +1013,14 @@ impl Store {
             self.observation.focus,
         ) {
             self.mark("launches");
-        } else if self.early_outcomes.len() < 128 {
-            self.early_outcomes
-                .insert(number, (Instant::now(), outcome));
+        } else if !self.identity_launches.contains_key(&number) && self.early_outcomes.len() < 128 {
+            let entry = self
+                .early_outcomes
+                .entry(number)
+                .or_insert_with(|| (Instant::now(), Vec::new()));
+            if entry.1.len() < 128 {
+                entry.1.push(outcome);
+            }
         }
     }
     pub fn bind_launch(
@@ -852,9 +1039,21 @@ impl Store {
         }
         self.early_outcomes
             .retain(|_, (at, _)| at.elapsed() < Duration::from_secs(10));
+        if let Some(app) = self.launches.desktop_id(id)
+            && self.identity_launches.len() < 4096
+        {
+            self.identity_launches.insert(number, (app, Instant::now()));
+        }
         self.launches.bind(id, connection, number);
-        let result = already.or_else(|| self.early_outcomes.remove(&number).map(|(_, v)| v));
-        if let Some(v) = result {
+        let mut results = self
+            .early_outcomes
+            .remove(&number)
+            .map(|(_, v)| v)
+            .unwrap_or_default();
+        if let Some(v) = already {
+            results.push(v);
+        }
+        for v in results {
             self.launch_outcome(number, v);
         }
     }

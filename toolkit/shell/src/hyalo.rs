@@ -49,6 +49,8 @@ pub enum HyaloUpdate {
     /// `epoch` changes with every new connection: window IDs never carry across it.
     Windows {
         epoch: u64,
+        /// Compositor run from H1's snapshot, distinct from our connection counter.
+        run: u64,
         windows: Vec<HyaloWindow>,
         workspaces: Vec<Workspace>,
     },
@@ -85,7 +87,7 @@ fn send(stream: &mut UnixStream, value: &Value) -> Result<(), String> {
     stream.write_all(line.as_bytes()).map_err(|e| e.to_string())
 }
 
-fn reply(reader: &mut impl BufRead) -> Result<Value, String> {
+fn message(reader: &mut impl BufRead) -> Result<Value, String> {
     let mut bytes = vec![];
     let n = reader
         .take(4 << 20)
@@ -95,6 +97,10 @@ fn reply(reader: &mut impl BufRead) -> Result<Value, String> {
         return Err("incomplete compositor reply".into());
     }
     let reply: Value = serde_json::from_slice(&bytes).map_err(|e| e.to_string())?;
+    Ok(reply)
+}
+fn reply(reader: &mut impl BufRead) -> Result<Value, String> {
+    let reply = message(reader)?;
     if let Some(error) = reply.get("error") {
         return Err(error.as_str().unwrap_or("compositor refused").to_string());
     }
@@ -125,6 +131,7 @@ pub fn parse_windows(ok: &Value) -> Vec<HyaloWindow> {
                     id: w["id"].as_u64()?,
                     app_id: s(w, "app_id"),
                     initial_app_id: s(w, "initial_app_id"),
+                    desktop_id: String::new(),
                     title: s(w, "title"),
                     parent: w["parent"].as_u64(),
                     minimized: b(w, "minimized"),
@@ -165,9 +172,10 @@ pub fn parse_workspaces(ok: &Value) -> Vec<Workspace> {
 }
 
 /// Windows and workspaces, read together.
-fn read(epoch: u64) -> Result<HyaloUpdate, String> {
+fn read(epoch: u64, run: u64) -> Result<HyaloUpdate, String> {
     Ok(HyaloUpdate::Windows {
         epoch,
+        run,
         windows: parse_windows(&request(json!({"request": "windows"}))?),
         workspaces: parse_workspaces(&request(json!({"request": "workspaces"}))?),
     })
@@ -193,15 +201,26 @@ pub fn watch(emit: impl Fn(HyaloUpdate)) {
 
 fn stream(epoch: u64, emit: &impl Fn(HyaloUpdate)) -> Result<(), String> {
     let mut events = connect()?;
-    send(&mut events, &json!({"request": "event_stream"}))?;
+    send(
+        &mut events,
+        &json!({"request": "event_stream","snapshot":true}),
+    )?;
     let mut reader = BufReader::new(events.try_clone().map_err(|e| e.to_string())?);
     reply(&mut reader)?;
+    let snapshot = message(&mut reader)?;
+    let run = snapshot["epoch"]
+        .as_u64()
+        .filter(|run| *run > 0)
+        .ok_or("missing compositor run")?;
+    if snapshot["event"] != "snapshot" {
+        return Err("missing H1 snapshot barrier".into());
+    }
     // Subscribed and acknowledged: only now the first reads.
     let locked = request(json!({"request": "lock"}))?["locked"]
         .as_bool()
         .unwrap_or(false);
     emit(HyaloUpdate::Lock(locked));
-    emit(read(epoch)?);
+    emit(read(epoch, run)?);
     loop {
         events.set_read_timeout(None).map_err(|e| e.to_string())?;
         let mut stale = false;
@@ -223,6 +242,9 @@ fn stream(epoch: u64, emit: &impl Fn(HyaloUpdate)) -> Result<(), String> {
                 Err(e) => return Err(e.to_string()),
             }
             let event: Value = serde_json::from_str(&line).unwrap_or_default();
+            if event["epoch"].as_u64().is_some_and(|epoch| epoch != run) {
+                return Err("compositor run changed".into());
+            }
             match event["event"].as_str() {
                 Some("lock_changed") => emit(HyaloUpdate::Lock(
                     event["locked"].as_bool().unwrap_or(false),
@@ -238,7 +260,7 @@ fn stream(epoch: u64, emit: &impl Fn(HyaloUpdate)) -> Result<(), String> {
                 .map_err(|e| e.to_string())?;
         }
         if stale {
-            emit(read(epoch)?);
+            emit(read(epoch, run)?);
         }
     }
 }
@@ -316,7 +338,10 @@ mod tests {
                 };
                 writeln!(conn, "{answer}").unwrap();
                 match req["request"].as_str().unwrap() {
-                    "event_stream" => stream_conn = Some(conn),
+                    "event_stream" => {
+                        writeln!(conn, "{}", json!({"event":"snapshot","epoch":77})).unwrap();
+                        stream_conn = Some(conn);
+                    }
                     // Each read is windows then workspaces: act once both are answered.
                     "workspaces" if reads == 1 => {
                         let s = stream_conn.as_mut().unwrap();

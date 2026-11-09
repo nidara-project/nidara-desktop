@@ -337,6 +337,17 @@ never falls back to Exec. Admission/dispatch never confirms a window or focus.
 `LaunchAvailable` is distinct from Unity's `LauncherAvailable`. A3 consumes H1's
 snapshot barrier and focus_transition for usage/matching/correlation; never use
 coalesced focus_changed for accounting. Read `session/daemon/src/applications/A3.md`.
+#998's only window-identity resolver lives in Applications1 (`WINDOW-IDENTITY.md`): token,
+sandbox, package ownership, launch unit, names and parent, with bounded set
+narrowing. The dock consumes WindowMatches for the current Hyalo run; never add
+a local matcher. Proc/pacman reads run outside GLib/H1 and painting, cached per
+window identity and invalidated by package monitors. HTTP-handler packages are
+excluded to preserve PWA identity. Inherited environment and executable
+substrings never choose an app. A token can identify several windows while its
+foreground activation grant remains single-use and reuse is confined to the first
+presenting Wayland client. X11 startup IDs stay single-use. Packages belong to the
+window PID's own exe; a unit requires matching recorded Exec/main-process exe,
+so a child cannot inherit the dock-launched terminal's identity.
 Keep tentative watch time out of persistence so idle caps watch-start +30 s. Unity
 is a signal on arbitrary object paths, never an Update method; retire its actual
 sender and use one ordered stream so a queued signal cannot resurrect a dead owner.

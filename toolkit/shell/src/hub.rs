@@ -268,6 +268,7 @@ pub struct Hub {
     apps: Option<AppsState>,
     windows: Vec<HyaloWindow>,
     hyalo_epoch: u64,
+    hyalo_run: u64,
     locked: bool,
     prefs: Prefs,
     docks: HashMap<OutputId, DockHandle>,
@@ -353,6 +354,7 @@ impl Hub {
             apps: None,
             windows: vec![],
             hyalo_epoch: 0,
+            hyalo_run: 0,
             locked: false,
             prefs,
             docks: HashMap::new(),
@@ -716,11 +718,13 @@ impl Hub {
                     memory.update(Some(&s));
                 }
                 self.apps = Some(s);
+                self.apply_window_matches();
                 self.request_icons();
             }
             HubEvent::Apps(AppsUpdate::Unavailable(why)) => {
                 eprintln!("nidara-shell: Applications1 unavailable: {why}");
                 self.apps = None;
+                self.apply_window_matches();
                 self.icons.clear();
                 self.large_icons.clear();
                 if let Some(memory) = self.memory.clone() {
@@ -731,11 +735,14 @@ impl Hub {
             HubEvent::Trash(trash) => self.trash = trash,
             HubEvent::Hyalo(HyaloUpdate::Windows {
                 epoch,
+                run,
                 windows,
                 workspaces,
             }) => {
                 self.hyalo_epoch = epoch;
+                self.hyalo_run = run;
                 self.windows = windows;
+                self.apply_window_matches();
                 self.workspaces = Arc::new(workspaces);
                 // A window of an app that is not pinned brings that app into the dock: its
                 // art is fetched now, not at the next unrelated catalogue or settings change.
@@ -1083,6 +1090,23 @@ impl Hub {
         });
     }
 
+    fn apply_window_matches(&mut self) {
+        let source = self.apps.as_ref().filter(|a| {
+            a.matching_available
+                && a.hyalo_epoch
+                    .split(':')
+                    .next()
+                    .and_then(|s| s.parse::<u64>().ok())
+                    == Some(self.hyalo_run)
+        });
+        for w in &mut self.windows {
+            w.window.desktop_id = source
+                .and_then(|a| a.window_matches.get(&w.window.id))
+                .cloned()
+                .unwrap_or_default();
+        }
+    }
+
     /// Only the apps the dock shows get their art fetched.
     fn shown(&self, id: &str) -> bool {
         let pinned = self.apps.as_ref().is_some_and(|a| {
@@ -1098,7 +1122,7 @@ impl Hub {
                 .map(|a| a.apps.as_slice())
                 .unwrap_or_default();
             self.windows.iter().any(|w| {
-                crate::model::match_window(apps, &w.window).is_some_and(|n| apps[n].id == id)
+                crate::model::resolved_app(apps, &w.window).is_some_and(|n| apps[n].id == id)
             })
         }
     }
@@ -1229,7 +1253,7 @@ impl Hub {
                 .iter()
                 .filter(mine)
                 .find(|w| w.window.focused && !w.window.minimized)
-                .map(|w| match crate::model::match_window(apps, &w.window) {
+                .map(|w| match crate::model::resolved_app(apps, &w.window) {
                     Some(i) if !apps[i].name.is_empty() => apps[i].name.clone(),
                     _ => w.window.app_id.clone(),
                 });
@@ -1762,9 +1786,21 @@ mod tests {
         w.window.app_id = "org.gnome.Terminal".into();
         hub.handle(HubEvent::Hyalo(HyaloUpdate::Windows {
             epoch: 1,
+            run: 77,
             windows: vec![w],
             workspaces: vec![],
         }));
+        assert!(
+            requested.try_recv().is_err(),
+            "names alone cannot fetch app art"
+        );
+        let mut matching = hub.apps.clone().unwrap();
+        matching.hyalo_epoch = "77:connection".into();
+        matching.matching_available = true;
+        matching
+            .window_matches
+            .insert(6, "org.gnome.Terminal.desktop".into());
+        hub.handle(HubEvent::Apps(AppsUpdate::State(matching)));
         let key = requested
             .recv_timeout(std::time::Duration::from_secs(2))
             .expect("newly shown app fetched");
@@ -1871,16 +1907,19 @@ mod tests {
                 Window {
                     id: 1,
                     app_id: "a".into(),
+                    desktop_id: "a.desktop".into(),
                     ..Default::default()
                 },
                 Window {
                     id: 2,
                     app_id: "b".into(),
+                    desktop_id: "b.desktop".into(),
                     ..Default::default()
                 },
                 Window {
                     id: 3,
                     app_id: "c".into(),
+                    desktop_id: "c.desktop".into(),
                     ..Default::default()
                 },
             ];

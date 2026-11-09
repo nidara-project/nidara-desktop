@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
-//! H1 is the only source of session/window truth. No title or executable matching.
+//! H1 is the only source of window truth; Applications1 owns presentation identity.
 use super::{catalogue::App, store::Handle};
 use serde::Deserialize;
 use serde_json::{Value, json};
@@ -19,44 +19,214 @@ pub struct Window {
     pub visible: bool,
     #[serde(default)]
     pub focused: bool,
+    #[serde(default)]
+    pub pid: Option<u32>,
+    #[serde(default)]
+    pub parent: Option<u64>,
+    #[serde(default)]
+    pub xwayland: bool,
+    #[serde(default)]
+    pub steam_app: Option<u32>,
+    #[serde(skip)]
+    pub token_app: String,
+    #[serde(skip)]
+    pub evidence: super::identity::Evidence,
+    #[serde(skip)]
+    pub evidence_ready: bool,
 }
-#[derive(Default)]
+impl Window {
+    pub fn identity(&self) -> String {
+        format!(
+            "{:?}",
+            (
+                self.id,
+                &self.app_id,
+                &self.initial_app_id,
+                self.pid,
+                self.parent,
+                self.xwayland,
+                self.steam_app
+            )
+        )
+    }
+}
+#[derive(Clone, Default)]
 pub struct Index {
     exact: BTreeMap<String, BTreeSet<String>>,
     wmclass: BTreeMap<String, BTreeSet<String>>,
     flatpak: BTreeMap<String, BTreeSet<String>>,
     generations: BTreeMap<String, u64>,
+    paths: BTreeMap<String, BTreeSet<String>>,
+    snap: BTreeMap<String, BTreeSet<String>>,
+    folded: BTreeMap<String, BTreeSet<String>>,
+    folded_class: BTreeMap<String, BTreeSet<String>>,
+    browsers: BTreeSet<String>,
 }
 impl Index {
     pub fn new(apps: &BTreeMap<String, App>) -> Self {
         let mut i = Self::default();
         for (id, a) in apps {
             i.generations.insert(id.clone(), a.generation);
+            if a.record["MimeTypes"]
+                .as_array()
+                .is_some_and(|v| v.iter().any(|m| m == "x-scheme-handler/http"))
+            {
+                i.browsers.insert(id.clone());
+            }
+            if let Some(path) = a.record["DesktopPath"].as_str() {
+                i.paths.entry(path.into()).or_default().insert(id.clone());
+            }
+            if a.record["Origin"] == "snap" {
+                // Exported Snap desktop IDs have <snap>_<app>.desktop form.
+                if let Some((name, _)) = id.split_once('_') {
+                    i.snap.entry(name.into()).or_default().insert(id.clone());
+                }
+            }
             for name in [id.as_str(), id.strip_suffix(".desktop").unwrap_or(id)] {
                 i.exact.entry(name.into()).or_default().insert(id.clone());
+                i.folded
+                    .entry(name.to_ascii_lowercase())
+                    .or_default()
+                    .insert(id.clone());
             }
             for (key, map) in [
                 ("StartupWMClass", &mut i.wmclass),
                 ("OriginId", &mut i.flatpak),
             ] {
-                if let Some(s) = a.record[key].as_str().filter(|s| !s.is_empty()) {
+                if let Some(s) = a.record[key].as_str().filter(|s| !s.is_empty())
+                    && (key != "OriginId" || a.record["Origin"] == "flatpak")
+                {
                     map.entry(s.into()).or_default().insert(id.clone());
                 }
+            }
+            if let Some(s) = a.record["StartupWMClass"]
+                .as_str()
+                .filter(|s| !s.is_empty())
+            {
+                i.folded_class
+                    .entry(s.to_ascii_lowercase())
+                    .or_default()
+                    .insert(id.clone());
             }
         }
         i
     }
+    fn hits(map: &BTreeMap<String, BTreeSet<String>>, keys: &[String]) -> BTreeSet<String> {
+        keys.iter()
+            .flat_map(|k| map.get(k).into_iter().flatten().cloned())
+            .collect()
+    }
+    fn names(&self, w: &Window) -> Vec<(BTreeSet<String>, &'static str)> {
+        vec![
+            (
+                Self::hits(&self.exact, std::slice::from_ref(&w.app_id)),
+                "exact-app-id",
+            ),
+            (
+                Self::hits(&self.wmclass, std::slice::from_ref(&w.app_id)),
+                "startup-wmclass",
+            ),
+            (
+                Self::hits(&self.flatpak, std::slice::from_ref(&w.app_id)),
+                "flatpak-name",
+            ),
+            (
+                Self::hits(&self.folded, &[w.app_id.to_ascii_lowercase()]),
+                "case-insensitive-app-id",
+            ),
+            (
+                Self::hits(&self.folded_class, &[w.app_id.to_ascii_lowercase()]),
+                "case-insensitive-wmclass",
+            ),
+            (
+                Self::hits(&self.exact, std::slice::from_ref(&w.initial_app_id)),
+                "initial-app-id",
+            ),
+            (
+                Self::hits(&self.wmclass, std::slice::from_ref(&w.initial_app_id)),
+                "initial-startup-wmclass",
+            ),
+            (
+                Self::hits(&self.flatpak, std::slice::from_ref(&w.initial_app_id)),
+                "initial-flatpak-name",
+            ),
+            (
+                Self::hits(&self.folded, &[w.initial_app_id.to_ascii_lowercase()]),
+                "initial-case-insensitive-app-id",
+            ),
+            (
+                Self::hits(&self.folded_class, &[w.initial_app_id.to_ascii_lowercase()]),
+                "initial-case-insensitive-wmclass",
+            ),
+        ]
+    }
     pub fn resolve(&self, w: &Window, epoch: &str) -> Value {
-        let choices = [
-            (self.exact.get(&w.app_id), "exact-app-id"),
-            (self.wmclass.get(&w.app_id), "startup-wmclass"),
-            (self.flatpak.get(&w.app_id), "flatpak"),
-            (self.exact.get(&w.initial_app_id), "initial-app-id"),
+        self.resolution(w, epoch).0
+    }
+    fn resolution(&self, w: &Window, epoch: &str) -> (Value, BTreeSet<String>) {
+        if w.pid.is_some() && !w.evidence_ready && w.token_app.is_empty() {
+            return (
+                json!({"HyaloEpoch":epoch,"WindowId":w.id,"DesktopId":"","AppGeneration":0_u64,"MatchKind":"pending","CandidateCount":0_u64,"CandidatesComplete":true,"Candidates":[],"Narrowing":[]}),
+                BTreeSet::new(),
+            );
+        }
+        let e = &w.evidence;
+        let mut sandbox = Self::hits(&self.flatpak, &e.flatpak);
+        sandbox.extend(Self::hits(&self.snap, &e.snap));
+        if let Some(steam) = w.steam_app {
+            sandbox.extend(Self::hits(&self.exact, &[format!("steam_app_{steam}")]));
+            sandbox.extend(Self::hits(&self.wmclass, &[format!("steam_app_{steam}")]));
+        }
+        let names = self.names(w);
+        let name_hits = names
+            .iter()
+            .find(|(s, _)| !s.is_empty())
+            .map(|(s, _)| s.clone())
+            .unwrap_or_default();
+        let mut units = Self::hits(&self.exact, &e.units);
+        let scopes = Self::hits(&self.exact, &e.scopes);
+        // A foreign Chromium scope naming another app is not launch provenance.
+        units.extend(
+            scopes
+                .into_iter()
+                .filter(|id| name_hits.is_empty() || name_hits.contains(id)),
+        );
+        units.retain(|id| !self.browsers.contains(id) || name_hits.contains(id));
+        let token = if self.generations.contains_key(&w.token_app) {
+            [w.token_app.clone()].into()
+        } else {
+            BTreeSet::new()
+        };
+        let mut choices = vec![
+            (token, "activation-token"),
+            (sandbox, "sandbox"),
+            (Self::hits(&self.paths, &e.packages), "package"),
+            (units, "launch-unit"),
         ];
-        let (set, kind) = choices
-            .into_iter()
-            .find_map(|(v, k)| v.filter(|v| !v.is_empty()).map(|v| (v, k)))
-            .map_or((None, "unknown"), |(v, k)| (Some(v), k));
+        choices.extend(names);
+        let mut candidates: Option<BTreeSet<String>> = None;
+        let mut kind = "unknown";
+        let mut narrowing = Vec::new();
+        for (set, tier) in choices {
+            if set.is_empty() {
+                continue;
+            }
+            let next = match &candidates {
+                Some(old) => old.intersection(&set).cloned().collect(),
+                None => set,
+            };
+            if next.is_empty() {
+                continue;
+            }
+            narrowing.push(json!({"Tier":tier,"CandidateCount":next.len() as u64}));
+            let unique = next.len() == 1;
+            candidates = Some(next);
+            kind = tier;
+            if unique {
+                break;
+            }
+        }
+        let set = candidates.as_ref();
         let count = set.map_or(0, BTreeSet::len);
         let id = if count == 1 {
             set.unwrap().first().unwrap().as_str()
@@ -74,7 +244,8 @@ impl Index {
             })
             .cloned()
             .collect::<Vec<_>>();
-        json!({"HyaloEpoch":epoch,"WindowId":w.id,"DesktopId":id,"AppGeneration":self.generations.get(id).copied().unwrap_or(0),"MatchKind":if count>1{"ambiguous"}else{kind},"CandidateCount":count as u64,"CandidatesComplete":ids.len()==count,"Candidates":ids})
+        let result = json!({"HyaloEpoch":epoch,"WindowId":w.id,"DesktopId":id,"AppGeneration":self.generations.get(id).copied().unwrap_or(0),"MatchKind":if count>1{"ambiguous"}else{kind},"CandidateCount":count as u64,"CandidatesComplete":ids.len()==count,"Candidates":ids,"Narrowing":narrowing});
+        (result, candidates.unwrap_or_default())
     }
     pub fn id(&self, w: &Window) -> Option<String> {
         let r = self.resolve(w, "");
@@ -197,7 +368,16 @@ impl Model {
         match v["event"].as_str().ok_or("missing event")? {
             "snapshot" => return Err("unexpected snapshot".into()),
             "windows_changed" => {
-                let ws = windows(&v["windows"])?;
+                let mut ws = windows(&v["windows"])?;
+                for (id, w) in &mut ws {
+                    if let Some(old) = self.windows.get(id) {
+                        w.token_app = old.token_app.clone();
+                        if w.identity() == old.identity() {
+                            w.evidence = old.evidence.clone();
+                            w.evidence_ready = old.evidence_ready;
+                        }
+                    }
+                }
                 let fs = ws
                     .values()
                     .filter(|w| w.focused)
@@ -230,6 +410,10 @@ impl Model {
                 if let Some(w) = id.and_then(|id| self.windows.get_mut(&id)) {
                     w.visible = true;
                     w.minimized = false;
+                    if w.app_id != app {
+                        w.evidence = Default::default();
+                        w.evidence_ready = false;
+                    }
                     w.app_id = app;
                 }
                 effect.boundary = true;
@@ -277,7 +461,10 @@ impl Model {
             if w.minimized || !w.visible {
                 return None;
             }
-            index.id(w)
+            self.resolve(index, w.id)["DesktopId"]
+                .as_str()
+                .filter(|s| !s.is_empty())
+                .map(str::to_owned)
         } else if !self.fallback.is_empty() {
             index.id(&Window {
                 id,
@@ -288,11 +475,35 @@ impl Model {
             None
         }
     }
-    pub fn matches(&self, index: &Index) -> Vec<Value> {
-        self.windows
-            .values()
-            .map(|w| index.resolve(w, &self.epoch))
-            .collect()
+    pub fn resolve(&self, index: &Index, id: u64) -> Value {
+        fn walk(m: &Model, index: &Index, id: u64, seen: &mut BTreeSet<u64>) -> Option<Value> {
+            if seen.len() >= 32 || !seen.insert(id) {
+                return None;
+            }
+            let w = m.windows.get(&id)?;
+            let (mut result, candidates) = index.resolution(w, &m.epoch);
+            if result["DesktopId"] == ""
+                && result["MatchKind"] != "pending"
+                && let Some(parent) = w.parent.and_then(|p| walk(m, index, p, seen))
+            {
+                let app = parent["DesktopId"].as_str().unwrap_or_default();
+                let allowed = candidates.is_empty() || candidates.contains(app);
+                if !app.is_empty() && allowed {
+                    result["DesktopId"] = json!(app);
+                    result["AppGeneration"] = parent["AppGeneration"].clone();
+                    result["MatchKind"] = json!("parent");
+                    result["Candidates"] = json!([app]);
+                    result["CandidateCount"] = json!(1);
+                    result["CandidatesComplete"] = json!(true);
+                    result["Narrowing"]
+                        .as_array_mut()
+                        .unwrap()
+                        .push(json!({"Tier":"parent","CandidateCount":1_u64}));
+                }
+            }
+            Some(result)
+        }
+        walk(self, index, id, &mut BTreeSet::new()).unwrap_or(Value::Null)
     }
     pub fn disconnect(&mut self) {
         self.live = false;
@@ -501,5 +712,190 @@ mod tests {
         .unwrap();
         assert_eq!(clean, json!({"outcome":"activated","window":1}));
         assert!(parse_outcome(&json!({"outcome":"made-up","window":1})).is_err());
+    }
+}
+
+#[cfg(test)]
+mod identity_tests {
+    use super::*;
+    fn app(id: &str, extra: Value) -> App {
+        let mut record =
+            json!({"DesktopId":id,"DesktopPath":format!("/usr/share/applications/{id}")});
+        for (key, value) in extra.as_object().unwrap() {
+            record[key] = value.clone();
+        }
+        App {
+            id: id.into(),
+            generation: 1,
+            digest: String::new(),
+            source_hash: String::new(),
+            exec_hash: String::new(),
+            record,
+            executable: String::new(),
+            keywords: Vec::new(),
+            icon: String::new(),
+        }
+    }
+    fn index() -> Index {
+        Index::new(
+            &[
+                app("chatgpt.desktop", json!({})),
+                app(
+                    "org.telegram.desktop.desktop",
+                    json!({"StartupWMClass":"Telegram"}),
+                ),
+                app(
+                    "org.flat.App.desktop",
+                    json!({"Origin":"flatpak","OriginId":"org.flat.App"}),
+                ),
+                app("snapapp_editor.desktop", json!({"Origin":"snap"})),
+                app(
+                    "steam-game.desktop",
+                    json!({"StartupWMClass":"steam_app_440"}),
+                ),
+                app(
+                    "chromium.desktop",
+                    json!({"MimeTypes":["x-scheme-handler/http"]}),
+                ),
+            ]
+            .into_iter()
+            .map(|a| (a.id.clone(), a))
+            .collect(),
+        )
+    }
+    fn w() -> Window {
+        Window {
+            id: 1,
+            ..Default::default()
+        }
+    }
+    fn check(i: &Index, w: &Window, app: &str, kind: &str) {
+        let r = i.resolve(w, "7:fixture");
+        assert_eq!(r["DesktopId"], app);
+        assert_eq!(r["MatchKind"], kind);
+    }
+    #[test]
+    fn every_tier_has_its_own_positive_and_missing_evidence_control() {
+        let i = index();
+        let mut win = w();
+        win.token_app = "chatgpt.desktop".into();
+        check(&i, &win, "chatgpt.desktop", "activation-token");
+        win.token_app.clear();
+        check(&i, &win, "", "unknown");
+        win.evidence.flatpak = vec!["org.flat.App".into()];
+        check(&i, &win, "org.flat.App.desktop", "sandbox");
+        win.evidence.flatpak.clear();
+        check(&i, &win, "", "unknown");
+        win.evidence.snap = vec!["snapapp".into()];
+        check(&i, &win, "snapapp_editor.desktop", "sandbox");
+        win.evidence.snap.clear();
+        win.steam_app = Some(440);
+        check(&i, &win, "steam-game.desktop", "sandbox");
+        win.steam_app = None;
+        win.evidence.packages = vec!["/usr/share/applications/chatgpt.desktop".into()];
+        check(&i, &win, "chatgpt.desktop", "package");
+        win.evidence.packages.clear();
+        check(&i, &win, "", "unknown");
+        win.evidence.units = vec!["chatgpt".into()];
+        check(&i, &win, "chatgpt.desktop", "launch-unit");
+        win.evidence.units.clear();
+        check(&i, &win, "", "unknown");
+        win.app_id = "Chatgpt".into();
+        check(&i, &win, "chatgpt.desktop", "case-insensitive-app-id");
+        win.app_id = "Telegram".into();
+        check(&i, &win, "org.telegram.desktop.desktop", "startup-wmclass");
+        win.app_id.clear();
+        win.initial_app_id = "chatgpt".into();
+        check(&i, &win, "chatgpt.desktop", "initial-app-id");
+    }
+    #[test]
+    fn pid_evidence_is_hydrated_before_lower_tiers_can_choose() {
+        let i = index();
+        let mut win = w();
+        win.pid = Some(42);
+        win.app_id = "Chatgpt".into();
+        check(&i, &win, "", "pending");
+        win.evidence_ready = true;
+        check(&i, &win, "chatgpt.desktop", "case-insensitive-app-id");
+        win.app_id.clear();
+        win.initial_app_id = "Chatgpt".into();
+        check(
+            &i,
+            &win,
+            "chatgpt.desktop",
+            "initial-case-insensitive-app-id",
+        );
+    }
+    #[test]
+    fn ambiguity_narrows_but_conflicting_lower_tiers_never_replace_it() {
+        let i = index();
+        let mut win = w();
+        win.evidence.packages = vec![
+            "/usr/share/applications/chatgpt.desktop".into(),
+            "/usr/share/applications/steam-game.desktop".into(),
+        ];
+        win.app_id = "chromium".into();
+        check(&i, &win, "", "ambiguous");
+        win.app_id = "Chatgpt".into();
+        check(&i, &win, "chatgpt.desktop", "case-insensitive-app-id");
+        let r = i.resolve(&win, "e");
+        assert_eq!(r["Narrowing"][0]["CandidateCount"], 2);
+        win.token_app = "steam-game.desktop".into();
+        check(&i, &win, "steam-game.desktop", "activation-token");
+    }
+    #[test]
+    fn browser_pwas_and_foreign_scopes_cannot_steal_another_app() {
+        let i = index();
+        let mut win = w();
+        win.app_id = "chrome-abc-Default".into();
+        win.evidence.scopes = vec!["chromium".into()];
+        check(&i, &win, "", "unknown");
+        win.app_id = "Chatgpt".into();
+        check(&i, &win, "chatgpt.desktop", "case-insensitive-app-id");
+        win.evidence.units = vec!["chatgpt".into()];
+        check(&i, &win, "chatgpt.desktop", "launch-unit");
+        win.app_id = "chromium".into();
+        win.evidence.units.clear();
+        check(&i, &win, "chromium.desktop", "launch-unit");
+        win.evidence.scopes.clear();
+        check(&i, &win, "chromium.desktop", "exact-app-id");
+    }
+    #[test]
+    fn dialogs_inherit_only_unresolved_identity_and_cycles_terminate() {
+        let i = index();
+        let mut m = Model {
+            epoch: "7:e".into(),
+            ..Default::default()
+        };
+        let mut main = w();
+        main.app_id = "Chatgpt".into();
+        let dialog = Window {
+            id: 2,
+            parent: Some(1),
+            ..Default::default()
+        };
+        m.windows = [(1, main), (2, dialog)].into();
+        assert_eq!(m.resolve(&i, 2)["MatchKind"], "parent");
+        assert_eq!(m.resolve(&i, 2)["DesktopId"], "chatgpt.desktop");
+        m.windows.get_mut(&2).unwrap().app_id = "chromium".into();
+        assert_eq!(m.resolve(&i, 2)["DesktopId"], "chromium.desktop");
+        m.windows.get_mut(&2).unwrap().app_id.clear();
+        m.windows.get_mut(&1).unwrap().app_id.clear();
+        m.windows.get_mut(&1).unwrap().parent = Some(2);
+        assert_eq!(m.resolve(&i, 2)["DesktopId"], "");
+    }
+    #[test]
+    fn token_identity_survives_snapshots_but_not_window_close_or_connection_loss() {
+        let mut m = Model::default();
+        m.bootstrap(json!({"event":"snapshot","epoch":7,"serial":1,"time_us":1,"windows":[{"id":1}],"focus":null,"locked":false,"idle":false,"session_active":true,"sleeping":false})).unwrap();
+        m.windows.get_mut(&1).unwrap().token_app = "chatgpt.desktop".into();
+        m.event(json!({"event":"windows_changed","epoch":7,"serial":2,"time_us":2,"windows":[{"id":1,"app_id":"new-name"}]})).unwrap();
+        assert_eq!(m.resolve(&index(), 1)["MatchKind"], "activation-token");
+        m.event(json!({"event":"windows_changed","epoch":7,"serial":3,"time_us":3,"windows":[]}))
+            .unwrap();
+        m.event(json!({"event":"windows_changed","epoch":7,"serial":4,"time_us":4,"windows":[{"id":1}]})).unwrap();
+        assert_eq!(m.resolve(&index(), 1)["DesktopId"], "");
+        m.disconnect();
+        assert!(m.windows.is_empty());
     }
 }

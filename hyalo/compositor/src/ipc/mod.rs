@@ -29,6 +29,8 @@ pub struct WindowInfo {
     pub initial_app_id: String,
     pub initial_title: String,
     pub pid: Option<i32>,
+    /// Steam identity read once when the window was created.
+    pub steam_app: Option<u32>,
     /// An X11 window, through Xwayland (xwayland.rs).
     pub xwayland: bool,
     /// The window it is a dialog of.
