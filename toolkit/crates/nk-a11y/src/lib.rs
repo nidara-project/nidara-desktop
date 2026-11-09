@@ -129,6 +129,8 @@ pub struct Node {
     pub description: String,
     pub states: States,
     pub actions: Vec<Action>,
+    /// Translated labels keyed by stable AT-SPI action name.
+    pub action_labels: BTreeMap<String, String>,
     pub bounds: Bounds,
     pub text: Option<TextInfo>,
     pub value: Option<ValueInfo>,
@@ -146,6 +148,7 @@ impl Node {
             description: String::new(),
             states: States::default(),
             actions: vec![],
+            action_labels: BTreeMap::new(),
             bounds: Bounds::default(),
             text: None,
             value: None,

@@ -451,10 +451,18 @@ impl Actions {
         }
     }
     fn get_localized_name(&self, index: i32) -> String {
-        self.get_name(index)
+        let name = self.get_name(index);
+        if name.is_empty() {
+            return name;
+        }
+        self.0
+            .node()
+            .ok()
+            .and_then(|n| n.action_labels.get(&name).cloned())
+            .unwrap_or(name)
     }
     fn get_description(&self, index: i32) -> String {
-        self.get_name(index)
+        self.get_localized_name(index)
     }
     fn get_key_binding(&self, _index: i32) -> &str {
         ""
@@ -466,7 +474,7 @@ impl Actions {
                 let description = if name == "click" {
                     "Activate".into()
                 } else {
-                    name.clone()
+                    self.get_description(i)
                 };
                 (name, description, String::new())
             })
@@ -1012,6 +1020,10 @@ mod tests {
             Action::Activate,
             Action::Named("Remove"),
         ];
+        node.action_labels
+            .insert("Move up".into(), "Mover arriba".into());
+        node.action_labels
+            .insert("Remove".into(), "Eliminar".into());
         let tree = Arc::new(Mutex::new(Tree {
             root: 1,
             nodes: [(1, node)].into(),
@@ -1031,6 +1043,18 @@ mod tests {
         assert_eq!(actions.get_name(0), "Move up");
         assert_eq!(actions.get_name(1), "click");
         assert_eq!(actions.get_name(2), "Remove");
+        assert_eq!(actions.get_localized_name(0), "Mover arriba");
+        assert_eq!(actions.get_description(2), "Eliminar");
+        assert_eq!(actions.get_actions()[2].1, "Eliminar");
+        assert!(actions.get_localized_name(-1).is_empty());
+        tree.lock()
+            .unwrap()
+            .nodes
+            .get_mut(&1)
+            .unwrap()
+            .action_labels
+            .insert("Remove".into(), "Quitar".into());
+        assert_eq!(actions.get_description(2), "Quitar");
         assert!(!actions.do_action(-1));
         assert!(!actions.do_action(3));
         assert!(actions.do_action(2));

@@ -913,15 +913,22 @@
     "dev.log.critical.one": "97233ee1",
     "dev.log.critical.other": "67e63d3f",
     "dev.log.critical.hint": "8fbf5bdf",
-    "cc.grid.full": "e25c7407",
     "cc.grid.add": "61cc55aa",
     "cc.grid.mode": "26926bf5",
-    "cc.detail.refresh": "56e3badc"
+    "cc.detail.refresh": "56e3badc",
+    "cc.grid.write-read-only": "695e5551",
+    "cc.grid.write-changed": "4bfce6d9",
+    "cc.grid.write-failed": "4e388036",
+    "cc.action.move-up": "b4f57cd0",
+    "cc.action.move-down": "260ff8ae",
+    "cc.action.move-left": "525df57d",
+    "cc.action.move-right": "3a43e56f",
+    "cc.action.resize": "f52dc753"
   },
   "locales": {
     "de": {
-      "translated": 792,
-      "of": 916,
+      "translated": 799,
+      "of": 923,
       "untranslated": [
         "bar.edit.done",
         "bar.edit.hint",
@@ -1051,14 +1058,14 @@
       "stale": []
     },
     "es": {
-      "translated": 916,
-      "of": 916,
+      "translated": 923,
+      "of": 923,
       "untranslated": [],
       "stale": []
     },
     "fr": {
-      "translated": 792,
-      "of": 916,
+      "translated": 799,
+      "of": 923,
       "untranslated": [
         "bar.edit.done",
         "bar.edit.hint",
@@ -1188,8 +1195,8 @@
       "stale": []
     },
     "it": {
-      "translated": 792,
-      "of": 916,
+      "translated": 799,
+      "of": 923,
       "untranslated": [
         "bar.edit.done",
         "bar.edit.hint",
@@ -1319,8 +1326,8 @@
       "stale": []
     },
     "ja": {
-      "translated": 792,
-      "of": 916,
+      "translated": 799,
+      "of": 923,
       "untranslated": [
         "bar.edit.done",
         "bar.edit.hint",
@@ -1450,8 +1457,8 @@
       "stale": []
     },
     "nl": {
-      "translated": 792,
-      "of": 916,
+      "translated": 799,
+      "of": 923,
       "untranslated": [
         "bar.edit.done",
         "bar.edit.hint",
@@ -1581,8 +1588,8 @@
       "stale": []
     },
     "pl": {
-      "translated": 792,
-      "of": 916,
+      "translated": 799,
+      "of": 923,
       "untranslated": [
         "bar.edit.done",
         "bar.edit.hint",
@@ -1712,8 +1719,8 @@
       "stale": []
     },
     "pt-BR": {
-      "translated": 792,
-      "of": 916,
+      "translated": 799,
+      "of": 923,
       "untranslated": [
         "bar.edit.done",
         "bar.edit.hint",
@@ -1843,8 +1850,8 @@
       "stale": []
     },
     "pt-PT": {
-      "translated": 792,
-      "of": 916,
+      "translated": 799,
+      "of": 923,
       "untranslated": [
         "bar.edit.done",
         "bar.edit.hint",
@@ -1974,8 +1981,8 @@
       "stale": []
     },
     "ru": {
-      "translated": 792,
-      "of": 916,
+      "translated": 799,
+      "of": 923,
       "untranslated": [
         "bar.edit.done",
         "bar.edit.hint",
@@ -2105,8 +2112,8 @@
       "stale": []
     },
     "zh-CN": {
-      "translated": 792,
-      "of": 916,
+      "translated": 799,
+      "of": 923,
       "untranslated": [
         "bar.edit.done",
         "bar.edit.hint",

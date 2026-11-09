@@ -1615,7 +1615,7 @@ impl Bar {
             let panel = self.cc.panel();
             let mut group = Node::new(CC_PANEL, Role::Panel, "Control Center");
             group.description = if self.cc.editor.active {
-                format!("Edit mode. {}", self.cc.editor.error)
+                self.cc.editor.description(self.look.as_ref())
             } else {
                 String::new()
             };
@@ -2585,11 +2585,11 @@ impl Application for Bar {
             .unwrap_or_default();
         for (version, result) in results {
             if version & (1u64 << 63) != 0 {
-                if version == ((1u64 << 63) | self.cc.editor.write_serial) {
-                    if let Err(error) = result {
-                        self.cc.editor.pending = false;
-                        self.cc.editor.error = error;
-                    }
+                if self
+                    .cc
+                    .editor
+                    .write_finished(version & !(1u64 << 63), result)
+                {
                     self.refresh(w);
                 }
                 continue;
@@ -2599,10 +2599,6 @@ impl Application for Bar {
             }
             if let Some(d) = &mut self.cc.detail {
                 d.error = result.clone().err().unwrap_or_default();
-            }
-            if let Err(error) = result {
-                self.cc.editor.pending = false;
-                self.cc.editor.error = error;
             }
             self.refresh(w);
         }

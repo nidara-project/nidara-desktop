@@ -191,7 +191,10 @@ through an Alert node. CPU/RAM and missing hardware retain their source semantic
 Tab focuses tiles, Ctrl+arrows moves, Menu/Shift+F10 opens sizes, Delete removes.
 AT-SPI declares named Move up/down/left/right, Resize and nonfixed Remove actions.
 Editor IDs occupy a separate high range from detail/list rows; only one view owns
-focus. A settings write disables further edits until the final read echo arrives.
+focus. A settings write disables further edits until its matching echo or successful
+write acknowledgement. Acknowledgement releases the barrier even if another
+writer replaced the layout before the echo; the next sync takes the actual state.
+Replies from an earlier write serial cannot unlock a later edit.
 
 ### Persistence and motion
 
@@ -203,7 +206,9 @@ these two schemas. Remove writes membership first, then geometry; add writes
 geometry first, then membership; move/resize applies geometry once. Every
 intermediate layout remains valid. Removal with lift can have a valid intermediate
 position distinct from both endpoints. Watchers coalesce key notifications; the
-editor retains its pending model until the final echo rather than showing phases.
+editor retains its pending model until the matching echo or the write reply rather
+than showing intermediate phases. A successful reply always releases pending,
+including when a concurrent writer makes the final echo different.
 
 Hyalo moves both ink and material in synchronized tile layers. The unpublished
 layers v1 protocol appends a parent-space clip, fixed to the viewport while the tile
@@ -251,12 +256,27 @@ not GTK presentation. `cc_layout_controls.py` compiles four actual source mutati
 and requires each to fail the layout tests; contradictory observation controls in
 the graphical report additionally check its predicates. They are distinct evidence.
 
-Local acceptance for this cut: 183 shell, 18 AT-SPI, 4 renderer and 14 Hyalo
-layer tests; workspace/all-target clippy; 21 graphical assertion/control pairs;
+Local acceptance for this cut: 188 shell, 18 AT-SPI, 4 renderer and 14 Hyalo
+layer tests; workspace/all-target clippy; 23 English and 10 Spanish graphical
+assertion/control pairs;
 four discriminating layout source mutations. The B2.2 wrapper currently stops
 before CC at dock-check.py:602: GetState also contains `nc` after B3.2, while its
 assertion expects only `app-grid`. Reproduced on B2.3 and on the clean B3.2 base
 281e88f4 (shell sources identical to main 03bc8fcc). Its harness is unchanged.
-The new four strings are translated in all twelve catalogs; the existing 124-key
+All eleven new keys are translated in all twelve catalogs; the existing 124-key
 debt in ten catalogs is unchanged. Local evidence is evidence-1016 under the
 owner's ChatGPT workspace; physical/Orca acceptance remains pending.
+
+Editing refusals distinguish out-of-grid targets (silent arrow no-op / pointer
+rollback) from a genuine capacity refusal (`cc.menu.size-full`). Layout write
+errors are translated read-only/changed/save-failed messages; raw diagnostics stay
+in the log. AT-SPI stable English action identifiers are independent of their
+localized names/descriptions, supplied by each current semantic node.
+
+`cc_edit_locale_check.py` runs a short private Spanish reader walk via
+`check-notifications-headless.sh` with `NK_WIDGETS_CHECK` selecting that file.
+It checks stable English action IDs against localized names/descriptions and the
+existing capacity key. The normal edit walk also covers keyboard and pointer
+out-of-grid targets; pure tests cover write acknowledgement versus a concurrent
+layout change and stale write replies. `Meta::default_in_bar` owns each widget's
+bar default alongside its CC default.

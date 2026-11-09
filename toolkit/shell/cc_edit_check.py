@@ -57,6 +57,13 @@ try:
     (LOG/'edit-tree.txt').write_text('\n'.join(f'{n.get_role_name()} {n.get_name()} {box(n)}' for n in nodes()))
     oracle('edit mode exposes full-grid controls',lambda v:'Done' in v and 'screenshot' not in v,names(),[])
     before=stored();print('STORED',before,flush=True)
+    focus('Screenshot');keys(103,(29,));pump(.2)
+    oracle('Ctrl-up at top is a silent no-op',lambda v:v==(before,False),(stored(),any(n.get_role()==Atspi.Role.ALERT for n in nodes())),({},True))
+    r=box(find('Volume'));sx,sy=r[0]+20,r[1]+20
+    control(f'press {sx} {sy} 272');control(f'move {sx+96} {sy}');control('release 272')
+    until('wide invalid drop restores box',lambda:box(find('Volume'))==r)
+    oracle('wide drop past cell boundary silently rolls back',lambda v:v==(before,False),(stored(),any(n.get_role()==Atspi.Role.ALERT for n in nodes())),({},True))
+
     # Same-sized screenshot and recording occupy adjacent cells in DEFAULT.
     source=find('Screenshot');target=find('Screen recording')
     a=box(source);b=box(target);sx,sy=a[0]+a[2]/2,a[1]+a[3]/2;tx,ty=b[0]+b[2]/2,b[1]+b[3]/2

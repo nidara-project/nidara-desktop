@@ -27,6 +27,8 @@ struct Hold {
     preview: Option<layout::Stored>,
     moved: bool,
     pointer: (f64, f64),
+    size: Size,
+    target_in_bounds: bool,
 }
 pub struct Editor {
     pub active: bool,
@@ -119,9 +121,15 @@ impl Editor {
         };
         let width = layout::GRID_WIDTH + 2. * PAD;
         let total = grid + extra;
-        let visible = total.min((height - top - HANG - 2. * PAD - 48.).max(76.));
+        let footer = if self.error.is_empty() { 48. } else { 80. };
+        let visible = total.min((height - top - HANG - 2. * PAD - footer).max(76.));
         self.offset = self.offset.clamp(0., (total - visible).max(0.));
-        self.panel = [right - width, top + HANG, width, visible + 2. * PAD + 48.];
+        self.panel = [
+            right - width,
+            top + HANG,
+            width,
+            visible + 2. * PAD + footer,
+        ];
         self.viewport = [
             self.panel[0] + PAD,
             self.panel[1] + PAD,
@@ -254,7 +262,7 @@ impl Editor {
     }
     pub fn accept(&mut self, next: Option<layout::Stored>) -> Option<Act> {
         let Some(next) = next else {
-            self.error = "Grid is full".into();
+            self.error = "cc.menu.size-full".into();
             return None;
         };
         self.error.clear();
@@ -330,6 +338,10 @@ impl Editor {
                     "Move left" => (-1, 0),
                     _ => (1, 0),
                 };
+                if !layout::in_bounds(p.x + dx, p.y + dy, p.size) {
+                    self.error.clear();
+                    return None;
+                }
                 self.accept(layout::move_tile(
                     &self.stored,
                     &|id| available(id, status),
@@ -383,8 +395,15 @@ impl Editor {
             } else {
                 self.tiles.iter().find(|t| t.tile.id == id)?.rect
             };
+            let size = if added {
+                layout::meta_of(id).unwrap().default_size
+            } else {
+                self.tiles.iter().find(|t| t.tile.id == id)?.tile.size
+            };
             self.hold = Some(Hold {
                 id,
+                size,
+                target_in_bounds: false,
                 offset: if added {
                     let (w, h) = layout::meta_of(id).unwrap().default_size.cells();
                     (
@@ -422,7 +441,8 @@ impl Editor {
                 ((p.0 - h.offset.0 - self.origin.0) / (layout::UNIT + layout::GAP)).round() as i32;
             let y =
                 ((p.1 - h.offset.1 - self.origin.1) / (layout::UNIT + layout::GAP)).round() as i32;
-            h.preview = if inside(self.viewport, p) {
+            h.target_in_bounds = inside(self.viewport, p) && layout::in_bounds(x, y, h.size);
+            h.preview = if h.target_in_bounds {
                 if h.added {
                     layout::add(&h.snapshot, &|id| available(id, status), h.id, Some((x, y)))
                 } else {
@@ -442,7 +462,7 @@ impl Editor {
             }
             return None;
         }
-        if !inside(self.viewport, h.pointer) {
+        if !h.target_in_bounds {
             self.error.clear();
             return None;
         }
@@ -581,16 +601,52 @@ impl Editor {
         }
     }
     pub fn full_text(look: Option<&Look>) -> String {
-        look.map(|l| l.text_of(&crate::menu::Label::Key("cc.grid.full")))
-            .filter(|v| v != "cc.grid.full")
+        look.map(|l| l.text_of(&crate::menu::Label::Key("cc.menu.size-full")))
+            .filter(|v| v != "cc.menu.size-full")
             .unwrap_or_else(|| "Grid is full".into())
     }
     fn error_text(&self, look: Option<&Look>) -> String {
-        if self.error == "Grid is full" {
+        if self.error == "cc.menu.size-full" {
             Self::full_text(look)
         } else {
-            self.error.clone()
+            let fallback = match self.error.as_str() {
+                "cc.grid.write-read-only" => "Control Center layout is read-only",
+                "cc.grid.write-changed" => "Control Center layout changed; retry the edit",
+                "cc.grid.write-failed" => "Could not save the Control Center layout",
+                _ => return self.error.clone(),
+            };
+            translate(look, &self.error, fallback)
         }
+    }
+    pub fn description(&self, look: Option<&Look>) -> String {
+        let mode = translate(look, "cc.grid.mode", "Edit mode");
+        let message = self.error_text(look);
+        if message.is_empty() {
+            mode
+        } else {
+            format!("{mode}. {message}")
+        }
+    }
+    /// Stable names stay on the wire; only reader-facing labels are translated.
+    pub(super) fn action_label(name: &str, look: Option<&Look>) -> String {
+        let key = match name {
+            "Move up" => "cc.action.move-up",
+            "Move down" => "cc.action.move-down",
+            "Move left" => "cc.action.move-left",
+            "Move right" => "cc.action.move-right",
+            "Resize" => "cc.action.resize",
+            "Remove" => "cc.menu.remove",
+            _ => return name.into(),
+        };
+        translate(look, key, name)
+    }
+    pub fn write_finished(&mut self, serial: u64, result: Result<(), String>) -> bool {
+        if serial != self.write_serial {
+            return false;
+        }
+        self.pending = false;
+        self.error = result.err().unwrap_or_default();
+        true
     }
     pub fn controls_nodes(
         &self,
@@ -631,6 +687,12 @@ impl Editor {
                 }
                 if !layout::meta_of(p.tile.id).unwrap().fixed && !self.pending {
                     n.actions.push(Action::Named("Remove"));
+                }
+                for action in &n.actions {
+                    if let Action::Named(name) = action {
+                        n.action_labels
+                            .insert((*name).into(), Self::action_label(name, look));
+                    }
                 }
                 n.states.focused = self.focus == Some(Target::Tile(p.tile.id));
                 n.states.offscreen = !intersects(p.rect, self.viewport);
@@ -694,14 +756,19 @@ impl Editor {
             );
             n.bounds = Bounds {
                 x: self.panel[0] + PAD,
-                y: self.panel[1] + self.panel[3] - 68.,
+                y: self.panel[1] + self.panel[3] - 88.,
                 width: self.panel[2] - 2. * PAD,
-                height: 20.,
+                height: 40.,
             };
             out.push((n, super::Target::Edit(Target::Toggle)));
         }
         out
     }
+}
+fn translate(look: Option<&Look>, key: &str, fallback: &str) -> String {
+    look.and_then(|l| l.exports.text(key).ok())
+        .map(str::to_owned)
+        .unwrap_or_else(|| fallback.into())
 }
 fn index(id: &str) -> u64 {
     layout::REGISTRY.iter().position(|m| m.id == id).unwrap() as u64
@@ -849,11 +916,11 @@ impl Editor {
                 &style,
                 [
                     self.panel[0] + PAD,
-                    self.panel[1] + self.panel[3] - 68.,
+                    self.panel[1] + self.panel[3] - 88.,
                     self.panel[2] - 2. * PAD,
-                    20.,
+                    40.,
                 ],
-                1,
+                2,
                 1.,
             )?;
         }
@@ -921,6 +988,110 @@ mod tests {
         editor.sync(&Default::default(), &status, 900., 36., 1080.);
         (editor, status)
     }
+    #[test]
+    fn translated_write_errors_have_two_lines_above_done_without_covering_the_grid() {
+        let (mut editor, status) = ready();
+        let stored = editor.stored.clone();
+        editor.error = "cc.grid.write-changed".into();
+        editor.sync(&stored, &status, 900., 36., 688.);
+        let nodes = editor.controls_nodes(100, None);
+        let alert = nodes
+            .iter()
+            .find(|(n, _)| n.role == nk_a11y::Role::Alert)
+            .unwrap()
+            .0
+            .clone();
+        let done = editor
+            .controls
+            .iter()
+            .find(|c| c.target == Target::Toggle)
+            .unwrap();
+        assert!(alert.bounds.height >= 40.);
+        assert!(alert.bounds.y >= editor.viewport[1] + editor.viewport[3]);
+        assert!(alert.bounds.y + alert.bounds.height <= done.rect[1]);
+        assert_eq!(alert.name, "Control Center layout changed; retry the edit");
+        assert!(!editor.description(None).contains("cc.grid."));
+    }
+
+    #[test]
+    fn arrows_at_the_grid_edge_are_silent_and_do_not_write() {
+        let (mut editor, status) = ready();
+        let before = editor.stored.clone();
+        for (id, action) in [
+            ("screenshot", "Move up"),
+            ("media", "Move left"),
+            ("volume", "Move right"),
+        ] {
+            assert!(editor.named(id, action, &status).is_none());
+            assert!(editor.error.is_empty());
+            assert!(!editor.pending);
+            assert_eq!(editor.stored, before);
+        }
+    }
+    #[test]
+    fn a_wide_drop_past_the_cell_boundary_rolls_back_even_with_pointer_in_viewport() {
+        let (mut editor, status) = ready();
+        let before = editor.stored.clone();
+        let tile = editor
+            .tiles
+            .iter()
+            .find(|p| p.tile.id == "volume")
+            .unwrap()
+            .rect;
+        let start = (tile[0] + 20., tile[1] + 20.);
+        editor.press(start, &status);
+        let point = (start.0 + 96., start.1);
+        assert!(inside(editor.viewport, point));
+        editor.motion(point, &status);
+        assert!(!editor.hold.as_ref().unwrap().target_in_bounds);
+        assert!(editor.release(&status).is_none());
+        editor.sync(&before, &status, 900., 36., 1080.);
+        assert_eq!(
+            editor
+                .tiles
+                .iter()
+                .find(|p| p.tile.id == "volume")
+                .unwrap()
+                .rect,
+            tile
+        );
+        assert_eq!(editor.stored, before);
+        assert!(editor.error.is_empty());
+        assert!(!editor.pending);
+        // A capacity refusal still explains itself instead of silently swallowing every None.
+        assert!(editor.accept(None).is_none());
+        assert_eq!(editor.error, "cc.menu.size-full");
+    }
+    #[test]
+    fn success_unblocks_a_concurrent_echo_and_stale_replies_cannot_unlock_a_new_edit() {
+        let (mut editor, status) = ready();
+        let before = editor.stored.clone();
+        let next = layout::remove(&before, &|id| available(id, &status), "screenshot").unwrap();
+        editor.accept(Some(next.clone()));
+        let serial = editor.write_serial;
+        let mut rival = next.clone();
+        rival.sizes.insert("media".into(), "1x1".into());
+        editor.sync(&rival, &status, 900., 36., 1080.);
+        assert!(editor.pending);
+        assert!(editor.write_finished(serial, Ok(())));
+        editor.sync(&rival, &status, 900., 36., 1080.);
+        assert!(!editor.pending);
+        assert_eq!(editor.stored, rival);
+        assert!(
+            !editor
+                .controls
+                .iter()
+                .find(|c| c.target == Target::Toggle)
+                .unwrap()
+                .disabled
+        );
+        assert!(editor.action(Target::Add("screenshot"), &status).is_some());
+        assert!(!editor.write_finished(serial, Ok(())));
+        assert!(editor.pending);
+        assert!(editor.write_finished(editor.write_serial, Err("cc.grid.write-failed".into())));
+        assert!(!editor.pending);
+    }
+
     #[test]
     fn scrolling_during_a_drag_retargets_the_cell_without_a_pointer_move_or_a_write() {
         let (mut editor, status) = ready();

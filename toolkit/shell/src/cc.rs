@@ -2037,11 +2037,23 @@ impl Writer {
     }
 }
 
+fn layout_write_error(raw: String) -> String {
+    eprintln!("nidara-shell: Control Center layout write failed: {raw}");
+    match raw.as_str() {
+        "Control Center layout is read-only" => "cc.grid.write-read-only",
+        "Control Center layout changed; retry the edit" => "cc.grid.write-changed",
+        _ => "cc.grid.write-failed",
+    }
+    .into()
+}
+
 fn write(conn: &zbus::blocking::Connection, act: &Act) -> Result<(), String> {
     use zbus::zvariant::{ObjectPath, OwnedObjectPath};
     const SESSION: &str = crate::status::SESSION;
     match act {
-        Act::Layout(before, after) => crate::prefs::write_cc(before, after),
+        Act::Layout(before, after) => {
+            crate::prefs::write_cc(before, after).map_err(layout_write_error)
+        }
         Act::OpenDetail(_) => Ok(()),
         Act::Detail(action) => detail::write(conn, action),
         Act::Dark(on) => crate::prefs::apply(
@@ -2138,6 +2150,24 @@ mod tests {
 
     fn placed(cc: &Cc, id: &str) -> Placed {
         *cc.tiles.iter().find(|p| p.tile.id == id).unwrap()
+    }
+
+    #[test]
+    fn layout_write_diagnostics_map_to_translatable_keys_not_raw_backend_text() {
+        for (raw, key) in [
+            (
+                "Control Center layout is read-only",
+                "cc.grid.write-read-only",
+            ),
+            (
+                "Control Center layout changed; retry the edit",
+                "cc.grid.write-changed",
+            ),
+            ("GSettings backend diagnostic", "cc.grid.write-failed"),
+            ("no control-center schema", "cc.grid.write-failed"),
+        ] {
+            assert_eq!(layout_write_error(raw.into()), key);
+        }
     }
 
     #[test]

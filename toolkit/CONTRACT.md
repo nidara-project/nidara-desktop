@@ -111,6 +111,9 @@ glass, a state wash or a control background.
   only actions declared by the current, enabled node may be invoked. Hosts validate
   the view and identity again before applying it. B2.3 uses this for tile Move,
   Resize and Remove without inventing text/value edits or synthetic key presses.
+  `Node::action_labels` maps stable action names to application-translated text.
+  The backend keeps `get_name` and callbacks stable, and uses the current node's
+  label for `get_localized_name`, descriptions and GetActions descriptions.
 
 Control Center edit views may clip a material `Group` to a logical viewport and
 set its formation opacity. nk-wayland forwards these through the existing

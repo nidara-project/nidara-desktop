@@ -10,7 +10,7 @@ mutants={
  'no-swap':('if conflicts.len() == 1','if false && conflicts.len() == 1'),
  'reverse-gravity':('if *y > conflict.y {','if *y < conflict.y {'),
  'lift-above-gap':('while y > freed.y &&','while y > 0 &&'),
- 'lose-bar-default':('or_insert((default_bar(id), false))','or_insert((false, false))'),
+ 'lose-bar-default':('meta("battery", Size::Single, TOGGLE, false, false, true)','meta("battery", Size::Single, TOGGLE, false, false, false)'),
 }
 report={}
 for name,change in mutants.items():

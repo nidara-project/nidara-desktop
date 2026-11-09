@@ -374,7 +374,7 @@ pub fn apply(
 
 /// One committed edit. GSettings delay/apply is per schema, not across schemas.
 /// Removal membership precedes geometry; addition membership follows geometry.
-/// All interim grids remain valid; the editor waits for the final snapshot echo.
+/// All interim grids remain valid. Echo or write acknowledgement releases editing.
 pub fn write_cc(
     before: &crate::cclayout::Stored,
     after: &crate::cclayout::Stored,

@@ -63,6 +63,7 @@ pub struct Meta {
     pub fixed: bool,
     /// In it on first run.
     pub default_in_cc: bool,
+    pub default_in_bar: bool,
 }
 
 const TOGGLE: &[Size] = &[Size::Single, Size::Wide, Size::Square];
@@ -71,21 +72,21 @@ const SLIDER: &[Size] = &[Size::Single, Size::Tall, Size::FullWidth];
 /// The registry (`widgets/index.ts`), in its order — the order a member that the default
 /// layout does not list arrives in.
 pub const REGISTRY: &[Meta] = &[
-    meta("battery", Size::Single, TOGGLE, false, false),
-    meta("bt", Size::Single, TOGGLE, true, true),
-    meta("brightness", Size::FullWidth, SLIDER, true, true),
-    meta("clipboard", Size::Wide, TOGGLE, false, false),
-    meta("cpu_memory", Size::Wide, TOGGLE, false, false),
-    meta("dark_mode", Size::Single, TOGGLE, false, true),
-    meta("ethernet", Size::Wide, TOGGLE, false, false),
-    meta("focus", Size::Wide, TOGGLE, true, true),
-    meta("media", Size::Square, TOGGLE, true, true),
-    meta("night_light", Size::Single, TOGGLE, true, true),
-    meta("screenrecord", Size::Wide, TOGGLE, false, true),
-    meta("screenshot", Size::Wide, TOGGLE, false, true),
-    meta("volume", Size::FullWidth, SLIDER, true, true),
-    meta("vpn", Size::Wide, TOGGLE, false, false),
-    meta("wifi", Size::Wide, TOGGLE, true, true),
+    meta("battery", Size::Single, TOGGLE, false, false, true),
+    meta("bt", Size::Single, TOGGLE, true, true, false),
+    meta("brightness", Size::FullWidth, SLIDER, true, true, false),
+    meta("clipboard", Size::Wide, TOGGLE, false, false, false),
+    meta("cpu_memory", Size::Wide, TOGGLE, false, false, false),
+    meta("dark_mode", Size::Single, TOGGLE, false, true, false),
+    meta("ethernet", Size::Wide, TOGGLE, false, false, false),
+    meta("focus", Size::Wide, TOGGLE, true, true, true),
+    meta("media", Size::Square, TOGGLE, true, true, false),
+    meta("night_light", Size::Single, TOGGLE, true, true, false),
+    meta("screenrecord", Size::Wide, TOGGLE, false, true, false),
+    meta("screenshot", Size::Wide, TOGGLE, false, true, false),
+    meta("volume", Size::FullWidth, SLIDER, true, true, true),
+    meta("vpn", Size::Wide, TOGGLE, false, false, false),
+    meta("wifi", Size::Wide, TOGGLE, true, true, true),
 ];
 
 const fn meta(
@@ -94,6 +95,7 @@ const fn meta(
     supported: &'static [Size],
     fixed: bool,
     default_in_cc: bool,
+    default_in_bar: bool,
 ) -> Meta {
     Meta {
         id,
@@ -101,6 +103,7 @@ const fn meta(
         supported,
         fixed,
         default_in_cc,
+        default_in_bar,
     }
 }
 
@@ -253,10 +256,6 @@ pub fn same_view(a: &Stored, b: &Stored) -> bool {
             member(a) == member(b)
         })
 }
-fn default_bar(id: &str) -> bool {
-    // widgets/*.ts defaultInBar; keep its effective value when adding a new pair.
-    matches!(id, "battery" | "wifi" | "volume" | "focus")
-}
 pub(super) fn occupancy(tiles: &[Tile], ignore: &[&str]) -> Grid {
     let mut grid = Grid::default();
     for t in tiles.iter().filter(|t| !ignore.contains(&t.id)) {
@@ -270,6 +269,11 @@ fn overlaps(a: &Tile, b: &Tile) -> bool {
     a.x < b.x + bw && a.x + aw > b.x && a.y < b.y + bh && a.y + ah > b.y
 }
 /// Spatial displacement (owner 2026-06-09): only directly covered tiles move.
+pub fn in_bounds(x: i32, y: i32, size: Size) -> bool {
+    let (w, h) = size.cells();
+    x >= 0 && y >= 0 && x <= COLS - w && y <= ROWS - h
+}
+
 /// Equal footprints swap; otherwise gravity below beats same row, then above.
 fn resolve(tiles: &[Tile], target: Tile) -> Option<Vec<Tile>> {
     if !Grid::default().free(target.x, target.y, target.size) {
@@ -407,7 +411,7 @@ pub fn remove(stored: &Stored, available: &dyn Fn(&str) -> bool, id: &str) -> Op
     let placement = out
         .placement
         .entry(id.into())
-        .or_insert((default_bar(id), false));
+        .or_insert((meta_of(id).is_some_and(|m| m.default_in_bar), false));
     placement.1 = false;
     Some(out)
 }
@@ -424,7 +428,7 @@ pub fn add(
     let mut out = stored.clone();
     out.placement
         .entry(id.into())
-        .or_insert((default_bar(id), false))
+        .or_insert((meta_of(id).is_some_and(|m| m.default_in_bar), false))
         .1 = true;
     if stored.positions.is_empty() && cell.is_none() {
         return layout(&out, available)
@@ -467,7 +471,7 @@ pub(super) struct Grid(HashSet<(i32, i32)>);
 impl Grid {
     pub(super) fn free(&self, x: i32, y: i32, size: Size) -> bool {
         let (w, h) = size.cells();
-        if x < 0 || y < 0 || x + w > COLS || y + h > ROWS {
+        if !in_bounds(x, y, size) {
             return false;
         }
         (0..h).all(|dy| (0..w).all(|dx| !self.0.contains(&(x + dx, y + dy))))
@@ -506,7 +510,7 @@ pub fn write_phases(
             final_state
                 .placement
                 .entry(m.id.into())
-                .or_insert((default_bar(m.id), m.default_in_cc))
+                .or_insert((m.default_in_bar, m.default_in_cc))
                 .1 = cc(after);
         }
     }

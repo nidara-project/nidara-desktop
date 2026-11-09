@@ -811,6 +811,10 @@ impl Detail {
                     })
                 ) {
                     n.actions.push(nk_a11y::Action::Named("Remove"));
+                    n.action_labels.insert(
+                        "Remove".into(),
+                        super::edit::Editor::action_label("Remove", look),
+                    );
                 }
                 (n, Target::Detail(row.id))
             })
