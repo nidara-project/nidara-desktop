@@ -32,7 +32,11 @@ used. A user override mechanism remains outside this change.
 
 Process and package reads run outside GLib/H1 and painting. Evidence is cached for
 an unchanged window identity and the package database is indexed lazily, watched
-for invalidation, and never queried by spawning pacman. Late evidence is accepted
+for invalidation, and never queried by spawning pacman. Only packages that install
+a non-browser launcher are indexed (a few dozen of over a thousand on a desktop,
+about 27,000 paths instead of 1.2 million), and one directory monitor on the
+database's `local/` invalidates it: an install or upgrade creates a new package
+directory there. An unreadable entry skips only itself. Late evidence is accepted
 only for the same compositor connection and window identity. Token bindings live
 until window close/connection loss; a consumed launch record cannot erase them.
 Multiple Wayland windows can reuse a token only on the first presenting client's
