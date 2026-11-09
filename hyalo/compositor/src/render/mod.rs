@@ -224,7 +224,7 @@ fn push_surface_over_glass<R: HyaloRenderer>(
             // that changed. (Its ink coverage is not drawn: the drawn region's own element draws it.)
             let plain = |inner: WaylandSurfaceRenderElement<R>, renderer: &mut R| {
                 if inked.iter().any(|(id, _)| id == smithay::backend::renderer::element::Element::id(&inner)) {
-                    window::inked_element(renderer, &inked, window::AtScale { inner, scale }, when)
+                    window::inked_element(renderer, &inked, window::AtScale { inner, scale, clip: None }, when)
                 } else {
                     OutputElement::Surface(inner)
                 }
@@ -284,7 +284,7 @@ pub(super) fn push_tree<R: HyaloRenderer>(
         Some(layered) => out.extend(layered.interleave(|e| window::inked_element(renderer, &inked, e, when), layer_paint)),
         None => {
             let elements: Vec<WaylandSurfaceRenderElement<R>> = render_elements_from_surface_tree(renderer, surface, location, scale, 1.0, kind);
-            out.extend(elements.into_iter().map(|inner| window::inked_element(renderer, &inked, window::AtScale { inner, scale }, when)));
+            out.extend(elements.into_iter().map(|inner| window::inked_element(renderer, &inked, window::AtScale { inner, scale, clip: None }, when)));
         }
     }
     push_material(out, surface, location, scale, output_size, when);

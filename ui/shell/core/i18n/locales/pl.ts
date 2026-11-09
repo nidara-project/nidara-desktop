@@ -880,4 +880,8 @@ export default {
     "share.windows": "Okna",
     "share.cancel": "Anuluj",
     "share.share": "Udostępnij",
+    "cc.grid.full": "Siatka jest pełna",
+    "cc.grid.add": "Dodaj",
+    "cc.grid.mode": "Tryb edycji",
+    "cc.detail.refresh": "Odśwież",
 }

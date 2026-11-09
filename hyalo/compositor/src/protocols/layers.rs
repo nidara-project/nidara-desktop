@@ -218,6 +218,7 @@ pub struct Pending {
     position: Option<[f64; 2]>,
     scale: Option<(f64, [f64; 2])>,
     opacity: Option<f64>,
+    parent_clip: Option<Option<Rectangle<i32, Logical>>>,
 }
 
 impl Cacheable for Pending {
@@ -236,6 +237,7 @@ impl Cacheable for Pending {
         if self.scale.is_some() {
             into.scale = self.scale;
         }
+        if self.parent_clip.is_some() { into.parent_clip = self.parent_clip; }
         if self.opacity.is_some() {
             into.opacity = self.opacity;
         }
@@ -259,6 +261,7 @@ pub struct Layer {
     scale: Prop,
     anchor: [f64; 2],
     opacity: Prop,
+    parent_clip: Option<Rectangle<i32, Logical>>,
     shown: presentation::PresentedLook,
 }
 
@@ -270,6 +273,7 @@ pub struct Look {
     pub scale: f64,
     pub anchor: [f64; 2],
     pub opacity: f64,
+    pub parent_clip: Option<Rectangle<i32, Logical>>,
 }
 
 impl Layer {
@@ -280,6 +284,7 @@ impl Layer {
         };
         Look {
             position,
+            parent_clip: self.parent_clip,
             scale: self.scale.presented(t).0.max(0.0),
             anchor: self.anchor,
             opacity: self.opacity.presented(t).0.clamp(0.0, 1.0),
@@ -316,6 +321,7 @@ impl Layer {
             self.anchor = anchor;
             self.scale.set(s, curve, now, 5e-4);
         }
+        if let Some(clip) = p.parent_clip { self.parent_clip = clip; }
         if let Some(o) = p.opacity {
             let curve = self.begin(OPACITY);
             self.opacity.set(o, curve, now, 5e-4);
@@ -442,6 +448,8 @@ struct Place {
     at: Point<f64, Logical>,
     scale: f64,
     alpha: f64,
+    /// Root-logical intersection. Some(empty) must stay empty.
+    clip: Option<Rectangle<f64, Logical>>,
 }
 
 /// A surface's place from its parent's: a layer at its presented transform, anything else at
@@ -450,13 +458,23 @@ fn place(parent: Place, states: &SurfaceData, offset: Point<i32, Logical>, t: In
     place_look(parent, offset, look(states, t))
 }
 
+fn intersect_clip(a: Option<Rectangle<f64, Logical>>, b: Option<Rectangle<f64, Logical>>) -> Option<Rectangle<f64, Logical>> {
+    match (a,b) {
+        (Some(a),Some(b)) => Some(a.intersection(b).unwrap_or_default()),
+        (a,b) => a.or(b),
+    }
+}
+
 fn place_look(parent: Place, offset: Point<i32, Logical>, look: Option<Look>) -> Place {
     match look {
         Some(l) => {
             let p = l.position.map_or(offset.to_f64(), |[x, y]| Point::from((x, y)));
             // Scaled about the anchor: the anchor stays where it is at scale 1.
             let shift = Point::<f64, Logical>::from((l.anchor[0] * (1.0 - l.scale), l.anchor[1] * (1.0 - l.scale)));
-            Place { at: parent.at + (p + shift).upscale(parent.scale), scale: parent.scale * l.scale, alpha: parent.alpha * l.opacity }
+            let clip = l.parent_clip.map(|r| Rectangle::new(
+                parent.at + r.loc.to_f64().upscale(parent.scale), r.size.to_f64().upscale(parent.scale)));
+            Place { at: parent.at + (p + shift).upscale(parent.scale), scale: parent.scale * l.scale,
+                alpha: parent.alpha * l.opacity, clip: intersect_clip(parent.clip, clip) }
         }
         None => Place { at: parent.at + offset.to_f64().upscale(parent.scale), ..parent },
     }
@@ -469,7 +487,7 @@ fn place_shown(parent: Place, states: &SurfaceData, offset: Point<i32, Logical>,
         let layer = layer.lock().unwrap();
         layer.alive.then(|| match frame {
             Some(frame) => layer.shown.get(frame).unwrap_or(Look {
-                position: None, scale: 1., anchor: [0., 0.], opacity: 0.,
+                position: None, scale: 1., anchor: [0., 0.], opacity: 0., parent_clip: None,
             }),
             None => layer.look(now),
         })
@@ -518,6 +536,7 @@ struct Glassy {
     at: Point<i32, Physical>,
     scale: Scale<f64>,
     alpha: f64,
+    clip: Option<Rectangle<i32, Physical>>,
 }
 
 /// `surface`'s tree as render elements, front to back, each layer at its presented transform
@@ -540,7 +559,7 @@ where
     }
     // Logical, relative to the root; turned physical per element at the output's scale.
     let origin = location.to_f64().to_logical(scale);
-    let root = Place { at: origin, scale: 1.0, alpha: 1.0 };
+    let root = Place { at: origin, scale: 1.0, alpha: 1.0, clip: None };
     let mut out = Vec::new();
     // The layers that hold a material: their glass is made after the walk, which holds their
     // states locked.
@@ -565,9 +584,9 @@ where
             match WaylandSurfaceRenderElement::from_surface(renderer, surface, states, at, here.alpha as f32, kind) {
                 Ok(Some(inner)) => {
                     let s = Scale::from((scale.x * here.scale, scale.y * here.scale));
-                    out.push(AtScale { inner, scale: s });
+                    out.push(AtScale { inner, scale: s, clip: here.clip.map(|r| r.to_physical(scale).to_i32_round()) });
                     if is_layer(states) && crate::protocols::material::glass_shapes(states) > 0 {
-                        glassy.push(Glassy { index: out.len() - 1, layer: surface.clone(), at: at.to_i32_round(), scale: s, alpha: here.alpha });
+                        glassy.push(Glassy { index: out.len() - 1, layer: surface.clone(), at: at.to_i32_round(), scale: s, alpha: here.alpha, clip: here.clip.map(|r| r.to_physical(scale).to_i32_round()) });
                     }
                 }
                 Ok(None) => {}
@@ -583,7 +602,11 @@ where
     });
     let glass = glassy
         .into_iter()
-        .flat_map(|Glassy { index, layer, at, scale, alpha }| {
+        .flat_map(|Glassy { index, layer, at, scale, alpha, clip }| {
+            let bounds = match (bounds, clip) {
+                (Some(a), Some(b)) => Some(a.intersection(b).unwrap_or_default()),
+                (a,b) => a.or(b),
+            };
             let elements = GlassElement::for_surface(&layer, at, scale, output_size, when);
             let elements: Vec<GlassElement> = match bounds {
                 Some(b) => elements.into_iter().filter_map(|g| g.within(b)).collect(),
@@ -621,7 +644,7 @@ pub fn infos(root: &WlSurface, when: Instant) -> Vec<crate::ipc::WindowLayerInfo
     let mut out = Vec::new();
     with_surface_tree_downward(
         root,
-        Place { at: Point::from((0.0, 0.0)), scale: 1.0, alpha: 1.0 },
+        Place { at: Point::from((0.0, 0.0)), scale: 1.0, alpha: 1.0, clip: None },
         |_, states, parent| match view(states) {
             Some(v) => TraversalAction::DoChildren(place(*parent, states, v.offset, when)),
             None => TraversalAction::SkipChildren,
@@ -660,7 +683,7 @@ pub fn under_tree(
     frame: Option<std::sync::Arc<Instant>>,
 ) -> Option<(WlSurface, Point<f64, Logical>)> {
     let now = Instant::now();
-    let root = Place { at: location.to_f64(), scale: 1.0, alpha: 1.0 };
+    let root = Place { at: location.to_f64(), scale: 1.0, alpha: 1.0, clip: None };
     let found = std::cell::RefCell::new(None);
     with_surface_tree_downward(
         surface,
@@ -676,7 +699,7 @@ pub fn under_tree(
         |surface, states, parent| {
             let Some(v) = view(states) else { return };
             let here = place_shown(*parent, states, v.offset, frame.as_ref(), now);
-            if here.alpha <= 0.0 || here.scale <= 0.0 {
+            if here.alpha <= 0.0 || here.scale <= 0.0 || here.clip.is_some_and(|c| !c.contains(point)) {
                 return;
             }
             if crate::control::enabled() {
@@ -708,7 +731,7 @@ pub struct LayersGlobal;
 pub struct LayerData(Weak<WlSurface>);
 
 pub fn init(dh: &DisplayHandle) {
-    dh.create_global::<Hyalo, NidaraLayersManagerV1, _>(1, LayersGlobal);
+    dh.create_global::<Hyalo, NidaraLayersManagerV1, _>(2, LayersGlobal);
 }
 
 impl GlobalDispatch2<NidaraLayersManagerV1, Hyalo> for LayersGlobal {
@@ -775,6 +798,7 @@ impl Dispatch2<NidaraLayersManagerV1, Hyalo> for LayersGlobal {
                     scale: Prop::new(1.0),
                     anchor: [0.0, 0.0],
                     opacity: Prop::new(1.0),
+                    parent_clip: None,
                     shown: presentation::PresentedLook::default(),
                 };
                 with_states(&surface, |s| {
@@ -843,6 +867,13 @@ impl Dispatch2<NidaraLayerV1, Hyalo> for LayerData {
                 } else {
                     invalid("a scale must be finite and not negative");
                 }
+            }
+            Request::SetParentClip { x, y, width, height } => {
+                if width == 0 && height == 0 {
+                    self.pending(|m| m.parent_clip = Some(None));
+                } else if width > 0 && height > 0 {
+                    self.pending(|m| m.parent_clip = Some(Some(Rectangle::new((x,y).into(),(width,height).into()))));
+                } else { invalid("clip needs positive dimensions or both zero to clear"); }
             }
             Request::SetOpacity { opacity } => {
                 if (0.0..=1.0).contains(&opacity) {
@@ -917,6 +948,25 @@ pub fn layer_surface_under(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn parent_clip_follows_parent_but_not_child_motion_and_intersects_descendants() {
+        let parent = Place { at: (20.,30.).into(), scale: 2., alpha: 1., clip: None };
+        let clip = Rectangle::new((10,20).into(),(100,80).into());
+        let mut look = Look { position: Some([200.,300.]), scale: 0.5, anchor: [15.,20.], opacity: 1., parent_clip: Some(clip) };
+        let first = place_look(parent,(0,0).into(),Some(look));
+        assert_eq!(first.clip,Some(Rectangle::new((40.,70.).into(),(200.,160.).into())));
+        look.position = Some([-50.,10.]); look.scale = 3.;
+        let moved = place_look(parent,(0,0).into(),Some(look));
+        assert_eq!(moved.clip,first.clip);
+        assert_ne!(moved.at,first.at);
+        let child = place_look(first,(0,0).into(),Some(Look { parent_clip: Some(Rectangle::new((500,500).into(),(20,20).into())), ..look }));
+        assert!(child.clip.unwrap().is_empty());
+        // An empty ancestor intersection must never become unbounded again.
+        assert!(place_look(child,(0,0).into(),None).clip.unwrap().is_empty());
+        let no_clip = place_look(parent,(0,0).into(),Some(Look { parent_clip: None, ..look }));
+        assert!(no_clip.clip.is_none());
+    }
 
     const MS: fn(u64) -> Duration = Duration::from_millis;
 

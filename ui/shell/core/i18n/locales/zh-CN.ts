@@ -880,4 +880,8 @@ export default {
     "share.windows": "窗口",
     "share.cancel": "取消",
     "share.share": "共享",
+    "cc.grid.full": "网格已满",
+    "cc.grid.add": "添加",
+    "cc.grid.mode": "编辑模式",
+    "cc.detail.refresh": "刷新",
 }

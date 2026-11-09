@@ -458,6 +458,7 @@ fn request(
         return Err("stale or suspended parent action".into());
     }
     match action {
+        Request::Named(..) => Err("no named action declared by Settings".into()),
         Request::Focus(id) => tree.dispatch(tree.target(id), Command::Focus),
         Request::Activate(id) => tree.dispatch(tree.target(id), Command::Activate),
         Request::SetValue(id, value) => tree.request_value(tree.target(id), value as f32),

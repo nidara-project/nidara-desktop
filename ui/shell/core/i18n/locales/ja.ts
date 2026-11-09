@@ -880,4 +880,8 @@ export default {
     "share.windows": "ウィンドウ",
     "share.cancel": "キャンセル",
     "share.share": "共有",
+    "cc.grid.full": "グリッドがいっぱいです",
+    "cc.grid.add": "追加",
+    "cc.grid.mode": "編集モード",
+    "cc.detail.refresh": "更新",
 }

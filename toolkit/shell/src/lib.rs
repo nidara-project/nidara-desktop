@@ -11,6 +11,7 @@ pub mod bubble;
 mod capture;
 pub mod cc;
 mod ccauth;
+pub mod ccaux;
 pub mod ccdata;
 pub mod cclayout;
 pub mod chooser;

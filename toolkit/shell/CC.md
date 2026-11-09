@@ -1,16 +1,16 @@
-# The Rust Control Center, B2.1–B2.2 (#959)
+# The Rust Control Center, B2.1–B2.3 (#959)
 
 **Status: B2.1 built, 2026-11-03.** The owner approved it in Claude's chat ("Yes, start
 B2.1"). Like the bar (`BAR.md`), it runs with `--bar`. The early B2.4 switch
 (#1017, owner 2026-11-05) activates it in Hyalo: see `SESSION.md`.
-B2.2 is implemented by #1015 (private validation below); B2.3 and physical-session
-acceptance remain separate. Activation does not imply their completion.
+B2.2 is implemented by #1015; B2.3 is implemented by #1016 (private validation below).
+Physical-session acceptance remains separate. Activation does not imply their completion.
 
 | Step | What |
 |---|---|
 | **B2.1** (this) | the panel, the grid read from GSettings, the ten default tiles working, opened from the bar's Control Center button |
 | **B2.2** (#1015) | same-surface detail panels, native Wi-Fi secrets, output/player choice, screenshot and owned recording |
-| B2.3 | edit mode (sizes, moves, add/remove) and the widgets not yet ported (battery, clipboard, CPU/memory, Ethernet, VPN) |
+| B2.3 (#1016) | edit mode (sizes, moves, add/remove), battery, clipboard, CPU/memory, Ethernet and VPN |
 | B2.4 | early switch (#1017), without waiting for B2.2/B2.3 |
 
 🔑 Owner rules for what comes next (2026-11-03): **right click changes a tile's size only in
@@ -21,9 +21,11 @@ things (its detail, its panel, its control), never editing.
 
 | File | What |
 |---|---|
-| `cclayout.rs` | Pure and unit-tested: the registry, `DEFAULT_LAYOUT`, membership, and the layout (DEFAULT = flow-packed; PERSONAL = the stored cells, clashes moved to the first free cell). It only reads; writing is B2.3's |
+| `cclayout.rs` | Pure and unit-tested: the registry, `DEFAULT_LAYOUT`, membership, and the layout (DEFAULT = flow-packed; PERSONAL = the stored cells, clashes moved to the first free cell). Moves, resizing, gravity, lift and membership edits share these pure rules |
 | `cc.rs` | The panel: placement, glass, washes, paint, input, reader nodes, and coalesced writes |
 | `ccdetail.rs` | Detail rows, stable identities, scrolling, keyboard/AT-SPI, and typed actions |
+| `ccedit.rs` | View-local edit mode, preview, gallery, keyboard and named reader actions |
+| `ccaux.rs` | Mapped-only resources, bounded clipboard helpers and visible image previews |
 | `ccdata.rs` | Audio/Media object snapshots from the status workers |
 | `ccauth.rs` | A view-owned Network1 secrets renderer and bounded password editing |
 | `capture.rs` | Screenshot jobs and one recorder shared across outputs |
@@ -166,3 +168,94 @@ Product comparison and explicit gaps are recorded in [B2.2.md](B2.2.md): quick
 connection plus password (GNOME), per-device/application audio (KDE), and visible
 Stop/capture choices. A unified visual capture chooser, enterprise/hidden profile
 editor and new-device Bluetooth pairing are not silently approximated by TS.
+
+## B2.3 editing and widgets (#1016)
+
+Edit/Done stays below the scrollable grid. Edit shows all eight rows, their empty
+slots, removable tile badges and a list of available nonmembers. Escape leaves
+edit mode while keeping the CC open and focusing Edit; closing the CC ends edit.
+Outside edit, right click opens only a tile's own detail. In edit, it opens all
+three size tiers, including an unavailable tier with its refusal reason. Fixed
+tiles have no remove action. Child controls are inactive while their tile moves.
+
+A drag preserves its press offset. Preview uses the same pure layout operations
+as keyboard/reader actions and performs no settings writes. An equal-footprint
+single overlap swaps the other tile to the origin; other direct conflicts move
+to the nearest free cell, with priority below, same row, then above. Resize is
+anchored and clamped left/up to fit. Shrink/remove lifts only within freed columns,
+never sideways or above their top. DEFAULT add/remove repacks without creating
+positions; first move/resize personalizes all cells. Hardware absence never edits
+membership, stored positions or sizes. A full grid refuses an edit visibly and
+through an Alert node. CPU/RAM and missing hardware retain their source semantics.
+
+Tab focuses tiles, Ctrl+arrows moves, Menu/Shift+F10 opens sizes, Delete removes.
+AT-SPI declares named Move up/down/left/right, Resize and nonfixed Remove actions.
+Editor IDs occupy a separate high range from detail/list rows; only one view owns
+focus. A settings write disables further edits until the final read echo arrives.
+
+### Persistence and motion
+
+Both hosts use the existing wire keys: control-center `positions a{s(ii)}` and
+`sizes a{ss}` with `WxH`; widgets `placement a{s(bb)}` with `(bar,cc)`. Edits merge
+the latest bar flags, including the registry default for an unstored pair.
+GSettings `delay/apply` is **per schema**, so it cannot be one transaction across
+these two schemas. Remove writes membership first, then geometry; add writes
+geometry first, then membership; move/resize applies geometry once. Every
+intermediate layout remains valid. Removal with lift can have a valid intermediate
+position distinct from both endpoints. Watchers coalesce key notifications; the
+editor retains its pending model until the final echo rather than showing phases.
+
+Hyalo moves both ink and material in synchronized tile layers. Layers version 2
+adds a parent-space clip, fixed to the viewport while the tile moves, for glass,
+ink, shadows and input including descendants. Old/new model positions can cross
+the viewport edge during a return. Layer identity survives preview retargeting;
+no client timer paints glass or drives motion. Version-1 compositors retain static
+client clipping and cannot provide this edge animation. See toolkit/CONTRACT.md.
+
+### Additional sources
+
+Battery reads Power1's display device, state and known time remaining, using the
+bar's custom glyph. Ethernet and VPN consume Network1 snapshots, pin their unique
+owner/epoch, and call SetWiredEnabled or Activate/Deactivate with literal typed
+arguments. There is no nmcli path. CPU/RAM reads /proc only while the resources tile
+is mapped in a grid, and sleeps without a timer while hidden. CPU uses counter
+deltas; RAM uses MemAvailable. An unavailable value is shown as unknown.
+
+Clipboard uses literal cliphist list/decode/delete/wipe and wl-copy. Parsing strips
+C0 bytes before UTF-8 conversion without truncating at NUL; positively identified
+UTF-16 text becomes UTF-8, while image bytes are reoffered unchanged. The list is
+bounded to 200 records/2 MiB; decode is bounded to 32 MiB. Each child has a five
+second deadline, nonblocking owned pipes, and is killed/reaped on failure. Clipboard
+writes have a separate lane from layout/hardware writes. Clear asks for confirmation;
+individual rows expose Remove. Only visible image rows request decoded previews,
+through one worker with a 32-entry cache, bounded allocation/dimensions and 40px
+thumbnails. List revisions retire old rows and previews. A missing cliphist makes
+the widget unavailable.
+
+### Verification
+
+`check-cc-edit-headless.sh` extends the private notification harness with real
+pointer, keyboard, AT-SPI and GSettings, plus private Network1 and clipboard helper
+fixtures. No installed clipboard, desktop bus, preferences or session is used.
+Set matching HYALO_BIN, NK_DOCK_BIN, NK_SESSIOND_BIN and exported NK_SETTINGS_DATA.
+Never build while it runs. The longer walk is a nightly proposal; no CI job is
+added here. Physical display, hardware, Orca and installed-session acceptance
+remain separate from this local evidence.
+
+The TS wire check bundles the unchanged CCLayoutManager, WidgetConfig and
+configFile readers with declaration-only metadata extracted from the actual TS
+widget sources. It compares their read cells and `(bar,cc)` placement against the
+Rust writes, without booting the TS shell. This proves wire/read compatibility,
+not GTK presentation. `cc_layout_controls.py` compiles four actual source mutations
+and requires each to fail the layout tests; contradictory observation controls in
+the graphical report additionally check its predicates. They are distinct evidence.
+
+Local acceptance for this cut: 183 shell, 18 AT-SPI, 4 renderer and 14 Hyalo
+layer tests; workspace/all-target clippy; 21 graphical assertion/control pairs;
+four discriminating layout source mutations. The B2.2 wrapper currently stops
+before CC at dock-check.py:602: GetState also contains `nc` after B3.2, while its
+assertion expects only `app-grid`. Reproduced on B2.3 and on the clean B3.2 base
+281e88f4 (shell sources identical to main 03bc8fcc). Its harness is unchanged.
+The new four strings are translated in all twelve catalogs; the existing 124-key
+debt in ten catalogs is unchanged. Local evidence is evidence-1016 under the
+owner's ChatGPT workspace; physical/Orca acceptance remains pending.

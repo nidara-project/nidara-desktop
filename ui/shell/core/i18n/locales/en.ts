@@ -1024,4 +1024,8 @@ export default {
     "dev.log.critical.one": "A CRITICAL in the log",
     "dev.log.critical.other": "%d kinds of CRITICAL in the log",
     "dev.log.critical.hint": "Development mode · details: nidara-doctor --log",
+    "cc.grid.full": "Grid is full",
+    "cc.grid.add": "Add",
+    "cc.grid.mode": "Edit mode",
+    "cc.detail.refresh": "Refresh",
 }

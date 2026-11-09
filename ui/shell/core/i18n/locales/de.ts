@@ -880,4 +880,8 @@ export default {
     "share.windows": "Fenster",
     "share.cancel": "Abbrechen",
     "share.share": "Teilen",
+    "cc.grid.full": "Raster voll",
+    "cc.grid.add": "Hinzufügen",
+    "cc.grid.mode": "Bearbeitungsmodus",
+    "cc.detail.refresh": "Aktualisieren",
 }

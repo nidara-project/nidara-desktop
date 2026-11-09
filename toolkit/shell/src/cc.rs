@@ -15,6 +15,8 @@
 //! detail panel (Wi-Fi's body, screenshot, recording) opens it in B2.2.
 #[path = "ccdetail.rs"]
 pub mod detail;
+#[path = "ccedit.rs"]
+pub mod edit;
 
 use crate::cclayout::{self as layout, Size, Tile};
 use crate::popup::Look;
@@ -58,6 +60,7 @@ const THUMB: f64 = 9.;
 /// What a click can land on.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub enum Target {
+    Edit(edit::Target),
     Detail(u64),
     OpenDetail(&'static str),
     /// The whole tile: a toggle that is only a toggle.
@@ -73,6 +76,7 @@ pub enum Target {
 /// What the Control Center asks a service to do.
 #[derive(Clone, Debug, PartialEq)]
 pub enum Act {
+    Layout(layout::Stored, layout::Stored),
     OpenDetail(&'static str),
     Detail(detail::Action),
     Dark(bool),
@@ -108,6 +112,7 @@ struct Drag {
 }
 
 pub struct Cc {
+    pub editor: edit::Editor,
     tiles: Vec<Placed>,
     pub detail: Option<detail::Detail>,
     pub detail_height: f64,
@@ -132,6 +137,7 @@ impl Default for Cc {
 impl Cc {
     pub fn new() -> Self {
         Self {
+            editor: Default::default(),
             tiles: vec![],
             detail: None,
             detail_height: 1080.,
@@ -151,25 +157,13 @@ impl Cc {
 
     /// The tiles for this frame, under the right group's glass ending at `right`.
     pub fn place(&mut self, right: f64, top: f64, status: &Status, stored: &layout::Stored) {
-        let tiles = layout::layout(stored, &|id| available(id, status));
-        let rows = layout::rows(&tiles).max(1);
-        let grid_h = rows as f64 * (layout::UNIT + layout::GAP) - layout::GAP;
-        let w = layout::GRID_WIDTH + 2. * PAD;
-        let panel = [right - w, top + HANG, w, grid_h + 2. * PAD];
-        self.panel = panel;
-        self.tiles = tiles
-            .into_iter()
-            .map(|tile| {
-                let r = tile.rect();
-                Placed {
-                    tile,
-                    rect: [panel[0] + PAD + r[0], panel[1] + PAD + r[1], r[2], r[3]],
-                }
-            })
-            .collect();
+        self.tiles = self
+            .editor
+            .sync(stored, status, right, top, self.detail_height);
+        self.panel = self.editor.panel;
         if let Some(detail) = &mut self.detail {
             detail.max_height = self.detail_height;
-            detail.refresh(status, panel);
+            detail.refresh(status, self.panel);
             self.panel = detail.panel;
         }
         if self
@@ -181,6 +175,9 @@ impl Cc {
     }
 
     pub fn open_detail(&mut self, page: &'static str, status: &Status) {
+        if self.editor.active {
+            return;
+        }
         self.detail_generation += 1;
         let mut detail = detail::Detail::new(page, self.detail_generation);
         detail.max_height = self.detail_height;
@@ -193,10 +190,16 @@ impl Cc {
         self.detail_generation
     }
     pub fn back(&mut self) -> bool {
+        if self.editor.active {
+            self.keyboard_focus = None;
+            self.editor.toggle();
+            return true;
+        }
         self.detail_drag = None;
         let detail = self.detail.take();
         if let Some(detail) = detail {
             self.detail_generation += 1;
+            self.editor.focus = None;
             self.keyboard_focus = Some(Target::OpenDetail(detail.page));
             true
         } else {
@@ -204,6 +207,12 @@ impl Cc {
         }
     }
     pub fn focus(&mut self, target: Target) {
+        if let Target::Edit(t) = target {
+            self.keyboard_focus = None;
+            self.editor.focus = Some(t);
+            self.editor.reveal(t);
+            return;
+        }
         if let Target::Detail(id) = target {
             if let Some(d) = &mut self.detail {
                 d.focus_row(id);
@@ -215,10 +224,21 @@ impl Cc {
                 }
             }
         } else {
+            self.editor.focus = None;
             self.keyboard_focus = Some(target);
+            if let Target::Tile(id)
+            | Target::OpenDetail(id)
+            | Target::Slider(id)
+            | Target::Badge(id) = target
+            {
+                self.editor.reveal(edit::Target::Tile(id));
+            }
         }
     }
     pub fn key(&mut self, key: &nk_wayland::Key, status: &Status) -> Option<Act> {
+        if self.editor.active {
+            return self.editor.key(key, status);
+        }
         if let Some(d) = &mut self.detail {
             return d.key(key).map(Act::Detail);
         }
@@ -242,7 +262,7 @@ impl Cc {
                 Some(i) => (i + 1) % choices.len(),
                 None => 0,
             };
-            self.keyboard_focus = Some(choices[index]);
+            self.focus(choices[index]);
             return None;
         }
         let target = self.keyboard_focus?;
@@ -268,20 +288,36 @@ impl Cc {
     }
     pub fn action(&mut self, target: Target, status: &Status, value: Option<f64>) -> Option<Act> {
         match target {
+            Target::Edit(t) => {
+                self.keyboard_focus = None;
+                self.editor.action(t, status)
+            }
             Target::Detail(id) => self.detail.as_mut()?.action(id, value).map(Act::Detail),
             other => act_of(other, status),
         }
     }
-    pub fn scroll_detail(&mut self, delta: f64) -> bool {
+    pub fn scroll_detail(&mut self, delta: f64, status: &Status) -> bool {
+        if self.editor.active {
+            return self.editor.scroll(delta * 32., status);
+        }
         let Some(d) = &mut self.detail else {
-            return false;
+            return self.editor.scroll(delta * 32., status);
         };
         d.scroll(delta);
         true
     }
     pub fn detail_at(&self, p: (f64, f64)) -> Option<&'static str> {
+        if self.editor.active {
+            return None;
+        }
+        if self.detail.is_none() && !inside(self.editor.viewport, p) {
+            return None;
+        }
         if let Some(d) = &self.detail {
             return Some(d.page);
+        }
+        if !inside(self.editor.viewport, p) {
+            return None;
         }
         self.tiles
             .iter()
@@ -299,13 +335,24 @@ impl Cc {
     }
 
     pub fn dragging(&self) -> bool {
-        self.drag.is_some()
+        self.drag.is_some() || self.editor.dragging()
     }
 
     /// What is under `p`, when it does something.
     pub fn target_at(&self, p: (f64, f64)) -> Option<Target> {
+        if self.detail.is_none()
+            && let Some(t) = self.editor.target(p)
+        {
+            return Some(Target::Edit(t));
+        }
+        if self.editor.active {
+            return None;
+        }
         if let Some(d) = &self.detail {
             return d.target(p).map(Target::Detail);
+        }
+        if !inside(self.editor.viewport, p) {
+            return None;
         }
         let placed = self.tiles.iter().find(|t| inside(t.rect, p))?;
         targets(placed)
@@ -316,6 +363,9 @@ impl Cc {
 
     /// The pointer moved: the hover, and a held slider's value.
     pub fn motion(&mut self, p: (f64, f64), status: &Status) -> (bool, Option<Act>) {
+        if self.editor.active {
+            return (self.editor.motion(p, status), None);
+        }
         if let Some(detail) = &mut self.detail {
             let hover = detail.target(p);
             let changed = detail.hover != hover;
@@ -345,6 +395,10 @@ impl Cc {
 
     /// A press on `p`: what it asks for.
     pub fn press(&mut self, p: (f64, f64), status: &Status) -> Option<Act> {
+        if self.detail.is_none() && (self.editor.active || self.editor.target(p).is_some()) {
+            self.keyboard_focus = None;
+            return self.editor.press(p, status);
+        }
         let target = self.target_at(p)?;
         match target {
             Target::Detail(id) => {
@@ -365,6 +419,29 @@ impl Cc {
         }
     }
 
+    pub fn release_edit(&mut self, status: &Status) -> Option<Act> {
+        self.editor.release(status)
+    }
+    pub fn named(&mut self, target: Target, name: &str, status: &Status) -> Option<Act> {
+        if let Target::Edit(edit::Target::Tile(id)) = target {
+            self.editor.named(id, name, status)
+        } else if let Target::Detail(id) = target {
+            self.detail.as_mut()?.named(id, name).map(Act::Detail)
+        } else {
+            None
+        }
+    }
+    pub fn context(&mut self, p: (f64, f64), _status: &Status) -> Option<Act> {
+        if self.editor.active {
+            if let Some(edit::Target::Tile(id)) = self.editor.target(p) {
+                self.editor.menu = Some(id);
+                self.editor.focus = Some(edit::Target::Tile(id));
+            }
+            None
+        } else {
+            self.detail_at(p).map(Act::OpenDetail)
+        }
+    }
     pub fn release(&mut self) -> bool {
         if let Some(d) = &mut self.detail {
             d.held = None;
@@ -410,6 +487,8 @@ impl Cc {
             let groups =
                 crate::material::piece(tokens, "controlCenter", true, reduce_transparency, pane)
                     .map(|m| Group {
+                        clip: None,
+                        opacity: 1.,
                         tone: m.tone,
                         shadow: m.shadow,
                         shapes: vec![pane],
@@ -421,9 +500,10 @@ impl Cc {
                 self.veil(tokens, reduce_transparency).into_iter().collect(),
             );
         }
-        let groups = self
+        let mut groups: Vec<Group> = self
             .tiles
             .iter()
+            .filter(|_| !self.editor.layered)
             .filter_map(|p| {
                 let pane = pane_of(p);
                 let m = crate::material::piece(
@@ -434,12 +514,20 @@ impl Cc {
                     pane,
                 )?;
                 Some(Group {
+                    clip: Some(MaterialRect {
+                        x: self.editor.viewport[0],
+                        y: self.editor.viewport[1],
+                        width: self.editor.viewport[2],
+                        height: self.editor.viewport[3],
+                    }),
+                    opacity: 1.,
                     tone: m.tone,
                     shadow: m.shadow,
                     shapes: vec![pane],
                 })
             })
             .collect();
+        groups.extend(self.editor.glass(tokens, reduce_transparency));
         (
             groups,
             self.veil(tokens, reduce_transparency).into_iter().collect(),
@@ -479,7 +567,7 @@ impl Cc {
             .map(|t| t.rect[1] + t.rect[3])
             .fold(f64::MIN, f64::max)
             - inset;
-        let (x0, y0, x1, y1) = if self.detail.is_some() {
+        let (x0, y0, x1, y1) = if self.detail.is_some() || self.editor.active {
             let p = self.panel;
             (
                 p[0] + inset,
@@ -506,6 +594,9 @@ impl Cc {
     pub fn states(&self, status: &Status) -> Vec<StateRegion> {
         if let Some(d) = &self.detail {
             return d.states();
+        }
+        if self.editor.active {
+            return self.editor.states();
         }
         let mut out = vec![];
         for (i, p) in self.tiles.iter().enumerate() {
@@ -603,8 +694,9 @@ impl Cc {
         if let Some(d) = &self.detail {
             return d.paint(c, look, fallback);
         }
-        let accent = look.styles.palette.accent;
-        if let Some(base) = fallback {
+        self.editor.paint_under(c, fallback);
+        c.clip(rect(self.editor.viewport));
+        if let Some(base) = fallback.filter(|_| !self.editor.layered) {
             for p in self.tiles.clone() {
                 c.rounded_rect(rect(p.rect), radius_of(&p), base);
             }
@@ -620,39 +712,93 @@ impl Cc {
                 }
             }
         }
-        for p in self.tiles.clone() {
-            let id = p.tile.id;
-            let on = active(id, status);
-            // On white, the icon is the accent; elsewhere white.
-            let glyph = |whole_on: bool| if whole_on { accent } else { ink(1.) };
-            match (id, p.tile.size) {
-                ("media", size) => self.paint_media(c, look, &p, size, status)?,
-                ("volume" | "brightness", Size::FullWidth) => {
-                    self.paint_slider(c, look, &p, status)?
+        if !self.editor.layered {
+            for p in self.tiles.clone() {
+                self.paint_one(c, look, p, status)?;
+            }
+        }
+        c.pop_clip();
+        self.editor.paint(c, look, fallback)?;
+        Ok(())
+    }
+
+    fn paint_one(
+        &mut self,
+        c: &mut Canvas,
+        look: &mut Look,
+        p: Placed,
+        status: &Status,
+    ) -> nk_wayland::Result<()> {
+        let accent = look.styles.palette.accent;
+        let id = p.tile.id;
+        let on = active(id, status);
+        // On white, the icon is the accent; elsewhere white.
+        let glyph = |whole_on: bool| if whole_on { accent } else { ink(1.) };
+        match (id, p.tile.size) {
+            ("cpu_memory", _) => {
+                self.paint_resources(c, look, &p, status)?;
+            }
+            ("battery", _) => {
+                self.paint_battery(c, look, &p, status)?;
+            }
+            ("media", size) => self.paint_media(c, look, &p, size, status)?,
+            ("volume" | "brightness", Size::FullWidth) => self.paint_slider(c, look, &p, status)?,
+            ("volume" | "brightness", Size::Tall) => self.paint_gauge(c, look, &p, status)?,
+            (_, Size::Single) => {
+                let whole_on = on && toggles(id);
+                if let Some(i) = self.icon(icon_of(id, status), ICON) {
+                    c.icon(&i, centred(p.rect, ICON), glyph(whole_on));
                 }
-                ("volume" | "brightness", Size::Tall) => self.paint_gauge(c, look, &p, status)?,
-                (_, Size::Single) => {
-                    let whole_on = on && toggles(id);
-                    if let Some(i) = self.icon(icon_of(id, status), ICON) {
-                        c.icon(&i, centred(p.rect, ICON), glyph(whole_on));
-                    }
+            }
+            _ => {
+                let b = badge(&p).unwrap_or(p.rect);
+                if let Some(i) = self.icon(icon_of(id, status), ICON) {
+                    let lit = on && has_state(id);
+                    c.icon(&i, centred(b, ICON), glyph(lit));
                 }
-                _ => {
-                    let b = badge(&p).unwrap_or(p.rect);
-                    if let Some(i) = self.icon(icon_of(id, status), ICON) {
-                        let lit = on && has_state(id);
-                        c.icon(&i, centred(b, ICON), glyph(lit));
-                    }
-                    let (title, sub) = texts(id, status, look);
-                    let x = b[0] + BADGE + BADGE_GAP;
-                    let column = p.rect[0] + p.rect[2] - TILE_PAD - x;
-                    paint_titles(c, look, [x, p.rect[1], column, p.rect[3]], &title, &sub)?;
-                }
+                let (title, sub) = texts(id, status, look);
+                let x = b[0] + BADGE + BADGE_GAP;
+                let column = p.rect[0] + p.rect[2] - TILE_PAD - x;
+                paint_titles(c, look, [x, p.rect[1], column, p.rect[3]], &title, &sub)?;
             }
         }
         Ok(())
     }
-
+    pub fn edit_tiles(&self) -> Vec<(&'static str, [f64; 4], Size)> {
+        self.tiles
+            .iter()
+            .map(|p| (p.tile.id, p.rect, p.tile.size))
+            .collect()
+    }
+    pub fn paint_edit_layer(
+        &mut self,
+        id: &'static str,
+        c: &mut Canvas,
+        look: &mut Look,
+        status: &Status,
+    ) -> nk_wayland::Result<()> {
+        let Some(mut placed) = self.tiles.iter().find(|p| p.tile.id == id).copied() else {
+            return Ok(());
+        };
+        placed.rect[0] = 6.;
+        placed.rect[1] = 6.;
+        self.paint_one(c, look, placed, status)?;
+        if !layout::meta_of(id).unwrap().fixed {
+            crate::notification_card::text(
+                c,
+                look,
+                "×",
+                &TextStyle {
+                    size: 16.,
+                    ..look.styles.text.clone()
+                },
+                [placed.rect[2] - 14., 6., 20., 24.],
+                1,
+                1.,
+            )?;
+        }
+        Ok(())
+    }
     fn paint_media(
         &mut self,
         c: &mut Canvas,
@@ -847,6 +993,146 @@ impl Cc {
     }
 
     /// What a reader is told: a panel holding a node per tile, ids from `first` on.
+    fn paint_resources(
+        &mut self,
+        c: &mut Canvas,
+        look: &mut Look,
+        p: &Placed,
+        s: &Status,
+    ) -> nk_wayland::Result<()> {
+        let (cpu, ram) = s.aux.resources.unwrap_or((0., 0.));
+        let large = p.tile.size == Size::Square;
+        let ring = if large { 56. } else { 34. };
+        let single = p.tile.size == Size::Single;
+        let cy = p.rect[1] + p.rect[3] / 2. - 10.;
+        let cx = p.rect[0] + p.rect[2] / 2.;
+        for (x, name, value) in if single {
+            vec![(cx, "CPU", cpu)]
+        } else {
+            vec![(cx - 48., "CPU", cpu), (cx + 48., "RAM", ram)]
+        } {
+            c.progress_arc(
+                (x, cy),
+                ring / 2. - 3.,
+                if large { 5. } else { 4. },
+                1.,
+                ink(0.18),
+            );
+            c.progress_arc(
+                (x, cy),
+                ring / 2. - 3.,
+                if large { 5. } else { 4. },
+                value,
+                ink(1.),
+            );
+            let number = if s.aux.resources.is_some() {
+                format!("{:.0}", value * 100.)
+            } else {
+                "—".into()
+            };
+            let number_style = TextStyle {
+                size: if large { 18. } else { 12. },
+                ..look.styles.text.clone()
+            };
+            let number_layout = lay_out(look, &number, &number_style, f32::MAX)?;
+            let measured = number_layout.measured_size();
+            c.layout(
+                &number_layout,
+                (
+                    (x - f64::from(measured.width) / 2.) as f32,
+                    (cy - f64::from(measured.height) / 2.) as f32,
+                ),
+                ink(1.),
+            )?;
+            crate::notification_card::text(
+                c,
+                look,
+                name,
+                &TextStyle {
+                    size: 12.,
+                    ..look.styles.text.clone()
+                },
+                [x - 18., cy + ring / 2. + 3., 40., 20.],
+                1,
+                0.8,
+            )?;
+        }
+        Ok(())
+    }
+    fn paint_battery(
+        &mut self,
+        c: &mut Canvas,
+        look: &mut Look,
+        p: &Placed,
+        s: &Status,
+    ) -> nk_wayland::Result<()> {
+        let Some(b) = s.battery else {
+            return Ok(());
+        };
+        let single = p.tile.size == Size::Single;
+        let glyph = if p.tile.size == Size::Square {
+            56.
+        } else {
+            28.
+        };
+        let x = if single || p.tile.size == Size::Square {
+            p.rect[0] + (p.rect[2] - glyph) / 2.
+        } else {
+            p.rect[0] + 18.
+        };
+        let y = p.rect[1] + (p.rect[3] - glyph) / 2.
+            - if single {
+                10.
+            } else if p.tile.size == Size::Square {
+                24.
+            } else {
+                0.
+            };
+        crate::bar::paint_battery(c, rect([x, y, glyph, glyph]), b);
+        let text = if single || p.tile.size == Size::Square {
+            [p.rect[0] + 14., y + glyph + 3., p.rect[2] - 28., 22.]
+        } else {
+            [
+                x + glyph + 16.,
+                p.rect[1] + 22.,
+                p.rect[2] - glyph - 48.,
+                24.,
+            ]
+        };
+        crate::notification_card::text(
+            c,
+            look,
+            &format!("{:.0}%", b.fraction * 100.),
+            &TextStyle {
+                size: 14.,
+                ..look.styles.text.clone()
+            },
+            text,
+            1,
+            1.,
+        )?;
+        if !single {
+            let b = if p.tile.size == Size::Square {
+                [p.rect[0] + 12., text[1] + 25., p.rect[2] - 24., 40.]
+            } else {
+                [text[0], text[1] + 23., text[2], 32.]
+            };
+            let state = battery_text(s, Some(look));
+            crate::notification_card::text(
+                c,
+                look,
+                &state,
+                &TextStyle {
+                    size: 12.,
+                    ..look.styles.text.clone()
+                },
+                b,
+                2,
+                0.65,
+            )?;
+        }
+        Ok(())
+    }
     pub fn nodes(
         &self,
         first: nk_a11y::NodeId,
@@ -860,7 +1146,10 @@ impl Cc {
         let text = |k: &'static str| {
             look.map_or(k.to_string(), |l| l.text_of(&crate::menu::Label::Key(k)))
         };
-        let mut out = vec![];
+        let mut out = self.editor.controls_nodes(first, look);
+        if self.editor.active {
+            return out;
+        }
         for (i, p) in self.tiles.iter().enumerate() {
             let id = p.tile.id;
             let semantic = layout::REGISTRY
@@ -913,6 +1202,16 @@ impl Cc {
                     n
                 }
             };
+            if id == "cpu_memory" {
+                node.role = Role::Panel;
+                node.actions.clear();
+                node.description = status
+                    .aux
+                    .resources
+                    .map_or("CPU / RAM".into(), |(cpu, ram)| {
+                        format!("CPU {:.0}% · RAM {:.0}%", cpu * 100., ram * 100.)
+                    });
+            }
             node.bounds = Bounds {
                 x: p.rect[0],
                 y: p.rect[1],
@@ -925,6 +1224,11 @@ impl Cc {
                 _ => 0,
             };
             node.states.focused = self.keyboard_focus == Some(target);
+            node.states.offscreen = !(p.rect[0]
+                < self.editor.viewport[0] + self.editor.viewport[2]
+                && p.rect[0] + p.rect[2] > self.editor.viewport[0]
+                && p.rect[1] < self.editor.viewport[1] + self.editor.viewport[3]
+                && p.rect[1] + p.rect[3] > self.editor.viewport[1]);
             if !node.actions.is_empty() && !node.actions.contains(&Action::Focus) {
                 node.actions.push(Action::Focus);
             }
@@ -979,7 +1283,8 @@ impl Cc {
                     width: p.rect[2],
                     height: p.rect[3],
                 };
-                detail.actions = vec![Action::Activate];
+                detail.actions = vec![Action::Activate, Action::Focus];
+                detail.states.focused = self.keyboard_focus == Some(Target::OpenDetail(id));
                 out.push((detail, Target::OpenDetail(id)));
             }
         }
@@ -1001,6 +1306,14 @@ impl Cc {
 /// Rust shell does not draw yet (B2.3) is left out.
 pub fn available(id: &str, s: &Status) -> bool {
     match id {
+        "battery" => s.battery.is_some(),
+        "clipboard" => crate::ccaux::clipboard_available(),
+        "cpu_memory" => {
+            std::path::Path::new("/proc/stat").exists()
+                && std::path::Path::new("/proc/meminfo").exists()
+        }
+        "ethernet" => wired(s).is_some(),
+        "vpn" => vpn_profiles(s).next().is_some(),
         "wifi" => s.wifi.is_some(),
         "bt" => s.bluetooth.is_some(),
         "brightness" => s.brightness.is_some(),
@@ -1015,6 +1328,8 @@ pub fn active(id: &str, s: &Status) -> bool {
     use crate::status::Wifi;
     match id {
         "wifi" => matches!(s.wifi, Some(Wifi::Connected(_) | Wifi::Connecting)),
+        "ethernet" => wired(s).is_some_and(|d| d["wiredEnabled"] == true),
+        "vpn" => vpn_active(s).next().is_some(),
         "bt" => s.bluetooth.as_ref().is_some_and(|b| b.powered),
         "dark_mode" => s.dark,
         "night_light" => s.night.is_some_and(|n| n.enabled),
@@ -1026,16 +1341,23 @@ pub fn active(id: &str, s: &Status) -> bool {
 
 /// A tile with an on and an off: its badge (or its 1×1) wears it.
 fn has_state(id: &str) -> bool {
-    matches!(id, "wifi" | "bt" | "dark_mode" | "night_light" | "focus")
+    matches!(
+        id,
+        "wifi" | "bt" | "ethernet" | "dark_mode" | "night_light" | "focus"
+    )
 }
 
 /// A tile that is a toggle: at 1×1 the whole tile is the button.
 fn toggles(id: &str) -> bool {
-    matches!(id, "bt" | "dark_mode" | "night_light" | "focus")
+    matches!(
+        id,
+        "bt" | "ethernet" | "dark_mode" | "night_light" | "focus"
+    )
 }
 
 pub fn act_of(t: Target, s: &Status) -> Option<Act> {
     let id = match t {
+        Target::Edit(_) => return None,
         Target::OpenDetail(id) => return Some(Act::OpenDetail(id)),
         Target::Detail(_) => return None,
         Target::Tile(id) | Target::Badge(id) => id,
@@ -1045,6 +1367,17 @@ pub fn act_of(t: Target, s: &Status) -> Option<Act> {
         Target::Slider(_) => return None,
     };
     Some(match id {
+        "ethernet" => {
+            let device = wired(s)?;
+            let owner = s.details.network.as_ref()?.get("_serviceOwner")?.as_str()?;
+            Act::Detail(detail::Action::Call {
+                owner: owner.into(),
+                action: Box::new(detail::Action::WiredPower(
+                    device["path"].as_str()?.into(),
+                    device["wiredEnabled"] != true,
+                )),
+            })
+        }
         "dark_mode" => Act::Dark(!s.dark),
         "focus" => Act::Dnd(!s.dnd),
         "night_light" => Act::Night(!s.night?.enabled),
@@ -1063,7 +1396,11 @@ pub fn act_of(t: Target, s: &Status) -> Option<Act> {
 fn has_detail(id: &str) -> bool {
     matches!(
         id,
-        "wifi"
+        "battery"
+            | "clipboard"
+            | "ethernet"
+            | "vpn"
+            | "wifi"
             | "bt"
             | "volume"
             | "media"
@@ -1169,7 +1506,9 @@ fn targets(p: &Placed) -> Vec<(Target, [f64; 4])> {
         }
         (id, Size::Single) if toggles(id) => vec![(Target::Tile(id), r)],
         ("dark_mode" | "focus", _) => vec![(Target::Tile(id), r)],
-        ("night_light" | "bt", _) => badge(p).map_or(vec![], |b| vec![(Target::Badge(id), b)]),
+        ("night_light" | "bt" | "ethernet", _) => {
+            badge(p).map_or(vec![], |b| vec![(Target::Badge(id), b)])
+        }
         _ => vec![],
     };
     if has_detail(id) {
@@ -1210,6 +1549,31 @@ fn badge(p: &Placed) -> Option<[f64; 4]> {
     ])
 }
 
+pub(super) fn wired(s: &Status) -> Option<&serde_json::Value> {
+    s.details.network.as_ref()?["devices"]
+        .as_array()?
+        .iter()
+        .filter(|d| d["kind"] == 1)
+        .max_by_key(|d| d["state"] == 100)
+}
+pub(super) fn vpn_profiles(s: &Status) -> impl Iterator<Item = &serde_json::Value> {
+    s.details
+        .network
+        .as_ref()
+        .and_then(|n| n["profiles"].as_array())
+        .into_iter()
+        .flatten()
+        .filter(|p| matches!(p["type"].as_str(), Some("vpn" | "wireguard")))
+}
+pub(super) fn vpn_active(s: &Status) -> impl Iterator<Item = &serde_json::Value> {
+    s.details
+        .network
+        .as_ref()
+        .and_then(|n| n["active"].as_array())
+        .into_iter()
+        .flatten()
+        .filter(|p| p["vpn"] == true || matches!(p["type"].as_str(), Some("vpn" | "wireguard")))
+}
 fn pane_of(p: &Placed) -> Pane {
     let r = p.rect;
     Pane {
@@ -1236,6 +1600,17 @@ fn radius_of(p: &Placed) -> f64 {
 
 fn icon_of(id: &str, s: &Status) -> &'static str {
     match id {
+        "battery" => "nd-battery",
+        "cpu_memory" => "nd-cpu",
+        "clipboard" => "nd-clipboard",
+        "ethernet" => "nd-network-wired",
+        "vpn" => {
+            if vpn_active(s).next().is_some() {
+                "nd-network-vpn"
+            } else {
+                "nd-network-vpn-disconnected"
+            }
+        }
         "wifi" => s
             .wifi
             .map_or("nd-network-wireless-disabled", crate::status::wifi_icon),
@@ -1273,6 +1648,11 @@ fn icon_of(id: &str, s: &Status) -> &'static str {
 
 fn name_key(id: &str) -> &'static str {
     match id {
+        "battery" => "widget.battery.name",
+        "cpu_memory" => "widget.cpu-memory.name",
+        "clipboard" => "widget.clipboard.name",
+        "ethernet" => "cc.ethernet.name",
+        "vpn" => "widget.vpn.name",
         "volume" => "cc.volume.name",
         "brightness" => "widget.brightness.name",
         "media" => "cc.media.name",
@@ -1291,6 +1671,44 @@ fn texts(id: &str, s: &Status, look: &Look) -> (String, String) {
     use crate::status::Wifi;
     let t = |k: &'static str| look.text_of(&crate::menu::Label::Key(k));
     match id {
+        "battery" => (
+            t(name_key(id)),
+            s.battery
+                .map_or(String::new(), |b| format!("{:.0}%", b.fraction * 100.)),
+        ),
+        "clipboard" => (t(name_key(id)), format!("{}", s.aux.clips.len())),
+        "cpu_memory" => (
+            t(name_key(id)),
+            s.aux.resources.map_or("—".into(), |(cpu, ram)| {
+                format!("CPU {:.0}% · RAM {:.0}%", cpu * 100., ram * 100.)
+            }),
+        ),
+        "ethernet" => (
+            t(name_key(id)),
+            wired(s).map_or("—".into(), |d| {
+                format!(
+                    "{} · {}",
+                    d["interface"].as_str().unwrap_or(""),
+                    if d["state"] == 100 {
+                        "Connected"
+                    } else if d["wiredEnabled"] != true {
+                        "Off"
+                    } else {
+                        "Disconnected"
+                    }
+                )
+            }),
+        ),
+        "vpn" => (
+            t(name_key(id)),
+            vpn_active(s)
+                .next()
+                .and_then(|a| a["uuid"].as_str())
+                .and_then(|uuid| vpn_profiles(s).find(|p| p["uuid"] == uuid))
+                .and_then(|p| p["name"].as_str())
+                .unwrap_or("Disconnected")
+                .into(),
+        ),
         "wifi" => (
             t("cc.wifi.name"),
             match s.wifi {
@@ -1390,6 +1808,24 @@ fn fit(look: &mut Look, text: &str, style: &TextStyle, room: f64) -> String {
 /// A capsule's text column in `b`: the title in bold over its subtitle, both centred on
 /// the tile's middle. Without a subtitle the title may take two lines, when its longest
 /// word fits the column (`makeCapsuleInner`); else one, cut.
+pub(super) fn battery_text(s: &Status, look: Option<&Look>) -> String {
+    let (key, fallback) = match s.battery_state {
+        1 | 5 => ("widget.battery.state.charging", "Charging"),
+        2 | 6 => ("widget.battery.state.discharging", "Discharging"),
+        4 => ("widget.battery.state.charged", "Fully charged"),
+        _ => ("cc.detail.unavailable", "Unknown"),
+    };
+    let state = look.map_or_else(
+        || fallback.into(),
+        |l| l.text_of(&crate::menu::Label::Key(key)),
+    );
+    if let Some(seconds) = s.battery_time.filter(|seconds| *seconds > 0) {
+        format!("{state} · {}h {:02}m", seconds / 3600, seconds % 3600 / 60)
+    } else {
+        state
+    }
+}
+
 fn paint_titles(
     c: &mut Canvas,
     look: &mut Look,
@@ -1499,6 +1935,7 @@ impl Writer {
         let (tx, rx) = std::sync::mpsc::channel::<(u64, Act)>();
         let (results, replies) = std::sync::mpsc::channel();
         let connecting = std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false));
+        let clipboard_busy = std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false));
         let _ = std::thread::Builder::new()
             .name("cc-writes".into())
             .spawn(move || {
@@ -1521,8 +1958,42 @@ impl Writer {
                     for (i, (version, act)) in batch.into_iter().enumerate() {
                         let stale = key(&act).is_some_and(|key| last.get(&key) != Some(&i));
                         if !stale {
+                            // Bounded clipboard children still belong on a separate lane:
+                            // a stalled decode must not hold layout or hardware writes.
+                            if let Act::Detail(
+                                action @ (detail::Action::ClipboardList
+                                | detail::Action::Clipboard { .. }),
+                            ) = &act
+                            {
+                                if clipboard_busy.swap(true, std::sync::atomic::Ordering::AcqRel) {
+                                    let _ = results
+                                        .send((version, Err("clipboard operation pending".into())));
+                                    let _ = waker.wake();
+                                    continue;
+                                }
+                                let (action, conn, busy, clip_results, clip_waker) = (
+                                    action.clone(),
+                                    conn.clone(),
+                                    clipboard_busy.clone(),
+                                    results.clone(),
+                                    waker.clone(),
+                                );
+                                let failed = std::thread::Builder::new()
+                                    .name("cc-clipboard".into())
+                                    .spawn(move || {
+                                        let result = detail::write(&conn, &action);
+                                        busy.store(false, std::sync::atomic::Ordering::Release);
+                                        let _ = clip_results.send((version, result));
+                                        let _ = clip_waker.wake();
+                                    });
+                                if let Err(error) = failed {
+                                    clipboard_busy
+                                        .store(false, std::sync::atomic::Ordering::Release);
+                                    let _ = results.send((version, Err(error.to_string())));
+                                    let _ = waker.wake();
+                                }
                             // Connecting may await a password; never block the reply/control lane.
-                            if matches!(&act,Act::Detail(action) if action.connects()) {
+                            } else if matches!(&act,Act::Detail(action) if action.connects()) {
                                 if connecting.swap(true, std::sync::atomic::Ordering::AcqRel) {
                                     let _ = results
                                         .send((version, Err("network connection pending".into())));
@@ -1570,6 +2041,7 @@ fn write(conn: &zbus::blocking::Connection, act: &Act) -> Result<(), String> {
     use zbus::zvariant::{ObjectPath, OwnedObjectPath};
     const SESSION: &str = crate::status::SESSION;
     match act {
+        Act::Layout(before, after) => crate::prefs::write_cc(before, after),
         Act::OpenDetail(_) => Ok(()),
         Act::Detail(action) => detail::write(conn, action),
         Act::Dark(on) => crate::prefs::apply(
@@ -1669,6 +2141,48 @@ mod tests {
     }
 
     #[test]
+    fn edit_detail_back_and_refocus_never_publish_two_focused_nodes() {
+        use nk_a11y::{Node, Role, Tree};
+        let mut cc = Cc::new();
+        let status = status();
+        let stored = layout::Stored::default();
+        let mut snapshot = nk_a11y::Snapshot::default();
+        for step in 0..6 {
+            match step {
+                0 => {
+                    cc.editor.toggle();
+                    cc.focus(Target::Edit(edit::Target::Tile("screenshot")));
+                }
+                1 => {
+                    cc.back();
+                }
+                2 => {
+                    cc.open_detail("screenshot", &status);
+                }
+                3 => {
+                    cc.back();
+                }
+                4 => {
+                    cc.focus(Target::Edit(edit::Target::Toggle));
+                }
+                _ => {
+                    cc.editor.toggle();
+                    cc.focus(Target::Edit(edit::Target::Tile("media")));
+                }
+            }
+            cc.place(900., 36., &status, &stored);
+            let mut root = Node::new(1, Role::Panel, "Control Center");
+            let mut nodes = std::collections::BTreeMap::new();
+            for (node, _) in cc.nodes(100, &status, None) {
+                root.children.push(node.id);
+                nodes.insert(node.id, node);
+            }
+            nodes.insert(1, root);
+            snapshot.accept(Tree { root: 1, nodes }).unwrap();
+        }
+    }
+
+    #[test]
     fn semantic_ids_survive_hardware_arrival_and_a_slider_becoming_a_detail_button() {
         use nk_a11y::{Node, Role, Tree};
         let mut cc = Cc::new();
@@ -1717,7 +2231,10 @@ mod tests {
         let mut cc = Cc::new();
         cc.place(1916., 36., &status(), &Default::default());
         // Without Wi-Fi, Bluetooth and a backlight: four rows.
-        assert_eq!(cc.panel, [1916. - 396., 44., 396., 4. * 96. - 20. + 32.]);
+        assert_eq!(
+            cc.panel,
+            [1916. - 396., 44., 396., 4. * 96. - 20. + 32. + 48.]
+        );
         let media = placed(&cc, "media");
         assert_eq!(media.rect, [1520. + 16., 60., 172., 172.]);
         assert_eq!(radius_of(&media), 38.);

@@ -887,4 +887,8 @@ export default {
     "share.windows": "Окна",
     "share.cancel": "Отмена",
     "share.share": "Поделиться",
+    "cc.grid.full": "Сетка заполнена",
+    "cc.grid.add": "Добавить",
+    "cc.grid.mode": "Режим редактирования",
+    "cc.detail.refresh": "Обновить",
 }

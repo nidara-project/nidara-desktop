@@ -880,4 +880,8 @@ export default {
     "share.windows": "Janelas",
     "share.cancel": "Cancelar",
     "share.share": "Compartilhar",
+    "cc.grid.full": "A grade está cheia",
+    "cc.grid.add": "Adicionar",
+    "cc.grid.mode": "Modo de edição",
+    "cc.detail.refresh": "Atualizar",
 }

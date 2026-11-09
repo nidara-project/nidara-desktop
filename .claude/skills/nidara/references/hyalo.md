@@ -2879,3 +2879,15 @@ an unapplied mutation, infrastructure failure or previous utterance as evidence.
   product file to the smoke: put it in the PKGBUILD, and the smoke gets it (a hand list here
   lacked the wallpapers, then the Settings portal — 2026-10-18). NOT a required check
   while Hyalo is a preview: it must never hold the merge queue for the desktop that ships.
+
+## Fixed animated viewport clipping (#1016)
+
+nidara-layers-v1 version 2 adds set_parent_clip. It is synchronized surface state,
+in the parent's logical coordinates, applied before the child's position/scale.
+The scene walk intersects ancestor clips and preserves an empty intersection.
+Ink uses Smithay's CropRenderElement geometry/source/damage; material and shadows
+use the same physical intersection. Hit testing uses the displayed Look's clip,
+so a request changing the pending model never changes input ahead of presentation.
+Both zero dimensions clear; negative/one-zero sizes fail with invalid_value.
+Version-1 clients keep existing behavior. The Rust host checks supports_layer_clip
+before using it. See toolkit/CONTRACT.md and toolkit/shell/CC.md.

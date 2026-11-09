@@ -998,4 +998,8 @@ export default {
     "dev.log.critical.one": "Un CRITICAL en el log",
     "dev.log.critical.other": "%d tipos de CRITICAL en el log",
     "dev.log.critical.hint": "Modo desarrollo · detalle: nidara-doctor --log",
+    "cc.grid.full": "La cuadrícula está llena",
+    "cc.grid.add": "Añadir",
+    "cc.grid.mode": "Modo de edición",
+    "cc.detail.refresh": "Actualizar",
 }

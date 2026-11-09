@@ -117,6 +117,31 @@ pub(super) fn fixed(values: &[f64]) -> Result<()> {
     }
 }
 impl Window {
+    /// Fixed parent-space clipping is available from layers version 2.
+    pub fn supports_layer_clip(&self) -> bool {
+        self.layers_manager
+            .as_ref()
+            .is_some_and(|m| m.version() >= 2)
+    }
+    /// Clip ink, material, shadows and input in the parent's logical space.
+    /// None clears the clip. Staged with the synchronized parent commit.
+    pub fn set_layer_parent_clip(
+        &mut self,
+        id: LayerId,
+        rect: Option<(i32, i32, i32, i32)>,
+    ) -> Result<()> {
+        if !self.supports_layer_clip() {
+            return Err("missing layers version 2 parent clip".into());
+        }
+        let (x, y, w, h) = rect.unwrap_or((0, 0, 0, 0));
+        if rect.is_some() && (w <= 0 || h <= 0) {
+            return Err("parent clip requires positive dimensions".into());
+        }
+        let layer = self.layer(id)?;
+        layer.proxy.set_parent_clip(x, y, w, h);
+        layer.pending = true;
+        Ok(())
+    }
     pub fn supports_layers(&self) -> bool {
         self.layers_manager.is_some()
             && self.subcompositor.is_some()

@@ -72,6 +72,7 @@ pub struct States {
 }
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Action {
+    Named(&'static str),
     Focus,
     Activate,
     SetText,
@@ -283,6 +284,7 @@ impl TextInfo {
 }
 #[derive(Clone, Debug, PartialEq)]
 pub enum Request {
+    Named(NodeId, String),
     Focus(NodeId),
     Activate(NodeId),
     SetText(NodeId, String),

@@ -19,6 +19,8 @@ pub struct Material {
 }
 #[derive(Clone, Debug)]
 pub struct Group {
+    pub clip: Option<crate::MaterialRect>,
+    pub opacity: f64,
     pub tone: Tone,
     pub shadow: Shadow,
     pub shapes: Vec<Pane>,
@@ -87,8 +89,27 @@ pub struct Pointer {
 
 /// One pane to the compositor, with its pointer when it has one.
 pub(crate) fn add_pane(m: &crate::nidara_material_v1::NidaraMaterialV1, p: &Pane) {
+    add_pane_clipped(m, p, None, 1.);
+}
+fn add_pane_clipped(
+    m: &crate::nidara_material_v1::NidaraMaterialV1,
+    p: &Pane,
+    clip: Option<crate::MaterialRect>,
+    opacity: f64,
+) {
+    let c = clip.unwrap_or(crate::MaterialRect {
+        x: 0.,
+        y: 0.,
+        width: 0.,
+        height: 0.,
+    });
     match p.pointer {
-        None => m.add_shape(p.x, p.y, p.width, p.height, p.radius, p.exponent),
+        None if clip.is_none() && opacity == 1. => {
+            m.add_shape(p.x, p.y, p.width, p.height, p.radius, p.exponent)
+        }
+        None => m.add_shape_clipped(
+            p.x, p.y, p.width, p.height, p.radius, p.exponent, opacity, c.x, c.y, c.width, c.height,
+        ),
         Some(q) => m.add_shape_pointed(
             p.x,
             p.y,
@@ -96,11 +117,11 @@ pub(crate) fn add_pane(m: &crate::nidara_material_v1::NidaraMaterialV1, p: &Pane
             p.height,
             p.radius,
             p.exponent,
-            1.,
-            0.,
-            0.,
-            0.,
-            0.,
+            opacity,
+            c.x,
+            c.y,
+            c.width,
+            c.height,
             q.base.0,
             q.base.1,
             q.tip.0,
@@ -123,12 +144,12 @@ pub(super) fn send_material(
     m.set_glass(0., 0., 0., 0., 0., 0., g.refraction, g.rim, 0.);
     m.set_lensing(g.lensing);
     // Each group's tone and shadow hold for the shapes added after them.
-    let first = (material.tone, material.shadow, &material.shapes);
+    let first = (material.tone, material.shadow, &material.shapes, None, 1.);
     let rest = material
         .groups
         .iter()
-        .map(|g| (g.tone, g.shadow, &g.shapes));
-    for (t, s, shapes) in std::iter::once(first).chain(rest) {
+        .map(|g| (g.tone, g.shadow, &g.shapes, g.clip, g.opacity));
+    for (t, s, shapes, clip, opacity) in std::iter::once(first).chain(rest) {
         m.set_tone(
             t.saturation,
             t.ceiling,
@@ -150,7 +171,7 @@ pub(super) fn send_material(
             s.offset,
         );
         for p in shapes {
-            add_pane(m, p);
+            add_pane_clipped(m, p, clip, opacity);
         }
     }
     for v in &material.veils {

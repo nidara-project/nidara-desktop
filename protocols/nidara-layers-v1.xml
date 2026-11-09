@@ -18,11 +18,11 @@
     transform and gives pointer coordinates in the layer's own space, and
     maps a text-input cursor rectangle of the layer's surface the same way.
 
-    Phase 0 draft (#818, toolkit/CONTRACT.md). It stays at version 1 until it
-    is published: requests are appended, never versioned.
+    Version 2 adds a fixed parent-space clip for animated viewports (#1016).
+    Version 1 requests keep their original meaning.
   </description>
 
-  <interface name="nidara_layers_manager_v1" version="1">
+  <interface name="nidara_layers_manager_v1" version="2">
     <enum name="error">
       <entry name="not_subsurface" value="0" summary="the surface has no wl_subsurface role"/>
       <entry name="already_layer" value="1" summary="the surface already has a layer object"/>
@@ -70,7 +70,7 @@
     </request>
   </interface>
 
-  <interface name="nidara_layer_v1" version="1">
+  <interface name="nidara_layer_v1" version="2">
     <description summary="one animated layer">
       Every request is double-buffered and applied with the surface's
       commit — for a subsurface in sync mode, with its parent's, so a
@@ -146,6 +146,21 @@
     <request name="set_opacity">
       <description summary="pending: the model opacity, 0..1"/>
       <arg name="opacity" type="fixed"/>
+    </request>
+
+    <request name="set_parent_clip" since="2">
+      <description summary="pending: clip the subtree in its parent's space">
+        x, y, width and height are parent-local logical pixels. Positive sizes
+        clip this layer and every descendant's ink, glass, shadow and input.
+        The clip follows the parent's presented transform, independently of
+        this layer's position and scale. Ancestor clips intersect. Both sizes
+        zero clear it; a negative size or exactly one zero is invalid_value.
+        The clip is initially absent and is double buffered with the surface.
+      </description>
+      <arg name="x" type="int"/>
+      <arg name="y" type="int"/>
+      <arg name="width" type="int"/>
+      <arg name="height" type="int"/>
     </request>
 
     <event name="done">

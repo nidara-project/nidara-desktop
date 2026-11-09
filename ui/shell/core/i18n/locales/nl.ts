@@ -880,4 +880,8 @@ export default {
     "share.windows": "Vensters",
     "share.cancel": "Annuleren",
     "share.share": "Delen",
+    "cc.grid.full": "Raster is vol",
+    "cc.grid.add": "Toevoegen",
+    "cc.grid.mode": "Bewerkmodus",
+    "cc.detail.refresh": "Vernieuwen",
 }
