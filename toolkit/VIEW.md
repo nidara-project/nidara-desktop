@@ -2,7 +2,7 @@
 # nk-view — layout and interaction for shell surfaces (contract, proposal)
 
 Part of #1048 (read it first: why one description, what is out of scope). **Status: a proposal
-for the owner's review.** Nothing here is built yet. It is merged before the code that uses it,
+for the owner's review; the NC's behaviour is decided (end of file).** Nothing here is built yet. It is merged before the code that uses it,
 as `CONTRACT.md` asks.
 
 This file covers the two pieces that the shell inventory of 2026-11-10 ranked first:
@@ -192,10 +192,42 @@ The pilot replaces `nc.rs` and `notification_card.rs` with a view over the same 
 Hyalo's read-back of washes covers toplevels (`hyalo/compositor/src/ipc/mod.rs`, #889). If it does
 not cover layer surfaces, the check needs that addition first.
 
-## Questions for the owner
+## The NC's behaviour (owner, 2026-11-10: as in TS)
 
-1. **The close button:** shown only on hover (macOS) or always? The contract allows both.
-2. **The whole card:** does clicking a card open its app, and does the card itself show hover?
-3. **Groups:** stacked cards that open into a list (macOS), or a header with its cards below?
-4. **Shape limit:** Hyalo's limit on glass shapes per surface, if any, still has to be measured
-   before the pilot. Cards are viewport-only, so a full screen is about ten.
+The owner answered the open questions with "as it was in TS". This is what the TS notification
+centre did (`ui/shell/surfaces/control-center/NotificationCenter.tsx`), and what the pilot keeps:
+
+1. **The close button is revealed on hover.** It floats over the card's top-left corner, the same
+   on banners and NC cards, and is a `Control` `revealed_with` its card's pane (§4). On a collapsed
+   group it clears the whole group.
+2. **The card itself has no wash.** Hovering a card reveals its controls (the close and, on an
+   expandable card, the chevron, which takes the timestamp's place on the same line) but lights
+   nothing: the TS card declared no hover colour. So a `Control` may declare `wash: None`. Its
+   hover state still exists and drives `revealed_with`, and it spends no region of the budget.
+   Its own close and chevron do show their washes.
+3. **Clicking a card opens its app.** It focuses the app's window if one is open and invokes the
+   `default` action, or launches the app when it has no window and the notification has no
+   `default` action. A notification without an app opens the first URL in its text. The click
+   fires on release, so a swipe can cancel it. On a collapsed group the click expands the group
+   instead.
+4. **Groups are stacked cards.** A collapsed group shows its newest card with one ghost layer
+   peeking 14 px below it (two layers, 10 px further, from three notifications), and a count
+   badge on the title line. Expanded, it shows a header pane (the app's name, then collapse and
+   clear-all buttons revealed on hover) with its cards below. A tap on the header collapses it.
+5. **An expandable card** (with actions, a body over 70 characters, or a large image) grows from
+   two body lines to four, with its action buttons, through its hover chevron.
+
+What this adds to the contract and its pieces:
+
+- `wash: None` on a `Control` (point 2). It is the one addition to §4.
+- The ghost layers are part of the group's pane: one shape whose outline includes the peeking
+  strips, not two more panes. How Hyalo draws that outline is measured with the shape limit.
+- Expanding (points 4 and 5) needs the revealer, piece 4. Swipe to dismiss needs gestures, piece 8.
+  The pilot ships with both, because the TS centre had them: they are contracted before it, as
+  short additions to this file.
+
+## Still open
+
+**Shape limit.** Hyalo's limit on glass shapes per surface, if any, still has to be measured
+before the pilot. No fixed cap is in the compositor's source. Cards are viewport-only, so a full
+screen is about ten.
