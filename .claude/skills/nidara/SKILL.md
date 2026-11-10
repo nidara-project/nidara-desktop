@@ -334,7 +334,7 @@ kit's curves and durations). Hover, press and focus are derived by key. A `Revea
 closes in place, moved panes slide, and a `swipe(action)` control is swiped off and reported by
 `tick` when it is gone; the surface calls `tick` while `animating()`. A `Scroll` region builds
 only the rows inside `window(key)` (placeholders for the rest), keeps what is read in place on a
-rebuild, and draws the kit's one scroll bar (`nk-widgets` `ScrollBar`, shared with Settings). Panes are declared whole,
+rebuild, and draws the kit's one scroll bar (`nk-widgets` `ScrollBar`, shared with Settings). An `Overlay` places layers (a card's floating close) over a base without changing its size. Panes are declared whole,
 with their clip and their content's opacity. A pane never declares more than Hyalo's eight lit
 washes, and every other shown control is declared at rest so its hover fades in. The NC is the first consumer.
 

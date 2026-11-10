@@ -2,9 +2,9 @@
 # nk-view
 
 The shell's own view vocabulary, as `toolkit/VIEW.md` contracts it (#1048). It holds pieces 1
-to 5 and 8 of the 2026-11-10 shell inventory: the layout box, the shared interaction state, the
-pane, motion (reveals and slides), scrolling and swipe to dismiss. No surface uses it yet. The
-notification centre is the first, behind a flag, once overlay exists.
+to 6 and 8 of the 2026-11-10 shell inventory: the layout box, the shared interaction state, the
+pane, motion (reveals and slides), scrolling, the overlay and swipe to dismiss. No surface uses
+it yet. The notification centre is the first, behind a flag.
 
 A surface builds a `Node` tree from its model on every change, with each node's `Key` taken
 from the model. `ViewState` keeps what lasts between rebuilds:
@@ -52,6 +52,12 @@ ends, and Tab onto a control out of view scrolls it in. On a rebuild, a scrolled
 its first pane in view where it was. Rows outside `window(key)` are left unbuilt, as
 `Node::placeholder(key, height)` at the height they had. The bar is `nk-widgets`' `ScrollBar`,
 the one the native Settings draws, from `tokens/scrollbar.json`.
+
+**Overlay.** `Node::overlay(key, base).layer(across, down, inset, child)` places layers over a
+base, as `Gtk.Overlay`: the base alone gives the size; each layer is aligned on each axis
+within it and kept an inset (spacing tokens) from its edges. Layers come after the base: over
+it for the pointer, after it in the Tab order, painted over it. The NC's close over a card's
+top-left corner is one.
 
 **Tokens, never literals.** Gaps and paddings are `Space` steps, corners are `Pill` or a
 `Radius` step (`ts.RADIUS`), and motion uses the kit's curves and durations, all from

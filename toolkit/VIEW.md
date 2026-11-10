@@ -2,7 +2,7 @@
 # nk-view — layout and interaction for shell surfaces (contract)
 
 Part of #1048 (read it first: why one description, what is out of scope). **Status: accepted. Pieces 1
-to 5 and 8 (§2 to §8) are built in `toolkit/crates/nk-view`, which no surface uses yet. The NC's
+to 6 and 8 (§2 to §9) are built in `toolkit/crates/nk-view`, which no surface uses yet. The NC's
 behaviour is decided (end of file).**
 
 This file covers the two pieces that the shell inventory of 2026-11-10 ranked first:
@@ -12,8 +12,8 @@ This file covers the two pieces that the shell inventory of 2026-11-10 ranked fi
 
 A third piece is needed with them: **the pane** (a card of glass). It is the unit Hyalo's state
 budget counts in. Animation, scrolling, overlay, tile grid, gestures, tooltip and calendar are
-later contracts, except animation, the swipe and scrolling, which §6 to §8 add. This one only
-keeps room for the rest (§9).
+later contracts, except animation, the swipe, scrolling and the overlay, which §6 to §9 add.
+The rest are not in it (§10).
 
 ## Why
 
@@ -147,7 +147,7 @@ each card has its own eight. `nk-view` enforces the limit per pane, in this orde
 
 It never declares more than eight. If a pane would need more, the lowest are dropped and logged
 once per view. A pane that needs more than eight persistent markers is a design error that the
-check reports (§10).
+check reports (§11).
 
 **Revealed controls.** A `Control` may be `revealed_with(pane)`: it is drawn only while the
 pointer is over that pane or focus is inside it. A notification's close button is the example.
@@ -287,13 +287,33 @@ What TS had and this does not, yet:
   (`wl_pointer.axis_discrete`). The NC pilot needs that first: at 15 px a detent the wheel
   would be about a third as fast as TS's.
 
-## 9. What this keeps room for
+## 9. Overlay (piece 6)
 
-- **Overlay (piece 6).** A third axis value, `Stack(Z)`, with children placed over each other.
+A node kind, `Overlay { base, layers }`: layers placed over a base, as TS's `Gtk.Overlay`.
+The NC's cards use it for the close that floats over the card's top-left corner and for a
+banner's action column at its right edge.
 
-It is not in this contract.
+- **Size.** The base alone gives the overlay its size; the layers never add to it, as
+  `Gtk.Overlay` measured only its child.
+- **Place.** Each layer is aligned on each axis within the base (`Start`, `Center`, `End`, or
+  `Stretch` to fill the axis), and kept an inset from the base's edges, in spacing tokens. A
+  layer is measured within the base's width. It is not clipped to the base.
+- **Order.** Layers come after the base, the last on top: over the base for the pointer (a
+  close over the app's icon takes the press), after it in the Tab order and the semantics, and
+  painted over it.
+- **With the rest.** A layer is part of whatever holds its overlay: it is in the same pane,
+  reveals and scroll region, and a swipe or a slide moves it with its card.
 
-## 10. Acceptance for the NC pilot
+A view written as `Node::overlay(key, base).layer(across, down, inset, child)`. The `Stack(Z)`
+this file used to keep room for is this node: a stack lays its children out along an axis,
+and an overlay does not.
+
+## 10. Not in this contract
+
+The tile grid (piece 7), the tooltip (piece 9) and the calendar (piece 10). The first NC keeps
+today's calendar.
+
+## 11. Acceptance for the NC pilot
 
 The pilot replaces `nc.rs` and `notification_card.rs` with a view over the same model
 (`notifications.rs`), behind a flag, beside today's NC.
@@ -316,7 +336,8 @@ The owner answered the open questions with "as it was in TS". This is what the T
 centre did (`ui/shell/surfaces/control-center/NotificationCenter.tsx`), and what the pilot keeps:
 
 1. **The close button is revealed on hover.** It floats over the card's top-left corner, the same
-   on banners and NC cards, and is a `Control` `revealed_with` its card's pane (§4). On a collapsed
+   on banners and NC cards, and is a `Control` `revealed_with` its card's pane (§4), in a layer
+   of an overlay over the card's content (§9). On a collapsed
    group it clears the whole group.
 2. **The card itself has no wash.** Hovering a card reveals its controls (the close and, on an
    expandable card, the chevron, which takes the timestamp's place on the same line) but lights
@@ -368,7 +389,7 @@ private nested Hyalo of `toolkit/widgets-demo/check-headless.sh` on this machine
 So each card adds about 0.06 ms of GPU time per redrawn frame over one panel of the same area.
 Textures and captures stay the same. The NC builds only the cards in its viewport, about ten,
 which costs about 0.3 ms per frame more than today's single pane, and only on frames where the
-glass is redrawn. That is within budget. The pilot's "Cost" check (§10) measures it again on the
+glass is redrawn. That is within budget. The pilot's "Cost" check (§11) measures it again on the
 real NC.
 
 That all N cards are drawn comes from the code (one call per shape, no cap) and from the GPU

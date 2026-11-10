@@ -216,7 +216,7 @@ fn a_stack_places_by_gap_padding_justify_spacer_and_grow() {
     assert_eq!(rect(&s, "b"), [42., 32., 16., 16.]);
 }
 
-/// The acceptance check of VIEW.md §10: on every card, the icon's centre and the title's
+/// The acceptance check of VIEW.md §11: on every card, the icon's centre and the title's
 /// first line agree to one device pixel, at scale 1 and 1.25. Its control: `Center`.
 #[test]
 fn first_line_puts_the_icon_level_with_the_title_and_center_does_not() {
@@ -1327,4 +1327,140 @@ fn a_scroll_region_is_a_scroll_pane_holding_its_cards() {
         held.iter()
             .all(|id| tree.nodes[id].role == nk_a11y::Role::Panel)
     );
+}
+
+/// A card as TS built it: its content, and over it the close at its top-left corner and an
+/// action column at its right edge, centred, as `Gtk.Overlay` layers.
+fn floating(id: &str, layers: bool) -> Node {
+    let content = Node::row(
+        format!("{id}/row"),
+        vec![
+            // Under the close, as the app's icon was in TS.
+            Node::control(
+                format!("{id}/app"),
+                "App",
+                "app",
+                Node::icon(format!("{id}/icon"), "nd-app", 32.),
+            ),
+            Node::text(format!("{id}/title"), "Title", style(14.)).grow(),
+        ],
+    )
+    .gap(Space::S3)
+    .padding(Padding::symmetric(Space::S3, Space::S4))
+    .align(Align::FirstLine);
+    let mut body = Node::overlay(format!("{id}/over"), content);
+    if layers {
+        body = body
+            .layer(
+                Align::Start,
+                Align::Start,
+                Padding::all(Space::S1),
+                Node::control(
+                    format!("{id}/close"),
+                    "Close",
+                    "close",
+                    Node::icon(format!("{id}/x"), "nd-window-close", 16.),
+                )
+                .revealed_with(format!("{id}/pane"))
+                .wash(Wash::Destructive),
+            )
+            .layer(
+                Align::End,
+                Align::Center,
+                Padding {
+                    right: Some(Space::S3),
+                    ..Padding::default()
+                },
+                Node::control(
+                    format!("{id}/reply"),
+                    "Reply",
+                    "reply",
+                    Node::text(format!("{id}/reply-label"), "Reply", style(12.)),
+                ),
+            )
+            .layer(
+                Align::Stretch,
+                Align::End,
+                Padding::default(),
+                Node::text(format!("{id}/strip"), "", style(1.)),
+            );
+    }
+    // In a list, so the card takes the height it measures.
+    Node::column(
+        "list",
+        vec![Node::pane(
+            format!("{id}/pane"),
+            Corner::Token(Radius::Xl),
+            Node::control(format!("{id}/card"), "Open", "open", body).wash(Wash::None),
+        )],
+    )
+}
+
+#[test]
+fn an_overlay_is_the_size_of_its_base_and_places_each_layer_by_its_alignment_and_inset() {
+    let plain = laid(&floating("n", false), (360., 400.), 1.);
+    let s = laid(&floating("n", true), (360., 400.), 1.);
+    let pane = rect(&s, "n/pane");
+    assert!(pane[3] < 400., "measured, not the surface's height");
+    assert_eq!(pane, rect(&plain, "n/pane"), "layers never add to the size");
+    assert_eq!(
+        rect(&s, "n/row"),
+        rect(&plain, "n/row"),
+        "nor move the base"
+    );
+    let close = rect(&s, "n/close");
+    assert_eq!(
+        [close[0], close[1]],
+        [pane[0] + 4., pane[1] + 4.],
+        "the close over the top-left corner"
+    );
+    assert_eq!(close[2], 16.);
+    let reply = rect(&s, "n/reply");
+    assert_eq!(
+        reply[0] + reply[2],
+        pane[0] + pane[2] - 12.,
+        "at the right edge"
+    );
+    assert!(
+        ((reply[1] + reply[3] / 2.) - (pane[1] + pane[3] / 2.)).abs() <= 0.5,
+        "centred down"
+    );
+    let strip = rect(&s, "n/strip");
+    assert_eq!(
+        [strip[0], strip[2], strip[1] + strip[3]],
+        [pane[0], pane[2], pane[1] + pane[3]],
+        "stretched across, at the bottom"
+    );
+}
+
+#[test]
+fn a_layer_is_over_its_base_for_the_pointer_and_after_it_in_the_tab_order() {
+    let mut s = laid(&floating("n", true), (360., 400.), 1.);
+    let (close, app) = (rect(&s, "n/close"), rect(&s, "n/app"));
+    let both = crate::layout::intersect(close, app).expect("the close overlaps the icon");
+    s.pointer_motion(both[0] + both[2] / 2., both[1] + both[3] / 2.);
+    assert_eq!(
+        s.hover(),
+        Some(&Key::from("n/close")),
+        "the close, not the app's icon under it"
+    );
+    let pane = rect(&s, "n/pane");
+    s.pointer_motion(pane[0] + 100., pane[1] + pane[3] / 2.);
+    assert_eq!(s.hover(), Some(&Key::from("n/card")));
+    let order: Vec<Key> = (0..4)
+        .filter_map(|_| {
+            s.key(KeyInput::Tab);
+            s.focus().cloned()
+        })
+        .collect();
+    assert_eq!(
+        order,
+        ["n/card", "n/app", "n/close", "n/reply"]
+            .map(Key::from)
+            .to_vec(),
+        "base first, then the layers in order"
+    );
+    let v = floating("n", true);
+    let back: Node = serde_json::from_str(&serde_json::to_string(&v).unwrap()).unwrap();
+    assert_eq!(back, v);
 }

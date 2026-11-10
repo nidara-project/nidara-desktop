@@ -36,6 +36,7 @@ pub enum Kind {
     Control(Control),
     Reveal(Reveal),
     Scroll(Scroll),
+    Overlay(Overlay),
     /// A row the surface did not build, at the height it had when it was (VIEW.md §8).
     Placeholder(f64),
 }
@@ -45,6 +46,23 @@ pub enum Kind {
 pub struct Reveal {
     pub open: bool,
     pub child: Box<Node>,
+}
+
+/// A base and layers placed over it (VIEW.md §9): the base alone gives the size, as
+/// `Gtk.Overlay` measured only its child.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+pub struct Overlay {
+    pub base: Box<Node>,
+    pub layers: Vec<Layer>,
+}
+/// One layer over an overlay's base: aligned on each axis within the base, kept `inset` from
+/// its edges. `Stretch` fills the axis; `FirstLine` is `Start`.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+pub struct Layer {
+    pub across: Align,
+    pub down: Align,
+    pub inset: Padding,
+    pub child: Node,
 }
 
 /// A region that shows its child through a viewport, scrolled vertically (VIEW.md §8).
@@ -276,6 +294,16 @@ impl Node {
             }),
         )
     }
+    /// `base` with no layers yet; `layer` adds them, the last drawn on top.
+    pub fn overlay(key: impl Into<Key>, base: Node) -> Self {
+        Self::new(
+            key,
+            Kind::Overlay(Overlay {
+                base: Box::new(base),
+                layers: vec![],
+            }),
+        )
+    }
     pub fn scroll(key: impl Into<Key>, child: Node) -> Self {
         Self::new(
             key,
@@ -337,6 +365,17 @@ impl Node {
     pub fn align(mut self, a: Align) -> Self {
         if let Kind::Stack(st) = &mut self.kind {
             st.align = a;
+        }
+        self
+    }
+    pub fn layer(mut self, across: Align, down: Align, inset: Padding, child: Node) -> Self {
+        if let Kind::Overlay(o) = &mut self.kind {
+            o.layers.push(Layer {
+                across,
+                down,
+                inset,
+                child,
+            });
         }
         self
     }

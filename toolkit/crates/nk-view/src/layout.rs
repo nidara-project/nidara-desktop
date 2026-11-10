@@ -270,6 +270,7 @@ impl Layouter<'_> {
             Kind::Control(c) => self.natural(&c.child),
             Kind::Reveal(r) => self.natural(&r.child),
             Kind::Scroll(sc) => self.natural(&sc.child),
+            Kind::Overlay(o) => self.natural(&o.base),
             Kind::Placeholder(_) => 0.,
             Kind::Stack(s) => {
                 let pad = self.spacing.of(s.padding.left) + self.spacing.of(s.padding.right);
@@ -287,6 +288,7 @@ impl Layouter<'_> {
             Kind::Control(c) => self.min(&c.child),
             Kind::Reveal(r) => self.min(&r.child),
             Kind::Scroll(sc) => self.min(&sc.child),
+            Kind::Overlay(o) => self.min(&o.base),
             Kind::Placeholder(_) => 0.,
             Kind::Stack(s) => {
                 let pad = self.spacing.of(s.padding.left) + self.spacing.of(s.padding.right);
@@ -364,6 +366,31 @@ impl Layouter<'_> {
                 }
             }
             Kind::Placeholder(h) => leaf(0., self.up(*h), None),
+            Kind::Overlay(o) => {
+                // The base gives the size; each layer is measured within it, never added.
+                let base = self.measure(&o.base, width);
+                let mut children = Vec::with_capacity(o.layers.len() + 1);
+                for l in &o.layers {
+                    let sp = self.spacing;
+                    let room =
+                        (base.w.max(width) - sp.of(l.inset.left) - sp.of(l.inset.right)).max(0.);
+                    let w = if l.across == Align::Stretch {
+                        room
+                    } else {
+                        self.natural(&l.child).min(room)
+                    };
+                    children.push(self.measure(&l.child, w));
+                }
+                children.insert(0, base);
+                Measure {
+                    w: children[0].w,
+                    h: children[0].h,
+                    first_line: children[0].first_line,
+                    give: children[0].give,
+                    children,
+                    cross: vec![],
+                }
+            }
             Kind::Reveal(r) => {
                 let p = self.progress(&n.key, r.open);
                 let c = self.measure(&r.child, width);
@@ -557,6 +584,7 @@ impl Layouter<'_> {
                 progress: self.progress(&n.key, rv.open),
             },
             Kind::Placeholder(_) => What::Spacer,
+            Kind::Overlay(_) => What::Stack,
             Kind::Scroll(_) => What::Scroll {
                 offset: 0.,
                 content: m.children[0].h,
@@ -628,6 +656,29 @@ impl Layouter<'_> {
                     inner,
                     out,
                 )
+            }
+            Kind::Overlay(o) => {
+                self.place(&o.base, &m.children[0], r, inner, out);
+                let sp = self.spacing;
+                for (l, lm) in o.layers.iter().zip(&m.children[1..]) {
+                    let (x0, x1) = (
+                        r[0] + sp.of(l.inset.left),
+                        r[0] + r[2] - sp.of(l.inset.right),
+                    );
+                    let (y0, y1) = (
+                        r[1] + sp.of(l.inset.top),
+                        r[1] + r[3] - sp.of(l.inset.bottom),
+                    );
+                    let at = |a: Align, lo: f64, hi: f64, size: f64| match a {
+                        Align::Stretch => (lo, (hi - lo).max(0.)),
+                        Align::Center => (lo + (hi - lo - size) / 2., size),
+                        Align::End => (hi - size, size),
+                        Align::Start | Align::FirstLine => (lo, size),
+                    };
+                    let (x, w) = at(l.across, x0, x1, lm.w);
+                    let (y, h) = at(l.down, y0, y1, lm.h);
+                    self.place(&l.child, lm, [x, y, w, h], inner, out);
+                }
             }
             Kind::Stack(s) => self.place_stack(s, m, r, inner, out),
             _ => {}
