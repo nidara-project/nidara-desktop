@@ -328,20 +328,24 @@ fn hover_is_the_innermost_control_and_a_release_outside_cancels() {
     // The close is revealed now, and it is innermost.
     s.pointer_motion(close[0] + 2., close[1] + 2.);
     assert_eq!(s.hover(), Some(&Key::from("n/close")));
-    s.button(true);
+    s.button(true, Instant::now());
     assert_eq!(
-        s.button(false),
+        s.button(false, Instant::now()),
         Some(Activated {
             key: Key::from("n/close"),
             action: "close".into()
         })
     );
-    s.button(true);
+    s.button(true, Instant::now());
     s.pointer_motion(pane[0] + 40., pane[1] + 4.);
-    assert_eq!(s.button(false), None, "released over another control");
+    assert_eq!(
+        s.button(false, Instant::now()),
+        None,
+        "released over another control"
+    );
     s.pointer_motion(-10., -10.);
-    s.button(true);
-    assert_eq!(s.button(false), None);
+    s.button(true, Instant::now());
+    assert_eq!(s.button(false, Instant::now()), None);
 }
 
 #[test]
@@ -417,7 +421,7 @@ fn a_card_without_wash_declares_nothing_and_its_close_declares_the_destructive_h
     s.pointer_motion(close[0] + 2., close[1] + 2.);
     let f = s.frame(&tk, Instant::now());
     assert_eq!(f.states[0].wash, w.destructive_hover);
-    s.button(true);
+    s.button(true, Instant::now());
     assert_eq!(
         s.frame(&tk, Instant::now()).states[0].wash,
         w.destructive_press
@@ -573,7 +577,7 @@ fn only_panes_in_the_viewport_are_declared() {
         "{} panes",
         f.panes.len()
     );
-    assert!(f.panes.iter().all(|(_, p)| p.y < 200.));
+    assert!(f.panes.iter().all(|p| p.pane.y < 200.));
 }
 
 #[test]
@@ -701,7 +705,7 @@ fn a_reveal_unrolls_with_the_tokens_and_what_is_below_follows_without_sliding() 
     assert!(s.animating());
     assert_eq!(rect(&s, "cards")[3], 0., "it starts closed");
     let half = t0 + t.motion.slow / 2;
-    assert!(s.tick(&t, &mut text, half));
+    assert!(s.tick(&t, &mut text, half).animating);
     let mid = rect(&s, "cards")[3];
     let full = rect(&s, "cards/list")[3];
     assert!(mid > 0. && mid < full, "{mid} of {full}");
@@ -712,16 +716,34 @@ fn a_reveal_unrolls_with_the_tokens_and_what_is_below_follows_without_sliding() 
     // The card below follows the reveal, frame by frame: it is the reveal's height lower.
     assert_eq!(rect(&s, "below/pane")[1], below0 + mid);
     // Content is clipped and fading: a pane cut by the reveal is declared cut.
-    let a = placed(&s, "a/pane");
-    assert!(a.alpha > 0. && a.alpha < 1.);
+    let a = placed(&s, "a/pane").alpha;
+    assert!(a > 0. && a < 1.);
     let f = s.frame(&t, half);
+    // Declared whole, cut straight where the reveal ends, its glass as formed as its content.
     let cards = rect(&s, "cards");
+    let b = rect(&s, "b/pane");
     assert!(
-        f.panes.iter().all(
-            |(_, p)| p.y + p.height <= cards[1] + cards[3] + 1e-9 || p.y >= cards[1] + cards[3]
-        )
+        b[1] < cards[1] + cards[3] && b[1] + b[3] > cards[1] + cards[3],
+        "b is cut"
     );
-    assert!(!s.tick(&t, &mut text, t0 + t.motion.slow));
+    let fb = f
+        .panes
+        .iter()
+        .find(|p| p.key == Key::from("b/pane"))
+        .unwrap();
+    assert_eq!(fb.pane.height, b[3]);
+    assert_eq!(fb.opacity, a);
+    let cut = fb
+        .clip
+        .expect("a pane cut by the reveal is declared with its clip");
+    assert_eq!(cut[1] + cut[3], cards[1] + cards[3]);
+    let below = f
+        .panes
+        .iter()
+        .find(|p| p.key == Key::from("below/pane"))
+        .unwrap();
+    assert_eq!((below.clip, below.opacity), (None, 1.));
+    assert!(!s.tick(&t, &mut text, t0 + t.motion.slow).animating);
     assert_eq!(rect(&s, "cards")[3], full);
     assert_eq!(placed(&s, "a/pane").alpha, 1.);
 }
@@ -742,7 +764,7 @@ fn a_reveal_turned_back_midway_eases_from_where_it_is() {
     s.tick(&t, &mut text, t1 + t.motion.base / 2);
     let closing = rect(&s, "cards")[3];
     assert!(closing < mid && closing > 0.);
-    assert!(!s.tick(&t, &mut text, t1 + t.motion.base));
+    assert!(!s.tick(&t, &mut text, t1 + t.motion.base).animating);
     assert_eq!(rect(&s, "cards")[3], 0.);
 }
 
@@ -770,7 +792,7 @@ fn a_pane_the_model_moved_slides_from_where_it_was_drawn() {
     s.tick(&t, &mut text, t0 + t.motion.base / 2);
     let mid = rect(&s, "b/pane")[1];
     assert!(mid > 0. && mid < was[1], "{mid}");
-    assert!(!s.tick(&t, &mut text, t0 + t.motion.base));
+    assert!(!s.tick(&t, &mut text, t0 + t.motion.base).animating);
     assert_eq!(rect(&s, "b/pane")[1], 0.);
 }
 
@@ -785,4 +807,203 @@ fn with_reduced_motion_everything_lands_at_once() {
     s.layout(&group(true), (360., 800.), 1., &t, &mut text, t0);
     assert!(!s.animating());
     assert!(rect(&s, "cards")[3] > 100.);
+}
+
+fn swipeable(id: &str) -> Node {
+    let mut n = card(id, "Body", Align::FirstLine);
+    if let Kind::Pane(p) = &mut n.kind {
+        let c = std::mem::replace(&mut *p.child, Node::spacer("_"));
+        *p.child = c.swipe("dismiss");
+    }
+    n
+}
+fn swipe_list(ids: &[&str]) -> Node {
+    Node::column("list", ids.iter().map(|i| swipeable(i)).collect()).gap(Space::S2)
+}
+/// A point on the card's body, away from its close button.
+fn on_card(s: &ViewState, id: &str) -> (f64, f64) {
+    let r = rect(s, &format!("{id}/pane"));
+    (r[0] + 60., r[1] + r[3] / 2.)
+}
+
+#[test]
+fn a_card_swiped_past_the_threshold_leaves_and_is_reported_when_gone() {
+    let t = tokens();
+    let mut text = backend();
+    let mut s = ViewState::new(0);
+    let t0 = Instant::now();
+    s.layout(
+        &swipe_list(&["a", "b"]),
+        (360., 800.),
+        1.,
+        &t,
+        &mut text,
+        t0,
+    );
+    let (a0, b0) = (rect(&s, "a/pane"), rect(&s, "b/pane"));
+    let placed_before_title = rect(&s, "a/title")[0];
+    let (x, y) = on_card(&s, "a");
+    s.pointer_motion(x, y);
+    s.button(true, t0);
+    assert_eq!(s.press(), Some(&Key::from("a/card")));
+    s.pointer_motion(x + 5., y);
+    assert_eq!(rect(&s, "a/pane"), a0, "not a swipe yet");
+    assert!(s.pointer_motion(x + 60., y + 2.));
+    assert_eq!(s.press(), None, "the swipe cancels the press");
+    assert_eq!(rect(&s, "a/pane")[0], a0[0] + 60.);
+    assert_eq!(
+        rect(&s, "a/title")[0],
+        placed_before_title + 60.,
+        "with all it holds"
+    );
+    let alpha = placed(&s, "a/title").alpha;
+    assert!(alpha < 1. && alpha > 0.5, "{alpha}");
+    assert_eq!(rect(&s, "b/pane"), b0, "the others stay");
+    s.pointer_motion(x + 120., y);
+    assert_eq!(s.button(false, t0), None, "the release opens nothing");
+    assert!(s.animating());
+    let mid = s.tick(&t, &mut text, t0 + t.motion.base / 2);
+    assert!(mid.animating && mid.activated.is_empty());
+    let xm = rect(&s, "a/pane")[0];
+    assert!(xm > a0[0] + 120. && xm < 360., "{xm}");
+    let end = s.tick(&t, &mut text, t0 + t.motion.base);
+    assert_eq!(
+        end.activated,
+        vec![Activated {
+            key: Key::from("a/card"),
+            action: "dismiss".into()
+        }]
+    );
+    assert_eq!(
+        placed(&s, "a/pane").alpha,
+        0.,
+        "gone until the model drops it"
+    );
+    let f = s.frame(&t, t0 + t.motion.base);
+    assert!(f.panes.iter().all(|p| p.key != Key::from("a/pane")));
+    // The model drops it: the card below slides up from where it was drawn.
+    let t1 = t0 + t.motion.base;
+    s.layout(&swipe_list(&["b"]), (360., 800.), 1., &t, &mut text, t1);
+    assert_eq!(rect(&s, "b/pane"), b0);
+    assert!(!s.tick(&t, &mut text, t1 + t.motion.base).animating);
+    assert_eq!(rect(&s, "b/pane")[1], a0[1]);
+}
+
+#[test]
+fn a_swipe_short_of_the_threshold_settles_back() {
+    let t = tokens();
+    let mut text = backend();
+    let mut s = ViewState::new(0);
+    let t0 = Instant::now();
+    s.layout(&swipe_list(&["a"]), (360., 800.), 1., &t, &mut text, t0);
+    let a0 = rect(&s, "a/pane");
+    let (x, y) = on_card(&s, "a");
+    s.pointer_motion(x, y);
+    s.button(true, t0);
+    s.pointer_motion(x - 50., y);
+    assert_eq!(rect(&s, "a/pane")[0], a0[0] - 50.);
+    assert_eq!(s.button(false, t0), None);
+    let end = s.tick(&t, &mut text, t0 + t.motion.base);
+    assert!(!end.animating && end.activated.is_empty());
+    assert_eq!(rect(&s, "a/pane"), a0);
+    assert_eq!(placed(&s, "a/title").alpha, 1.);
+}
+
+#[test]
+fn a_drag_more_down_than_across_stays_a_press() {
+    let mut s = laid(&swipe_list(&["a"]), (360., 800.), 1.);
+    let a0 = rect(&s, "a/pane");
+    let (x, y) = on_card(&s, "a");
+    s.pointer_motion(x, y);
+    s.button(true, Instant::now());
+    s.pointer_motion(x + 10., y + 20.);
+    assert_eq!(rect(&s, "a/pane"), a0);
+    assert_eq!(
+        s.button(false, Instant::now()),
+        Some(Activated {
+            key: Key::from("a/card"),
+            action: "open".into()
+        })
+    );
+}
+
+#[test]
+fn a_press_on_a_button_inside_the_card_never_swipes() {
+    let mut s = laid(&swipe_list(&["a"]), (360., 800.), 1.);
+    let a0 = rect(&s, "a/pane");
+    let (x, y) = on_card(&s, "a");
+    s.pointer_motion(x, y);
+    let c = rect(&s, "a/close");
+    let (cx, cy) = (c[0] + c[2] / 2., c[1] + c[3] / 2.);
+    s.pointer_motion(cx, cy);
+    assert_eq!(s.hover(), Some(&Key::from("a/close")));
+    s.button(true, Instant::now());
+    s.pointer_motion(cx - 100., cy);
+    assert_eq!(rect(&s, "a/pane"), a0);
+    assert_eq!(s.button(false, Instant::now()), None);
+}
+
+#[test]
+fn the_drag_resists_past_its_free_travel() {
+    let mut s = laid(&swipe_list(&["a"]), (360., 800.), 1.);
+    let a0 = rect(&s, "a/pane");
+    let (x, y) = on_card(&s, "a");
+    s.pointer_motion(x, y);
+    s.button(true, Instant::now());
+    s.pointer_motion(x + 300., y);
+    // 140 px follow freely, then 15 % of the other 160: 164, on the pixel grid.
+    assert_eq!(rect(&s, "a/pane")[0], a0[0] + 164.);
+    let alpha = placed(&s, "a/title").alpha;
+    assert!((alpha - (1. - 164. / 320.)).abs() < 1e-9, "{alpha}");
+}
+
+#[test]
+fn with_reduced_motion_a_fling_is_reported_on_release() {
+    let t = tokens();
+    let mut text = backend();
+    let mut s = ViewState::new(0);
+    s.set_reduced_motion(true);
+    let t0 = Instant::now();
+    s.layout(&swipe_list(&["a"]), (360., 800.), 1., &t, &mut text, t0);
+    let (x, y) = on_card(&s, "a");
+    s.pointer_motion(x, y);
+    s.button(true, t0);
+    s.pointer_motion(x + 100., y);
+    assert_eq!(
+        s.button(false, t0),
+        Some(Activated {
+            key: Key::from("a/card"),
+            action: "dismiss".into()
+        })
+    );
+    assert!(!s.animating());
+    assert_eq!(placed(&s, "a/pane").alpha, 0.);
+}
+
+#[test]
+fn frame_groups_share_a_group_per_clip_and_opacity() {
+    let t = tokens();
+    let mut s = laid(&swipe_list(&["a", "b"]), (360., 800.), 1.);
+    let f = s.frame(&t, Instant::now());
+    let tone = nk_wayland::Tone {
+        saturation: 1.,
+        ceiling: 1.,
+        lift: 0.,
+        gain: 1.,
+        wash: [0.; 4],
+        ambient: 0.,
+        ambient_lift: 0.,
+        ambient_gain: 0.,
+    };
+    let shadow = nk_wayland::Shadow {
+        opacity_small: 0.,
+        opacity_large: 0.,
+        blur_small: 0.,
+        blur_large: 0.,
+        offset: 0.,
+    };
+    let g = f.groups(tone, shadow);
+    assert_eq!(g.len(), 1);
+    assert_eq!(g[0].shapes.len(), 2);
+    assert!(g[0].clip.is_none() && g[0].opacity == 1.);
 }

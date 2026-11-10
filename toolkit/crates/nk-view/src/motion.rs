@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: LGPL-3.0-or-later
-//! The motion state (VIEW.md §6): each reveal's progress, eased by the kit's motion tokens,
-//! and the slides of panes a rebuilt view moved.
+//! The motion state (VIEW.md §6, §7): each reveal's progress, eased by the kit's motion
+//! tokens, the slides of panes a rebuilt view moved, and the cards being swiped away.
 use crate::layout::{Placed, Rect, What};
 use crate::tokens::{Bezier, Motion};
 use crate::view::{Key, Kind, Node};
@@ -35,6 +35,38 @@ struct RevealState {
     ease: Option<Ease>,
 }
 
+/// The swipe's feel, as the TS shell had it (`ui/shell/common/ScaleRevealer.ts`): logical px a
+/// press must travel, more across than down, to become a swipe; how far a release must have
+/// gone to dismiss; the free travel before the drag resists, and how much of the rest shows;
+/// and the distance over which the content fades, never below the floor.
+pub(crate) const SWIPE_CLAIM: f64 = 8.;
+pub(crate) const SWIPE_DISMISS: f64 = 90.;
+const SWIPE_FREE: f64 = 140.;
+const SWIPE_RESIST: f64 = 0.15;
+const SWIPE_FADE: f64 = 320.;
+const SWIPE_FLOOR: f64 = 0.15;
+
+fn rubber(dx: f64) -> f64 {
+    let a = dx.abs();
+    if a <= SWIPE_FREE {
+        dx
+    } else {
+        dx.signum() * (SWIPE_FREE + (a - SWIPE_FREE) * SWIPE_RESIST)
+    }
+}
+fn fade(dx: f64) -> f64 {
+    (1. - dx.abs() / SWIPE_FADE).max(SWIPE_FLOOR)
+}
+
+enum Swipe {
+    /// Following the pointer, at this drawn offset.
+    Follow(f64),
+    /// Released: settling back, or flung off the surface (then `out` is what to report).
+    Ease { ease: Ease, out: Option<String> },
+    /// Flung and reported; hidden until the surface drops it from the view.
+    Gone,
+}
+
 /// A pane drawn `offset` away from its place at `start`, easing to it.
 struct Slide {
     offset: (f64, f64),
@@ -45,6 +77,7 @@ struct Slide {
 pub(crate) struct MotionState {
     reveals: HashMap<Key, RevealState>,
     slides: HashMap<Key, Slide>,
+    swipes: HashMap<Key, Swipe>,
     pub reduced: bool,
 }
 
@@ -176,6 +209,122 @@ impl MotionState {
     }
 
     pub fn animating(&self) -> bool {
-        !self.slides.is_empty() || self.reveals.values().any(|s| s.ease.is_some())
+        !self.slides.is_empty()
+            || self.reveals.values().any(|s| s.ease.is_some())
+            || self
+                .swipes
+                .values()
+                .any(|s| matches!(s, Swipe::Ease { .. }))
+    }
+
+    /// The swiped control follows the pointer, `dx` from where the press began.
+    pub fn swipe_follow(&mut self, key: &Key, dx: f64) {
+        self.swipes.insert(key.clone(), Swipe::Follow(rubber(dx)));
+    }
+
+    /// The press ended `dx` from where it began, or was lost (`dx` 0). Past the threshold the
+    /// control is flung off a surface `width` wide, and `action` is reported when it is gone:
+    /// at once with reduced motion, which this returns; otherwise from `finished`.
+    pub fn swipe_release(
+        &mut self,
+        key: &Key,
+        dx: f64,
+        width: f64,
+        action: String,
+        now: Instant,
+        m: &Motion,
+    ) -> Option<String> {
+        let from = match self.swipes.get(key) {
+            Some(Swipe::Follow(d)) => *d,
+            _ => return None,
+        };
+        let fling = dx.abs() >= SWIPE_DISMISS;
+        if self.reduced {
+            return if fling {
+                self.swipes.insert(key.clone(), Swipe::Gone);
+                Some(action)
+            } else {
+                self.swipes.remove(key);
+                None
+            };
+        }
+        let to = if fling { dx.signum() * width } else { 0. };
+        let ease = Ease {
+            from,
+            to,
+            start: now,
+            duration: m.base,
+            curve: m.emphasized,
+        };
+        let out = fling.then_some(action);
+        self.swipes.insert(key.clone(), Swipe::Ease { ease, out });
+        None
+    }
+
+    /// The flings that arrived by `now`, and what each reports; settles that arrived end.
+    pub fn finished(&mut self, now: Instant) -> Vec<(Key, String)> {
+        let mut out = vec![];
+        self.swipes.retain(|k, s| {
+            let Swipe::Ease { ease, out: report } = s else {
+                return true;
+            };
+            if !ease.at(now).1 {
+                return true;
+            }
+            match report.take() {
+                Some(action) => {
+                    out.push((k.clone(), action));
+                    *s = Swipe::Gone;
+                    true
+                }
+                None => false,
+            }
+        });
+        out
+    }
+
+    /// Moves each swiped control's card (its nearest pane, or itself outside one) and all it
+    /// holds by the swipe's offset, fading its content. Clips from outside the card stop
+    /// cutting it across, so it can leave its list. Swipes whose control left are dropped.
+    pub fn swipe(&mut self, placed: &mut [Placed], now: Instant, width: f64, scale: f64) {
+        let snap = |v: f64| (v * scale).round() / scale;
+        self.swipes
+            .retain(|k, _| placed.iter().any(|p| &p.key == k));
+        for (key, s) in &self.swipes {
+            let Some(c) = placed.iter().position(|p| &p.key == key) else {
+                continue;
+            };
+            let (dx, alpha) = match s {
+                Swipe::Follow(d) => (*d, fade(*d)),
+                Swipe::Ease { ease, out } => {
+                    let v = ease.at(now).0;
+                    let gone = if out.is_some() && ease.to != ease.from {
+                        (v - ease.from) / (ease.to - ease.from)
+                    } else {
+                        0.
+                    };
+                    (v, fade(v) * (1. - gone))
+                }
+                Swipe::Gone => (0., 0.),
+            };
+            let card = placed[c].pane.unwrap_or(c);
+            let outside = placed[card].clip;
+            for i in card..placed.len() {
+                let inside = i == card
+                    || std::iter::successors(placed[i].parent, |&q| placed[q].parent)
+                        .any(|q| q == card);
+                if !inside {
+                    continue;
+                }
+                let r = placed[i].rect;
+                placed[i].rect = [snap(r[0] + dx), r[1], r[2], r[3]];
+                placed[i].alpha *= alpha;
+                placed[i].clip = match placed[i].clip {
+                    Some(c) if Some(c) == outside => Some([0., c[1], width, c[3]]),
+                    Some(c) => Some([snap(c[0] + dx), c[1], c[2], c[3]]),
+                    None => None,
+                };
+            }
+        }
     }
 }

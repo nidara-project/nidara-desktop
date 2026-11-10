@@ -331,8 +331,10 @@ New shell surfaces and ports are built on `toolkit/crates/nk-view` (#1048), not 
 hit-testing and painting by hand. Its contract is `toolkit/VIEW.md` and its README covers the
 API. Gaps, corners and motion are tokens read from `tokens/static.json` (`Space`, `Radius`, the
 kit's curves and durations). Hover, press and focus are derived by key. A `Reveal` opens and
-closes in place, and moved panes slide; the surface calls `tick` while `animating()`. A pane never declares more than Hyalo's eight lit washes, and every other
-shown control is declared at rest so its hover fades in. The NC is the first consumer.
+closes in place, moved panes slide, and a `swipe(action)` control is swiped off and reported by
+`tick` when it is gone; the surface calls `tick` while `animating()`. Panes are declared whole,
+with their clip and their content's opacity. A pane never declares more than Hyalo's eight lit
+washes, and every other shown control is declared at rest so its hover fades in. The NC is the first consumer.
 
 ### Applications1 catalogue and native dock pins
 

@@ -186,6 +186,9 @@ pub struct Control {
     /// Drawn only while the pointer is over this pane, or focus is inside it. Always in the
     /// semantic tree and the Tab order.
     pub revealed_with: Option<Key>,
+    /// Swiped across, its card (the nearest pane) follows the pointer; released far enough,
+    /// it leaves the surface and the surface receives this action (VIEW.md §7).
+    pub swipe: Option<String>,
     pub child: Box<Node>,
 }
 
@@ -284,6 +287,7 @@ impl Node {
                 enabled: true,
                 marked: false,
                 revealed_with: None,
+                swipe: None,
                 child: Box::new(child),
             }),
         )
@@ -367,6 +371,12 @@ impl Node {
     pub fn revealed_with(mut self, pane: impl Into<Key>) -> Self {
         if let Kind::Control(c) = &mut self.kind {
             c.revealed_with = Some(pane.into());
+        }
+        self
+    }
+    pub fn swipe(mut self, action: impl Into<String>) -> Self {
+        if let Kind::Control(c) = &mut self.kind {
+            c.swipe = Some(action.into());
         }
         self
     }

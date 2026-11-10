@@ -3,12 +3,12 @@
 //! across rebuilds; the panes and state regions a frame declares to Hyalo, within its budget;
 //! the semantics; and the content paint (texts, icons, the focus ring, and the D5 washes).
 use crate::layout::{Layouter, Placed, Rect, TextCache, What};
-use crate::motion::MotionState;
+use crate::motion::{MotionState, SWIPE_CLAIM};
 use crate::tokens::Tokens;
 use crate::view::{Key, Node, Role, Wash};
 use nk_a11y::{Action, Bounds, NodeId, Tree};
 use nk_render::Canvas;
-use nk_wayland::{MaterialRect, Pane, StateRegion};
+use nk_wayland::{Group, MaterialRect, Pane, Shadow, StateRegion, Tone};
 use std::collections::{HashMap, HashSet};
 use std::time::{Duration, Instant};
 
@@ -34,12 +34,73 @@ pub enum KeyInput {
 /// What one frame declares to Hyalo: a shape per visible pane, and the state regions.
 #[derive(Clone, Debug, Default)]
 pub struct Frame {
-    pub panes: Vec<(Key, Pane)>,
+    pub panes: Vec<FramePane>,
     pub states: Vec<StateRegion>,
+}
+/// One pane's shape at its whole size, what of it may show (cut straight where a reveal
+/// ends), and how formed its glass is (its content's opacity, so glass and content come and
+/// go together).
+#[derive(Clone, Debug)]
+pub struct FramePane {
+    pub key: Key,
+    pub pane: Pane,
+    pub clip: Option<Rect>,
+    pub opacity: f64,
+}
+impl Frame {
+    /// The panes as material groups in the surface's tone and shadow, in order: one group
+    /// per run of panes that share a clip and an opacity (`add_shape_clipped`).
+    pub fn groups(&self, tone: Tone, shadow: Shadow) -> Vec<Group> {
+        let mut out: Vec<(Option<Rect>, f64, Vec<Pane>)> = vec![];
+        for p in &self.panes {
+            match out.last_mut() {
+                Some((clip, opacity, shapes)) if *clip == p.clip && *opacity == p.opacity => {
+                    shapes.push(p.pane)
+                }
+                _ => out.push((p.clip, p.opacity, vec![p.pane])),
+            }
+        }
+        out.into_iter()
+            .map(|(clip, opacity, shapes)| Group {
+                clip: clip.map(|c| MaterialRect {
+                    x: c[0],
+                    y: c[1],
+                    width: c[2],
+                    height: c[3],
+                }),
+                opacity,
+                tone,
+                shadow,
+                shapes,
+            })
+            .collect()
+    }
+}
+
+/// What `tick` reports: whether something still moves, and the controls swiped away whose
+/// fling just ended.
+#[derive(Clone, Debug, Default, PartialEq)]
+pub struct Ticked {
+    pub animating: bool,
+    pub activated: Vec<Activated>,
+}
+
+/// A press on a swipeable control, until it is released.
+struct Drag {
+    key: Key,
+    origin: (f64, f64),
+    dx: f64,
+    claimed: bool,
 }
 
 pub struct ViewState {
     placed: Vec<Placed>,
+    /// The placement before swipes move it; what a rebuild compares panes against.
+    laid: Vec<Placed>,
+    now: Instant,
+    drag: Option<Drag>,
+    /// The motion tokens of the last layout, for a release between frames.
+    motion_tokens: Option<crate::tokens::Motion>,
     view: Option<Node>,
     size: (f64, f64),
     scale: f64,
@@ -65,6 +126,10 @@ impl ViewState {
     pub fn new(id_base: u32) -> Self {
         Self {
             placed: vec![],
+            laid: vec![],
+            now: Instant::now(),
+            drag: None,
+            motion_tokens: None,
             view: None,
             size: (0., 0.),
             scale: 1.,
@@ -97,12 +162,13 @@ impl ViewState {
         now: Instant,
     ) {
         let before: HashMap<Key, Rect> = self
-            .placed
+            .laid
             .iter()
             .filter(|p| matches!(p.what, What::Pane(_)))
             .map(|p| (p.key.clone(), p.rect))
             .collect();
         self.motion.view(view, now, &tokens.motion);
+        self.motion_tokens = Some(tokens.motion);
         self.view = Some(view.clone());
         self.size = size;
         self.scale = scale;
@@ -118,23 +184,37 @@ impl ViewState {
             }
         }
         self.ids.retain(|k, _| live.contains(k));
+        if self.drag.as_ref().is_some_and(|d| !live.contains(&d.key)) {
+            self.drag = None;
+        }
         self.rehover();
     }
 
-    /// Advances the motion to `now` and lays the view out again if anything moved. Returns
-    /// whether something still moves, so the surface asks for another frame.
+    /// Advances the motion to `now` and lays the view out again if anything moved. Reports
+    /// whether something still moves, so the surface asks for another frame, and each control
+    /// whose swipe took it off the surface, with its swipe action: the surface drops it from
+    /// its model, and the panes below slide up.
     pub fn tick(
         &mut self,
         tokens: &Tokens,
         text: &mut dyn nk_text::TextBackend,
         now: Instant,
-    ) -> bool {
+    ) -> Ticked {
         if !self.motion.animating() {
-            return false;
+            return Ticked::default();
         }
+        let activated = self
+            .motion
+            .finished(now)
+            .into_iter()
+            .map(|(key, action)| Activated { key, action })
+            .collect();
         self.relayout(tokens, text, now, None);
         self.rehover();
-        self.motion.animating()
+        Ticked {
+            animating: self.motion.animating(),
+            activated,
+        }
     }
 
     /// Whether a reveal eases or a pane slides.
@@ -171,6 +251,16 @@ impl ViewState {
         }
         self.motion
             .slide(&mut placed, now, &tokens.motion, self.scale);
+        self.now = now;
+        self.laid = placed;
+        self.reswipe();
+    }
+
+    /// The placement with the swipes in force at the last instant laid out.
+    fn reswipe(&mut self) {
+        let mut placed = self.laid.clone();
+        self.motion
+            .swipe(&mut placed, self.now, self.size.0, self.scale);
         self.placed = placed;
     }
 
@@ -260,18 +350,55 @@ impl ViewState {
         self.hover != before
     }
 
-    /// The pointer moved; whether anything shown changed (a hover, a revealed control).
+    /// The pointer moved; whether anything shown changed (a hover, a revealed control, a
+    /// card being swiped). A press on a swipeable control that has gone further across than
+    /// down, past the claim distance, becomes a swipe: the press is cancelled, so its release
+    /// activates nothing, and the card follows the pointer across (VIEW.md §7).
     pub fn pointer_motion(&mut self, x: f64, y: f64) -> bool {
         let revealed = self.revealed();
         self.pointer = Some((x, y));
-        self.rehover() | (revealed != self.revealed())
+        let mut swiped = false;
+        if let Some(d) = &mut self.drag {
+            let (dx, dy) = (x - d.origin.0, y - d.origin.1);
+            if !d.claimed && dx.abs() > SWIPE_CLAIM && dx.abs() > dy.abs() {
+                d.claimed = true;
+                self.press = None;
+            }
+            if d.claimed {
+                d.dx = dx;
+                self.motion.swipe_follow(&d.key, dx);
+                swiped = true;
+            }
+        }
+        if swiped {
+            self.reswipe();
+        }
+        self.rehover() | (revealed != self.revealed()) | swiped
     }
-    /// The pointer left the surface: hover clears and its wash fades.
+    /// The pointer left the surface: hover clears and its wash fades, and a swipe in progress
+    /// settles back.
     pub fn pointer_leave(&mut self) -> bool {
         let revealed = self.revealed();
         self.pointer = None;
         self.press = None;
-        self.rehover() | (revealed != self.revealed())
+        let swiped = self.end_swipe(0., self.now).is_some();
+        self.rehover() | (revealed != self.revealed()) | swiped
+    }
+
+    /// Ends the drag. A claimed swipe is released `dx` across (0 settles it back), and with
+    /// reduced motion a fling reports at once. None: there was no swipe.
+    fn end_swipe(&mut self, dx: f64, now: Instant) -> Option<Option<Activated>> {
+        let d = self.drag.take().filter(|d| d.claimed)?;
+        let motion = self.motion_tokens?;
+        let action = self
+            .index(&d.key)
+            .and_then(|i| self.control(i).swipe.clone())
+            .unwrap_or_default();
+        let out = self
+            .motion
+            .swipe_release(&d.key, dx, self.size.0, action, now, &motion);
+        self.reswipe();
+        Some(out.map(|action| Activated { key: d.key, action }))
     }
     /// A modal menu closed: hover is recomputed from where the pointer was sampled before
     /// the popup went (`Window::root_pointer_position`, #1030).
@@ -285,14 +412,35 @@ impl ViewState {
         self.controls().map(|i| self.shown(i)).collect()
     }
 
-    /// The primary button went down or up. A release over the pressed control activates
-    /// it; a release elsewhere cancels.
-    pub fn button(&mut self, pressed: bool) -> Option<Activated> {
+    /// The primary button went down or up, at `now`. A release over the pressed control
+    /// activates it; a release elsewhere cancels. A release that ends a swipe flings the card
+    /// off past the dismiss distance or settles it back, and activates nothing then (`tick`
+    /// reports the fling), except with reduced motion, where the fling lands at once.
+    pub fn button(&mut self, pressed: bool, now: Instant) -> Option<Activated> {
         if pressed {
             self.press = self.hover.clone();
             self.focus_visible = false;
+            self.drag = self
+                .hover
+                .as_ref()
+                .zip(self.pointer)
+                .filter(|(k, _)| {
+                    self.index(k)
+                        .is_some_and(|i| self.control(i).swipe.is_some())
+                })
+                .map(|(k, origin)| Drag {
+                    key: k.clone(),
+                    origin,
+                    dx: 0.,
+                    claimed: false,
+                });
             return None;
         }
+        let dx = self.drag.as_ref().map_or(0., |d| d.dx);
+        if let Some(flung) = self.end_swipe(dx, now) {
+            return flung;
+        }
+        self.drag = None;
         let pressed = self.press.take()?;
         let i = self.pointer.and_then(|pt| self.hit(pt))?;
         (self.placed[i].key == pressed).then(|| Activated {
@@ -356,18 +504,23 @@ impl ViewState {
             .placed
             .iter()
             .filter_map(|p| match (&p.what, p.visible()) {
-                (What::Pane(c), Some(r)) if p.alpha > 0. && overlaps(r, viewport) => Some((
-                    p.key.clone(),
-                    Pane {
-                        x: r[0],
-                        y: r[1],
-                        width: r[2],
-                        height: r[3],
-                        radius: c.of(r[2], r[3], &tokens.radii),
-                        exponent: 2.,
-                        pointer: None,
-                    },
-                )),
+                (What::Pane(c), Some(v)) if p.alpha > 0. && overlaps(v, viewport) => {
+                    let r = p.rect;
+                    Some(FramePane {
+                        key: p.key.clone(),
+                        pane: Pane {
+                            x: r[0],
+                            y: r[1],
+                            width: r[2],
+                            height: r[3],
+                            radius: c.of(r[2], r[3], &tokens.radii),
+                            exponent: 2.,
+                            pointer: None,
+                        },
+                        clip: p.clip.filter(|_| v != r),
+                        opacity: p.alpha,
+                    })
+                }
                 _ => None,
             })
             .collect();

@@ -2,7 +2,7 @@
 # nk-view — layout and interaction for shell surfaces (contract)
 
 Part of #1048 (read it first: why one description, what is out of scope). **Status: accepted. Pieces 1
-to 3 (§2 to §5) are built in `toolkit/crates/nk-view`, which no surface uses yet. The NC's
+to 4 and 8 (§2 to §7) are built in `toolkit/crates/nk-view`, which no surface uses yet. The NC's
 behaviour is decided (end of file).**
 
 This file covers the two pieces that the shell inventory of 2026-11-10 ranked first:
@@ -12,7 +12,8 @@ This file covers the two pieces that the shell inventory of 2026-11-10 ranked fi
 
 A third piece is needed with them: **the pane** (a card of glass). It is the unit Hyalo's state
 budget counts in. Animation, scrolling, overlay, tile grid, gestures, tooltip and calendar are
-later contracts, except animation, which §6 adds. This one only keeps room for the rest (§7).
+later contracts, except animation and the swipe, which §6 and §7 add. This one only keeps room
+for the rest (§8).
 
 ## Why
 
@@ -146,7 +147,7 @@ each card has its own eight. `nk-view` enforces the limit per pane, in this orde
 
 It never declares more than eight. If a pane would need more, the lowest are dropped and logged
 once per view. A pane that needs more than eight persistent markers is a design error that the
-check reports (§8).
+check reports (§9).
 
 **Revealed controls.** A `Control` may be `revealed_with(pane)`: it is drawn only while the
 pointer is over that pane or focus is inside it. A notification's close button is the example.
@@ -197,7 +198,42 @@ Placement stays a pure function of the view, its size, its scale and the motion 
 instant. `ViewState::tick(now)` advances the motion state, and reports whether anything still
 moves so the surface asks for another frame.
 
-## 7. What this keeps room for
+**The glass goes with its content.** A pane is declared at its whole size, with what of it may
+show as a clip (`add_shape_clipped`): a card a reveal cuts is cut straight where the reveal
+ends, not drawn as a shorter card with rounded corners. Its glass is as formed as its content
+is opaque, so a reveal or a swipe fades both together, as TS did.
+
+## 7. Swipe to dismiss (piece 8)
+
+A `Control` may be `swipe(action)`: a notification's card, which TS let you swipe away in
+either direction, banner and NC alike.
+
+- **Recognised.** A press on a swipeable control becomes a swipe once the pointer, still
+  pressed, has travelled more than 8 px across and more across than down. Until then it is a
+  press; a drag mostly downward stays one, which leaves the vertical for scrolling. A press on
+  a control inside the card (its close, its chevron) never swipes: the innermost control takes
+  the press, as in TS, where those buttons claimed it first.
+- **Following.** Once recognised, the press is cancelled, so the release opens nothing, and
+  the card follows the pointer across: the nearest pane holding the control, with all it holds,
+  or the control alone when it lies in no pane. It follows one to one for 140 px, then shows
+  15 % of further travel. Its content and glass fade with the distance, to 1 − distance/320,
+  never below 0.15. Clips from outside the card stop cutting it across, so it can leave its
+  list.
+- **Released.** At 90 px or more from where the press began, it is flung off the surface in
+  that direction, fading out; short of it, it settles back. Both use `ease-emphasized` over
+  `dur-base`. When the fling ends, `tick` reports `Activated { key, action }` with the swipe's
+  action, and the card stays hidden until the surface drops it from its model. The panes below
+  then slide up (§6), which is what TS's collapsing row did.
+- **Reduced motion.** Following is direct manipulation and stays. A fling lands at once, and the
+  release itself reports it; a settle snaps back.
+- **Lost.** If the pointer leaves the surface, the swipe settles back. If the control leaves
+  the view, its swipe is dropped.
+
+The distances are the kit's, transcribed from TS (`ui/shell/common/ScaleRevealer.ts`), and live
+in `nk-view` once, not in a surface. A swipe has no keyboard form: the card's close button is
+the way to dismiss it from the keyboard, and it stays in the Tab order (§4).
+
+## 8. What this keeps room for
 
 - **Scroll (piece 5).** A scroll region becomes a node kind that places its child at an offset
   and clips, as a reveal already clips. Hit-testing already goes through placed rects.
@@ -205,7 +241,7 @@ moves so the surface asks for another frame.
 
 Neither of these is in this contract.
 
-## 8. Acceptance for the NC pilot
+## 9. Acceptance for the NC pilot
 
 The pilot replaces `nc.rs` and `notification_card.rs` with a view over the same model
 (`notifications.rs`), behind a flag, beside today's NC.
@@ -252,9 +288,8 @@ What this adds to the contract and its pieces:
 - `wash: None` on a `Control` (point 2). It is the one addition to §4.
 - The ghost layers are part of the group's pane: one shape whose outline includes the peeking
   strips, not two more panes. How Hyalo draws that outline is measured with the shape limit.
-- Expanding (points 4 and 5) needs the revealer, piece 4. Swipe to dismiss needs gestures, piece 8.
-  The pilot ships with both, because the TS centre had them: they are contracted before it, as
-  short additions to this file.
+- Expanding (points 4 and 5) needs the revealer, piece 4 (§6). Swipe to dismiss needs gestures,
+  piece 8 (§7). The pilot ships with both, because the TS centre had them.
 
 ## The shape limit (measured 2026-11-10)
 
@@ -281,7 +316,7 @@ private nested Hyalo of `toolkit/widgets-demo/check-headless.sh` on this machine
 So each card adds about 0.06 ms of GPU time per redrawn frame over one panel of the same area.
 Textures and captures stay the same. The NC builds only the cards in its viewport, about ten,
 which costs about 0.3 ms per frame more than today's single pane, and only on frames where the
-glass is redrawn. That is within budget. The pilot's "Cost" check (§8) measures it again on the
+glass is redrawn. That is within budget. The pilot's "Cost" check (§9) measures it again on the
 real NC.
 
 That all N cards are drawn comes from the code (one call per shape, no cap) and from the GPU

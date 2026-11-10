@@ -11,7 +11,7 @@ mod tokens;
 mod view;
 
 pub use layout::{Fitted, Placed, Rect, TextCache, What, first_line_centre};
-pub use state::{Activated, BUDGET, Frame, KeyInput, ViewState};
+pub use state::{Activated, BUDGET, Frame, FramePane, KeyInput, Ticked, ViewState};
 pub use tokens::{
     Bezier, Look, Motion, Radii, Radius, Space, Spacing, Tokens, Washes, parse_color,
 };
