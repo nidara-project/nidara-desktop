@@ -268,14 +268,14 @@ fn edges_land_on_device_pixels_so_equal_cards_end_on_the_same_pixel() {
 
 #[test]
 fn outside_text_wraps_to_its_lines_and_ends_in_an_ellipsis_keeping_its_whole_text_for_readers() {
-    let s = laid(&card("n", LONG, Align::FirstLine), (360., 400.), 1.);
+    let mut s = laid(&card("n", LONG, Align::FirstLine), (360., 400.), 1.);
     let body = s.text().get(&Key::from("n/body")).unwrap();
     assert!(body.shown.ends_with('…'), "{:?}", body.shown);
     assert!(body.layout.lines().len() <= 3);
     let tree = s.semantics(nk_a11y::Node::new(1, nk_a11y::Role::Window, "NC"), 2);
     // The body is inside the card's control: the control's name speaks for it. A text outside
     // any control is a label with its whole text.
-    let s = laid(&Node::text("t", LONG, style(12.)).lines(1), (120., 40.), 1.);
+    let mut s = laid(&Node::text("t", LONG, style(12.)).lines(1), (120., 40.), 1.);
     assert!(s.text().get(&Key::from("t")).unwrap().shown.ends_with('…'));
     let tree2 = s.semantics(nk_a11y::Node::new(1, nk_a11y::Role::Window, "x"), 2);
     assert!(tree2.nodes.values().any(|n| n.name == LONG));
@@ -1314,7 +1314,7 @@ fn placeholders_stand_in_for_rows_outside_the_window_at_the_height_they_had() {
 
 #[test]
 fn a_scroll_region_is_a_scroll_pane_holding_its_cards() {
-    let s = laid(&feed(3), (360., 400.), 1.);
+    let mut s = laid(&feed(3), (360., 400.), 1.);
     let tree = s.semantics(nk_a11y::Node::new(1, nk_a11y::Role::Panel, "NC"), 2);
     let (&pane_id, _) = tree
         .nodes
@@ -1533,7 +1533,7 @@ fn a_readers_request_finds_its_control_by_semantic_id() {
     let mut s = laid(&view, (360., 600.), 1.);
     let root = nk_a11y::Node::new(1, nk_a11y::Role::Panel, "Centre");
     let tree = s.semantics(root, 100);
-    let keys = s.semantic_keys(100);
+    let keys = s.semantic_keys();
     // Every id the map names is a button in the tree, by the same name, and every button is
     // in the map.
     let buttons: Vec<_> = tree
@@ -1576,4 +1576,70 @@ fn a_readers_request_finds_its_control_by_semantic_id() {
         None,
         "a pane is not a control"
     );
+}
+
+#[test]
+fn a_weight_without_a_face_falls_back_to_regular_and_is_never_dropped() {
+    // The test fonts carry no bold face of Noto Sans: weight 700 cannot be shaped as asked.
+    let bold = TextStyle {
+        weight: 700.,
+        ..style(13.)
+    };
+    use nk_text::TextBackend;
+    assert!(
+        backend().layout("Title", &bold, 200.).is_err(),
+        "the control needs no bold face"
+    );
+    let view = Node::row(
+        "head",
+        vec![
+            Node::text("title", "Title", bold.clone()).lines(1).grow(),
+            Node::text("label", "Month", bold),
+        ],
+    );
+    let s = laid(&view, (300., 100.), 1.);
+    for k in ["title", "label"] {
+        let r = rect(&s, k);
+        assert!(r[2] > 0. && r[3] > 10., "{k}: {r:?}");
+    }
+}
+
+#[test]
+fn a_semantic_id_stays_with_its_node_when_the_view_changes_around_it() {
+    // A reader holds ids between updates, and nk-a11y refuses an id that comes back as
+    // another role: a rebuild that drops a card before another must not renumber it.
+    let list = |keys: &[&str]| {
+        Node::column(
+            "list",
+            keys.iter()
+                .map(|k| card(k, "Body", Align::FirstLine))
+                .collect(),
+        )
+        .gap(Space::S2)
+    };
+    let mut s = laid(&list(&["a", "b"]), (360., 600.), 1.);
+    let root = || nk_a11y::Node::new(1, nk_a11y::Role::Panel, "Centre");
+    let first = s.semantics(root(), 100);
+    let ids = |s: &ViewState| {
+        s.semantic_keys()
+            .into_iter()
+            .map(|(id, k)| (k, id))
+            .collect::<std::collections::HashMap<_, _>>()
+    };
+    let before = ids(&s);
+    s.layout(
+        &list(&["b"]),
+        (360., 600.),
+        1.,
+        &tokens(),
+        &mut backend(),
+        Instant::now(),
+    );
+    let second = s.semantics(root(), 100);
+    let after = ids(&s);
+    assert_eq!(after[&Key::from("b/close")], before[&Key::from("b/close")]);
+    assert_eq!(after[&Key::from("b/card")], before[&Key::from("b/card")]);
+    let mut snapshot = nk_a11y::Snapshot::default();
+    snapshot.accept(first).unwrap();
+    snapshot.accept(second).expect("no id changes role");
 }

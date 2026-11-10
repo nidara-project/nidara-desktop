@@ -150,6 +150,10 @@ pub struct ViewState {
     focus_visible: bool,
     ids: HashMap<Key, u32>,
     id_base: u32,
+    /// Each semantic node's id, by key and kind, for the view's life: a reader holds ids
+    /// across updates, and nk-a11y refuses an id that comes back as another role.
+    semantic_ids: HashMap<(Key, nk_a11y::Role), NodeId>,
+    next_semantic: NodeId,
     /// The regions that showed a wash in the last frame.
     lit: HashSet<Key>,
     /// Regions fading out, until when (they still take a place in Hyalo's eight).
@@ -183,6 +187,8 @@ impl ViewState {
             focus_visible: false,
             ids: HashMap::new(),
             id_base,
+            semantic_ids: HashMap::new(),
+            next_semantic: 0,
             lit: HashSet::new(),
             fading: HashMap::new(),
             overflow_logged: false,
@@ -943,23 +949,26 @@ impl ViewState {
     }
 
     /// The semantic tree: `root` holds a panel per pane and, in tree order, each control (by
-    /// its name) and each text outside a control (by its whole text, never its cut).
-    pub fn semantics(&self, root: nk_a11y::Node, first_id: NodeId) -> Tree {
+    /// its name) and each text outside a control (by its whole text, never its cut). Ids
+    /// start at `first_id` and stay with their node's key and role while the view lives, so
+    /// a rebuild that moves, adds or drops nodes never hands a reader's id to another node.
+    pub fn semantics(&mut self, root: nk_a11y::Node, first_id: NodeId) -> Tree {
         let mut nodes = std::collections::BTreeMap::new();
         let root_id = root.id;
         nodes.insert(root_id, root);
         let mut ids: HashMap<usize, NodeId> = HashMap::new();
-        let mut next = first_id;
-        for (i, p) in self.placed.iter().enumerate() {
+        self.next_semantic = self.next_semantic.max(first_id);
+        for i in 0..self.placed.len() {
             if !self.in_semantics(i) {
                 continue;
             }
-            let node = match &p.what {
-                What::Pane(_) => nk_a11y::Node::new(next, nk_a11y::Role::Panel, ""),
-                What::Scroll { .. } => nk_a11y::Node::new(next, nk_a11y::Role::ScrollPane, ""),
+            let p = &self.placed[i];
+            let mut node = match &p.what {
+                What::Pane(_) => nk_a11y::Node::new(0, nk_a11y::Role::Panel, ""),
+                What::Scroll { .. } => nk_a11y::Node::new(0, nk_a11y::Role::ScrollPane, ""),
                 What::Control(c) => {
                     let mut n = nk_a11y::Node::new(
-                        next,
+                        0,
                         match c.role {
                             Role::Button => nk_a11y::Role::Button,
                             Role::Toggle => nk_a11y::Role::ToggleButton,
@@ -973,11 +982,19 @@ impl ViewState {
                     n
                 }
                 What::Text { full, .. } if p.control.is_none() => {
-                    nk_a11y::Node::new(next, nk_a11y::Role::Label, full.clone())
+                    nk_a11y::Node::new(0, nk_a11y::Role::Label, full.clone())
                 }
                 _ => continue,
             };
-            let mut node = node;
+            let next_semantic = &mut self.next_semantic;
+            let id = *self
+                .semantic_ids
+                .entry((p.key.clone(), node.role))
+                .or_insert_with(|| {
+                    *next_semantic += 1;
+                    *next_semantic - 1
+                });
+            node.id = id;
             node.bounds = Bounds {
                 x: p.rect[0],
                 y: p.rect[1],
@@ -992,10 +1009,9 @@ impl ViewState {
                 .get_mut(&parent)
                 .expect("parent is placed first")
                 .children
-                .push(next);
-            nodes.insert(next, node);
-            ids.insert(i, next);
-            next += 1;
+                .push(id);
+            nodes.insert(id, node);
+            ids.insert(i, id);
         }
         Tree {
             root: root_id,
@@ -1015,14 +1031,23 @@ impl ViewState {
             }
     }
 
-    /// Which control each semantic node of `semantics(_, first_id)` is, by id: what a
+    /// Which control each id `semantics` gave is, for the controls placed now: what a
     /// reader's request names.
-    pub fn semantic_keys(&self, first_id: NodeId) -> HashMap<NodeId, Key> {
+    pub fn semantic_keys(&self) -> HashMap<NodeId, Key> {
         (0..self.placed.len())
             .filter(|&i| self.in_semantics(i))
-            .zip(first_id..)
-            .filter(|(i, _)| matches!(self.placed[*i].what, What::Control(_)))
-            .map(|(i, id)| (id, self.placed[i].key.clone()))
+            .map(|i| &self.placed[i])
+            .filter_map(|p| match &p.what {
+                What::Control(c) => {
+                    let role = match c.role {
+                        Role::Button => nk_a11y::Role::Button,
+                        Role::Toggle => nk_a11y::Role::ToggleButton,
+                    };
+                    let id = self.semantic_ids.get(&(p.key.clone(), role))?;
+                    Some((*id, p.key.clone()))
+                }
+                _ => None,
+            })
             .collect()
     }
 

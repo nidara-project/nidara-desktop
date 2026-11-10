@@ -105,7 +105,9 @@ variable of `_tokens.scss`, `space-1` to `space-10` among them, and `nk-view` re
 **Text that does not fit.** Interface labels never truncate: a label that does not fit is a
 wording problem (the project's rule). A text whose content comes from outside, such as a
 notification's body or a track title, declares `lines(n)`: it wraps to `n` lines and ends in an
-ellipsis. Its full text stays in the semantics.
+ellipsis. Its full text stays in the semantics. A weight the fonts have no face for (no bold
+installed) falls back to the regular weight, as the shell's own text does; a text is never
+dropped for its weight.
 
 **Pixel snapping.** Every placed edge is rounded to the output's device-pixel grid once, at
 placement. A size is the difference between two snapped edges. Sums of rounded sizes are never
@@ -163,10 +165,13 @@ always reach it.
 surface passes `Window::root_pointer_position()` sampled before the popup is destroyed (#1030),
 and `nk-view` recomputes hover from it. Hiding or disabling a control clears its states.
 
-**Readers' requests.** `semantic_keys(first_id)` says which control each node of
-`semantics(_, first_id)` is, and `request(key, activate)` acts on it: focus moves there (scrolled
-into view, the ring shown) or it is activated, as a click or Enter would. A disabled or absent
-control does nothing.
+**Readers' requests.** A semantic node's id belongs to its key and role for the view's life,
+starting at `first_id`: a reader keeps ids across updates, and `nk-a11y` refuses an id that comes
+back as another role, so ids are never numbered by position (a month change renumbered the
+calendar and the whole bar left the tree). `semantic_keys()` says which control each id of the
+last `semantics(_, first_id)` is, and `request(key, activate)` acts on it: focus moves there
+(scrolled into view, the ring shown) or it is activated, as a click or Enter would. A disabled or
+absent control does nothing.
 
 ## 5. The pane (the part of piece 3 needed now)
 

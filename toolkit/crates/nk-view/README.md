@@ -18,7 +18,7 @@ from the model. `ViewState` keeps what lasts between rebuilds:
 | `scroll(ScrollBy)`, `window(key)` | Scroll the region under the pointer, by pixels or wheel detents; and say what of a region's content shows, so the surface builds only those rows. |
 | `frame(tokens, now)` | Returns a `FramePane` per visible pane (its whole shape, its clip, and its glass opacity, which is its content's), plus the state regions (see below). `Frame::groups(tone, shadow)` turns the panes into material groups. |
 | `semantics(root, first_id)` | Builds the AT-SPI tree: a scroll pane per scroll region, a panel per pane, a button per control, a label per text outside a control (whole, never cut). |
-| `semantic_keys(first_id)`, `request(key, activate)` | Which control each semantic id is, and a reader's focus or activation on it. |
+| `semantic_keys()`, `request(key, activate)` | Which control each semantic id is (ids stay with their key and role), and a reader's focus or activation on it. |
 | `paint(canvas, tokens, icons, fallback)` | Paints texts, icons, the keyboard focus ring and the scroll bars. With `fallback` it also paints the washes (D5, no material protocol). |
 
 **State regions.** Each pane's lit regions come first: press, then hover, then those still

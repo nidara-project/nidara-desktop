@@ -50,7 +50,14 @@ impl TextCache {
         {
             return *w;
         }
-        let w = match backend.layout(&one_line(text), style, UNBOUNDED) {
+        let line = one_line(text);
+        let shaped = backend
+            .layout(&line, style, UNBOUNDED)
+            .or_else(|e| match regular(style) {
+                Some(r) => backend.layout(&line, &r, UNBOUNDED),
+                None => Err(e),
+            });
+        let w = match shaped {
             Ok(l) => {
                 self.shaped += 1;
                 natural_width(&l)
@@ -99,9 +106,31 @@ fn natural_width(l: &Layout) -> f64 {
         .fold(0., f64::max)
 }
 
-/// A text laid out to `width`. An interface label is one line, whole. A text with a line
-/// limit wraps, and if it needs more lines it is cut at a grapheme and ends in an ellipsis.
+/// The style a text falls back to when its weight has no face in the font set (no bold
+/// installed, no variable font): the regular weight, as the shell's own text does
+/// (`cc::lay_out`). A text is never dropped for its weight.
+fn regular(style: &TextStyle) -> Option<TextStyle> {
+    (style.weight != 400.).then(|| TextStyle {
+        weight: 400.,
+        ..style.clone()
+    })
+}
+
+/// A text laid out to `width`, in its style or, failing that, in the regular weight. An
+/// interface label is one line, whole. A text with a line limit wraps, and if it needs more
+/// lines it is cut at a grapheme and ends in an ellipsis.
 fn fit(
+    backend: &mut dyn TextBackend,
+    text: &str,
+    style: &TextStyle,
+    lines: Option<usize>,
+    width: f32,
+) -> Option<(Fitted, usize)> {
+    fit_as(backend, text, style, lines, width)
+        .or_else(|| fit_as(backend, text, &regular(style)?, lines, width))
+}
+
+fn fit_as(
     backend: &mut dyn TextBackend,
     text: &str,
     style: &TextStyle,
