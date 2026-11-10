@@ -41,6 +41,10 @@ pub fn enabled() -> bool {
     *ON.get_or_init(|| std::env::var_os("NK_NC_VIEW").is_some_and(|v| v != "0"))
 }
 
+/// A card's corner, the CC's 4×1 (owner, 2026-11-10): `lg` of the radius scale, which a test
+/// holds equal to `cc::wide_radius`.
+const CARD: Radius = Radius::Lg;
+
 /// The kit's tokens for the shell's skin (always dark) in this appearance.
 pub fn tokens(
     e: &nk_settings::exports::Exports,
@@ -652,7 +656,7 @@ impl Pilot {
                 .padding(Padding::all(Space::S3)),
         )
         .wash(Wash::None)
-        .corner(Corner::Token(Radius::Xl))
+        .corner(Corner::Token(CARD))
         .swipe(close_action.clone());
         let close = Node::control(
             k("close"),
@@ -671,7 +675,7 @@ impl Pilot {
         .revealed_with(pane.clone());
         Node::pane(
             pane,
-            Corner::Token(Radius::Xl),
+            Corner::Token(CARD),
             Node::overlay(k("over"), content).layer(
                 Align::Start,
                 Align::Start,
@@ -900,7 +904,7 @@ impl Pilot {
             return (vec![], vec![]);
         };
         let frame = &self.last;
-        let radius = tokens.radii.px(Radius::Xl);
+        let radius = tokens.radii.px(CARD);
         let mut groups = vec![];
         for (key, list) in groups_of(&self.history) {
             if list.len() < 2 || self.groups_open.contains(&key) {
@@ -1286,6 +1290,15 @@ mod tests {
         // The list leaves room for them: the clear pill starts below the deepest.
         let pill = p.state.rect(&Key::from("clear")).unwrap();
         assert!(pill[1] >= bottom + PEEK + STEP);
+        // Cards and their ghosts take the CC's 4×1 corner.
+        let corner = crate::cc::wide_radius();
+        let front = groups
+            .iter()
+            .flat_map(|g| &g.shapes)
+            .find(|s| s.x == card[0] && s.y == card[1] && s.width == card[2])
+            .expect("the front card's pane");
+        assert_eq!(front.radius, corner);
+        assert!(ghosts.iter().all(|g| g.shapes[0].radius == corner));
         // A group of two has one ghost; a lone card none.
         let Some(mut p) = laid(history[..2].to_vec(), |_| {}) else {
             return;
