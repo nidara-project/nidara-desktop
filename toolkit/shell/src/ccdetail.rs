@@ -176,6 +176,8 @@ pub struct Detail {
     pub clipboard_confirm: bool,
     pub error: String,
     pub max_height: f64,
+    /// The output's scale, for crisp edges.
+    pub scale: f64,
     pub auth_ready: bool,
     pub form: Option<crate::ccauth::Form>,
     /// The rows' layout, hover, press, focus, held slider and scroll: nk-view's (#1048).
@@ -227,6 +229,7 @@ impl Detail {
             clipboard_confirm: false,
             error: String::new(),
             max_height: 1080.,
+            scale: 1.,
             auth_ready: false,
             form: None,
             state: nk_view::ViewState::new(REGIONS),
@@ -491,11 +494,13 @@ impl Detail {
         let room = (self.max_height - panel[1]).max(ROW_MIN);
         let now = std::time::Instant::now();
         let mut bounds = [panel[0], panel[1], panel[2], room];
-        self.state.layout_in(&view, bounds, 1., &tokens, text, now);
+        self.state
+            .layout_in(&view, bounds, self.scale, &tokens, text, now);
         let content = self.state.rect(&"rows".into()).map_or(room, |r| r[3]);
         if content < room {
             bounds[3] = content;
-            self.state.layout_in(&view, bounds, 1., &tokens, text, now);
+            self.state
+                .layout_in(&view, bounds, self.scale, &tokens, text, now);
         }
         self.panel = bounds;
         if self.form.is_some()

@@ -1508,6 +1508,7 @@ impl Bar {
             self.cc_auth = None;
         }
 
+        self.cc.detail_scale = w.scale();
         self.relayout();
         self.relayout_nc_view(w.scale());
         let viewport = self.cc.editor.viewport;

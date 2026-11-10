@@ -116,6 +116,8 @@ pub struct Cc {
     tiles: Vec<Placed>,
     pub detail: Option<detail::Detail>,
     pub detail_height: f64,
+    /// The output's scale, which the detail lays out for.
+    pub detail_scale: f64,
     detail_generation: u64,
     panel: [f64; 4],
     hover: Option<Target>,
@@ -140,6 +142,7 @@ impl Cc {
             tiles: vec![],
             detail: None,
             detail_height: 1080.,
+            detail_scale: 1.,
             detail_generation: 0,
             panel: [0.; 4],
             hover: None,
@@ -168,6 +171,7 @@ impl Cc {
         self.panel = self.editor.panel;
         if let Some(detail) = &mut self.detail {
             detail.max_height = self.detail_height;
+            detail.scale = self.detail_scale;
             detail.refresh(status, self.panel, look);
             self.panel = detail.panel;
         }
@@ -186,6 +190,7 @@ impl Cc {
         self.detail_generation += 1;
         let mut detail = detail::Detail::new(page, self.detail_generation);
         detail.max_height = self.detail_height;
+        detail.scale = self.detail_scale;
         detail.refresh(status, self.panel, look);
         self.panel = detail.panel;
         self.detail = Some(detail);
