@@ -12,11 +12,13 @@ from the model. `ViewState` keeps what lasts between rebuilds:
 | Call | What it does |
 |---|---|
 | `layout(view, size, scale, tokens, text, now)` | Measures, then places. Measured sizes are rounded up to whole device pixels and every edge is snapped to the device grid, so equal cards have equal sizes wherever they are. Texts are cached by key, string, style, line limit and width. A reveal whose `open` changed starts to ease, and a pane the rebuild moved slides from where it was drawn. |
+| `layout_in(view, bounds, scale, tokens, text, now)` | `layout` for a view that takes only `bounds` of its surface; everything it gives back is in surface coordinates. |
 | `tick(tokens, text, now)` | Advances reveals, slides, swipes, scrolls and scroll bars, and lays the view out again. It returns `Ticked`: whether anything still moves (while it does, the surface asks for frames), and the cards whose swipe just took them off the surface, as `Activated` with the swipe's action. |
 | `pointer_motion`, `pointer_leave`, `button(pressed, now)`, `key`, `reconcile_pointer` | Derive hover (the innermost shown, enabled control), press (cancelled by a release elsewhere), focus (Tab order), swipes, and the scroll bars' drags. The surface gets back only `Activated { key, action }`. |
 | `scroll(ScrollBy)`, `window(key)` | Scroll the region under the pointer, by pixels or wheel detents; and say what of a region's content shows, so the surface builds only those rows. |
 | `frame(tokens, now)` | Returns a `FramePane` per visible pane (its whole shape, its clip, and its glass opacity, which is its content's), plus the state regions (see below). `Frame::groups(tone, shadow)` turns the panes into material groups. |
 | `semantics(root, first_id)` | Builds the AT-SPI tree: a scroll pane per scroll region, a panel per pane, a button per control, a label per text outside a control (whole, never cut). |
+| `semantic_keys(first_id)`, `request(key, activate)` | Which control each semantic id is, and a reader's focus or activation on it. |
 | `paint(canvas, tokens, icons, fallback)` | Paints texts, icons, the keyboard focus ring and the scroll bars. With `fallback` it also paints the washes (D5, no material protocol). |
 
 **State regions.** Each pane's lit regions come first: press, then hover, then those still

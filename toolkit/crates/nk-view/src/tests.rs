@@ -1493,3 +1493,87 @@ fn a_wheel_scrolls_by_its_detents_and_a_touchpad_by_its_pixels() {
         "a notch is GTK's step, not 15 px"
     );
 }
+
+#[test]
+fn a_view_laid_in_bounds_answers_in_surface_coordinates() {
+    let view = Node::column("list", vec![card("a", "Body", Align::FirstLine)]);
+    let t = tokens();
+    let mut s = ViewState::new(1000);
+    s.layout_in(
+        &view,
+        [600., 40., 360., 400.],
+        1.,
+        &t,
+        &mut backend(),
+        Instant::now(),
+    );
+    let pane = rect(&s, "a/pane");
+    assert_eq!((pane[0], pane[1], pane[2]), (600., 40., 360.));
+    // The pointer is in surface coordinates: the card is under it there, not at the origin.
+    s.pointer_motion(620., 60.);
+    assert_eq!(s.hover(), Some(&Key::from("a/card")));
+    s.pointer_motion(20., 20.);
+    assert_eq!(s.hover(), None);
+    // The regions are declared where the view lies.
+    let f = s.frame(&t, Instant::now());
+    assert_eq!(f.panes.len(), 1);
+    assert_eq!((f.panes[0].pane.x, f.panes[0].pane.y), (600., 40.));
+}
+
+#[test]
+fn a_readers_request_finds_its_control_by_semantic_id() {
+    let view = Node::column(
+        "list",
+        vec![
+            card("a", "Body", Align::FirstLine),
+            card("b", "Body", Align::FirstLine),
+        ],
+    )
+    .gap(Space::S2);
+    let mut s = laid(&view, (360., 600.), 1.);
+    let root = nk_a11y::Node::new(1, nk_a11y::Role::Panel, "Centre");
+    let tree = s.semantics(root, 100);
+    let keys = s.semantic_keys(100);
+    // Every id the map names is a button in the tree, by the same name, and every button is
+    // in the map.
+    let buttons: Vec<_> = tree
+        .nodes
+        .values()
+        .filter(|n| n.role == nk_a11y::Role::Button)
+        .collect();
+    assert_eq!(buttons.len(), keys.len());
+    for n in buttons {
+        let key = &keys[&n.id];
+        assert!(
+            key.0.ends_with("/card") || key.0.ends_with("/close"),
+            "{key:?}"
+        );
+        assert_eq!(
+            n.name,
+            if key.0.ends_with("/card") {
+                "Open"
+            } else {
+                "Close"
+            }
+        );
+    }
+    let close = keys
+        .iter()
+        .find(|(_, k)| k.0 == "b/close")
+        .map(|(id, _)| *id)
+        .unwrap();
+    assert_eq!(
+        s.request(&keys[&close], true),
+        Some(Activated {
+            key: Key::from("b/close"),
+            action: "close".into()
+        })
+    );
+    assert_eq!(s.request(&Key::from("b/close"), false), None);
+    assert_eq!(s.focus(), Some(&Key::from("b/close")));
+    assert_eq!(
+        s.request(&Key::from("b/pane"), true),
+        None,
+        "a pane is not a control"
+    );
+}

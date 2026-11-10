@@ -78,6 +78,11 @@ The view is `serde`-serializable, as #1048 asks. Actions are names, never code.
 the `nk-text` layout that paint will use. Then it is placed. The same placed rectangles feed paint,
 hit-testing, semantics and the material. Nothing computes a position twice.
 
+**A view may take part of its surface.** `layout_in(view, bounds, …)` lays the root out in a rect
+of the surface (the NC along the bar surface's right edge); everything given back, from
+hit-testing to the regions, is in surface coordinates. `layout(view, size, …)` is the whole
+surface.
+
 **Measures are tokens, never literals.** A `Stack`'s gap and padding take a `Space`, and a
 corner takes `Pill` or a step of the radius scale (`RADIUS`, `xs` to `xl`, exported in
 `tokens/static.json`). It is a
@@ -157,6 +162,11 @@ always reach it.
 **Leave and grabs.** Pointer leave clears hover and fades its wash. When a modal menu closes, the
 surface passes `Window::root_pointer_position()` sampled before the popup is destroyed (#1030),
 and `nk-view` recomputes hover from it. Hiding or disabling a control clears its states.
+
+**Readers' requests.** `semantic_keys(first_id)` says which control each node of
+`semantics(_, first_id)` is, and `request(key, activate)` acts on it: focus moves there (scrolled
+into view, the ring shown) or it is activated, as a click or Enter would. A disabled or absent
+control does nothing.
 
 ## 5. The pane (the part of piece 3 needed now)
 

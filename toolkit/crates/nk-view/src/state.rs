@@ -138,7 +138,8 @@ pub struct ViewState {
     /// A bar is showing, fading or waiting to hide.
     bars_busy: bool,
     view: Option<Node>,
-    size: (f64, f64),
+    /// Where the view lies on the surface: the root takes this whole rect.
+    bounds: Rect,
     scale: f64,
     motion: MotionState,
     text: TextCache,
@@ -171,7 +172,7 @@ impl ViewState {
             bars: HashMap::new(),
             bars_busy: false,
             view: None,
-            size: (0., 0.),
+            bounds: [0.; 4],
             scale: 1.,
             motion: MotionState::default(),
             text: TextCache::default(),
@@ -201,6 +202,20 @@ impl ViewState {
         text: &mut dyn nk_text::TextBackend,
         now: Instant,
     ) {
+        self.layout_in(view, [0., 0., size.0, size.1], scale, tokens, text, now);
+    }
+
+    /// `layout` for a view that takes only `bounds` of its surface (a panel along one edge):
+    /// everything it gives back, from hit-testing to the regions, is in surface coordinates.
+    pub fn layout_in(
+        &mut self,
+        view: &Node,
+        bounds: Rect,
+        scale: f64,
+        tokens: &Tokens,
+        text: &mut dyn nk_text::TextBackend,
+        now: Instant,
+    ) {
         let before: HashMap<Key, Rect> = self
             .laid
             .iter()
@@ -210,7 +225,7 @@ impl ViewState {
         self.motion.view(view, now, &tokens.motion);
         self.tokens = Some(tokens.clone());
         self.view = Some(view.clone());
-        self.size = size;
+        self.bounds = bounds;
         self.scale = scale;
         self.relayout(tokens, text, now, Some(&before));
         let live: HashSet<Key> = self
@@ -299,7 +314,7 @@ impl ViewState {
             cache: &mut self.text,
             scale: self.scale,
         }
-        .run(view, self.size);
+        .run(view, self.bounds);
         // A rebuild keeps what the reader was looking at in place: each scrolled region's
         // first pane in view stays where it was drawn, whatever changed above it.
         let mut anchored = false;
@@ -322,7 +337,7 @@ impl ViewState {
                 cache: &mut self.text,
                 scale: self.scale,
             }
-            .run(view, self.size);
+            .run(view, self.bounds);
         }
         self.offsets = placed
             .iter()
@@ -366,8 +381,12 @@ impl ViewState {
     /// The placement with the swipes in force at the last instant laid out.
     fn reswipe(&mut self) {
         let mut placed = self.laid.clone();
-        self.motion
-            .swipe(&mut placed, self.now, self.size.0, self.scale);
+        self.motion.swipe(
+            &mut placed,
+            self.now,
+            self.bounds[0] + self.bounds[2],
+            self.scale,
+        );
         self.placed = placed;
     }
 
@@ -511,9 +530,14 @@ impl ViewState {
             .index(&d.key)
             .and_then(|i| self.control(i).swipe.clone())
             .unwrap_or_default();
-        let out = self
-            .motion
-            .swipe_release(&d.key, dx, self.size.0, action, now, &motion);
+        let out = self.motion.swipe_release(
+            &d.key,
+            dx,
+            self.bounds[0] + self.bounds[2],
+            action,
+            now,
+            &motion,
+        );
         self.reswipe();
         Some(out.map(|action| Activated { key: d.key, action }))
     }
@@ -811,7 +835,7 @@ impl ViewState {
         let washes = &tokens.washes;
         let fade = Duration::from_millis(washes.fade_ms as u64);
         self.fading.retain(|_, until| *until > now);
-        let viewport = [0., 0., self.size.0, self.size.1];
+        let viewport = self.bounds;
         let panes = self
             .placed
             .iter()
@@ -927,7 +951,7 @@ impl ViewState {
         let mut ids: HashMap<usize, NodeId> = HashMap::new();
         let mut next = first_id;
         for (i, p) in self.placed.iter().enumerate() {
-            if p.alpha <= 0. {
+            if !self.in_semantics(i) {
                 continue;
             }
             let node = match &p.what {
@@ -977,6 +1001,47 @@ impl ViewState {
             root: root_id,
             nodes,
         }
+    }
+
+    /// Whether a placed node is a node of the semantic tree: a pane, a scroll region, a
+    /// control, or a text outside a control, while it shows at all.
+    fn in_semantics(&self, i: usize) -> bool {
+        let p = &self.placed[i];
+        p.alpha > 0.
+            && match &p.what {
+                What::Pane(_) | What::Scroll { .. } | What::Control(_) => true,
+                What::Text { .. } => p.control.is_none(),
+                _ => false,
+            }
+    }
+
+    /// Which control each semantic node of `semantics(_, first_id)` is, by id: what a
+    /// reader's request names.
+    pub fn semantic_keys(&self, first_id: NodeId) -> HashMap<NodeId, Key> {
+        (0..self.placed.len())
+            .filter(|&i| self.in_semantics(i))
+            .zip(first_id..)
+            .filter(|(i, _)| matches!(self.placed[*i].what, What::Control(_)))
+            .map(|(i, id)| (id, self.placed[i].key.clone()))
+            .collect()
+    }
+
+    /// A reader's request on a control: focus moves to it (scrolled into view, its ring
+    /// shown), or it is activated. A disabled or absent control does nothing.
+    pub fn request(&mut self, key: &Key, activate: bool) -> Option<Activated> {
+        let i = self
+            .index(key)
+            .filter(|&i| matches!(self.placed[i].what, What::Control(_)) && self.enabled(i))?;
+        if activate {
+            return Some(Activated {
+                key: key.clone(),
+                action: self.control(i).action.clone(),
+            });
+        }
+        self.focus = Some(key.clone());
+        self.focus_visible = true;
+        self.scroll_to_focus(i);
+        None
     }
 
     /// Paints the content: texts, icons, and the focus ring of the focused control when

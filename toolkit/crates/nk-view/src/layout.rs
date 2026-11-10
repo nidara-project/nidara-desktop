@@ -244,8 +244,8 @@ pub struct Layouter<'a> {
 impl Layouter<'_> {
     /// Lays the view out in a `size` box at the origin; returns every node placed, in tree
     /// order. Texts whose key left the view are dropped from the cache.
-    pub fn run(&mut self, root: &Node, size: (f64, f64)) -> Vec<Placed> {
-        let m = self.measure(root, size.0);
+    pub fn run(&mut self, root: &Node, bounds: Rect) -> Vec<Placed> {
+        let m = self.measure(root, bounds[2]);
         let mut out = Vec::new();
         let ctx = Ctx {
             parent: None,
@@ -255,7 +255,7 @@ impl Layouter<'_> {
             alpha: 1.,
             scroll: None,
         };
-        self.place(root, &m, [0., 0., size.0, size.1], ctx, &mut out);
+        self.place(root, &m, bounds, ctx, &mut out);
         let live: std::collections::HashSet<Key> = out.iter().map(|p| p.key.clone()).collect();
         self.cache.retain(&live);
         out
