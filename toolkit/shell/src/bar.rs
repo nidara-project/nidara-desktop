@@ -203,6 +203,9 @@ pub struct Bar {
     cc_resources_visible: bool,
     nc: crate::nc::Center,
     nc_open: bool,
+    /// The centre on nk-view, behind `NK_NC_VIEW` (the pilot, #1048): when Some, it draws
+    /// the centre and `nc` keeps only the month shown and the bulk-dismissal path.
+    nc_view: Option<crate::nc_view::Pilot>,
     nc_generation: u64,
     nc_ghost: Option<(nk_wayland::LayerId, Instant, u8)>,
     cc_writer: Option<crate::cc::Writer>,
@@ -296,6 +299,7 @@ impl Bar {
             cc_resources_visible: false,
             nc: Default::default(),
             nc_open: false,
+            nc_view: crate::nc_view::enabled().then(Default::default),
             nc_generation: 0,
             nc_ghost: None,
             cc_writer: None,
@@ -447,7 +451,7 @@ impl Bar {
             self.output_height,
             &self.card_pages,
         );
-        if self.nc_open {
+        if self.nc_open && self.nc_view.is_none() {
             self.nc.set_history(self.frame.history.clone());
             self.nc.error = self.frame.nc_error.clone();
             self.nc
@@ -980,6 +984,86 @@ impl Bar {
         self.refresh(w);
     }
 
+    /// The pilot centre's rect: its cards' right edge where today's panel ends, its scroll
+    /// bar's lane past it, from under the bar's capsules to the output's foot.
+    fn relayout_nc_view(&mut self, scale: f64) {
+        let right = self.panel_right();
+        let (Some(pilot), Some(look)) = (self.nc_view.as_mut(), self.look.as_mut()) else {
+            return;
+        };
+        if !self.nc_open {
+            pilot.close();
+            return;
+        }
+        let w = crate::notification_card::WIDTH.min((right - 4.).max(1.));
+        let x = right - w;
+        let y = crate::barmodel::TOP + crate::barmodel::CAPSULE_H + crate::cc::HANG;
+        let cards = [x, y, w, (self.output_height as f64 - y - 4.).max(1.)];
+        pilot.refresh(
+            look,
+            self.frame.history.clone(),
+            (self.nc.year, self.nc.month),
+            cards,
+            self.width,
+            scale,
+        );
+        self.nc.minute = pilot.minute;
+    }
+    /// What an activation in the pilot centre asks for.
+    fn nc_view_act(&mut self, a: nk_view::Activated, serial: Option<u32>, w: &mut Window) {
+        let Some(act) = self.nc_view.as_mut().and_then(|p| p.activated(&a)) else {
+            return;
+        };
+        match act {
+            crate::nc_view::Act::Card(instance, content, target) => {
+                self.card_activate(instance, content, target, serial, w)
+            }
+            crate::nc_view::Act::Nc(target) => self.nc_act(target, w),
+            crate::nc_view::Act::Rebuild => self.refresh(w),
+        }
+    }
+    /// Advances the pilot's motion; what a finished swipe asks for is acted on.
+    fn nc_view_tick(&mut self, w: &mut Window) {
+        let (Some(pilot), Some(look)) = (self.nc_view.as_mut(), self.look.as_mut()) else {
+            return;
+        };
+        let ticked = pilot.tick(&mut look.text);
+        if pilot.stale() {
+            // Scrolled past the rows it built: the view is built again around the window.
+            self.refresh(w);
+        }
+        let Some(t) = ticked else {
+            return;
+        };
+        w.redraw();
+        for a in t.activated {
+            self.nc_view_act(a, None, w);
+        }
+    }
+    fn nc_view_key(&mut self, key: &nk_wayland::Key, w: &mut Window) {
+        use nk_view::KeyInput as K;
+        let input = match key.sym {
+            0xff09 if key.shift => K::ShiftTab,
+            0xff09 => K::Tab,
+            0xfe20 => K::ShiftTab,
+            0xff0d | 0xff8d | 0x20 => K::Activate,
+            0xff55 => K::PageUp,
+            0xff56 => K::PageDown,
+            0xff50 if key.ctrl => K::Home,
+            0xff57 if key.ctrl => K::End,
+            _ => return,
+        };
+        let Some(pilot) = self.nc_view.as_mut() else {
+            return;
+        };
+        let activated = pilot.key(input);
+        self.nc_view_tick(w);
+        w.redraw();
+        self.publish_semantics(w);
+        if let Some(a) = activated {
+            self.nc_view_act(a, key.serial, w);
+        }
+    }
     fn toggle_nc(&mut self, w: &mut Window) {
         if self.frame.locked {
             return;
@@ -1023,6 +1107,10 @@ impl Bar {
     fn nc_key(&mut self, key: &nk_wayland::Key, w: &mut Window) {
         if key.sym == ESCAPE {
             self.toggle_nc(w);
+            return;
+        }
+        if self.nc_view.is_some() {
+            self.nc_view_key(key, w);
             return;
         }
         if key.sym == 0xff55 || key.sym == 0xff56 {
@@ -1552,6 +1640,7 @@ impl Bar {
         }
 
         self.relayout();
+        self.relayout_nc_view(w.scale());
         let viewport = self.cc.editor.viewport;
         let resources = self.cc_open
             && self.cc.detail.is_none()
@@ -1605,7 +1694,15 @@ impl Bar {
         {
             n.states.expanded = self.nc_open;
         }
-        if self.nc_open {
+        if self.nc_open
+            && let Some(pilot) = self.nc_view.as_mut()
+        {
+            let centre = pilot.semantics(crate::nc::PANEL + 1);
+            if let Some(root) = tree.nodes.get_mut(&tree.root) {
+                root.children.push(centre.root);
+            }
+            tree.nodes.extend(centre.nodes);
+        } else if self.nc_open {
             self.nc.semantics(&mut tree);
             if let Some(root) = tree.nodes.get_mut(&tree.root) {
                 root.states.active = self.card_keyboard_active;
@@ -1872,6 +1969,19 @@ impl Bar {
                 continue;
             };
             let activate = matches!(request, nk_a11y::Request::Activate(_));
+            if self.nc_open
+                && let Some(answer) = self.nc_view.as_mut().and_then(|p| p.request(id, activate))
+            {
+                match answer {
+                    Some(a) => self.nc_view_act(a, None, w),
+                    None => {
+                        self.nc_view_tick(w);
+                        w.redraw();
+                        self.publish_semantics(w);
+                    }
+                }
+                continue;
+            }
             if self.nc_open
                 && let Some(target) = self.nc.control(id)
             {
@@ -2143,6 +2253,7 @@ impl Application for Bar {
                 .saturating_sub(start.elapsed().as_millis().min(u32::MAX as u128) as u32)
                 .clamp(1, 1000),
             Some(_) => 8,
+            None if self.nc_view.as_ref().is_some_and(|p| p.animating()) => 8,
             None => 1000,
         }
     }
@@ -2248,7 +2359,13 @@ impl Application for Bar {
             Event::Motion(x, y) => {
                 self.pointer = (x, y);
                 self.pointer_inside = true;
-                if self.nc_open && self.nc.motion((x, y)) {
+                if self.nc_open
+                    && let Some(pilot) = self.nc_view.as_mut()
+                {
+                    if pilot.state.pointer_motion(x, y) {
+                        w.redraw();
+                    }
+                } else if self.nc_open && self.nc.motion((x, y)) {
                     w.redraw();
                 }
                 self.card_hover(self.card_at((x, y)).map(|(id, _, _)| id));
@@ -2275,6 +2392,11 @@ impl Application for Bar {
             Event::PointerLeave => {
                 self.pointer_inside = false;
                 self.nc.hover = None;
+                if let Some(pilot) = self.nc_view.as_mut()
+                    && pilot.state.pointer_leave()
+                {
+                    w.redraw();
+                }
                 self.card_hover(None);
                 self.card_press = None;
                 let cc = self.cc.leave();
@@ -2301,7 +2423,13 @@ impl Application for Bar {
                         start: p,
                         serial,
                     });
-                } else if self.nc_open && self.nc.contains(p) {
+                } else if self.nc_open
+                    && let Some(pilot) = self.nc_view.as_mut()
+                    && pilot.contains(p)
+                {
+                    pilot.state.button(true, Instant::now());
+                    w.redraw();
+                } else if self.nc_open && self.nc_view.is_none() && self.nc.contains(p) {
                     if let Some(target) = self.nc.hit(p) {
                         self.nc_act(target, w);
                     }
@@ -2328,8 +2456,16 @@ impl Application for Bar {
             Event::Button {
                 button: LEFT_BUTTON,
                 pressed: false,
+                serial,
                 ..
             } => {
+                if let Some(pilot) = self.nc_view.as_mut() {
+                    let activated = pilot.state.button(false, Instant::now());
+                    w.redraw();
+                    if let Some(a) = activated {
+                        self.nc_view_act(a, Some(serial), w);
+                    }
+                }
                 if let Some(CardPress {
                     instance,
                     content,
@@ -2495,8 +2631,16 @@ impl Application for Bar {
                     self.tray_click(i, button, Some(serial), w);
                 }
             }
-            Event::Scroll(nk_wayland::ScrollAmount { pixels: delta, .. }) => {
-                if self.nc_open {
+            Event::Scroll(amount) => {
+                let delta = amount.pixels;
+                if self.nc_open
+                    && let Some(pilot) = self.nc_view.as_mut()
+                {
+                    if pilot.scroll(amount.into()) {
+                        self.nc_view_tick(w);
+                        self.publish_semantics(w);
+                    }
+                } else if self.nc_open {
                     self.nc.scroll(delta * 32.);
                     self.refresh(w);
                 } else if self.cc_open && self.cc.scroll_detail(delta, &self.frame.status) {
@@ -2619,6 +2763,9 @@ impl Application for Bar {
 
     fn idle(&mut self, w: &mut Window) -> nk_wayland::Result<()> {
         self.auth_events(w);
+        if self.nc_open {
+            self.nc_view_tick(w);
+        }
         if let Some((layer, start, stage)) = self.nc_ghost {
             if stage == 2
                 && start.elapsed()
@@ -2783,7 +2930,26 @@ impl Application for Bar {
             let look = self.look.as_mut().unwrap();
             self.cc.paint(&mut c, look, &self.frame.status, fallback)?;
         }
-        if self.nc_open {
+        if self.nc_open
+            && let Some(pilot) = self.nc_view.as_mut()
+        {
+            let icons = &mut self.icons;
+            let mut glyph = |name: &str, size: f64| {
+                if name.is_empty() {
+                    return None;
+                }
+                icons.as_mut()?.get(name, size.round() as u32).ok()
+            };
+            let art = crate::notification_card::Artwork {
+                theme: &self.frame.notification_theme,
+                catalogue: &self.frame.catalogue,
+                namespace: &self.name,
+                scale: f.scale,
+            };
+            if let Err(e) = pilot.paint(&mut c, &mut glyph, &art, f.material) {
+                eprintln!("nidara-shell: the NC view cannot be drawn: {e}");
+            }
+        } else if self.nc_open {
             self.nc
                 .paint(&mut c, self.look.as_mut().unwrap(), f.material)?;
         }
@@ -2857,10 +3023,18 @@ impl Application for Bar {
             .filter(|c| c.age.is_none())
             .map(|c| c.pane())
             .collect();
+        let pilot = self.nc_view.as_ref().filter(|_| self.nc_open);
         if self.frame.hidden {
             panes = cards.clone();
-            if self.nc_open {
+            if let Some(p) = pilot {
+                if panes.is_empty() {
+                    panes.extend(p.first_pane());
+                }
+            } else if self.nc_open {
                 panes.push(self.nc.pane());
+            }
+            if panes.is_empty() {
+                return None;
             }
         }
         let tokens = self.frame.tokens.as_ref()?;
@@ -2900,7 +3074,19 @@ impl Application for Bar {
                 shapes: cards,
             });
         }
-        if self.nc_open
+        if let Some(p) = pilot
+            && let Some(nc) = crate::material::piece(
+                tokens,
+                "controlCenter",
+                true,
+                self.frame.reduce_transparency,
+                material.shapes[0],
+            )
+        {
+            let (groups, states) = p.glass(nc.tone, nc.shadow);
+            material.groups.extend(groups);
+            material.states.extend(states);
+        } else if self.nc_open
             && let Some(nc) = crate::material::piece(
                 tokens,
                 "controlCenter",

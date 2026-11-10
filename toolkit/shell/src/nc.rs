@@ -151,7 +151,7 @@ fn week_start() -> usize {
             .unwrap_or(1)
     })
 }
-fn weekday_labels() -> Vec<String> {
+pub(crate) fn weekday_labels() -> Vec<String> {
     let monday = glib::DateTime::from_local(2024, 1, 1, 0, 0, 0.).unwrap();
     (0..7)
         .map(|i| {
