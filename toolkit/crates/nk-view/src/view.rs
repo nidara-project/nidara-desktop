@@ -227,7 +227,56 @@ pub struct Control {
     /// Swiped across, its card (the nearest pane) follows the pointer; released far enough,
     /// it leaves the surface and the surface receives this action (VIEW.md §7).
     pub swipe: Option<String>,
+    /// A slider's value and range (VIEW.md §12.1); its role is `Slider`.
+    #[serde(default)]
+    pub slider: Option<Slider>,
     pub child: Box<Node>,
+}
+
+/// What a slider holds: its value in a range, and how the value is said. The rules (steps,
+/// keys, the pointer) are `nk-widgets`' `ValueRange`'s, the native Settings slider's.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+pub struct Slider {
+    pub min: f64,
+    pub max: f64,
+    pub step: f64,
+    pub value: f64,
+    /// Decimals in its value's text, and what follows the number (" K", " %").
+    #[serde(default)]
+    pub decimals: usize,
+    #[serde(default)]
+    pub unit: String,
+}
+impl Slider {
+    pub fn new(min: f64, max: f64, step: f64, value: f64) -> Self {
+        Self {
+            min,
+            max,
+            step,
+            value,
+            decimals: 0,
+            unit: String::new(),
+        }
+    }
+    pub fn unit(mut self, unit: impl Into<String>) -> Self {
+        self.unit = unit.into();
+        self
+    }
+    pub fn range(&self) -> nk_widgets::ValueRange {
+        nk_widgets::ValueRange {
+            min: self.min as f32,
+            max: self.max as f32,
+            step: self.step as f32,
+            wrap: false,
+            digits: 0,
+            decimals: self.decimals,
+            unit: self.unit.clone(),
+        }
+    }
+    /// Its value clamped and on a step, as it is drawn and said.
+    pub fn shown(&self, value: f64) -> f64 {
+        f64::from(self.range().snap(value as f32))
+    }
 }
 
 /// The roles a control takes (CATALOG.md).
@@ -236,6 +285,8 @@ pub enum Role {
     Button,
     /// A button with an on and off state (`marked` is its state).
     Toggle,
+    /// A value in a range, set by dragging or by the keys (VIEW.md §12.1).
+    Slider,
 }
 
 /// The constructors a surface builds its view with.
@@ -352,9 +403,28 @@ impl Node {
                 marked: false,
                 revealed_with: None,
                 swipe: None,
+                slider: None,
                 child: Box::new(child),
             }),
         )
+    }
+    /// A slider (VIEW.md §12.1): as tall as its thumb and as wide as it is given (a column
+    /// stretches it; in a row, `.grow()` it). `action` is reported on every change, its value
+    /// read with `ViewState::value`.
+    pub fn slider(
+        key: impl Into<Key>,
+        name: impl Into<String>,
+        action: impl Into<String>,
+        slider: Slider,
+    ) -> Self {
+        let key = key.into();
+        let track = Key(format!("{}/track", key.0));
+        let mut n = Self::control(key, name, action, Self::spacer(track));
+        if let Kind::Control(c) = &mut n.kind {
+            c.role = Role::Slider;
+            c.slider = Some(slider);
+        }
+        n
     }
 
     // Modifiers. Each applies to the kind it names and is a no-op on any other.

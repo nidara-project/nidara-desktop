@@ -362,6 +362,36 @@ pub fn scrollbar_from(component: &Value, set: &Value) -> Result<ScrollbarStyle, 
     .checked()
 }
 
+/// The row slider's measures (`components.json` `range.slider`), the native Settings
+/// slider's: the track's thickness, the thumb's radius, the fill's opacity, and how many steps
+/// Page Up and Page Down move.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct SliderStyle {
+    pub track: f64,
+    pub thumb_radius: f64,
+    pub fill_opacity: f64,
+    pub page_steps: f64,
+}
+
+pub fn slider_from(range: &Value) -> Result<SliderStyle, String> {
+    let s = &range["slider"];
+    let n = |k: &str| {
+        s[k].as_f64()
+            .filter(|v| v.is_finite() && *v >= 0.)
+            .ok_or_else(|| format!("range.slider: no {k}"))
+    };
+    let style = SliderStyle {
+        track: n("track")?,
+        thumb_radius: n("thumbRadius")?,
+        fill_opacity: n("fillOpacity")?,
+        page_steps: n("pageSteps")?,
+    };
+    if style.fill_opacity > 1. || style.thumb_radius <= 0. {
+        return Err("range.slider: invalid measures".into());
+    }
+    Ok(style)
+}
+
 /// Everything a view is laid out and drawn with.
 #[derive(Clone, Debug)]
 pub struct Tokens {
@@ -371,4 +401,5 @@ pub struct Tokens {
     pub look: Look,
     pub washes: Washes,
     pub scrollbar: ScrollbarStyle,
+    pub slider: SliderStyle,
 }

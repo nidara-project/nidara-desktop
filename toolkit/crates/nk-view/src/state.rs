@@ -37,6 +37,14 @@ pub enum KeyInput {
     /// Ctrl+Home and Ctrl+End: that region goes to its start or its end.
     Home,
     End,
+    /// The arrows, and Home and End without Ctrl: a focused slider's steps and ends
+    /// (VIEW.md §12.1). Page Up and Page Down move a focused slider too, before any region.
+    Left,
+    Right,
+    Up,
+    Down,
+    LineStart,
+    LineEnd,
 }
 
 /// How far a wheel or a touchpad scrolled: in logical pixels (a touchpad), or in wheel
@@ -159,6 +167,13 @@ pub struct ViewState {
     /// Regions fading out, until when (they still take a place in Hyalo's eight).
     fading: HashMap<Key, Instant>,
     overflow_logged: bool,
+    /// The slider the pointer holds, and the value it holds it at: drawn and said instead of
+    /// the view's until release.
+    held: Option<(Key, f64)>,
+    /// A change the pointer made to the held slider since `slid` was last asked.
+    slid: Option<Activated>,
+    /// A slider value a key or a reader set, until the surface rebuilds with its model.
+    set: Option<(Key, f64)>,
 }
 
 impl ViewState {
@@ -192,6 +207,9 @@ impl ViewState {
             lit: HashSet::new(),
             fading: HashMap::new(),
             overflow_logged: false,
+            held: None,
+            slid: None,
+            set: None,
         }
     }
 
@@ -229,6 +247,7 @@ impl ViewState {
             .map(|p| (p.key.clone(), p.rect))
             .collect();
         self.motion.view(view, now, &tokens.motion);
+        self.set = None;
         self.tokens = Some(tokens.clone());
         self.view = Some(view.clone());
         self.bounds = bounds;
@@ -247,6 +266,9 @@ impl ViewState {
         self.ids.retain(|k, _| live.contains(k));
         if self.drag.as_ref().is_some_and(|d| !live.contains(&d.key)) {
             self.drag = None;
+        }
+        if self.held.as_ref().is_some_and(|(k, _)| !live.contains(k)) {
+            self.held = None;
         }
         self.rehover();
     }
@@ -319,6 +341,7 @@ impl ViewState {
             text: &mut *text,
             cache: &mut self.text,
             scale: self.scale,
+            slider: 2. * tokens.slider.thumb_radius,
         }
         .run(view, self.bounds);
         // A rebuild keeps what the reader was looking at in place: each scrolled region's
@@ -342,6 +365,7 @@ impl ViewState {
                 text,
                 cache: &mut self.text,
                 scale: self.scale,
+                slider: 2. * tokens.slider.thumb_radius,
             }
             .run(view, self.bounds);
         }
@@ -431,6 +455,78 @@ impl ViewState {
     fn enabled(&self, i: usize) -> bool {
         self.control(i).enabled
     }
+
+    /// A slider's value: the one the pointer holds it at, else one a key or a reader set
+    /// since the last rebuild, else the view's, on a step.
+    pub fn value(&self, key: &Key) -> Option<f64> {
+        let s = self
+            .index(key)
+            .and_then(|i| self.control(i).slider.as_ref())?;
+        let mine = |v: &Option<(Key, f64)>| v.as_ref().filter(|(k, _)| k == key).map(|v| v.1);
+        Some(
+            mine(&self.held)
+                .or_else(|| mine(&self.set))
+                .unwrap_or_else(|| s.shown(s.value)),
+        )
+    }
+    /// The value of a slider's track under `x`: the track's ends are where the thumb's centre
+    /// stops.
+    fn value_at(&self, i: usize, x: f64) -> Option<f64> {
+        let s = self.control(i).slider.as_ref()?;
+        let thumb = self.tokens.as_ref()?.slider.thumb_radius;
+        let r = self.placed[i].rect;
+        let span = (r[2] - 2. * thumb).max(1.);
+        Some(f64::from(s.range().at(((x - r[0] - thumb) / span) as f32)))
+    }
+    /// A slider's thumb, where its value puts it.
+    fn thumb(&self, i: usize) -> Option<Rect> {
+        let s = self.control(i).slider.as_ref()?;
+        let radius = self.tokens.as_ref()?.slider.thumb_radius;
+        let value = self.value(&self.placed[i].key)?;
+        let r = self.placed[i].rect;
+        let f = ((value - s.min) / (s.max - s.min).max(f64::EPSILON)).clamp(0., 1.);
+        let x = r[0] + radius + f * (r[2] - 2. * radius).max(0.);
+        let y = r[1] + r[3] / 2.;
+        Some([x - radius, y - radius, 2. * radius, 2. * radius])
+    }
+    /// What a control's hover, press and focus ring outline: its thumb for a slider, else
+    /// what of it shows.
+    fn silhouette(&self, i: usize) -> Option<Rect> {
+        let visible = self.placed[i].visible()?;
+        match self.thumb(i) {
+            Some(t) => crate::layout::intersect(t, visible),
+            None => Some(visible),
+        }
+    }
+    /// A change of a slider to `value`: None when it is the value it has.
+    fn slide_to(&mut self, i: usize, value: f64, hold: bool) -> Option<Activated> {
+        let key = self.placed[i].key.clone();
+        let before = self.value(&key)?;
+        if hold {
+            self.held = Some((key.clone(), value));
+        } else {
+            self.set = Some((key.clone(), value));
+        }
+        ((value - before).abs() > f64::EPSILON).then(|| Activated {
+            key,
+            action: self.control(i).action.clone(),
+        })
+    }
+    /// What the pointer changed of the slider it holds since this was last asked: the
+    /// surface asks after each `pointer_motion`, and reads the value with `value`.
+    pub fn slid(&mut self) -> Option<Activated> {
+        self.slid.take()
+    }
+    /// A reader set a slider's value (AT-SPI `SetValue`).
+    pub fn request_value(&mut self, key: &Key, value: f64) -> Option<Activated> {
+        let i = self
+            .index(key)
+            .filter(|&i| matches!(self.placed[i].what, What::Control(_)) && self.enabled(i))?;
+        let s = self.control(i).slider.as_ref()?;
+        let value = s.shown(value).clamp(s.min, s.max);
+        let a = self.slide_to(i, value, false)?;
+        Some(a)
+    }
     fn index(&self, key: &Key) -> Option<usize> {
         self.placed.iter().position(|p| &p.key == key)
     }
@@ -502,6 +598,16 @@ impl ViewState {
         let revealed = self.revealed();
         self.pointer = Some((x, y));
         if self.bar_motion((x, y)) {
+            return true;
+        }
+        if let Some((key, _)) = self.held.clone()
+            && let Some(i) = self.index(&key)
+            && let Some(v) = self.value_at(i, x)
+        {
+            if let Some(a) = self.slide_to(i, v, true) {
+                self.slid = Some(a);
+            }
+            self.rehover();
             return true;
         }
         let mut swiped = false;
@@ -650,6 +756,31 @@ impl ViewState {
             self.bars_busy = true;
             return None;
         }
+        if pressed
+            && let Some(i) = self.hover.as_ref().and_then(|k| self.index(k))
+            && self.control(i).slider.is_some()
+        {
+            // A slider's: the value under the pointer, held until release (VIEW.md §12.1).
+            self.press = self.hover.clone();
+            self.focus = self.hover.clone();
+            self.focus_visible = false;
+            self.drag = None;
+            let v = self.value_at(i, self.pointer.map_or(0., |p| p.0))?;
+            let key = self.placed[i].key.clone();
+            let changed = self.slide_to(i, v, true);
+            self.held = Some((key, v));
+            return changed;
+        }
+        if !pressed && let Some((key, _)) = self.held.take() {
+            // The release reports the final value; a change not yet asked for is in it.
+            self.press = None;
+            self.slid = None;
+            let i = self.index(&key)?;
+            return Some(Activated {
+                key,
+                action: self.control(i).action.clone(),
+            });
+        }
         if pressed {
             self.press = self.hover.clone();
             self.focus_visible = false;
@@ -685,6 +816,28 @@ impl ViewState {
     /// Tab and Shift+Tab move focus through every enabled control in tree order, revealed or
     /// not; Enter or Space activates the focused one.
     pub fn key(&mut self, k: KeyInput) -> Option<Activated> {
+        if let Some(i) = self.focus.as_ref().and_then(|f| self.index(f))
+            && let Some(s) = self.control(i).slider.clone()
+            && let Some(page) = self.tokens.as_ref().map(|t| t.slider.page_steps)
+        {
+            let sym = match k {
+                KeyInput::Left => Some(0xff51),
+                KeyInput::Up => Some(0xff52),
+                KeyInput::Right => Some(0xff53),
+                KeyInput::Down => Some(0xff54),
+                KeyInput::PageUp => Some(0xff55),
+                KeyInput::PageDown => Some(0xff56),
+                KeyInput::LineStart => Some(0xff50),
+                KeyInput::LineEnd => Some(0xff57),
+                _ => None,
+            };
+            if let Some(sym) = sym {
+                let value = self.value(&self.placed[i].key)?;
+                let next = s.range().key(value as f32, sym, true, page as f32)?;
+                self.focus_visible = true;
+                return self.slide_to(i, f64::from(next), false);
+            }
+        }
         if matches!(
             k,
             KeyInput::PageUp | KeyInput::PageDown | KeyInput::Home | KeyInput::End
@@ -994,7 +1147,7 @@ impl ViewState {
             } else if self.lit.contains(&key) {
                 self.fading.insert(key.clone(), now + fade);
             }
-            let Some(r) = self.placed[i].visible() else {
+            let Some(r) = self.silhouette(i) else {
                 continue;
             };
             let corner = self.control(i).corner;
@@ -1034,19 +1187,23 @@ impl ViewState {
                 What::Pane(_) => nk_a11y::Node::new(0, nk_a11y::Role::Panel, ""),
                 What::Scroll { .. } => nk_a11y::Node::new(0, nk_a11y::Role::ScrollPane, ""),
                 What::Control(c) => {
-                    let mut n = nk_a11y::Node::new(
-                        0,
-                        match c.role {
-                            Role::Button => nk_a11y::Role::Button,
-                            Role::Toggle => nk_a11y::Role::ToggleButton,
-                        },
-                        c.name.clone(),
-                    );
+                    let mut n = nk_a11y::Node::new(0, a11y_role(c.role), c.name.clone());
                     n.description = c.description.clone();
                     n.states.disabled = !c.enabled;
                     n.states.checked = c.role == Role::Toggle && c.marked;
                     n.states.focused = self.focus.as_ref() == Some(&p.key);
                     n.actions = vec![Action::Focus, Action::Activate];
+                    if let Some(s) = &c.slider {
+                        let current = self.value(&p.key).unwrap_or(s.value);
+                        n.value = Some(nk_a11y::ValueInfo {
+                            min: s.min,
+                            max: s.max,
+                            current,
+                            step: s.step,
+                            text: s.range().text(current as f32),
+                        });
+                        n.actions = vec![Action::Focus, Action::SetValue];
+                    }
                     n
                 }
                 What::Text { full, .. } if p.control.is_none() => {
@@ -1107,11 +1264,7 @@ impl ViewState {
             .map(|i| &self.placed[i])
             .filter_map(|p| match &p.what {
                 What::Control(c) => {
-                    let role = match c.role {
-                        Role::Button => nk_a11y::Role::Button,
-                        Role::Toggle => nk_a11y::Role::ToggleButton,
-                    };
-                    let id = self.semantic_ids.get(&(p.key.clone(), role))?;
+                    let id = self.semantic_ids.get(&(p.key.clone(), a11y_role(c.role)))?;
                     Some((*id, p.key.clone()))
                 }
                 _ => None,
@@ -1190,14 +1343,38 @@ impl ViewState {
                         canvas.pop_clip();
                     }
                 }
-                What::Control(c) if self.focus_visible && self.focus.as_ref() == Some(&p.key) => {
-                    let r = visible;
-                    canvas.rounded_ring(
-                        rect(&r),
-                        c.corner.of(r[2], r[3], &tokens.radii),
-                        tokens.look.focus_width,
-                        ink(tokens.look.focus),
-                    );
+                What::Control(c) => {
+                    if c.slider.is_some()
+                        && let Some(thumb) = self.thumb(i)
+                    {
+                        // The row slider (VIEW.md §12.1): a track, filled up to the thumb.
+                        let s = &tokens.slider;
+                        let y = p.rect[1] + (p.rect[3] - s.track) / 2.;
+                        let track = [p.rect[0], y, p.rect[2], s.track];
+                        let centre = thumb[0] + thumb[2] / 2.;
+                        let ink_of = |a: f64| {
+                            let c = tokens.look.ink(crate::view::Ink::Primary);
+                            ink(c.with_alpha(c.components[3] * a as f32))
+                        };
+                        canvas.clip(rect(&visible));
+                        canvas.rounded_rect(rect(&track), s.track / 2., ink_of(0.18));
+                        let fill = [p.rect[0], y, centre - p.rect[0], s.track];
+                        canvas.rounded_rect(rect(&fill), s.track / 2., ink_of(s.fill_opacity));
+                        let inner = [thumb[0] + 1., thumb[1] + 1., thumb[2] - 2., thumb[3] - 2.];
+                        canvas.rounded_rect(rect(&inner), inner[2] / 2., ink_of(1.));
+                        canvas.pop_clip();
+                    }
+                    if self.focus_visible
+                        && self.focus.as_ref() == Some(&p.key)
+                        && let Some(r) = self.silhouette(i)
+                    {
+                        canvas.rounded_ring(
+                            rect(&r),
+                            c.corner.of(r[2], r[3], &tokens.radii),
+                            tokens.look.focus_width,
+                            ink(tokens.look.focus),
+                        );
+                    }
                 }
                 _ => {}
             }
@@ -1229,6 +1406,13 @@ fn in_lane(g: &BarGeometry, p: (f64, f64)) -> bool {
     let l = g.lane;
     let (x, y) = (p.0 as f32, p.1 as f32);
     x >= l.x && y >= l.y && x < l.x + l.width && y < l.y + l.height
+}
+fn a11y_role(role: Role) -> nk_a11y::Role {
+    match role {
+        Role::Button => nk_a11y::Role::Button,
+        Role::Toggle => nk_a11y::Role::ToggleButton,
+        Role::Slider => nk_a11y::Role::Slider,
+    }
 }
 fn inside(r: Rect, p: (f64, f64)) -> bool {
     p.0 >= r[0] && p.1 >= r[1] && p.0 < r[0] + r[2] && p.1 < r[1] + r[3]
