@@ -385,16 +385,21 @@ fn asset_image(
     m.request(key.clone());
     m.get(&key)
 }
-fn app_asset(art: &Artwork<'_>, b: &Banner) -> Option<Arc<crate::icon_memory::Asset>> {
-    let theme = art.theme;
-    let apps = art.catalogue;
-    let namespace = art.namespace;
-    let side = art.pixels(44);
-    let m = crate::icon_memory::global()?;
-    let desktop = b.notice.hint("desktop-entry").trim_end_matches(".desktop");
-    let direct = apps
-        .get(desktop)
-        .or_else(|| apps.get(&format!("{desktop}.desktop")));
+/// The app that sent a notice: its `desktop-entry` hint, as given or with `.desktop` added
+/// (catalogue ids carry the suffix, and a reverse-DNS name may itself end in `.desktop`, as
+/// `org.telegram.desktop` does, so the hint is never trimmed), else the one app whose name
+/// or declared icon matches.
+fn sender_app<'a>(
+    apps: &'a HashMap<String, crate::model::App>,
+    b: &Banner,
+) -> Option<&'a crate::model::App> {
+    let hint = b.notice.hint("desktop-entry");
+    let direct = (!hint.is_empty())
+        .then(|| {
+            apps.get(hint)
+                .or_else(|| apps.get(&format!("{hint}.desktop")))
+        })
+        .flatten();
     let mut matches = apps.values().filter(|a| {
         a.name.eq_ignore_ascii_case(&b.notice.app_name)
             || !b.notice.app_icon.is_empty() && a.raw_icon == b.notice.app_icon
@@ -405,7 +410,17 @@ fn app_asset(art: &Artwork<'_>, b: &Banner) -> Option<Arc<crate::icon_memory::As
     } else {
         None
     };
-    if let Some(app) = direct.or(unique)
+    direct.or(unique)
+}
+/// The art of a sender no app or icon names: the information glyph, as the TS card had it.
+const UNKNOWN_SENDER: &str = "nd-dialog-information-symbolic";
+fn app_asset(art: &Artwork<'_>, b: &Banner) -> Option<Arc<crate::icon_memory::Asset>> {
+    let theme = art.theme;
+    let apps = art.catalogue;
+    let namespace = art.namespace;
+    let side = art.pixels(44);
+    let m = crate::icon_memory::global()?;
+    if let Some(app) = sender_app(apps, b)
         && let Some(key) = m.current_app(&app.id, 44, art.scale)
     {
         m.request(key.clone());
@@ -457,13 +472,7 @@ fn app_asset(art: &Artwork<'_>, b: &Banner) -> Option<Arc<crate::icon_memory::As
         .file_name()
         .and_then(|n| n.to_str())
         .unwrap_or("nidara");
-    let key = m.named(
-        fallback_theme,
-        "nd-notifications-symbolic",
-        extra,
-        side,
-        true,
-    );
+    let key = m.named(fallback_theme, UNKNOWN_SENDER, extra, side, true);
     m.request(key.clone());
     m.get(&key)
 }
@@ -540,6 +549,54 @@ mod tests {
     use super::*;
     fn banner(id: u32) -> Banner {
         Banner {notice:crate::notifications::Notice::parse(&serde_json::json!({"id":id,"summary":"A card","hints":{"urgency":2},"actions":(0..8).map(|n|serde_json::json!({"id":format!("key{n}"),"label":format!("action{n}")})).collect::<Vec<_>>()} ).to_string()).unwrap(),instance:id as u64,content:1,output:"a".into(),deadline:None,hovered:false,error:String::new()}
+    }
+    #[test]
+    fn a_desktop_entry_hint_finds_its_app_even_when_its_name_ends_in_desktop() {
+        let app = |id: &str, name: &str| {
+            (
+                id.to_string(),
+                crate::model::App {
+                    id: id.into(),
+                    name: name.into(),
+                    ..Default::default()
+                },
+            )
+        };
+        let apps = HashMap::from([
+            app("org.telegram.desktop.desktop", "Telegram"),
+            app("org.telegram.desktop.extra.desktop", "Other"),
+            app("firefox.desktop", "Firefox"),
+        ]);
+        let sent = |hint: &str, name: &str| {
+            let mut b = banner(1);
+            b.notice = crate::notifications::Notice::parse(
+                &serde_json::json!({"id": 1, "app_name": name, "hints": {"desktop-entry": hint}})
+                    .to_string(),
+            )
+            .unwrap();
+            sender_app(&apps, &b).map(|a| a.id.clone())
+        };
+        assert_eq!(
+            sent("org.telegram.desktop", "Telegram Desktop").as_deref(),
+            Some("org.telegram.desktop.desktop")
+        );
+        assert_eq!(
+            sent("firefox.desktop", "").as_deref(),
+            Some("firefox.desktop")
+        );
+        assert_eq!(sent("firefox", "").as_deref(), Some("firefox.desktop"));
+        assert_eq!(sent("", "Firefox").as_deref(), Some("firefox.desktop"));
+        assert_eq!(sent("org.manjaro.pamac.tray", "Package Manager"), None);
+    }
+    #[test]
+    fn an_unknown_sender_is_drawn_with_the_information_glyph_that_ships() {
+        let theme = crate::paths::icon_reference();
+        assert!(
+            theme
+                .join(format!("scalable/actions/{UNKNOWN_SENDER}.svg"))
+                .is_file(),
+            "{UNKNOWN_SENDER} is not in {theme:?}"
+        );
     }
     #[test]
     fn error_has_its_own_row_and_reader_description() {
