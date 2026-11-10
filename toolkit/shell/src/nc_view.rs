@@ -42,6 +42,12 @@ const CASCADE: Duration = Duration::from_millis(45);
 /// A card's corner, the CC's 4×1 (owner, 2026-11-10): `lg` of the radius scale, which a test
 /// holds equal to `cc::wide_radius`.
 const CARD: Radius = Radius::Lg;
+/// An open card shows its picture across its whole width when the source is at least this
+/// wide; a smaller one (a chat avatar is 64 to 160 px) would only be blurred by it, and
+/// keeps its thumbnail. The height follows the picture, between the two bounds. As TS had it.
+const HERO_SOURCE: u32 = 240;
+const HERO_HEIGHT: (f64, f64) = (72., 200.);
+const HERO_CORNER: Radius = Radius::Md;
 
 /// The kit's tokens for the shell's skin (always dark) in this appearance.
 pub fn tokens(
@@ -107,6 +113,10 @@ pub struct View {
     folding: HashMap<String, Instant>,
     /// Why the last bulk dismissal failed, shown under the list.
     error: String,
+    /// The cards' width, which an open card's picture spans less its padding.
+    width: f64,
+    /// Each picture's pixel size, read from its header once.
+    sizes: std::cell::RefCell<HashMap<String, Option<(u32, u32)>>>,
 }
 
 impl Default for View {
@@ -129,6 +139,8 @@ impl Default for View {
             clearing: None,
             folding: HashMap::new(),
             error: String::new(),
+            width: 0.,
+            sizes: Default::default(),
         }
     }
 }
@@ -591,6 +603,25 @@ impl View {
     /// One card. `group`: the collapsed group it fronts and how many it holds; its close and
     /// its swipe clear the group, and a tap opens it. A front's keys start with `f`, a row's
     /// with `n`, so a folding group's rows and its front are never one node.
+    /// How tall a card's picture is across the card when it is open: None when it has none
+    /// that is big enough.
+    fn hero(&self, b: &Banner) -> Option<f64> {
+        let path = thumbnail(b)?;
+        let (w, h) = *self
+            .sizes
+            .borrow_mut()
+            .entry(path)
+            .or_insert_with_key(|path| image::image_dimensions(path).ok())
+            .as_ref()?;
+        let pad = self.tokens.as_ref()?.spacing.px(Space::S3);
+        let across = self.width - 2. * pad;
+        (w >= HERO_SOURCE && across > 0.).then(|| {
+            (across * f64::from(h) / f64::from(w))
+                .round()
+                .clamp(HERO_HEIGHT.0, HERO_HEIGHT.1)
+        })
+    }
+
     fn card(&self, b: &Banner, m: &Model<'_>, group: Option<(&String, usize)>) -> Node {
         let lead = if group.is_some() { 'f' } else { 'n' };
         let k = |s: &str| format!("{lead}{}/{s}", b.instance);
@@ -617,7 +648,11 @@ impl View {
             .collect::<Vec<_>>()
             .join(", ");
         let expanded = group.is_none() && self.items_open.contains(&i);
-        let expandable = group.is_none() && (!actions.is_empty() || body.chars().count() > 70);
+        let hero = group.is_none().then(|| self.hero(b)).flatten();
+        let expandable =
+            group.is_none() && (!actions.is_empty() || body.chars().count() > 70 || hero.is_some());
+        // Open, a big picture spans the card under its text, with the actions under it.
+        let hero = hero.filter(|_| expanded);
         let close_action = match group {
             Some((key, _)) => format!("clear-group:{key}"),
             None => format!("close:{i}:{c}"),
@@ -676,35 +711,38 @@ impl View {
                     .ink(Ink::Secondary),
             );
         }
-        if expanded && !actions.is_empty() {
-            text.push(
-                Node::row(
-                    k("actions"),
-                    actions
-                        .iter()
-                        .map(|a| {
-                            Node::control(
-                                format!("n{i}/act/{}", a.id),
-                                a.label.clone(),
-                                format!("act:{i}:{c}:{}", a.id),
-                                Node::row(
-                                    format!("n{i}/act/{}/pad", a.id),
-                                    vec![
-                                        Node::text(
-                                            format!("n{i}/act/{}/text", a.id),
-                                            a.label.clone(),
-                                            style(m.text, 12., 400.),
-                                        )
-                                        .lines(1),
-                                    ],
-                                )
-                                .padding(Padding::symmetric(Space::S1, Space::S3)),
+        let mut actions = (expanded && !actions.is_empty()).then(|| {
+            Node::row(
+                k("actions"),
+                actions
+                    .iter()
+                    .map(|a| {
+                        Node::control(
+                            format!("n{i}/act/{}", a.id),
+                            a.label.clone(),
+                            format!("act:{i}:{c}:{}", a.id),
+                            Node::row(
+                                format!("n{i}/act/{}/pad", a.id),
+                                vec![
+                                    Node::text(
+                                        format!("n{i}/act/{}/text", a.id),
+                                        a.label.clone(),
+                                        style(m.text, 12., 400.),
+                                    )
+                                    .lines(1),
+                                ],
                             )
-                        })
-                        .collect(),
-                )
-                .gap(Space::S2),
-            );
+                            .padding(Padding::symmetric(Space::S1, Space::S3)),
+                        )
+                    })
+                    .collect(),
+            )
+            .gap(Space::S2)
+        });
+        if hero.is_none()
+            && let Some(row) = actions.take()
+        {
+            text.push(row);
         }
         if !b.error.is_empty() {
             text.push(Node::text(k("error"), b.error.clone(), style(m.text, 12., 400.)).lines(2));
@@ -713,9 +751,14 @@ impl View {
             Node::icon(k("app"), "", ART),
             Node::column(k("text"), text).gap(Space::S1).grow(),
         ];
-        if thumbnail(b).is_some() {
+        if hero.is_none() && thumbnail(b).is_some() {
             row.push(Node::icon(k("thumb"), "", ART));
         }
+        let mut body = vec![Node::row(k("row"), row).gap(Space::S3).align(Align::Center)];
+        if let Some(h) = hero {
+            body.push(Node::placeholder(k("hero"), h));
+        }
+        body.extend(actions);
         let open = match group {
             Some((key, _)) => format!("group:{key}"),
             None => format!("open:{i}:{c}"),
@@ -727,9 +770,8 @@ impl View {
                 None => title,
             },
             open,
-            Node::row(k("row"), row)
+            Node::column(k("body-col"), body)
                 .gap(Space::S3)
-                .align(Align::Center)
                 .padding(Padding::all(Space::S3)),
         )
         .description(said)
@@ -848,6 +890,7 @@ impl View {
             cards[3],
         ];
         self.bounds = bounds;
+        self.width = cards[2];
         let weekdays = nc::weekday_labels();
         let history = self.history.clone();
         let view = self.view(&Model {
@@ -1111,46 +1154,64 @@ impl View {
         self.last = self.state.frame(tokens, Instant::now());
         self.state
             .paint(c, tokens, icons, (!material).then_some(&self.last))?;
-        for p in self.state.placed() {
-            let Some(rest) = p.key.0.strip_prefix(['n', 'f']) else {
-                continue;
-            };
-            let Some((instance, slot)) = rest.split_once('/') else {
-                continue;
-            };
-            if slot != "app" && slot != "thumb" || p.alpha < 0.5 {
-                continue;
-            }
-            let Some(visible) = p.visible() else {
-                continue;
-            };
-            let Some(b) = instance
-                .parse::<u64>()
-                .ok()
-                .and_then(|i| self.history.iter().find(|b| b.instance == i))
-            else {
-                continue;
+        for (p, slot, b, visible) in self.artwork() {
+            let side = match slot {
+                "hero" => art.pixels(p.rect[2].ceil() as u32),
+                _ => art.pixels(64),
             };
             let asset = if slot == "app" {
                 notification_card::app_asset(art, b)
             } else {
-                thumbnail(b).and_then(|path| {
-                    notification_card::asset_image(art.namespace, b, &path, art.pixels(64))
-                })
+                thumbnail(b)
+                    .and_then(|path| notification_card::asset_image(art.namespace, b, &path, side))
             };
-            if let Some(asset) = asset {
-                c.clip(rect(visible));
-                if slot == "thumb" {
-                    c.clip_rounded_rect(rect(p.rect), ART * crate::geometry::ICON_CORNER);
-                }
-                c.image(&asset.raster, rect(p.rect), ImageFit::Contain);
-                if slot == "thumb" {
-                    c.pop_clip();
-                }
+            let Some(asset) = asset else {
+                continue;
+            };
+            // The picture fades and slides with its card, as its text does.
+            let fading = p.alpha < 1.;
+            if fading {
+                c.push_opacity(p.alpha);
+            }
+            c.clip(rect(visible));
+            let (corner, fit) = match slot {
+                "app" => (0., ImageFit::Contain),
+                "thumb" => (ART * crate::geometry::ICON_CORNER, ImageFit::Contain),
+                _ => (tokens.radii.px(HERO_CORNER), ImageFit::Cover),
+            };
+            if corner > 0. {
+                c.clip_rounded_rect(rect(p.rect), corner);
+            }
+            c.image(&asset.raster, rect(p.rect), fit);
+            if corner > 0. {
                 c.pop_clip();
+            }
+            c.pop_clip();
+            if fading {
+                c.pop_opacity();
             }
         }
         Ok(())
+    }
+
+    /// Each card's artwork this frame: its slot (`app`, `thumb` or `hero`), its notice and
+    /// what of it shows. Everything that shows is drawn, at its card's opacity, so a card
+    /// leaving or unrolling takes its pictures with it.
+    fn artwork(&self) -> Vec<(&nk_view::Placed, &str, &Banner, nk_view::Rect)> {
+        self.state
+            .placed()
+            .iter()
+            .filter_map(|p| {
+                let (instance, slot) = p.key.0.strip_prefix(['n', 'f'])?.split_once('/')?;
+                if !matches!(slot, "app" | "thumb" | "hero") || p.alpha <= 0. {
+                    return None;
+                }
+                let visible = p.visible()?;
+                let i = instance.parse::<u64>().ok()?;
+                let b = self.history.iter().find(|b| b.instance == i)?;
+                Some((p, slot, b, visible))
+            })
+            .collect()
     }
 
     /// The semantics, under a panel named for the centre; its ids start at `first_id`.
@@ -1661,7 +1722,15 @@ mod tests {
             key: Key::from("g:mail/toggle"),
             action: "group:mail".into(),
         };
+        let t0 = Instant::now();
         assert_eq!(p.activated(&fold), Some(Act::Rebuild));
+        // Its rows stay built for the reveal's closing (`dur-base`). The deadline is held off
+        // here: laying out below looks fonts up, which under a loaded test run can outlast it.
+        let base = p.tokens.as_ref().unwrap().motion.base;
+        let until = p.folding["mail"];
+        assert!(until >= t0 + base && until <= Instant::now() + base);
+        p.folding
+            .insert("mail".into(), Instant::now() + Duration::from_secs(60));
         let relay = |p: &mut View| {
             let strings = Strings {
                 empty: String::new(),
@@ -1765,6 +1834,113 @@ mod tests {
             })
             .collect();
         assert_eq!(thumbs, [3, 4]);
+    }
+
+    /// A directory of test pictures: `big.png` 400×200, `small.png` 100×100.
+    fn pictures() -> std::path::PathBuf {
+        let dir = std::env::temp_dir().join(format!(
+            "nk-nc-hero-{}-{:?}",
+            std::process::id(),
+            std::thread::current().id()
+        ));
+        std::fs::create_dir_all(&dir).unwrap();
+        image::RgbaImage::new(400, 200)
+            .save(dir.join("big.png"))
+            .unwrap();
+        image::RgbaImage::new(100, 100)
+            .save(dir.join("small.png"))
+            .unwrap();
+        dir
+    }
+
+    #[test]
+    fn an_open_card_spans_a_big_picture_under_its_text_with_its_actions_under_that() {
+        let dir = pictures();
+        let with = |name: &str, actions: serde_json::Value| serde_json::json!({"hints": {"image-path": dir.join(name)}, "actions": actions});
+        let reply = serde_json::json!([{"id": "reply", "label": "Reply"}]);
+        let history = vec![
+            banner(1, "a", 10, with("big.png", reply.clone())),
+            banner(2, "b", 20, with("small.png", reply)),
+            banner(3, "c", 30, with("big.png", serde_json::json!([]))),
+        ];
+        let shut = laid(history.clone(), |_| {});
+        let open = laid(history, |p| {
+            p.items_open.extend([1, 2]);
+        });
+        std::fs::remove_dir_all(&dir).unwrap();
+        let (Some(shut), Some(open)) = (shut, open) else {
+            return;
+        };
+        let at = |p: &View, k: &str| p.state.rect(&Key::from(k));
+        // Shut, every picture is a thumbnail; a big one makes its card one to open.
+        for i in 1..=3 {
+            assert!(at(&shut, &format!("n{i}/thumb")).is_some());
+            assert!(at(&shut, &format!("n{i}/hero")).is_none());
+        }
+        assert!(
+            at(&shut, "n3/more").is_some(),
+            "a big picture is worth opening"
+        );
+        // Open, the big one spans the card under the text, at its own proportions.
+        assert!(at(&open, "n1/thumb").is_none());
+        let hero = at(&open, "n1/hero").expect("the picture across the card");
+        let card = at(&open, "n1/pane").unwrap();
+        let pad = open.tokens.as_ref().unwrap().spacing.px(Space::S3);
+        assert!(
+            (hero[2] - (card[2] - 2. * pad)).abs() <= 1.,
+            "{hero:?} in {card:?}"
+        );
+        assert!((hero[3] - (hero[2] / 2.).round().clamp(72., 200.)).abs() <= 1.);
+        let row = at(&open, "n1/row").unwrap();
+        assert!(hero[1] >= row[1] + row[3]);
+        let act = at(&open, "n1/act/reply").unwrap();
+        assert!(
+            act[1] >= hero[1] + hero[3],
+            "the actions sit under the picture"
+        );
+        // A small picture stays a thumbnail, its actions under its text.
+        assert!(at(&open, "n2/hero").is_none() && at(&open, "n2/thumb").is_some());
+        let text = at(&open, "n2/text").unwrap();
+        let act = at(&open, "n2/act/reply").unwrap();
+        assert!(act[1] + act[3] <= text[1] + text[3]);
+    }
+
+    #[test]
+    fn a_cards_pictures_go_with_it_as_it_is_swiped() {
+        let dir = pictures();
+        let hint = serde_json::json!({"hints": {"image-path": dir.join("small.png")}});
+        let cards: Vec<_> = (0..2)
+            .map(|_| laid(vec![banner(1, "a", 10, hint.clone())], |_| {}))
+            .collect();
+        std::fs::remove_dir_all(&dir).unwrap();
+        // Dragged 300 px either way, the card shows at under half, and so does each picture
+        // still in view: the one on the side it leaves by is cut off by the list's edge.
+        for (p, dx, slot) in cards
+            .into_iter()
+            .zip([(300., "app"), (-300., "thumb")])
+            .map(|(p, (dx, s))| (p, dx, s))
+        {
+            let Some(mut p) = p else {
+                return;
+            };
+            let r = p.state.rect(&Key::from("n1/pane")).unwrap();
+            let (x, y) = (r[0] + r[2] / 2., r[1] + r[3] / 2.);
+            p.state.pointer_motion(x, y);
+            p.state.button(true, Instant::now());
+            p.state.pointer_motion(x + dx, y);
+            let title = card_alpha(&p, "n1/title");
+            assert!(title > 0. && title < 0.5, "{title}");
+            let art: Vec<_> = p
+                .artwork()
+                .iter()
+                .map(|(q, slot, ..)| (slot.to_string(), q.alpha))
+                .collect();
+            assert!(art.iter().any(|(s, _)| s == slot), "dragged {dx}: {art:?}");
+            assert!(
+                art.iter().all(|&(_, a)| a == title),
+                "dragged {dx}: {art:?}"
+            );
+        }
     }
 
     #[test]
