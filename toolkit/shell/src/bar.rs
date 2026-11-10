@@ -1700,6 +1700,7 @@ impl Bar {
             let centre = pilot.semantics(crate::nc::PANEL + 1);
             if let Some(root) = tree.nodes.get_mut(&tree.root) {
                 root.children.push(centre.root);
+                root.states.active = self.card_keyboard_active;
             }
             tree.nodes.extend(centre.nodes);
         } else if self.nc_open {
