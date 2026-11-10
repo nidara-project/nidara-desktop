@@ -1174,6 +1174,7 @@ dependencies = [
  "nk-render",
  "nk-settings",
  "nk-text",
+ "nk-view",
  "nk-wayland",
  "nk-widgets",
  "png 0.18.1",

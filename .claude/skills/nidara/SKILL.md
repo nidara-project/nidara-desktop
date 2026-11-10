@@ -336,7 +336,11 @@ closes in place, moved panes slide, and a `swipe(action)` control is swiped off 
 only the rows inside `window(key)` (placeholders for the rest), keeps what is read in place on a
 rebuild, and draws the kit's one scroll bar (`nk-widgets` `ScrollBar`, shared with Settings). An `Overlay` places layers (a card's floating close) over a base without changing its size. Panes are declared whole,
 with their clip and their content's opacity. A pane never declares more than Hyalo's eight lit
-washes, and every other shown control is declared at rest so its hover fades in. The NC is the first consumer.
+washes, and every other shown control is declared at rest so its hover fades in. `layout_in`
+lays a view in part of its surface; `semantic_keys` + `request` answer a reader. The NC is the
+first consumer: `toolkit/shell/src/nc_view.rs`, behind `NK_NC_VIEW=1` beside `nc.rs` (the
+pilot, #1048), separate glass cards with the calendar as one more; the bar keeps `nc` for the
+month shown and bulk dismissal.
 
 ### Applications1 catalogue and native dock pins
 
