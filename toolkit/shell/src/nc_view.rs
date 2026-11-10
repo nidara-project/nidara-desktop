@@ -464,7 +464,8 @@ impl Pilot {
                     .marked(true)
                     .grow(),
                     Some(d) => cell(key, d.to_string(), Ink::Primary),
-                    None => cell(key, String::new(), Ink::Primary),
+                    // A day outside the month is room, not an empty text a reader would visit.
+                    None => Node::icon(format!("{key}/square"), "", 28.).grow(),
                 });
             }
             rows.push(Node::row(format!("cal/w{week}"), cells));
@@ -1013,8 +1014,9 @@ impl Pilot {
             width: self.bounds[2],
             height: self.bounds[3],
         };
-        self.ids = self.state.semantic_keys(first_id);
-        self.state.semantics(root, first_id)
+        let tree = self.state.semantics(root, first_id);
+        self.ids = self.state.semantic_keys();
+        tree
     }
 
     /// A reader's request on one of the centre's controls: None when the id is not the
