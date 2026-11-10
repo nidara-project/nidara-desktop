@@ -254,5 +254,6 @@ which costs about 0.3 ms per frame more than today's single pane, and only on fr
 glass is redrawn. That is within budget. The pilot's "Cost" check (§7) measures it again on the
 real NC.
 
-All N cards are drawn: the capture covers their whole union in every run. A screenshot could not
-be taken in the private Hyalo, because the run has no consent for computer control.
+That all N cards are drawn comes from the code (one call per shape, no cap) and from the GPU
+time growing with N. It is not seen in a screenshot. The private Hyalo refuses screenshots,
+because the run has no consent for computer control.
