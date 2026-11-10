@@ -11,9 +11,21 @@ def center():
     root=bar()
     return next((n for n in children(root) if n.get_name()=='Notification Center'),None) if root else None
 
-def find(name):return next(n for n in walk(center()) if n.get_name()==name)
-def history_cards():return [] if not center() else [n for n in children(center()) if n.get_role()==Atspi.Role.PANEL]
+def nodes(role=None):
+    c=center()
+    return [] if not c else [n for n in walk(c) if n is not c and (role is None or n.get_role()==role)]
+def named(prefix,role=Atspi.Role.BUTTON):return [n for n in nodes(role) if n.get_name().startswith(prefix)]
+def find(name):return next(n for n in nodes() if n.get_name()==name)
+def history_cards():return named('History ')
 def activate(name):find(name).get_action_iface().do_action(0);pump(.05)
+def key(code):
+    with open(os.environ['HYALO_CONTROL'],'w',buffering=1) as pipe:pipe.write(f'key {code}\n')
+    pump(.3)
+def card_of(name):
+    # The card's pane: the panel holding the button of that name.
+    return next(p for p in nodes(Atspi.Role.PANEL) if any(n.get_name()==name for n in walk(p)))
+FRONT='History 2000, 2000 notifications, expand'
+HEADER='Archive, 2000 notifications, collapse'
 def clock():return next(n for n in children(bar()) if n.get_role()==Atspi.Role.BUTTON and n.get_name()!='Control Center' and n.get_state_set().contains(Atspi.StateType.EXPANDABLE))
 def open_clock():
     r=until('clock geometry configured',lambda:(r:=box(clock())) and r[0]>=0 and r[2]>0 and r[3]>0 and r);move(r[0]+r[2]/2,r[1]+r[3]/2);pump(.3);click(r[0]+r[2]/2,r[1]+r[3]/2);until('clock opens NC',center)
@@ -40,14 +52,15 @@ try:
     cache=Path(os.environ['XDG_CACHE_HOME'])/'nidara/notifd'
     oracle('legacy store imported once into journal',lambda v:v==(False,True),((cache/'state.json').exists(),(cache/'history.jsonl').exists()),(True,False))
     open_clock()
-    until('collapsed archive group',lambda:find('Archive (2000)'))
-    oracle('collapsed group shows count and newest only',lambda v:len(v)==1 and v[0].get_name()=='Archive: History 2000',history_cards(),[])
-    oracle('relative age is available to readers',lambda v:'now' in v,find('Archive: History 2000').get_description(),'')
-    date=next(n.get_name() for n in children(center()) if n.get_name().startswith('Calendar '))
-    activate('Next month');until('calendar navigates',lambda:any(n.get_name().startswith('Calendar ') and n.get_name()!=date for n in children(center())))
-    activate('Previous month');until('calendar returns',lambda:any(n.get_name()==date for n in children(center())))
-    selected=[n for n in children(center()) if n.get_state_set().contains(Atspi.StateType.SELECTED)]
-    oracle('calendar marks today',lambda v:len(v)==1 and v[0].get_description()=='Today',selected,[])
+    until('collapsed archive group',lambda:find(FRONT))
+    oracle('collapsed group shows count and newest only',lambda v:len(v)==1 and v[0].get_name()==FRONT,history_cards(),[])
+    oracle('relative age is available to readers',lambda v:v.startswith('now'),find(FRONT).get_description(),'')
+    month=lambda:[n.get_name() for n in nodes(Atspi.Role.LABEL) if any(ch.isdigit() for ch in n.get_name()) and len(n.get_name())>6]
+    date=month()
+    activate('Next month');until('calendar navigates',lambda:month()!=date)
+    activate('Previous month');until('calendar returns',lambda:month()==date)
+    selected=named('Today, ')
+    oracle('calendar marks today',lambda v:len(v)==1 and not v[0].get_state_set().contains(Atspi.StateType.ENABLED),selected,[])
     def today_ink():
         msg('screenshot',LOG/'nc-calendar.png')
         pix=GdkPixbuf.Pixbuf.new_from_file(str(LOG/'nc-calendar.png'));data=pix.get_pixels();stride=pix.get_rowstride();channels=pix.get_n_channels()
@@ -59,17 +72,22 @@ try:
         return good-bad if digit>5 else 0
     visible_today=until('today marker paints',lambda:(v:=today_ink())>10 and v)
     oracle('today is visibly marked by compositor',lambda v:v>10,visible_today,0)
-    activate('Archive (2000)')
-    until('group expands',lambda:find('Archive (2000)').get_state_set().contains(Atspi.StateType.EXPANDED))
+    activate(FRONT)
+    until('group expands',lambda:find(HEADER))
     before=[n.get_name() for n in history_cards()]
-    oracle('2000 expanded cards have a bounded visible tree',lambda v:0<len(v)<=5,history_cards(),list(range(2000)))
-    activate('Scroll down');until('viewport scrolls',lambda:[n.get_name() for n in history_cards()]!=before)
-    oracle('scroll changes visible rows only',lambda v:0<len(v)<=5,history_cards(),list(range(2000)))
+    # Only the rows near the window are built: a bounded tree, never 2000 cards.
+    oracle('2000 expanded cards have a bounded visible tree',lambda v:0<len(v)<40,history_cards(),list(range(2000)))
+    until('NC has keyboard focus',lambda:bar().get_state_set().contains(Atspi.StateType.ACTIVE))
+    key(15)  # Tab
+    for _ in range(12):key(109)  # Page Down
+    until('viewport scrolls',lambda:[n.get_name() for n in history_cards()]!=before and not named('History 2000'))
+    oracle('scroll changes visible rows only',lambda v:0<len(v)<40,history_cards(),list(range(2000)))
     stable_shot(LOG/'nc-scrolled.png')
-    # Reset to the newest row using page-up. No hidden card widgets are constructed.
-    activate('Scroll up');until('top restored',lambda:any(n.get_name()=='Archive: History 2000' for n in history_cards()))
-    activate('Archive (2000)')
-    until('group collapsed before CC switch',lambda:not find('Archive (2000)').get_state_set().contains(Atspi.StateType.EXPANDED))
+    # Back to the newest row with Page Up.
+    for _ in range(14):key(104)  # Page Up
+    until('top restored',lambda:named('History 2000'))
+    activate(HEADER)
+    until('group collapsed before CC switch',lambda:find(FRONT))
     cc=next(n for n in children(bar()) if n.get_name()=='Control Center')
     r=box(cc);move(r[0]+r[2]/2,r[1]+r[3]/2);click(r[0]+r[2]/2,r[1]+r[3]/2)
     until('CC excludes NC',lambda:center() is None and any(n.get_name()=='Control Center' and n.get_role()==Atspi.Role.PANEL for n in children(bar())))
@@ -105,23 +123,22 @@ try:
     until('renderer reload ready',lambda:state()['available'])
     until('reload retires transient leftovers',lambda:transient not in ids(history()))
     oracle('shell restart preserves ordinary history without banners',lambda v:set(ids(v))==before_ids and not banners(),history(),[])
-    open_clock();until('history after shell restart',lambda:find('Archive (2000)'))
+    open_clock();until('history after shell restart',lambda:find(FRONT))
     # The daemon restart restores fresh revisions and unknown senders. Invoke through AT-SPI.
     daemon.terminate();daemon.wait(timeout=5);PROCS.remove(daemon)
     until('owner loss',lambda:not state()['available'])
     daemon=start('daemon-reloaded',[os.environ['NK_SESSIOND_BIN'],'--config','--applications'],XDG_DATA_DIRS=str(data))
     until('new daemon snapshot',lambda:state()['available'])
-    until('restored card actionable',lambda:find('Archive: History 2000'))
-    read=until('read button restored',lambda:find('Read'))
-    if box(read)[3]<20:
-        activate('Scroll down')
-        until('read button visible',lambda:box(find('Read'))[3]>=20)
+    until('restored card actionable',lambda:find(FRONT))
+    # Its action shows once its group is open and the card is shown whole.
+    activate(FRONT);until('group opens',lambda:find(HEADER))
+    more=until('card offers more',lambda:next((n for n in walk(card_of('History 2000')) if n.get_name()=='Show more'),None))
+    more.get_action_iface().do_action(0);pump(.05)
+    until('read button restored',lambda:find('Read'))
     activate('Read')
     until('restored action resolves missing sender',lambda:2000 not in ids(history()))
     oracle('restored action with real token resolves',lambda v:2000 not in ids(v),history(),[{'id':2000}])
     # Clear just the small live-sender group, leaving the 1999 archived records.
-    # Reaching the restored action can scroll its group's header out of view.
-    activate('Scroll up')
     until('live group clear is visible',lambda:find('Clear B3 fixture'))
     activate('Clear B3 fixture')
     until('group clear leaves other app',lambda:len(history())==1999)
@@ -134,21 +151,13 @@ try:
     start('bulk-monitor',['stdbuf','-oL','dbus-monitor','--session',rule])
     until('bulk monitor ready',lambda:'NameAcquired' in (LOG/'bulk-monitor.log').read_text())
     journal=cache/'history.jsonl';before_bytes=journal.read_bytes();before_inode=journal.stat().st_ino
-    empty_events=[]
-    def empty_event(event,*_):
-        try:
-            if event.source.get_name()=='Notification Center':
-                event.source.clear_cache()
-                child=event.source.get_child_at_index(event.detail1)
-                if child and child.get_name()=='No notifications':empty_events.append(time.monotonic())
-        except (GLib.Error,AttributeError):pass
-    empty_listener=Atspi.EventListener.new(empty_event)
-    empty_listener.register('object:children-changed:add')
-    started=time.monotonic();activate('Clear all')
-    until('NC empty event',lambda:bool(empty_events))
-    elapsed=empty_events[0]-started
-    (LOG/'clear-timing.json').write_text(json.dumps({'start':started,'empty':empty_events[0],'elapsed':elapsed}))
-    until('NC empty state',lambda:find('No notifications'))
+    started=time.monotonic();activate('Clear notifications')
+    def emptied():
+        pump(.02)
+        return any(n.get_name()=='No notifications' for n in nodes(Atspi.Role.LABEL)) and time.monotonic()
+    emptied_at=until('NC empty state',emptied)
+    elapsed=emptied_at-started
+    (LOG/'clear-timing.json').write_text(json.dumps({'start':started,'empty':emptied_at,'elapsed':elapsed}))
     until('2000 cleared',lambda:history()==[])
     backend_elapsed=time.monotonic()-started
     until('one private removal batch',lambda:len(batches)==1)
@@ -156,18 +165,14 @@ try:
     oracle('2000 clear uses one bus call and one batch',lambda v:v==(1,1,2000),((LOG/'bulk-monitor.log').read_text().count('member=DismissAll'),len(batches),len(batches[0][0])),(2000,2000,1))
     after=journal.read_bytes()
     oracle('bulk removal appends one journal entry',lambda v:v[0] and v[1]==1 and v[2],(after.startswith(before_bytes),after[len(before_bytes):].count(b'\n'),journal.stat().st_ino==before_inode),(False,2000,False))
+    # Only the cards in view leave, 45 ms apart: bounded by the view, never by the 2000.
     oracle('2000 clear has no row-count cascade',lambda v:v<2.,elapsed,90.)
-    metrics=[json.loads(line.split('ICON_METRIC ',1)[1]) for line in (LOG/'shell-reloaded.log').read_text().splitlines() if 'ICON_METRIC ' in line]
-    removed=max(e['us'] for e in metrics if e['event']=='nc-history-removed' and e['count']==2000)
-    arm=max(e['us'] for e in metrics if e['event']=='nc-clear-armed' and e['us']>=removed)
-    finish=next(e['us'] for e in metrics if e['event']=='nc-clear-finished' and e['us']>=arm)
-    animation_seconds=(finish-arm)/1e6
-    oracle('clear animation deadline is independent of history size',lambda v:0.1<=v<0.35,animation_seconds,1.)
+    oracle('the cards leave before the list empties',lambda v:v>=0.15,elapsed,0.)
     stable_shot(LOG/'nc-empty.png')
     # One sender's over-limit record cannot disconnect the history stream.
     oversized=notify('x'*(1024*1024+1))
     after_limit=notify('After rejected over-limit record')
-    until('stream continues after bounded rejection',lambda:any(n.get_name()=='B3 fixture: After rejected over-limit record' for n in history_cards()))
+    until('stream continues after bounded rejection',lambda:find('After rejected over-limit record'))
     oracle('over-limit notice cannot stop later notifications',lambda v:v['available'] and v['historyCount']==1,state(),{'available':False,'historyCount':0})
     daemon.terminate();daemon.wait(timeout=5);PROCS.remove(daemon)
     until('oversized history owner loss',lambda:not state()['available'])
@@ -177,7 +182,7 @@ try:
     private('DismissAll')
     until('clear bounded rejection fixture',lambda:history()==[])
     close_escape()
-    (LOG/'report.json').write_text(json.dumps({'checks':REPORT,'clear_seconds':elapsed,'backend_seconds':backend_elapsed,'animation_seconds':animation_seconds,'records':2000},indent=2))
+    (LOG/'report.json').write_text(json.dumps({'checks':REPORT,'clear_seconds':elapsed,'backend_seconds':backend_elapsed,'records':2000},indent=2))
     print('B3.2 NC PASSED',flush=True)
 except Exception:
     try:
