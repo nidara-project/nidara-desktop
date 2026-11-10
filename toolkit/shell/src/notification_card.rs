@@ -412,6 +412,24 @@ fn sender_app<'a>(
     };
     direct.or(unique)
 }
+/// The icon a notice names for itself: its `app_icon`, or else an icon NAME in its image hint.
+/// The spec lets `image-path` be either; a name there is the notice's icon, not a picture to
+/// show beside the text (Pamac sends `system-software-install-symbolic`, with a desktop entry
+/// that is only an autostart one).
+fn sender_icon(b: &Banner) -> &str {
+    if !b.notice.app_icon.is_empty() {
+        return &b.notice.app_icon;
+    }
+    let image = match b.notice.hint("image-path") {
+        "" => b.notice.hint("image_path"),
+        image => image,
+    };
+    if std::path::Path::new(image).is_absolute() || image.contains("://") {
+        ""
+    } else {
+        image
+    }
+}
 /// The art of a sender no app or icon names: the information glyph, as the TS card had it.
 const UNKNOWN_SENDER: &str = "nd-dialog-information-symbolic";
 fn app_asset(art: &Artwork<'_>, b: &Banner) -> Option<Arc<crate::icon_memory::Asset>> {
@@ -431,7 +449,7 @@ fn app_asset(art: &Artwork<'_>, b: &Banner) -> Option<Arc<crate::icon_memory::As
             return None;
         }
     }
-    let name = b.notice.app_icon.as_str();
+    let name = sender_icon(b);
     if (std::path::Path::new(name).is_absolute() || name.starts_with("file://"))
         && let Some(a) = asset_image(namespace, b, name, side)
     {
@@ -549,6 +567,30 @@ mod tests {
     use super::*;
     fn banner(id: u32) -> Banner {
         Banner {notice:crate::notifications::Notice::parse(&serde_json::json!({"id":id,"summary":"A card","hints":{"urgency":2},"actions":(0..8).map(|n|serde_json::json!({"id":format!("key{n}"),"label":format!("action{n}")})).collect::<Vec<_>>()} ).to_string()).unwrap(),instance:id as u64,content:1,output:"a".into(),deadline:None,hovered:false,error:String::new()}
+    }
+    #[test]
+    fn an_icon_name_in_the_image_hint_is_the_notices_icon() {
+        let icon = |extra: serde_json::Value| {
+            let mut n = serde_json::json!({"id": 1, "summary": "A card"});
+            n.as_object_mut()
+                .unwrap()
+                .extend(extra.as_object().unwrap().clone());
+            let mut b = banner(1);
+            b.notice = crate::notifications::Notice::parse(&n.to_string()).unwrap();
+            sender_icon(&b).to_string()
+        };
+        let pamac =
+            serde_json::json!({"hints": {"image-path": "system-software-install-symbolic"}});
+        assert_eq!(icon(pamac), "system-software-install-symbolic");
+        let old = serde_json::json!({"hints": {"image_path": "update-notifier"}});
+        assert_eq!(icon(old), "update-notifier");
+        // A picture is not an icon; an app_icon comes first.
+        let photo = serde_json::json!({"hints": {"image-path": "/tmp/a/icon.png"}});
+        assert_eq!(icon(photo), "");
+        let uri = serde_json::json!({"hints": {"image-path": "file:///tmp/a/icon.png"}});
+        assert_eq!(icon(uri), "");
+        let both = serde_json::json!({"app_icon": "firefox", "hints": {"image-path": "x"}});
+        assert_eq!(icon(both), "firefox");
     }
     #[test]
     fn a_desktop_entry_hint_finds_its_app_even_when_its_name_ends_in_desktop() {
