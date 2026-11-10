@@ -713,7 +713,7 @@ impl View {
             Node::icon(k("app"), "", ART),
             Node::column(k("text"), text).gap(Space::S1).grow(),
         ];
-        if !thumbnail(b).is_empty() {
+        if thumbnail(b).is_some() {
             row.push(Node::icon(k("thumb"), "", ART));
         }
         let open = match group {
@@ -1134,7 +1134,9 @@ impl View {
             let asset = if slot == "app" {
                 notification_card::app_asset(art, b)
             } else {
-                notification_card::asset_image(art.namespace, b, thumbnail(b), art.pixels(64))
+                thumbnail(b).and_then(|path| {
+                    notification_card::asset_image(art.namespace, b, &path, art.pixels(64))
+                })
             };
             if let Some(asset) = asset {
                 c.clip(rect(visible));
@@ -1192,13 +1194,20 @@ fn groups_of(history: &[Banner]) -> Vec<(String, Vec<Banner>)> {
         .collect()
 }
 
-fn thumbnail(b: &Banner) -> &str {
-    let image = b.notice.hint("image-path");
-    if image.is_empty() {
-        b.notice.hint("image_path")
-    } else {
-        image
-    }
+/// The picture a notice carries beside its text, when there is one to show: a local file
+/// that exists, as TS's `heroImagePath` had it. An icon name (Pamac sends
+/// `system-software-install-symbolic`) is not a picture, and a sender's temporary file may be
+/// gone (Edge's `/tmp/…scoped_dir…`); either way the card keeps no room for it.
+fn thumbnail(b: &Banner) -> Option<String> {
+    let image = match b.notice.hint("image-path") {
+        "" => b.notice.hint("image_path"),
+        image => image,
+    };
+    let path = match image.strip_prefix("file://") {
+        Some(_) => glib::filename_from_uri(image).ok()?.0,
+        None => std::path::PathBuf::from(image),
+    };
+    (path.is_absolute() && path.is_file()).then(|| path.to_string_lossy().into_owned())
 }
 
 fn intersect(a: [f64; 4], b: [f64; 4]) -> Option<[f64; 4]> {
@@ -1717,6 +1726,45 @@ mod tests {
         p.state.pointer_motion(r[0] + r[2] / 2., r[1] + r[3] / 2.);
         assert!(!p.state.shown(age) && p.state.shown(more));
         assert!(p.state.placed().iter().all(|q| q.key.0 != "n1/more"));
+    }
+
+    #[test]
+    fn only_a_picture_that_exists_keeps_room_beside_the_text() {
+        let dir = std::env::temp_dir().join(format!("nk-nc-thumb-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let there = dir.join("there.png");
+        std::fs::write(&there, b"").unwrap();
+        let hint = |path: &str| serde_json::json!({"hints": {"image-path": path}});
+        let history = vec![
+            // Pamac: an icon name; Edge: a temporary file already gone.
+            banner(1, "a", 10, hint("system-software-install-symbolic")),
+            banner(2, "b", 20, hint(&dir.join("gone.png").to_string_lossy())),
+            banner(3, "c", 30, hint(&format!("file://{}", there.display()))),
+            banner(
+                4,
+                "d",
+                40,
+                serde_json::json!({"hints": {"image_path": there}}),
+            ),
+        ];
+        assert_eq!(thumbnail(&history[0]), None);
+        assert_eq!(thumbnail(&history[1]), None);
+        let path = Some(there.to_string_lossy().into_owned());
+        assert_eq!(thumbnail(&history[2]), path);
+        assert_eq!(thumbnail(&history[3]), path);
+        let laid = laid(history, |_| {});
+        std::fs::remove_dir_all(&dir).unwrap();
+        let Some(p) = laid else {
+            return;
+        };
+        let thumbs: Vec<_> = (1..=4)
+            .filter(|i| {
+                p.state
+                    .rect(&Key::from(format!("n{i}/thumb").as_str()))
+                    .is_some()
+            })
+            .collect();
+        assert_eq!(thumbs, [3, 4]);
     }
 
     #[test]
