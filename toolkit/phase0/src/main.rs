@@ -631,7 +631,7 @@ impl Application for App {
                 }
             }
             Event::Scroll(delta) => {
-                self.scroll = (self.scroll + delta as f32 * 3.)
+                self.scroll = (self.scroll + delta.pixels as f32 * 3.)
                     .clamp(0., (self.content_height - self.height).max(0.));
             }
             Event::Key(k) => {

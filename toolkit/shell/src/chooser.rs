@@ -345,7 +345,7 @@ impl Chooser {
                     self.pressed = None;
                     self.dirty = true;
                 }
-                LayerEvent::Scroll(d) => {
+                LayerEvent::Scroll(nk_wayland::ScrollAmount { pixels: d, .. }) => {
                     let to = (self.scroll + d * 4.).clamp(0., self.max_scroll());
                     if to != self.scroll {
                         self.scroll = to;

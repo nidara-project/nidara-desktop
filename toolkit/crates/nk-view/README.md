@@ -47,7 +47,7 @@ the card stays hidden until the surface drops it. These distances come from the 
 **Scroll.** A `Scroll` region is as tall as its content where there is room; a column that runs
 short takes the height from its scroll regions first. Its offset is kept by key and clamped.
 The wheel moves the innermost region under the pointer (a detent is the viewport's height to
-the 2/3, as GTK's), Page Up and Page Down move 0.9 of a page, Ctrl+Home and Ctrl+End go to the
+the 2/3, as GTK's; `ScrollBy::from` an `nk-wayland` scroll event takes its detents), Page Up and Page Down move 0.9 of a page, Ctrl+Home and Ctrl+End go to the
 ends, and Tab onto a control out of view scrolls it in. On a rebuild, a scrolled region keeps
 its first pane in view where it was. Rows outside `window(key)` are left unbuilt, as
 `Node::placeholder(key, height)` at the height they had. The bar is `nk-widgets`' `ScrollBar`,

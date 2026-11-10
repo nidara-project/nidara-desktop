@@ -623,6 +623,9 @@ Phase 0 remains an independent client of those four crates.
   clamped vertical offset and reveals focused pages below its fixed header. Vertical
   layer scroll routes to sidebar/content for sidebar/title respectively; horizontal
   layer scroll routes to content through nk-wayland::LayerEvent::HorizontalScroll.
+  A scroll event carries a `ScrollAmount`: its pixels, and its wheel detents when a wheel
+  gave it (seat v8 `axis_value120`, or `axis_discrete` from an older seat). This Tree scrolls
+  by the pixels; `nk-view` scrolls a wheel by its detents (VIEW.md §8).
   The no-layers fallback uses one
   sampled client timeline for paint/hit-testing/focus, with AT-SPI bounds at model values;
   reduced motion omits the transition. Hyalo's layer glass is separate work.

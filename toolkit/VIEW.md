@@ -249,7 +249,10 @@ centre's list used, over GTK's `ScrolledWindow`.
   cuts is declared whole, cut straight.
 - **Wheel and touchpad.** `ViewState::scroll(by)` moves the innermost region under the pointer:
   by pixels as a touchpad gives them, or by wheel detents, each the viewport's height to the
-  power 2/3, GTK's step, which the TS list scrolled by. A region at its end does not pass the
+  power 2/3, GTK's step, which the TS list scrolled by. `nk-wayland`'s scroll events carry both
+  (`ScrollAmount`: the pixels, and the detents when a wheel gave them, from the seat's
+  `axis_value120`), and `ScrollBy::from` takes the detents when there are any. Hyalo gives a
+  wheel notch as 15 px and one detent, so a notch moves a 400 px list by 54 px, not 15. A region at its end does not pass the
   scroll to an outer one, and a detent does not animate, as in GTK. The new offset is laid out
   at the next `tick`, which `animating()` asks for.
 - **Keys.** Page Up and Page Down move by 0.9 of the viewport, and Ctrl+Home and Ctrl+End go to
@@ -282,10 +285,6 @@ What TS had and this does not, yet:
 - **Kinetic scrolling and the bounce at the ends** of a touchpad scroll. `nk-wayland` reports
   neither the end of a touchpad scroll nor where it came from, and no Rust surface has either
   today.
-- **Wheel detents as detents.** `nk-wayland` passes only pixels (Hyalo gives 15 per detent),
-  so a surface can only pass `ScrollBy::Pixels` until it also passes the detents
-  (`wl_pointer.axis_discrete`). The NC pilot needs that first: at 15 px a detent the wheel
-  would be about a third as fast as TS's.
 
 ## 9. Overlay (piece 6)
 

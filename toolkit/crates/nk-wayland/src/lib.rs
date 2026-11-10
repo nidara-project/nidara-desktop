@@ -84,6 +84,25 @@ pub struct Frame {
     /// Without it the app paints an opaque base itself (PHASE1.md D5).
     pub material: bool,
 }
+/// How far one scroll went: in surface pixels, as every scroll gives them, and in wheel
+/// detents when a wheel gave it (`wl_pointer.axis_value120`, a detent being 120; or
+/// `axis_discrete` from a compositor older than seat v8). A view that steps by detents, as
+/// GTK's did, uses them; the rest keeps to the pixels.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct ScrollAmount {
+    pub pixels: f64,
+    pub detents: Option<f64>,
+}
+impl ScrollAmount {
+    /// A scroll with no detents: a touchpad's, or a test's.
+    pub fn pixels(pixels: f64) -> Self {
+        Self {
+            pixels,
+            detents: None,
+        }
+    }
+}
+
 #[derive(Clone, Debug)]
 pub enum Event {
     Configure,
@@ -131,8 +150,8 @@ pub enum Event {
         serial: u32,
         time: u32,
     },
-    Scroll(f64),
-    HorizontalScroll(f64),
+    Scroll(ScrollAmount),
+    HorizontalScroll(ScrollAmount),
     Ime(ImeBatch),
     Paste(String),
     /// A drag from any client came over the root surface, at (x, y) in its coordinates,
@@ -324,6 +343,8 @@ pub struct Window {
     block_popup_repeat: bool,
     pointer_inside: bool,
     pointer_position: (f64, f64),
+    /// Wheel detents announced for the next horizontal and vertical `axis` of this frame.
+    detents: [Option<f64>; 2],
     ignore_input_before: Option<u32>,
     globals: Vec<(u32, String, u32)>,
     surface: Option<wl_surface::WlSurface>,
@@ -1196,6 +1217,7 @@ fn run_inner(
         block_popup_release: false,
         block_popup_repeat: false,
         pointer_inside: false,
+        detents: [None; 2],
         pointer_position: (0., 0.),
         ignore_input_before: None,
         globals: Vec::new(),
@@ -1296,7 +1318,8 @@ fn run_inner(
     w.compositor = Some(compositor.clone());
     w.viewporter = viewporter.clone();
     w.shm = bind!(wl_shm::WlShm, 1);
-    w.seat = bind!(wl_seat::WlSeat, 7);
+    // v8: wheel detents as `axis_value120`.
+    w.seat = bind!(wl_seat::WlSeat, 8);
     for (id, _, v) in w.globals.iter().filter(|(_, n, _)| n == "wl_output") {
         let output: wl_output::WlOutput = registry.bind(*id, (*v).min(4), &qh, ());
         w.outputs.insert(output.id(), 1);
@@ -2015,6 +2038,7 @@ impl Dispatch<wl_pointer::WlPointer, ()> for Window {
                 w.pointer_motion(surface_x, surface_y);
             }
             wl_pointer::Event::Leave { .. } => {
+                w.detents = [None; 2];
                 if let Some(id) = w.pointer_popup.take() {
                     w.events.push(Event::PopupOverlay {
                         id,
@@ -2102,11 +2126,29 @@ impl Dispatch<wl_pointer::WlPointer, ()> for Window {
                     });
                 }
             }
+            wl_pointer::Event::AxisValue120 {
+                axis: WEnum::Value(axis),
+                value120,
+            } => {
+                let i = usize::from(axis == wl_pointer::Axis::VerticalScroll);
+                w.detents[i] = Some(w.detents[i].unwrap_or(0.) + value120 as f64 / 120.);
+            }
+            wl_pointer::Event::AxisDiscrete {
+                axis: WEnum::Value(axis),
+                discrete,
+            } => {
+                let i = usize::from(axis == wl_pointer::Axis::VerticalScroll);
+                w.detents[i] = Some(w.detents[i].unwrap_or(0.) + discrete as f64);
+            }
             wl_pointer::Event::Axis {
                 axis: WEnum::Value(wl_pointer::Axis::HorizontalScroll),
                 value,
                 ..
             } => {
+                let value = ScrollAmount {
+                    pixels: value,
+                    detents: w.detents[0].take(),
+                };
                 if let Some(id) = w.pointer_popup {
                     w.events.push(Event::PopupOverlay {
                         id,
@@ -2126,6 +2168,10 @@ impl Dispatch<wl_pointer::WlPointer, ()> for Window {
                 value,
                 ..
             } => {
+                let value = ScrollAmount {
+                    pixels: value,
+                    detents: w.detents[1].take(),
+                };
                 if let Some(id) = w.pointer_popup {
                     w.events.push(Event::PopupOverlay {
                         id,

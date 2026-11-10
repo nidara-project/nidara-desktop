@@ -1464,3 +1464,32 @@ fn a_layer_is_over_its_base_for_the_pointer_and_after_it_in_the_tab_order() {
     let back: Node = serde_json::from_str(&serde_json::to_string(&v).unwrap()).unwrap();
     assert_eq!(back, v);
 }
+
+#[test]
+fn a_wheel_scrolls_by_its_detents_and_a_touchpad_by_its_pixels() {
+    use nk_wayland::ScrollAmount;
+    // Hyalo's wheel: 15 px and one detent (axis_value120 of 120) per notch.
+    let wheel = ScrollAmount {
+        pixels: 15.,
+        detents: Some(1.),
+    };
+    assert_eq!(ScrollBy::from(wheel), ScrollBy::Steps(1.));
+    assert_eq!(
+        ScrollBy::from(ScrollAmount::pixels(15.)),
+        ScrollBy::Pixels(15.)
+    );
+    let t = tokens();
+    let mut text = backend();
+    let mut s = ViewState::new(0);
+    let t0 = Instant::now();
+    s.layout(&feed(10), (360., 400.), 1., &t, &mut text, t0);
+    let h = rect(&s, "feed")[3];
+    s.pointer_motion(60., 200.);
+    s.scroll(wheel.into());
+    s.tick(&t, &mut text, t0 + Duration::from_millis(16));
+    assert_eq!(
+        offset(&s),
+        h.powf(2. / 3.).round(),
+        "a notch is GTK's step, not 15 px"
+    );
+}

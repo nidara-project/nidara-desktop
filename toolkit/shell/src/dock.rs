@@ -2695,7 +2695,11 @@ impl Application for Dock {
                 self.leave_pointer();
                 self.close_tooltip(w);
             }
-            Event::Scroll(delta) if !self.frame.hidden && self.popup.is_none() => self.wheel(delta),
+            Event::Scroll(nk_wayland::ScrollAmount { pixels: delta, .. })
+                if !self.frame.hidden && self.popup.is_none() =>
+            {
+                self.wheel(delta)
+            }
             Event::PopupOverlay { id, event }
                 if self.tooltip.as_ref().is_some_and(|t| t.id == id) =>
             {

@@ -47,6 +47,13 @@ pub enum ScrollBy {
     Steps(f64),
 }
 
+impl From<nk_wayland::ScrollAmount> for ScrollBy {
+    /// A wheel's scroll goes by its detents; any other by its pixels.
+    fn from(a: nk_wayland::ScrollAmount) -> Self {
+        a.detents.map_or(Self::Pixels(a.pixels), Self::Steps)
+    }
+}
+
 /// What of a page Page Up and Page Down move, and a wheel detent's step: the viewport's
 /// height to this power. Both are GTK's (`GtkViewport`, `GtkScrolledWindow`), which the TS
 /// shell scrolled with.
