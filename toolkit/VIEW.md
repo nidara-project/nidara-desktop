@@ -226,8 +226,33 @@ What this adds to the contract and its pieces:
   The pilot ships with both, because the TS centre had them: they are contracted before it, as
   short additions to this file.
 
-## Still open
+## The shape limit (measured 2026-11-10)
 
-**Shape limit.** Hyalo's limit on glass shapes per surface, if any, still has to be measured
-before the pilot. No fixed cap is in the compositor's source. Cards are viewport-only, so a full
-screen is about ten.
+**Hyalo has no limit on glass shapes per surface.** A surface's shapes are a list
+(`hyalo/compositor/src/protocols/material.rs`), and each is drawn in its own call over its own
+rectangle (`render/glass_gl.rs`, `draw_plan`). The only fixed arrays in the shader are the eight
+washes and the eight members of a fusion group. Shapes whose blur reaches each other share one
+capture and one blur (`render/glass.rs`), so cards eight pixels apart cost one capture, as one
+panel does.
+
+Measured with `toolkit/crates/nk-wayland/examples/glass-count-probe.rs`: one layer surface with
+N cards of 232 × 60, moved one pixel every frame so that the glass is redrawn every frame, in the
+private nested Hyalo of `toolkit/widgets-demo/check-headless.sh` on this machine's GPU, at
+1272 × 688. The figures are the averages from `nidara-hyalo msg stats`:
+
+| Glass | Captures per frame | GPU per frame | Glass textures |
+|---|---|---|---|
+| 1 card | 1 | 0.32 ms | 0.4 MB |
+| 10 cards | 1 | 0.80 ms | 2.2 MB |
+| one pane over the same area as 10 cards | 1 | 0.53 ms | 2.2 MB |
+| 50 cards | 1 | 3.8 ms | 9.2 MB |
+| one pane over the same area as 50 cards | 1 | 0.98 ms | 9.2 MB |
+
+So each card adds about 0.06 ms of GPU time per redrawn frame over one panel of the same area.
+Textures and captures stay the same. The NC builds only the cards in its viewport, about ten,
+which costs about 0.3 ms per frame more than today's single pane, and only on frames where the
+glass is redrawn. That is within budget. The pilot's "Cost" check (§7) measures it again on the
+real NC.
+
+All N cards are drawn: the capture covers their whole union in every run. A screenshot could not
+be taken in the private Hyalo, because the run has no consent for computer control.
