@@ -556,7 +556,8 @@ impl ViewState {
         Some(out.map(|action| Activated { key: d.key, action }))
     }
     /// Flings the cards of these swipeable controls off the surface top to bottom, `stagger`
-    /// apart, as a clear-all does (VIEW.md §7); controls that do not show are left out. The
+    /// apart, as a clear-all does (VIEW.md §7); controls that do not show, or are already
+    /// gone, are left out. The
     /// last one gone reports `action` from `tick`, or this returns it at once when nothing
     /// shows or motion is reduced.
     pub fn cascade(
@@ -571,7 +572,9 @@ impl ViewState {
             .filter_map(|k| {
                 let i = self.index(k)?;
                 self.control(i).swipe.as_ref()?;
-                let v = self.placed[i].visible()?;
+                let v = self.placed[i]
+                    .visible()
+                    .filter(|_| self.placed[i].alpha > 0.)?;
                 Some((v[1], k.clone()))
             })
             .collect();
@@ -1039,6 +1042,7 @@ impl ViewState {
                         },
                         c.name.clone(),
                     );
+                    n.description = c.description.clone();
                     n.states.disabled = !c.enabled;
                     n.states.checked = c.role == Role::Toggle && c.marked;
                     n.states.focused = self.focus.as_ref() == Some(&p.key);

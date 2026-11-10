@@ -209,6 +209,10 @@ pub struct Control {
     pub role: Role,
     /// What a reader says for it.
     pub name: String,
+    /// What a reader says after its name: what the control holds besides it (a card's age
+    /// and body), since the texts inside a control are not separate labels.
+    #[serde(default)]
+    pub description: String,
     /// What the surface receives in `Activated` (a name, never code).
     pub action: String,
     pub wash: Wash,
@@ -340,6 +344,7 @@ impl Node {
             Kind::Control(Control {
                 role: Role::Button,
                 name: name.into(),
+                description: String::new(),
                 action: action.into(),
                 wash: Wash::Glass,
                 corner: Corner::Pill,
@@ -455,6 +460,12 @@ impl Node {
     pub fn revealed_with(mut self, pane: impl Into<Key>) -> Self {
         if let Kind::Control(c) = &mut self.kind {
             c.revealed_with = Some(pane.into());
+        }
+        self
+    }
+    pub fn description(mut self, text: impl Into<String>) -> Self {
+        if let Kind::Control(c) = &mut self.kind {
+            c.description = text.into();
         }
         self
     }

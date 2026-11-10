@@ -49,7 +49,8 @@ to bottom, and reports `action` once, when the last is gone (a clear-all).
 
 **Texts.** `lines(n)` wraps an outside text to `n` lines with an ellipsis; `reserve(n)` makes it
 that tall whatever it fills; `hidden_with(pane)` hides it while the pane is hovered or focused,
-keeping its room (the inverse of a control's `revealed_with`).
+keeping its room (the inverse of a control's `revealed_with`). The texts inside a control are not
+labels of their own: a control's `description` is what a reader says after its name.
 
 **Scroll.** A `Scroll` region is as tall as its content where there is room; a column that runs
 short takes the height from its scroll regions first. Its offset is kept by key and clamped.

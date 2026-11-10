@@ -168,6 +168,9 @@ chevron that way, so the title line never moves.
 surface passes `Window::root_pointer_position()` sampled before the popup is destroyed (#1030),
 and `nk-view` recomputes hover from it. Hiding or disabling a control clears its states.
 
+**What a control holds.** The texts inside a control are not labels of their own; a control
+may carry a `description`, which a reader says after its name (a card's age and body).
+
 **Readers' requests.** A semantic node's id belongs to its key and role for the view's life,
 starting at `first_id`: a reader keeps ids across updates, and `nk-a11y` refuses an id that comes
 back as another role, so ids are never numbered by position (a month change renumbered the
@@ -248,7 +251,7 @@ either direction, banner and NC alike.
   the view, its swipe is dropped.
 - **Cascade.** `cascade(keys, stagger, action, now)` flings the cards of several swipeable
   controls as if each were swiped away, top to bottom, `stagger` apart (TS's clear-all: 45 ms).
-  Controls that do not show are left out. Only the last one gone reports, with `action`, so the
+  Controls that do not show, or were already flung, are left out. Only the last one gone reports, with `action`, so the
   surface dismisses everything once; with reduced motion, or nothing shown, the call itself
   returns it.
 

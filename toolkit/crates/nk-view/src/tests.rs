@@ -1814,3 +1814,47 @@ fn a_text_hidden_with_its_pane_hides_on_hover_and_focus_and_keeps_its_room() {
     s.key(KeyInput::Tab);
     assert!(!s.shown(age), "focus inside hides it too");
 }
+
+#[test]
+fn a_controls_description_reaches_its_reader() {
+    let view = Node::column(
+        "list",
+        vec![
+            Node::control(
+                "a",
+                "Summary",
+                "open",
+                Node::text("a/t", "Summary", style(13.)),
+            )
+            .description("2 min, the body"),
+        ],
+    );
+    let mut s = laid(&view, (360., 600.), 1.);
+    let tree = s.semantics(nk_a11y::Node::new(1, nk_a11y::Role::Panel, "Centre"), 100);
+    let button = tree
+        .nodes
+        .values()
+        .find(|n| n.role == nk_a11y::Role::Button)
+        .unwrap();
+    assert_eq!(
+        (button.name.as_str(), button.description.as_str()),
+        ("Summary", "2 min, the body")
+    );
+    // A flung card stays out of a second cascade.
+    let t = tokens();
+    let mut text = backend();
+    let mut s = ViewState::new(0);
+    let t0 = Instant::now();
+    s.layout(&swipe_list(&["a"]), (360., 800.), 1., &t, &mut text, t0);
+    let keys = [Key::from("a/card")];
+    let stagger = Duration::from_millis(45);
+    assert_eq!(s.cascade(&keys, stagger, "clear", t0), None);
+    s.tick(&t, &mut text, t0 + t.motion.base);
+    assert_eq!(
+        s.cascade(&keys, stagger, "again", t0 + t.motion.base)
+            .map(|a| a.action),
+        Some("again".into()),
+        "nothing left to fling: it reports at once"
+    );
+    assert!(!s.animating());
+}
