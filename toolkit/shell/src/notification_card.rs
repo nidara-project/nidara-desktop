@@ -472,7 +472,7 @@ fn app_asset(art: &Artwork<'_>, b: &Banner) -> Option<Arc<crate::icon_memory::As
                 | "unknown"
         )
     {
-        let key = m.named(theme, name, vec![], side, false);
+        let key = m.named(theme, name, vec![], side, name.ends_with("-symbolic"));
         m.request(key.clone());
         if let Some(a) = m.get(&key) {
             return Some(a);
