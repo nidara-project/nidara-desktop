@@ -61,8 +61,12 @@ fn fade(dx: f64) -> f64 {
 enum Swipe {
     /// Following the pointer, at this drawn offset.
     Follow(f64),
-    /// Released: settling back, or flung off the surface (then `out` is what to report).
-    Ease { ease: Ease, out: Option<String> },
+    /// Released: settling back, or flung off the surface (`away`), then reporting `out`.
+    Ease {
+        ease: Ease,
+        away: bool,
+        out: Option<String>,
+    },
     /// Flung and reported; hidden until the surface drops it from the view.
     Gone,
 }
@@ -262,7 +266,53 @@ impl MotionState {
             curve: m.emphasized,
         };
         let out = fling.then_some(action);
-        self.swipes.insert(key.clone(), Swipe::Ease { ease, out });
+        self.swipes.insert(
+            key.clone(),
+            Swipe::Ease {
+                ease,
+                away: fling,
+                out,
+            },
+        );
+        None
+    }
+
+    /// Flings `keys` off a surface `width` wide, one after another `stagger` apart, as if
+    /// each had been swiped: the last reports `action` when it is gone. With reduced motion
+    /// they go at once and this returns the action.
+    pub fn cascade(
+        &mut self,
+        keys: &[Key],
+        stagger: Duration,
+        width: f64,
+        action: String,
+        now: Instant,
+        m: &Motion,
+    ) -> Option<String> {
+        if self.reduced || keys.is_empty() {
+            for k in keys {
+                self.swipes.insert(k.clone(), Swipe::Gone);
+            }
+            return Some(action);
+        }
+        for (i, k) in keys.iter().enumerate() {
+            let last = i + 1 == keys.len();
+            let ease = Ease {
+                from: 0.,
+                to: width,
+                start: now + stagger * i as u32,
+                duration: m.base,
+                curve: m.emphasized,
+            };
+            self.swipes.insert(
+                k.clone(),
+                Swipe::Ease {
+                    ease,
+                    away: true,
+                    out: last.then(|| action.clone()),
+                },
+            );
+        }
         None
     }
 
@@ -270,20 +320,25 @@ impl MotionState {
     pub fn finished(&mut self, now: Instant) -> Vec<(Key, String)> {
         let mut out = vec![];
         self.swipes.retain(|k, s| {
-            let Swipe::Ease { ease, out: report } = s else {
+            let Swipe::Ease {
+                ease,
+                away,
+                out: report,
+            } = s
+            else {
                 return true;
             };
             if !ease.at(now).1 {
                 return true;
             }
-            match report.take() {
-                Some(action) => {
-                    out.push((k.clone(), action));
-                    *s = Swipe::Gone;
-                    true
-                }
-                None => false,
+            if let Some(action) = report.take() {
+                out.push((k.clone(), action));
             }
+            let away = *away;
+            if away {
+                *s = Swipe::Gone;
+            }
+            away
         });
         out
     }
@@ -301,9 +356,9 @@ impl MotionState {
             };
             let (dx, alpha) = match s {
                 Swipe::Follow(d) => (*d, fade(*d)),
-                Swipe::Ease { ease, out } => {
+                Swipe::Ease { ease, away, .. } => {
                     let v = ease.at(now).0;
-                    let gone = if out.is_some() && ease.to != ease.from {
+                    let gone = if *away && ease.to != ease.from {
                         (v - ease.from) / (ease.to - ease.from)
                     } else {
                         0.

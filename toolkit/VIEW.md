@@ -107,7 +107,8 @@ wording problem (the project's rule). A text whose content comes from outside, s
 notification's body or a track title, declares `lines(n)`: it wraps to `n` lines and ends in an
 ellipsis. Its full text stays in the semantics. A weight the fonts have no face for (no bold
 installed) falls back to the regular weight, as the shell's own text does; a text is never
-dropped for its weight.
+dropped for its weight. A text may `reserve(n)` lines: it is that tall however few it fills, so
+cards of one kind share a height (TS reserved a notification body's two lines).
 
 **Pixel snapping.** Every placed edge is rounded to the output's device-pixel grid once, at
 placement. A size is the difference between two snapped edges. Sums of rounded sizes are never
@@ -159,7 +160,9 @@ check reports (§11).
 **Revealed controls.** A `Control` may be `revealed_with(pane)`: it is drawn only while the
 pointer is over that pane or focus is inside it. A notification's close button is the example.
 It stays in the semantic tree and in the Tab order at all times, so a reader and the keyboard
-always reach it.
+always reach it. Its inverse is a text `hidden_with(pane)`: not drawn while that pane is under
+the pointer or holds the focus, keeping its room. A notification's age gives its place to the
+chevron that way, so the title line never moves.
 
 **Leave and grabs.** Pointer leave clears hover and fades its wash. When a modal menu closes, the
 surface passes `Window::root_pointer_position()` sampled before the popup is destroyed (#1030),
@@ -243,6 +246,11 @@ either direction, banner and NC alike.
   release itself reports it; a settle snaps back.
 - **Lost.** If the pointer leaves the surface, the swipe settles back. If the control leaves
   the view, its swipe is dropped.
+- **Cascade.** `cascade(keys, stagger, action, now)` flings the cards of several swipeable
+  controls as if each were swiped away, top to bottom, `stagger` apart (TS's clear-all: 45 ms).
+  Controls that do not show are left out. Only the last one gone reports, with `action`, so the
+  surface dismisses everything once; with reduced motion, or nothing shown, the call itself
+  returns it.
 
 The distances are the kit's, transcribed from TS (`ui/shell/common/ScaleRevealer.ts`), and live
 in `nk-view` once, not in a surface. A swipe has no keyboard form: the card's close button is

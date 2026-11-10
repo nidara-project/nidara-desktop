@@ -172,6 +172,13 @@ pub struct Text {
     /// problem). Some(n): text from outside, wrapped to n lines and ended in an ellipsis; its
     /// whole text stays in the semantics.
     pub lines: Option<usize>,
+    /// Lines it is as tall as however few it fills, so cards of one kind share a height.
+    #[serde(default)]
+    pub reserve: usize,
+    /// Not drawn while the pointer is over this pane or focus is inside it, the inverse of
+    /// a control's `revealed_with`; it keeps its room, so what replaces it does not move it.
+    #[serde(default)]
+    pub hidden_with: Option<Key>,
 }
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
@@ -272,6 +279,8 @@ impl Node {
                 style,
                 ink: Ink::Primary,
                 lines: None,
+                reserve: 0,
+                hidden_with: None,
             }),
         )
     }
@@ -386,6 +395,20 @@ impl Node {
     pub fn lines(mut self, n: usize) -> Self {
         if let Kind::Text(t) = &mut self.kind {
             t.lines = Some(n.max(1));
+        }
+        self
+    }
+    /// A text at least `n` lines tall.
+    pub fn reserve(mut self, n: usize) -> Self {
+        if let Kind::Text(t) = &mut self.kind {
+            t.reserve = n;
+        }
+        self
+    }
+    /// A text hidden while `pane` is hovered or holds the focus.
+    pub fn hidden_with(mut self, pane: impl Into<Key>) -> Self {
+        if let Kind::Text(t) = &mut self.kind {
+            t.hidden_with = Some(pane.into());
         }
         self
     }

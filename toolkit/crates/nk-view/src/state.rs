@@ -439,15 +439,23 @@ impl ViewState {
         std::iter::successors(self.placed[i].pane, |&p| self.placed[p].pane)
     }
 
-    /// Whether a control is drawn: always, or while its pane is under the pointer or holds
-    /// the focus.
+    /// Whether a node is drawn as far as hover and focus go: a control revealed with a pane
+    /// while it is under the pointer or holds the focus, a text hidden with one while it is
+    /// not, anything else always; and nothing that does not show.
     pub fn shown(&self, i: usize) -> bool {
         if self.placed[i].visible().is_none() {
             return false;
         }
-        let Some(pane) = &self.control(i).revealed_with else {
-            return true;
-        };
+        match &self.placed[i].what {
+            What::Control(c) => c.revealed_with.as_ref().is_none_or(|k| self.hot(k)),
+            What::Text { hidden_with, .. } => hidden_with.as_ref().is_none_or(|k| !self.hot(k)),
+            _ => true,
+        }
+    }
+
+    /// Whether a pane is under the pointer or holds the focus: what reveals the controls
+    /// `revealed_with` it and hides the texts `hidden_with` it.
+    fn hot(&self, pane: &Key) -> bool {
         let Some(p) = self.index(pane) else {
             return false;
         };
@@ -547,6 +555,48 @@ impl ViewState {
         self.reswipe();
         Some(out.map(|action| Activated { key: d.key, action }))
     }
+    /// Flings the cards of these swipeable controls off the surface top to bottom, `stagger`
+    /// apart, as a clear-all does (VIEW.md §7); controls that do not show are left out. The
+    /// last one gone reports `action` from `tick`, or this returns it at once when nothing
+    /// shows or motion is reduced.
+    pub fn cascade(
+        &mut self,
+        keys: &[Key],
+        stagger: Duration,
+        action: impl Into<String>,
+        now: Instant,
+    ) -> Option<Activated> {
+        let mut shown: Vec<(f64, Key)> = keys
+            .iter()
+            .filter_map(|k| {
+                let i = self.index(k)?;
+                self.control(i).swipe.as_ref()?;
+                let v = self.placed[i].visible()?;
+                Some((v[1], k.clone()))
+            })
+            .collect();
+        shown.sort_by(|a, b| a.0.total_cmp(&b.0));
+        let shown: Vec<Key> = shown.into_iter().map(|(_, k)| k).collect();
+        let action = action.into();
+        let out = match self.tokens.as_ref().map(|t| t.motion) {
+            Some(motion) => self.motion.cascade(
+                &shown,
+                stagger,
+                self.bounds[0] + self.bounds[2],
+                action,
+                now,
+                &motion,
+            ),
+            None => Some(action),
+        };
+        self.drag = None;
+        self.press = None;
+        self.reswipe();
+        out.map(|action| Activated {
+            key: shown.last().cloned().unwrap_or_else(|| Key::from("")),
+            action,
+        })
+    }
     /// A modal menu closed: hover is recomputed from where the pointer was sampled before
     /// the popup went (`Window::root_pointer_position`, #1030).
     pub fn reconcile_pointer(&mut self, pointer: Option<(f64, f64)>) -> bool {
@@ -555,8 +605,22 @@ impl ViewState {
             None => self.pointer_leave(),
         }
     }
+    /// What hover and focus show and hide: compared before and after an event to tell
+    /// whether to draw again.
     fn revealed(&self) -> Vec<bool> {
-        self.controls().map(|i| self.shown(i)).collect()
+        let hidden = (0..self.placed.len()).filter(|&i| {
+            matches!(
+                self.placed[i].what,
+                What::Text {
+                    hidden_with: Some(_),
+                    ..
+                }
+            )
+        });
+        self.controls()
+            .chain(hidden)
+            .map(|i| self.shown(i))
+            .collect()
     }
 
     /// The primary button went down or up, at `now`. A release over the pressed control
@@ -1094,8 +1158,8 @@ impl ViewState {
                 );
             }
         }
-        for p in &self.placed {
-            if p.control.is_some_and(|c| !self.shown(c)) {
+        for (i, p) in self.placed.iter().enumerate() {
+            if p.control.is_some_and(|c| !self.shown(c)) || !self.shown(i) {
                 continue;
             }
             let Some(visible) = p.visible().filter(|_| p.alpha > 0.) else {

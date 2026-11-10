@@ -1643,3 +1643,174 @@ fn a_semantic_id_stays_with_its_node_when_the_view_changes_around_it() {
     snapshot.accept(first).unwrap();
     snapshot.accept(second).expect("no id changes role");
 }
+
+#[test]
+fn a_cascade_flings_the_shown_cards_top_to_bottom_and_reports_once_when_the_last_is_gone() {
+    let t = tokens();
+    let mut text = backend();
+    let mut s = ViewState::new(0);
+    let t0 = Instant::now();
+    s.layout(
+        &swipe_list(&["a", "b", "c"]),
+        (360., 800.),
+        1.,
+        &t,
+        &mut text,
+        t0,
+    );
+    let at_rest: Vec<_> = ["a", "b", "c"]
+        .iter()
+        .map(|k| rect(&s, &format!("{k}/pane")))
+        .collect();
+    let stagger = Duration::from_millis(45);
+    // Named bottom first: the cascade still starts at the top.
+    let keys: Vec<Key> = ["c/card", "b/card", "a/card"]
+        .iter()
+        .map(|k| Key::from(*k))
+        .collect();
+    assert_eq!(s.cascade(&keys, stagger, "clear-all", t0), None);
+    assert!(s.animating());
+    let t1 = t0 + stagger / 2;
+    let first = s.tick(&t, &mut text, t1);
+    assert!(first.activated.is_empty());
+    assert!(
+        rect(&s, "a/pane")[0] > at_rest[0][0],
+        "the top one has left"
+    );
+    assert_eq!(rect(&s, "b/pane"), at_rest[1], "the next waits its turn");
+    assert_eq!(rect(&s, "c/pane"), at_rest[2]);
+    let t2 = t0 + t.motion.base;
+    assert!(
+        s.tick(&t, &mut text, t2).activated.is_empty(),
+        "only the last reports"
+    );
+    assert_eq!(placed(&s, "a/pane").alpha, 0., "and the first stays gone");
+    let end = s.tick(&t, &mut text, t0 + stagger * 2 + t.motion.base);
+    assert_eq!(
+        end.activated,
+        vec![Activated {
+            key: Key::from("c/card"),
+            action: "clear-all".into()
+        }]
+    );
+    for k in ["a", "b", "c"] {
+        assert_eq!(placed(&s, &format!("{k}/pane")).alpha, 0., "{k}");
+    }
+    assert!(!end.animating);
+}
+
+#[test]
+fn a_cascade_with_nothing_shown_or_reduced_motion_reports_at_once() {
+    let t = tokens();
+    let mut text = backend();
+    let t0 = Instant::now();
+    let stagger = Duration::from_millis(45);
+    let mut s = ViewState::new(0);
+    s.layout(&swipe_list(&["a"]), (360., 800.), 1., &t, &mut text, t0);
+    let gone = s.cascade(&[Key::from("nowhere")], stagger, "clear-all", t0);
+    assert_eq!(gone.map(|a| a.action), Some("clear-all".into()));
+    s.set_reduced_motion(true);
+    let at_once = s.cascade(&[Key::from("a/card")], stagger, "clear-all", t0);
+    assert_eq!(
+        at_once,
+        Some(Activated {
+            key: Key::from("a/card"),
+            action: "clear-all".into()
+        })
+    );
+    assert!(!s.animating());
+    assert_eq!(placed(&s, "a/pane").alpha, 0.);
+}
+
+#[test]
+fn a_reserved_text_is_as_tall_as_its_lines_however_few_it_fills() {
+    let body = |id: &str, words: &str| {
+        Node::text(format!("{id}/body"), words, style(12.))
+            .lines(2)
+            .reserve(2)
+    };
+    let s = laid(
+        &Node::column(
+            "list",
+            vec![
+                body("short", "One line"),
+                body("long", LONG),
+                Node::text("plain/body", "One line", style(12.)).lines(2),
+            ],
+        ),
+        (360., 800.),
+        1.,
+    );
+    let (short, long, plain) = (
+        rect(&s, "short/body"),
+        rect(&s, "long/body"),
+        rect(&s, "plain/body"),
+    );
+    assert_eq!(short[3], long[3], "one height whatever the text");
+    assert!(
+        short[3] >= plain[3] * 2. - 1.,
+        "two lines: {} vs {}",
+        short[3],
+        plain[3]
+    );
+}
+
+#[test]
+fn a_text_hidden_with_its_pane_hides_on_hover_and_focus_and_keeps_its_room() {
+    let row = |id: &str| {
+        let pane = format!("{id}/pane");
+        Node::pane(
+            pane.clone(),
+            Corner::Token(Radius::Xl),
+            Node::control(
+                format!("{id}/card"),
+                "Open",
+                "open",
+                Node::overlay(
+                    format!("{id}/slot"),
+                    Node::text(format!("{id}/age"), "12m", style(11.)).hidden_with(pane.clone()),
+                )
+                .layer(
+                    Align::Center,
+                    Align::Center,
+                    Padding::default(),
+                    Node::control(
+                        format!("{id}/more"),
+                        "Show more",
+                        "more",
+                        Node::icon(format!("{id}/chevron"), "nd-pan-down", 13.),
+                    )
+                    .revealed_with(pane),
+                ),
+            )
+            .wash(Wash::None),
+        )
+    };
+    let mut s = laid(&Node::column("list", vec![row("n")]), (360., 400.), 1.);
+    let index = |s: &ViewState, k: &str| {
+        s.placed()
+            .iter()
+            .position(|p| p.key == Key::from(k))
+            .unwrap()
+    };
+    let (age, more) = (index(&s, "n/age"), index(&s, "n/more"));
+    let room = rect(&s, "n/age");
+    assert!(
+        s.shown(age) && !s.shown(more),
+        "at rest: the age, not the chevron"
+    );
+    let r = rect(&s, "n/pane");
+    assert!(
+        s.pointer_motion(r[0] + 2., r[1] + 2.),
+        "the swap is a change to draw"
+    );
+    assert!(
+        !s.shown(age) && s.shown(more),
+        "hovered: the chevron in its place"
+    );
+    assert_eq!(rect(&s, "n/age"), room, "and the age keeps its room");
+    s.pointer_leave();
+    assert!(s.shown(age));
+    s.key(KeyInput::Tab);
+    assert!(!s.shown(age), "focus inside hides it too");
+}

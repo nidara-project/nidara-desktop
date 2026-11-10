@@ -44,7 +44,12 @@ follows the pointer: freely for 140 px, then 15 % of further travel, fading to 1
 never below 0.15. Released 90 px or more away, it is flung off the surface; short of that, it
 settles back (`ease-emphasized` over `dur-base`). `tick` reports the fling when it ends, and
 the card stays hidden until the surface drops it. These distances come from the TS shell
-(`ScaleRevealer.ts`).
+(`ScaleRevealer.ts`). `cascade(keys, stagger, action, now)` flings several cards that way, top
+to bottom, and reports `action` once, when the last is gone (a clear-all).
+
+**Texts.** `lines(n)` wraps an outside text to `n` lines with an ellipsis; `reserve(n)` makes it
+that tall whatever it fills; `hidden_with(pane)` hides it while the pane is hovered or focused,
+keeping its room (the inverse of a control's `revealed_with`).
 
 **Scroll.** A `Scroll` region is as tall as its content where there is room; a column that runs
 short takes the height from its scroll regions first. Its offset is kept by key and clamped.
