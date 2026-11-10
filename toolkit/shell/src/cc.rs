@@ -117,7 +117,6 @@ pub struct Cc {
     pub detail: Option<detail::Detail>,
     pub detail_height: f64,
     detail_generation: u64,
-    detail_drag: Option<u64>,
     panel: [f64; 4],
     hover: Option<Target>,
     keyboard_focus: Option<Target>,
@@ -142,7 +141,6 @@ impl Cc {
             detail: None,
             detail_height: 1080.,
             detail_generation: 0,
-            detail_drag: None,
             panel: [0.; 4],
             hover: None,
             keyboard_focus: None,
@@ -156,14 +154,21 @@ impl Cc {
     }
 
     /// The tiles for this frame, under the right group's glass ending at `right`.
-    pub fn place(&mut self, right: f64, top: f64, status: &Status, stored: &layout::Stored) {
+    pub fn place(
+        &mut self,
+        right: f64,
+        top: f64,
+        status: &Status,
+        stored: &layout::Stored,
+        look: Option<&mut Look>,
+    ) {
         self.tiles = self
             .editor
             .sync(stored, status, right, top, self.detail_height);
         self.panel = self.editor.panel;
         if let Some(detail) = &mut self.detail {
             detail.max_height = self.detail_height;
-            detail.refresh(status, self.panel);
+            detail.refresh(status, self.panel, look);
             self.panel = detail.panel;
         }
         if self
@@ -174,14 +179,14 @@ impl Cc {
         }
     }
 
-    pub fn open_detail(&mut self, page: &'static str, status: &Status) {
+    pub fn open_detail(&mut self, page: &'static str, status: &Status, look: Option<&mut Look>) {
         if self.editor.active {
             return;
         }
         self.detail_generation += 1;
         let mut detail = detail::Detail::new(page, self.detail_generation);
         detail.max_height = self.detail_height;
-        detail.refresh(status, self.panel);
+        detail.refresh(status, self.panel, look);
         self.panel = detail.panel;
         self.detail = Some(detail);
         self.drag = None;
@@ -195,7 +200,6 @@ impl Cc {
             self.editor.toggle();
             return true;
         }
-        self.detail_drag = None;
         let detail = self.detail.take();
         if let Some(detail) = detail {
             self.detail_generation += 1;
@@ -296,14 +300,15 @@ impl Cc {
             other => act_of(other, status),
         }
     }
-    pub fn scroll_detail(&mut self, delta: f64, status: &Status) -> bool {
+    pub fn scroll_detail(&mut self, amount: nk_wayland::ScrollAmount, status: &Status) -> bool {
+        let delta = amount.pixels;
         if self.editor.active {
             return self.editor.scroll(delta * 32., status);
         }
         let Some(d) = &mut self.detail else {
             return self.editor.scroll(delta * 32., status);
         };
-        d.scroll(delta);
+        d.scroll(amount.into());
         true
     }
     pub fn detail_at(&self, p: (f64, f64)) -> Option<&'static str> {
@@ -367,14 +372,8 @@ impl Cc {
             return (self.editor.motion(p, status), None);
         }
         if let Some(detail) = &mut self.detail {
-            let hover = detail.target(p);
-            let changed = detail.hover != hover;
-            detail.hover = hover;
-            let act = self
-                .detail_drag
-                .and_then(|id| detail.pointer_action(id, p))
-                .map(Act::Detail);
-            return (changed || self.detail_drag.is_some(), act);
+            let (changed, act) = detail.motion(p);
+            return (changed || act.is_some(), act.map(Act::Detail));
         }
         if let Some(d) = self.drag {
             let act = self.slide(d.id, p, status);
@@ -388,7 +387,7 @@ impl Cc {
 
     pub fn leave(&mut self) -> bool {
         if let Some(d) = &mut self.detail {
-            return d.hover.take().is_some();
+            return d.leave();
         }
         self.hover.take().is_some()
     }
@@ -401,13 +400,7 @@ impl Cc {
         }
         let target = self.target_at(p)?;
         match target {
-            Target::Detail(id) => {
-                let d = self.detail.as_mut()?;
-                if d.rows.iter().any(|r| r.id == id && r.value.is_some()) {
-                    self.detail_drag = Some(id);
-                }
-                d.pointer_action(id, p).map(Act::Detail)
-            }
+            Target::Detail(_) => self.detail.as_mut()?.press().map(Act::Detail),
             Target::Slider(id) => {
                 self.drag = Some(Drag {
                     id,
@@ -442,11 +435,14 @@ impl Cc {
             self.detail_at(p).map(Act::OpenDetail)
         }
     }
-    pub fn release(&mut self) -> bool {
-        if let Some(d) = &mut self.detail {
-            d.held = None;
-        }
-        self.detail_drag.take().is_some() | self.drag.take().is_some()
+    /// The primary button went up: whether a drag ended, and what a detail's release asks.
+    pub fn release(&mut self) -> (bool, Option<Act>) {
+        let act = self
+            .detail
+            .as_mut()
+            .and_then(|d| d.release())
+            .map(Act::Detail);
+        (self.drag.take().is_some() || act.is_some(), act)
     }
 
     /// The slider's value under `p`, asked of its service.
@@ -691,7 +687,7 @@ impl Cc {
         status: &Status,
         fallback: Option<Color>,
     ) -> nk_wayland::Result<()> {
-        if let Some(d) = &self.detail {
+        if let Some(d) = &mut self.detail {
             return d.paint(c, look, fallback);
         }
         self.editor.paint_under(c, fallback);
@@ -2192,7 +2188,7 @@ mod tests {
                     cc.back();
                 }
                 2 => {
-                    cc.open_detail("screenshot", &status);
+                    cc.open_detail("screenshot", &status, None);
                 }
                 3 => {
                     cc.back();
@@ -2205,7 +2201,7 @@ mod tests {
                     cc.focus(Target::Edit(edit::Target::Tile("media")));
                 }
             }
-            cc.place(900., 36., &status, &stored);
+            cc.place(900., 36., &status, &stored, None);
             let mut root = Node::new(1, Role::Panel, "Control Center");
             let mut nodes = std::collections::BTreeMap::new();
             for (node, _) in cc.nodes(100, &status, None) {
@@ -2234,7 +2230,7 @@ mod tests {
             if step == 2 {
                 stored.sizes.insert("volume".into(), "1x1".into());
             }
-            cc.place(900., 36., &status, &stored);
+            cc.place(900., 36., &status, &stored, None);
             let mut root = Node::new(1, Role::Panel, "Control Center");
             let mut nodes = std::collections::BTreeMap::new();
             for (node, _) in cc.nodes(100, &status, None) {
@@ -2264,7 +2260,7 @@ mod tests {
     #[test]
     fn the_panel_hangs_under_the_right_group_and_holds_the_grid() {
         let mut cc = Cc::new();
-        cc.place(1916., 36., &status(), &Default::default());
+        cc.place(1916., 36., &status(), &Default::default(), None);
         // Without Wi-Fi, Bluetooth and a backlight: four rows.
         assert_eq!(
             cc.panel,
@@ -2285,7 +2281,7 @@ mod tests {
     fn clicks_land_on_what_acts() {
         let mut cc = Cc::new();
         let mut s = status();
-        cc.place(1916., 36., &s, &Default::default());
+        cc.place(1916., 36., &s, &Default::default(), None);
         let centre = |r: [f64; 4]| (r[0] + r[2] / 2., r[1] + r[3] / 2.);
         // Appearance at 2×1: the whole capsule.
         let dark = placed(&cc, "dark_mode");
@@ -2314,7 +2310,7 @@ mod tests {
         let (_, act) = cc.motion((t[0] - 50., t[1]), &s);
         assert_eq!(act, Some(Act::Volume(0.)));
         assert_eq!(cc.shown("volume", &s), 0.);
-        assert!(cc.release());
+        assert!(cc.release().0);
         assert_eq!(cc.shown("volume", &s), 0.4);
         // Brightness: the device's raw range.
         s.brightness = Some(Brightness {
@@ -2324,7 +2320,7 @@ mod tests {
             max: 400,
             current: 100,
         });
-        cc.place(1916., 36., &s, &Default::default());
+        cc.place(1916., 36., &s, &Default::default(), None);
         let b = placed(&cc, "brightness");
         let t = slider_track(b.rect, VALUE_W);
         assert_eq!(
@@ -2347,7 +2343,7 @@ mod tests {
         stored.sizes.insert("focus".into(), "1x1".into());
         stored.positions.insert("dark_mode".into(), (1, 0));
         stored.sizes.insert("dark_mode".into(), "2x1".into());
-        cc.place(1916., 36., &s, &stored);
+        cc.place(1916., 36., &s, &stored, None);
         let washes = cc.states(&s);
         let focus = cc.tiles.iter().position(|p| p.tile.id == "focus").unwrap();
         let tile = |i: usize| washes.iter().find(|w| w.id == 1000 + i as u32 * 8).unwrap();

@@ -17,8 +17,8 @@ pub use tokens::{
     scrollbar_from, slider_from,
 };
 pub use view::{
-    Align, Axis, Control, Corner, Icon, Ink, Justify, Key, Kind, Layer, Node, Overlay, Padding,
-    Field, Pane, Reveal, Role, Scroll, Slider, Stack, Text, Wash,
+    Align, Axis, Control, Corner, Field, Icon, Ink, Justify, Key, Kind, Layer, Node, Overlay,
+    Padding, Pane, Reveal, Role, Scroll, Slider, Stack, Text, Wash,
 };
 
 #[cfg(test)]

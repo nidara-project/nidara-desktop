@@ -839,10 +839,12 @@ impl ViewState {
             self.drag = None;
             return None;
         }
-        if !pressed && let Some((key, _)) = self.held.take() {
-            // The release reports the final value; a change not yet asked for is in it.
+        if !pressed && let Some((key, value)) = self.held.take() {
+            // The release reports the final value; a change not yet asked for is in it. The
+            // thumb stays there until the surface rebuilds with its model.
             self.press = None;
             self.slid = None;
+            self.set = Some((key.clone(), value));
             let i = self.index(&key)?;
             return Some(Activated {
                 key,
@@ -1278,7 +1280,11 @@ impl ViewState {
                     }
                     if let Some(f) = &c.field {
                         // A secret is said as nothing: its bullets are not its text.
-                        let text = if f.secret { String::new() } else { f.shown.clone() };
+                        let text = if f.secret {
+                            String::new()
+                        } else {
+                            f.shown.clone()
+                        };
                         let end = text.len();
                         n.text = Some(nk_a11y::TextInfo {
                             caret: f.caret.min(end),

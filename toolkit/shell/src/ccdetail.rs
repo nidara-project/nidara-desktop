@@ -171,20 +171,45 @@ pub struct Detail {
     pub panel: [f64; 4],
     ids: HashMap<String, u64>,
     next_id: u64,
-    pub hover: Option<u64>,
-    pub focus: Option<u64>,
-    pub held: Option<(u64, f64)>,
-    pub offset: usize,
     pub mode: &'static str,
     pub audio: bool,
     pub clipboard_confirm: bool,
     pub error: String,
     pub max_height: f64,
-    limit: usize,
     pub auth_ready: bool,
     pub form: Option<crate::ccauth::Form>,
+    /// The rows' layout, hover, press, focus, held slider and scroll: nk-view's (#1048).
+    pub state: nk_view::ViewState,
+    pub tokens: Option<nk_view::Tokens>,
+    appearance: Option<nk_settings::portal::Appearance>,
+    /// What the last painted frame declared: `states` reads it after `paint`.
+    last: nk_view::Frame,
 }
-const ROW: f64 = 48.;
+/// The view's scroll region: the rows past the output's height scroll.
+const LIST: &str = "list";
+/// Ids for the view's few regions, under the CC's other washes.
+const REGIONS: u32 = 100000;
+fn row_key(id: u64) -> nk_view::Key {
+    nk_view::Key::from(format!("r{id}"))
+}
+fn row_of(key: &nk_view::Key) -> Option<u64> {
+    key.0.strip_prefix('r')?.split('/').next()?.parse().ok()
+}
+/// A row's slider value as it reads: a time of day as hours and minutes.
+fn value_text(action: &Option<Action>, v: f64) -> String {
+    if matches!(action, Some(Action::Time(..))) {
+        format!("{:02}:{:02}", v as i32 / 60, v as i32 % 60)
+    } else {
+        format!("{v:.0}")
+    }
+}
+fn sized(base: &TextStyle, size: f32) -> TextStyle {
+    TextStyle {
+        size,
+        line_height: 1.3,
+        ..base.clone()
+    }
+}
 impl Detail {
     pub fn new(page: &'static str, generation: u64) -> Self {
         Self {
@@ -193,10 +218,6 @@ impl Detail {
             panel: [0.; 4],
             ids: HashMap::new(),
             next_id: generation * 10000,
-            hover: None,
-            focus: None,
-            held: None,
-            offset: 0,
             mode: if page == "screenshot" {
                 "area"
             } else {
@@ -206,12 +227,36 @@ impl Detail {
             clipboard_confirm: false,
             error: String::new(),
             max_height: 1080.,
-            limit: 8,
             auth_ready: false,
             form: None,
+            state: nk_view::ViewState::new(REGIONS),
+            tokens: None,
+            appearance: None,
+            last: nk_view::Frame::default(),
         }
     }
-    pub fn refresh(&mut self, status: &Status, panel: [f64; 4]) {
+    /// The rows for `status`, laid out in `panel` when the look is there (without it, as in
+    /// tests that lay out themselves, only the model changes).
+    pub fn refresh(&mut self, status: &Status, panel: [f64; 4], look: Option<&mut Look>) {
+        self.model(status);
+        self.panel = panel;
+        let Some(look) = look else {
+            return;
+        };
+        if self.appearance.as_ref() != Some(&look.appearance) {
+            self.appearance = Some(look.appearance.clone());
+            self.tokens = crate::nc_view::tokens(&look.exports, &look.appearance)
+                .map_err(|e| eprintln!("nidara-shell: the CC detail has no tokens: {e}"))
+                .ok();
+            self.state
+                .set_reduced_motion(look.appearance.reduced_motion);
+        }
+        let labels: Vec<String> = self.rows.iter().map(|r| r.label(Some(look))).collect();
+        let remove = super::edit::Editor::action_label("Remove", Some(look));
+        let style = look.styles.text.clone();
+        self.lay(&mut look.text, &style, &labels, &remove, panel);
+    }
+    fn model(&mut self, status: &Status) {
         let mut rows = if let Some(form) = &self.form {
             let mut fields: Vec<_> = form
                 .fields
@@ -289,173 +334,323 @@ impl Detail {
                 self.next_id
             });
         }
-        if let Some((id, value)) = self.held
-            && let Some(row) = rows.iter_mut().find(|r| r.id == id)
-            && let Some((min, max, _)) = row.value
-        {
-            row.value = Some((min, max, value.clamp(min, max)));
-        }
         self.rows = rows;
+    }
+
+    /// The view: one control per row, in a region that scrolls when the output is short.
+    fn view(&self, style: &TextStyle, labels: &[String], remove: &str) -> nk_view::Node {
+        use nk_view::{Corner, Ink, Node, Padding, Radius, Role, Space};
+        let body = sized(style, TEXT);
+        let small = sized(style, SMALL);
+        let rows = self
+            .rows
+            .iter()
+            .zip(labels)
+            .map(|(row, label)| {
+                let key = row_key(row.id);
+                let id = row.id;
+                let k = move |part: &str| format!("r{id}/{part}");
+                let enabled = row.action.is_some();
+                let title = Node::text(k("label"), label.clone(), body.clone()).lines(1);
+                if let Some((min, max, current)) = row.value {
+                    // A slider row: its name and value over its track; the track is the control.
+                    let step = if matches!(
+                        row.action,
+                        Some(Action::Number("nightlight.temperature", _))
+                    ) {
+                        100.
+                    } else {
+                        1.
+                    };
+                    let head = Node::row(
+                        k("head"),
+                        vec![
+                            title.grow(),
+                            Node::text(k("value"), value_text(&row.action, current), small.clone())
+                                .ink(Ink::Secondary),
+                        ],
+                    )
+                    .gap(Space::S2);
+                    let slider = Node::slider(
+                        key,
+                        label.clone(),
+                        "row",
+                        nk_view::Slider::new(min, max, step, current),
+                    )
+                    .enabled(enabled)
+                    .description(row.description.clone());
+                    return Node::column(k("slot"), vec![head, slider])
+                        .gap(Space::S1)
+                        .padding(Padding::symmetric(Space::S2, Space::S2));
+                }
+                if let Some(Action::SecretFocus(index)) = row.action {
+                    // A secret field: its bullets only (VIEW.md §12.2).
+                    let (shown, caret, anchor) = self
+                        .form
+                        .as_ref()
+                        .and_then(|f| f.fields.get(index))
+                        .map(|f| {
+                            let count = |end: usize| f.text[..end].chars().count().min(32);
+                            let dot = '•'.len_utf8();
+                            (
+                                "•".repeat(count(f.text.len())),
+                                count(f.caret) * dot,
+                                count(f.anchor.min(f.text.len())) * dot,
+                            )
+                        })
+                        .unwrap_or_default();
+                    let field = Node::field(
+                        k("field"),
+                        label.clone(),
+                        "submit",
+                        nk_view::Field {
+                            shown,
+                            caret,
+                            anchor,
+                            secret: true,
+                        },
+                        small.clone(),
+                    );
+                    return Node::column(k("slot"), vec![title, field])
+                        .gap(Space::S1)
+                        .padding(Padding::symmetric(Space::S2, Space::S3));
+                }
+                let mut line = vec![];
+                if row.checked.is_some() {
+                    line.push(Node::slot(k("check"), 10.));
+                }
+                if row.thumbnail.is_some() {
+                    line.push(Node::slot(k("thumb"), 32.));
+                }
+                let mut text = vec![title];
+                if !row.description.is_empty() {
+                    text.push(
+                        Node::text(k("sub"), row.description.clone(), small.clone())
+                            .lines(1)
+                            .ink(Ink::Secondary),
+                    );
+                }
+                line.push(Node::column(k("text"), text).grow());
+                let clip_row = matches!(
+                    row.action,
+                    Some(Action::Clipboard {
+                        wipe: false,
+                        remove: false,
+                        ..
+                    })
+                );
+                if clip_row {
+                    line.push(
+                        Node::control(
+                            k("remove"),
+                            remove,
+                            "remove",
+                            Node::text(k("x"), "×", body.clone()),
+                        )
+                        .corner(Corner::Pill),
+                    );
+                }
+                let control = Node::control(
+                    key,
+                    label.clone(),
+                    "row",
+                    Node::row(k("line"), line)
+                        .gap(Space::S2)
+                        .align(nk_view::Align::Center)
+                        .padding(Padding::symmetric(Space::S3, Space::S2)),
+                )
+                .corner(Corner::Token(Radius::Md))
+                .enabled(enabled)
+                .description(row.description.clone());
+                match row.checked {
+                    Some(on) => control.role(Role::Toggle).marked(on),
+                    None => control,
+                }
+            })
+            .collect();
+        Node::scroll(
+            LIST,
+            Node::column("rows", rows).padding(Padding::all(Space::S4)),
+        )
+    }
+
+    /// Lays the rows out in `panel`: as tall as they are, up to the output's bottom, where
+    /// they scroll.
+    fn lay(
+        &mut self,
+        text: &mut dyn nk_text::TextBackend,
+        style: &TextStyle,
+        labels: &[String],
+        remove: &str,
+        panel: [f64; 4],
+    ) {
+        let Some(tokens) = self.tokens.clone() else {
+            return;
+        };
+        let view = self.view(style, labels, remove);
+        let room = (self.max_height - panel[1]).max(ROW_MIN);
+        let now = std::time::Instant::now();
+        let mut bounds = [panel[0], panel[1], panel[2], room];
+        self.state.layout_in(&view, bounds, 1., &tokens, text, now);
+        let content = self.state.rect(&"rows".into()).map_or(room, |r| r[3]);
+        if content < room {
+            bounds[3] = content;
+            self.state.layout_in(&view, bounds, 1., &tokens, text, now);
+        }
+        self.panel = bounds;
         if self.form.is_some()
-            && !self.rows.iter().any(|r| Some(r.id) == self.focus)
-            && let Some(id) = self
+            && self.focused().is_none_or(|id| self.row(id).is_none())
+            && let Some(first) = self
                 .rows
                 .iter()
                 .find(|r| matches!(r.action, Some(Action::SecretFocus(_))))
                 .map(|r| r.id)
         {
-            self.focus_row(id);
+            // A question for a secret takes the focus to its first field.
+            self.focus_row(first);
         }
-        self.offset = self.offset.min(self.rows.len().saturating_sub(self.limit));
-        self.limit = (((self.max_height - panel[1] - 2. * PAD) / ROW).floor() as usize).clamp(1, 8);
-        self.panel = [
-            panel[0],
-            panel[1],
-            panel[2],
-            self.rows.len().min(self.limit) as f64 * ROW + 2. * PAD,
-        ];
+        self.sync_form();
     }
-    pub fn key(&mut self, key: &nk_wayland::Key) -> Option<Action> {
-        let mut index = self
-            .rows
-            .iter()
-            .position(|r| Some(r.id) == self.focus)
-            .unwrap_or(0);
-        if [0xff09, 0xfe20, 0xff52, 0xff54].contains(&key.sym) {
-            let backward =
-                key.sym == 0xfe20 || key.sym == 0xff52 || (key.sym == 0xff09 && key.shift);
-            for _ in 0..self.rows.len() {
-                index = if backward {
-                    (index + self.rows.len() - 1) % self.rows.len()
-                } else {
-                    (index + 1) % self.rows.len()
-                };
-                if self.rows[index].action.is_some() {
-                    break;
-                }
-            }
-            self.focus_row(self.rows[index].id);
-            if index < self.offset {
-                self.offset = index;
-            } else if index >= self.offset + self.limit {
-                self.offset = index + 1 - self.limit;
-            }
-            return None;
-        }
-        let row = &self.rows[index];
-        if [0xff51, 0xff53].contains(&key.sym)
-            && let Some((_, _, value)) = row.value
-        {
-            let step = if matches!(
-                row.action,
-                Some(Action::Number("nightlight.temperature", _))
-            ) {
-                100.
-            } else {
-                1.
-            };
-            return self.action(
-                row.id,
-                Some(value + if key.sym == 0xff51 { -step } else { step }),
-            );
-        }
-        if key.sym == 0xffff {
-            return self.named(row.id, "Remove");
-        }
-        if [0xff0d, 0x20].contains(&key.sym) {
-            return self.action(row.id, None);
-        }
-        None
+    /// Back to the first row, as a new question arrives.
+    pub fn to_top(&mut self) {
+        self.state.key(nk_view::KeyInput::Home);
     }
-    pub fn focus_row(&mut self, id: u64) {
-        let Some(index) = self.rows.iter().position(|r| r.id == id) else {
-            return;
-        };
-        self.focus = Some(id);
-        if let Some(Action::SecretFocus(field)) = self.rows[index].action
+
+    /// The secret field nk-view focused is the form's.
+    fn sync_form(&mut self) {
+        if let Some(index) = self.focused_field()
             && let Some(form) = &mut self.form
         {
-            form.focus(field);
-        }
-        if index < self.offset {
-            self.offset = index;
-        } else if index >= self.offset + self.limit {
-            self.offset = index + 1 - self.limit;
+            form.focus(index);
         }
     }
+
+    /// The row the focus is on.
+    pub fn focused(&self) -> Option<u64> {
+        self.state.focus().and_then(row_of)
+    }
+    fn row(&self, id: u64) -> Option<&Row> {
+        self.rows.iter().find(|r| r.id == id)
+    }
+    /// The control a row's focus lands on: a secret row's field, else the row.
+    fn focus_key(&self, id: u64) -> Option<nk_view::Key> {
+        let row = self.row(id)?;
+        Some(match row.action {
+            Some(Action::SecretFocus(_)) => nk_view::Key::from(format!("r{id}/field")),
+            _ => row_key(id),
+        })
+    }
+
+    pub fn key(&mut self, key: &nk_wayland::Key) -> Option<Action> {
+        use nk_view::KeyInput as K;
+        let input = match key.sym {
+            0xff09 if key.shift => K::ShiftTab,
+            0xff09 | 0xff54 => K::Tab,
+            0xfe20 | 0xff52 => K::ShiftTab,
+            0xff51 => K::Left,
+            0xff53 => K::Right,
+            0xff0d | 0xff8d | 0x20 => K::Activate,
+            0xff55 => K::PageUp,
+            0xff56 => K::PageDown,
+            0xff50 if key.ctrl => K::Home,
+            0xff57 if key.ctrl => K::End,
+            0xff50 => K::LineStart,
+            0xff57 => K::LineEnd,
+            0xffff => return self.focused().and_then(|id| self.named(id, "Remove")),
+            _ => return None,
+        };
+        if self.state.focus().is_none() && matches!(input, K::Tab | K::ShiftTab) {
+            // The first Tab lands on the first row that does something, as before.
+            let first = self
+                .rows
+                .iter()
+                .find(|r| r.action.is_some())
+                .map(|r| r.id)?;
+            self.focus_row(first);
+            return None;
+        }
+        let a = self.state.key(input);
+        self.sync_form();
+        a.and_then(|a| self.activated(&a))
+    }
+    pub fn focus_row(&mut self, id: u64) {
+        let Some(key) = self.focus_key(id) else {
+            return;
+        };
+        self.state.request(&key, false);
+        self.sync_form();
+    }
     pub fn focused_field(&self) -> Option<usize> {
-        let row = self.rows.iter().find(|r| Some(r.id) == self.focus)?;
-        match row.action {
+        let id = row_of(self.state.editing()?)?;
+        match self.row(id)?.action {
             Some(Action::SecretFocus(index)) => Some(index),
             _ => None,
         }
     }
-    pub fn text_input(&self, look: Option<&mut Look>) -> nk_wayland::TextInput {
-        let Some(index) = self.focused_field() else {
+    pub fn text_input(&self) -> nk_wayland::TextInput {
+        let Some(key) = self.state.editing() else {
             return Default::default();
         };
-        let Some((_, r)) = self.visible().find(|(row, _)| Some(row.id) == self.focus) else {
+        let Some(r) = self.state.caret(key) else {
             return Default::default();
         };
-        let count = self
-            .form
-            .as_ref()
-            .map(|f| {
-                f.fields[index].text[..f.fields[index].caret]
-                    .chars()
-                    .count()
-                    .min(32)
-            })
-            .unwrap_or(0);
-        let advance = look
-            .and_then(|look| {
-                let style = style_small(look);
-                lay_out(look, &"•".repeat(count), &style, f32::MAX)
-                    .ok()
-                    .map(|layout| f64::from(layout.measured_size().width))
-            })
-            .unwrap_or(0.);
         nk_wayland::TextInput {
             focused: true,
             password: true,
             text: String::new(),
             cursor: 0,
             anchor: 0,
-            rect: [
-                (r[0] + 8. + advance.min(r[2] - 16.)) as i32,
-                (r[1] + 27.) as i32,
-                1,
-                14,
-            ],
+            rect: [r[0] as i32, r[1] as i32, 1, r[3].ceil() as i32],
         }
     }
-    pub fn scroll(&mut self, delta: f64) {
-        let max = self.rows.len().saturating_sub(self.limit);
-        self.offset = (self.offset as isize + if delta > 0. { 1 } else { -1 })
-            .clamp(0, max as isize) as usize;
+    pub fn scroll(&mut self, by: nk_view::ScrollBy) -> bool {
+        self.state.scroll(by)
     }
-    fn visible(&self) -> impl Iterator<Item = (&Row, [f64; 4])> {
-        self.rows
-            .iter()
-            .skip(self.offset)
-            .take(self.limit)
-            .enumerate()
-            .map(|(i, row)| {
-                (
-                    row,
-                    [
-                        self.panel[0] + PAD,
-                        self.panel[1] + PAD + i as f64 * ROW,
-                        self.panel[2] - 2. * PAD,
-                        ROW,
-                    ],
-                )
-            })
+    /// The list's offset into its rows.
+    pub fn offset(&self) -> f64 {
+        self.state.window(&LIST.into()).map_or(0., |w| w.0)
     }
+    /// The row a semantic target or the pointer names, at `p`.
     pub fn target(&self, p: (f64, f64)) -> Option<u64> {
-        self.visible()
-            .find(|(_, r)| inside(*r, p))
-            .map(|(row, _)| row.id)
+        self.state
+            .placed()
+            .iter()
+            .rev()
+            .filter(|pl| matches!(pl.what, nk_view::What::Control(_)) && pl.alpha > 0.)
+            .find(|pl| pl.visible().is_some_and(|v| inside(v, p)))
+            .and_then(|pl| row_of(&pl.key))
+    }
+    /// The pointer moved: whether the hover changed, and what a held slider asks.
+    pub fn motion(&mut self, p: (f64, f64)) -> (bool, Option<Action>) {
+        let changed = self.state.pointer_motion(p.0, p.1);
+        let slid = self.state.slid();
+        (changed, slid.and_then(|a| self.activated(&a)))
+    }
+    pub fn leave(&mut self) -> bool {
+        self.state.pointer_leave()
+    }
+    /// A press: a slider takes the value under the pointer; a field takes the focus.
+    pub fn press(&mut self) -> Option<Action> {
+        let a = self.state.button(true, std::time::Instant::now());
+        self.sync_form();
+        a.and_then(|a| self.activated(&a))
+    }
+    /// A release: a row activates when released over itself; a slider reports its last value.
+    pub fn release(&mut self) -> Option<Action> {
+        let a = self.state.button(false, std::time::Instant::now());
+        a.and_then(|a| self.activated(&a))
+    }
+    /// What an activation of the view asks for.
+    fn activated(&mut self, a: &nk_view::Activated) -> Option<Action> {
+        let id = row_of(&a.key)?;
+        match a.action.as_str() {
+            "remove" => self.named(id, "Remove"),
+            "submit" => Some(Action::SecretSubmit),
+            _ => {
+                let value = self.state.value(&row_key(id));
+                self.action(id, value)
+            }
+        }
     }
     pub fn action(&mut self, id: u64, value: Option<f64>) -> Option<Action> {
         if value.is_some_and(|v| !v.is_finite()) {
@@ -540,222 +735,77 @@ impl Detail {
             _ => None,
         }
     }
-    pub fn pointer_action(&mut self, id: u64, p: (f64, f64)) -> Option<Action> {
-        let (row, r) = self.visible().find(|(row, _)| row.id == id)?;
-        if let Some(Action::Clipboard {
-            id,
-            revision,
-            remove: false,
-            wipe: false,
-        }) = &row.action
-            && p.0 > r[0] + r[2] - 32.
-        {
-            return Some(Action::Clipboard {
-                id: id.clone(),
-                revision: *revision,
-                remove: true,
-                wipe: false,
-            });
-        }
-        let value = row
-            .value
-            .map(|(min, max, _)| min + (max - min) * ((p.0 - r[0]) / r[2]).clamp(0., 1.));
-        self.focus = Some(id);
-        self.held = value.map(|v| (id, v));
-        self.action(id, value)
-    }
+    /// The rows, then what nk-view leaves to the surface: a toggle row's mark and a clipboard
+    /// entry's picture, in their slots (VIEW.md §12.3).
     pub fn paint(
-        &self,
+        &mut self,
         c: &mut Canvas,
         look: &mut Look,
         fallback: Option<Color>,
     ) -> nk_wayland::Result<()> {
+        let Some(tokens) = self.tokens.as_ref() else {
+            return Ok(());
+        };
         if let Some(base) = fallback {
             c.rounded_rect(rect(self.panel), SQUARE_RADIUS, base);
-            for state in self.states() {
-                c.rounded_rect(
-                    rect([
-                        state.bounds.x,
-                        state.bounds.y,
-                        state.bounds.width,
-                        state.bounds.height,
-                    ]),
-                    state.radius,
-                    Color::new(state.wash.map(|v| v as f32)),
-                );
-            }
         }
-        let style = style(look, TEXT, 400.);
-        for (row, r) in self.visible() {
-            let label = row.label(Some(look));
-            let image_row = row.thumbnail.is_some();
-            if let Some((revision, id)) = &row.thumbnail
-                && let Some(image) = crate::ccaux::thumbnail(*revision, id)
+        self.last = self.state.frame(tokens, std::time::Instant::now());
+        if let Err(e) = self.state.paint(
+            c,
+            tokens,
+            &mut |_, _| None,
+            fallback.is_some().then_some(&self.last),
+        ) {
+            eprintln!("nidara-shell: the CC detail cannot be drawn: {e}");
+        }
+        for p in self.state.placed() {
+            let Some(id) = row_of(&p.key) else {
+                continue;
+            };
+            let (Some(visible), Some(row)) = (p.visible(), self.row(id)) else {
+                continue;
+            };
+            if p.alpha <= 0. {
+                continue;
+            }
+            c.push_opacity(p.alpha);
+            c.clip(rect(visible));
+            if p.key.0.ends_with("/check")
+                && let Some(on) = row.checked
             {
-                c.image(
-                    &image,
-                    rect([r[0] + 8., r[1] + 4., 32., 32.]),
-                    ImageFit::Contain,
-                );
-            }
-            let clip_row = matches!(
-                row.action,
-                Some(Action::Clipboard {
-                    wipe: false,
-                    remove: false,
-                    ..
-                })
-            );
-            if matches!(
-                row.action,
-                Some(Action::Clipboard {
-                    wipe: false,
-                    remove: false,
-                    ..
-                })
-            ) {
-                crate::notification_card::text(
-                    c,
-                    look,
-                    "×",
-                    &style,
-                    [r[0] + r[2] - 28., r[1] + 12., 20., 24.],
-                    1,
-                    1.,
-                )?;
-            }
-            if let Some(checked) = row.checked {
-                let b = rect([r[0] + 8., r[1] + 13., 10., 10.]);
-                if checked {
+                let b = rect(p.rect);
+                if on {
                     c.rounded_rect(b, 5., look.styles.palette.accent);
                 } else {
                     c.rounded_ring(b, 5., 1., ink(DIM));
                 }
             }
-            let text = fit(
-                look,
-                &label,
-                &style,
-                r[2] - if clip_row {
-                    if image_row { 86. } else { 46. }
-                } else if row.value.is_some() {
-                    80.
-                } else if row.checked.is_some() {
-                    34.
-                } else {
-                    16.
-                },
-            );
-            let layout = lay_out(look, &text, &style, r[2] as f32)?;
-            c.layout(
-                &layout,
-                (
-                    (r[0]
-                        + if image_row {
-                            48.
-                        } else if row.checked.is_some() {
-                            26.
-                        } else {
-                            8.
-                        }) as f32,
-                    (r[1] + 8.) as f32,
-                ),
-                ink(1.),
-            )?;
-            let sub = row
-                .value
-                .map(|(_, _, v)| {
-                    if matches!(row.action, Some(Action::Time(..))) {
-                        format!("{:02}:{:02}", v as i32 / 60, v as i32 % 60)
-                    } else {
-                        format!("{v:.0}")
-                    }
-                })
-                .unwrap_or_else(|| {
-                    if let Some(Action::SecretFocus(index)) = &row.action {
-                        self.form
-                            .as_ref()
-                            .and_then(|f| f.fields.get(*index))
-                            .map(|f| "•".repeat(f.text.chars().count().min(32)))
-                            .unwrap_or_default()
-                    } else {
-                        row.description.clone()
-                    }
-                });
-            if let Some((min, max, value)) = row.value {
-                let track = [r[0] + 8., r[1] + ROW - 10., r[2] - 16., 4.];
-                let at = track[0] + track[2] * ((value - min) / (max - min).max(1.)).clamp(0., 1.);
-                c.rounded_rect(rect(track), 2., ink(0.18));
-                c.rounded_rect(rect([track[0], track[1], at - track[0], 4.]), 2., ink(0.9));
-                c.rounded_rect(rect([at - 5., track[1] - 3., 10., 10.]), 5., ink(0.95));
-            }
-            if !sub.is_empty() {
-                let small = style_small(look);
-                let sub = fit(look, &sub, &small, r[2] - 16.);
-                let layout = lay_out(look, &sub, &small, r[2] as f32)?;
-                let (x, y) = if row.value.is_some() {
-                    (
-                        r[0] + r[2] - f64::from(layout.measured_size().width) - 8.,
-                        r[1] + 8.,
-                    )
-                } else {
-                    (r[0] + 8., r[1] + 27.)
-                };
-                c.layout(&layout, (x as f32, y as f32), ink(SECONDARY))?;
-            }
-            if let Some(Action::SecretFocus(index)) = row.action
-                && let Some(form) = &self.form
-                && self.focus == Some(row.id)
-                && form.focused == index
+            if p.key.0.ends_with("/thumb")
+                && let Some((revision, thumb)) = &row.thumbnail
+                && let Some(image) = crate::ccaux::thumbnail(*revision, thumb)
             {
-                let field = &form.fields[index];
-                let bullets = "•".repeat(field.text[..field.caret].chars().count().min(32));
-                let small = style_small(look);
-                let echo = lay_out(look, &bullets, &small, f32::MAX)?;
-                let caret =
-                    (r[0] + 8. + f64::from(echo.measured_size().width)).min(r[0] + r[2] - 8.);
-                c.rect(rect([caret, r[1] + 27., 1., 14.]), ink(1.));
+                c.image(&image, rect(p.rect), ImageFit::Contain);
             }
+            c.pop_clip();
+            c.pop_opacity();
         }
         Ok(())
     }
+    /// The washes the last painted frame declared.
     pub fn states(&self) -> Vec<StateRegion> {
-        self.visible()
-            .map(|(row, r)| StateRegion {
-                id: 100000 + row.id as u32,
-                bounds: MaterialRect {
-                    x: r[0],
-                    y: r[1],
-                    width: r[2],
-                    height: r[3],
-                },
-                radius: 12.,
-                wash: [
-                    1.,
-                    1.,
-                    1.,
-                    if self.hover == Some(row.id) || self.focus == Some(row.id) {
-                        HOVER
-                    } else {
-                        0.
-                    },
-                ],
-                fade_ms: FADE_MS,
-            })
-            .collect()
+        self.last.states.clone()
     }
     pub fn nodes(&self, first: u64, look: Option<&Look>) -> Vec<(nk_a11y::Node, Target)> {
         use nk_a11y::{Action as A, Bounds, Node, Role, ValueInfo};
+        let window = self.state.rect(&LIST.into()).unwrap_or(self.panel);
         self.rows
             .iter()
-            .enumerate()
-            .map(|(index, row)| {
-                let r = [
-                    self.panel[0] + PAD,
-                    self.panel[1] + PAD + (index as f64 - self.offset as f64) * ROW,
-                    self.panel[2] - 2. * PAD,
-                    ROW,
-                ];
+            .map(|row| {
+                let r = self
+                    .state
+                    .rect(&row_key(row.id))
+                    .or_else(|| self.state.rect(&format!("r{}/slot", row.id).into()))
+                    .unwrap_or([self.panel[0], self.panel[1], self.panel[2], 0.]);
                 let label = row.label(look);
                 let role = if matches!(row.action, Some(Action::SecretFocus(_))) {
                     Role::Password
@@ -775,12 +825,11 @@ impl Detail {
                 };
                 n.description = row.description.clone();
                 n.states.checked = row.checked == Some(true);
-                n.states.offscreen = index < self.offset || index >= self.offset + self.limit;
-                n.states.focused = self.focus == Some(row.id);
+                n.states.offscreen = r[1] + r[3] <= window[1] || r[1] >= window[1] + window[3];
+                n.states.focused = self.focused() == Some(row.id);
                 n.states.disabled = row.action.is_none();
                 if let Some(Action::SecretFocus(_)) = row.action {
                     n.text = Some(Default::default());
-                    n.states.focused = self.focus == Some(row.id);
                 }
                 n.actions = if role == Role::Password {
                     vec![A::Focus, A::SetText]
@@ -791,16 +840,15 @@ impl Detail {
                 } else {
                     vec![A::Focus, A::Activate]
                 };
-                n.value = row.value.map(|(min, max, current)| ValueInfo {
-                    min,
-                    max,
-                    current,
-                    step: 1.,
-                    text: if matches!(row.action, Some(Action::Time(..))) {
-                        format!("{:02}:{:02}", current as i32 / 60, current as i32 % 60)
-                    } else {
-                        format!("{current:.0}")
-                    },
+                n.value = row.value.map(|(min, max, current)| {
+                    let current = self.state.value(&row_key(row.id)).unwrap_or(current);
+                    ValueInfo {
+                        min,
+                        max,
+                        current,
+                        step: 1.,
+                        text: value_text(&row.action, current),
+                    }
                 });
                 if matches!(
                     row.action,
@@ -821,9 +869,8 @@ impl Detail {
             .collect()
     }
 }
-fn style_small(look: &Look) -> TextStyle {
-    style(look, SMALL, 400.)
-}
+/// The least room a detail gets, on an output too short for it.
+const ROW_MIN: f64 = 48.;
 fn text(v: &Value, k: &str) -> String {
     v[k].as_str().unwrap_or("").to_owned()
 }
@@ -1601,6 +1648,20 @@ fn write_to(
 mod tests {
     use super::*;
     use serde_json::json;
+    /// Lays `d` out as the bar would, with the exported tokens; false (skipped) without them.
+    fn laid(d: &mut Detail, s: &Status, panel: [f64; 4]) -> bool {
+        let Some(tokens) = crate::nc_view::exported_tokens() else {
+            return false;
+        };
+        d.tokens = Some(tokens);
+        d.refresh(s, panel, None);
+        let labels: Vec<_> = d.rows.iter().map(|r| r.label(None)).collect();
+        let mut text =
+            nk_text::ParleyBackend::new(Arc::new(nk_text::FontSet::discover_required().unwrap()))
+                .unwrap();
+        d.lay(&mut text, &TextStyle::default(), &labels, "Remove", panel);
+        true
+    }
     fn status() -> Status {
         let mut s = Status::default();
         s.apply(crate::status::Update::Network(Arc::new(json!({"wirelessEnabled":true,"profiles":[],"devices":[{"path":"/wifi/1","kind":2,"state":30,"activeAp":"/","accessPoints":[
@@ -1655,7 +1716,7 @@ mod tests {
         let mut s = status();
         let mut d = Detail::new("wifi", 1);
         d.auth_ready = true;
-        d.refresh(&s, [0., 50., 396., 400.]);
+        d.refresh(&s, [0., 50., 396., 400.], None);
         let home = d
             .rows
             .iter()
@@ -1674,11 +1735,11 @@ mod tests {
             .unwrap()
             .reverse();
         s.apply(crate::status::Update::Network(Arc::new(data)));
-        d.refresh(&s, d.panel);
+        d.refresh(&s, d.panel, None);
         assert!(matches!(d.action(home,None),Some(Action::Connect {ap,..}) if ap=="/ap/strong"));
         assert!(matches!(d.action(other,None),Some(Action::Connect {ap,..}) if ap=="/ap/other"));
         s.apply(crate::status::Update::Wifi(None, String::new()));
-        d.refresh(&s, d.panel);
+        d.refresh(&s, d.panel, None);
         assert!(d.action(home, None).is_none());
     }
     #[test]
@@ -1691,7 +1752,7 @@ mod tests {
         .unwrap();
         form.replace(0, "private日本password");
         d.form = Some(form);
-        d.refresh(&status(), [0., 50., 396., 400.]);
+        d.refresh(&status(), [0., 50., 396., 400.], None);
         let nodes = d.nodes(901, None);
         let password = &nodes
             .iter()
@@ -1707,11 +1768,13 @@ mod tests {
         let mut detail = Detail::new("wifi", 1);
         detail.form =
             crate::ccauth::Form::new(1, &json!({"setting":"802-1x","hints":["password"]}));
-        detail.refresh(&status(), [0., 50., 396., 400.]);
+        if !laid(&mut detail, &status(), [0., 50., 396., 400.]) {
+            return;
+        }
         assert_eq!(detail.focused_field(), Some(0));
-        assert!(detail.text_input(None).focused);
-        assert!(detail.text_input(None).password);
-        assert!(detail.text_input(None).text.is_empty());
+        assert!(detail.text_input().focused);
+        assert!(detail.text_input().password);
+        assert!(detail.text_input().text.is_empty());
         let tab = nk_wayland::Key {
             serial: None,
             sym: 0xff09,
@@ -1726,10 +1789,10 @@ mod tests {
             if detail
                 .rows
                 .iter()
-                .any(|r| Some(r.id) == detail.focus && r.action == Some(Action::SecretSubmit))
+                .any(|r| Some(r.id) == detail.focused() && r.action == Some(Action::SecretSubmit))
             {
                 reached_submit = true;
-                assert!(!detail.text_input(None).focused);
+                assert!(!detail.text_input().focused);
                 assert_eq!(
                     detail.key(&nk_wayland::Key {
                         sym: 0x20,
@@ -1757,7 +1820,9 @@ mod tests {
         ] {
             let mut d = Detail::new(page, 1);
             d.max_height = 230.;
-            d.refresh(&s, [0., 50., 396., 400.]);
+            if !laid(&mut d, &s, [0., 50., 396., 400.]) {
+                return;
+            }
             assert!(d.panel[1] + d.panel[3] <= 230.);
             let back = d.rows[0].id;
             assert_eq!(d.action(back, None), Some(Action::Back));
@@ -1770,9 +1835,11 @@ mod tests {
                     ctrl: false,
                     alt: false,
                 });
-                assert!(d.focus.is_some());
-                d.scroll(1.);
-                assert!(d.offset > 0);
+                assert!(d.focused().is_some());
+                // The wheel scrolls the list under the pointer.
+                d.motion((100., 100.));
+                assert!(d.scroll(nk_view::ScrollBy::Steps(1.)));
+                assert!(d.offset() > 0.);
             }
         }
     }
@@ -1784,14 +1851,14 @@ mod tests {
             enabled: false,
             temperature: 4000,
         });
-        d.refresh(&s, [0., 50., 396., 400.]);
+        d.refresh(&s, [0., 50., 396., 400.], None);
         let id = d.rows.iter().find(|r| r.value.is_some()).unwrap().id;
         assert_eq!(
             d.action(id, Some(9000.)),
             Some(Action::Number("nightlight.temperature", 6500))
         );
         let mut d = Detail::new("screenshot", 2);
-        d.refresh(&s, d.panel);
+        d.refresh(&s, d.panel, None);
         let id = d
             .rows
             .iter()
@@ -1800,5 +1867,101 @@ mod tests {
             .id;
         assert_eq!(d.action(id, None), None);
         assert_eq!(d.mode, "window");
+    }
+    #[test]
+    fn a_secret_reaches_the_view_only_as_its_bullets() {
+        let mut d = Detail::new("wifi", 1);
+        let mut form = crate::ccauth::Form::new(
+            7,
+            &json!({"setting":"802-11-wireless-security","hints":["psk"]}),
+        )
+        .unwrap();
+        form.replace(0, "private日本password");
+        d.form = Some(form);
+        if !laid(&mut d, &status(), [0., 50., 396., 400.]) {
+            return;
+        }
+        let placed = format!("{:?}", d.state.placed());
+        assert!(!placed.contains("private"), "the view holds no secret");
+        assert!(placed.contains(&"•".repeat(17)), "one per character");
+        // Its caret stands at the end of the bullets, for the input method.
+        let caret = d.text_input().rect;
+        let field = d
+            .state
+            .rect(&d.focus_key(d.focused().unwrap()).unwrap())
+            .unwrap();
+        assert!(f64::from(caret[0]) > field[0] + 20., "{caret:?} {field:?}");
+    }
+    #[test]
+    fn a_row_acts_when_released_over_itself_and_not_elsewhere() {
+        let mut d = Detail::new("screenshot", 1);
+        if !laid(&mut d, &status(), [0., 50., 396., 400.]) {
+            return;
+        }
+        let window = d
+            .rows
+            .iter()
+            .find(|r| matches!(r.action, Some(Action::SetMode("window"))))
+            .unwrap()
+            .id;
+        let r = d.state.rect(&row_key(window)).unwrap();
+        d.motion((r[0] + 20., r[1] + r[3] / 2.));
+        assert_eq!(d.target((r[0] + 20., r[1] + r[3] / 2.)), Some(window));
+        assert_eq!(d.press(), None, "a press alone does nothing");
+        assert_eq!(d.release(), None, "the mode is the view's own");
+        assert_eq!(d.mode, "window");
+        // Pressed, then released off the row: nothing.
+        let back = d.rows[0].id;
+        let b = d.state.rect(&row_key(back)).unwrap();
+        d.motion((b[0] + 20., b[1] + b[3] / 2.));
+        d.press();
+        d.motion((r[0] + 20., r[1] + r[3] / 2.));
+        assert_eq!(d.release(), None);
+        d.motion((b[0] + 20., b[1] + b[3] / 2.));
+        d.press();
+        assert_eq!(d.release(), Some(Action::Back));
+    }
+    #[test]
+    fn a_slider_row_reports_its_value_while_dragged_and_on_release() {
+        let mut d = Detail::new("night_light", 1);
+        let mut s = status();
+        s.night = Some(crate::status::Night {
+            enabled: true,
+            temperature: 4000,
+        });
+        if !laid(&mut d, &s, [0., 50., 396., 400.]) {
+            return;
+        }
+        let row = d.rows.iter().find(|r| r.value.is_some()).unwrap();
+        let (min, max, _) = row.value.unwrap();
+        let t = d.state.rect(&row_key(row.id)).unwrap();
+        let y = t[1] + t[3] / 2.;
+        d.motion((t[0] + 1., y));
+        assert_eq!(
+            d.press(),
+            Some(Action::Number("nightlight.temperature", min as i32))
+        );
+        let (_, slid) = d.motion((t[0] + t[2] + 50., y));
+        assert_eq!(
+            slid,
+            Some(Action::Number("nightlight.temperature", max as i32))
+        );
+        assert_eq!(
+            d.release(),
+            Some(Action::Number("nightlight.temperature", max as i32))
+        );
+        // A key steps it by its own step.
+        let left = nk_wayland::Key {
+            serial: None,
+            sym: 0xff51,
+            text: String::new(),
+            shift: false,
+            ctrl: false,
+            alt: false,
+        };
+        assert_eq!(
+            d.key(&left),
+            Some(Action::Number("nightlight.temperature", max as i32 - 100))
+        );
     }
 }

@@ -217,7 +217,7 @@ fn audio_choices_use_real_wire_types_and_cannot_retarget_a_replacement_service()
     assert_eq!(status.details.audio.len(), 2);
     assert_eq!(status.details.default_output, ONE);
     let mut detail = Detail::new("volume", 1);
-    detail.refresh(&status, [0., 50., 396., 400.]);
+    detail.refresh(&status, [0., 50., 396., 400.], None);
     let default = detail
         .rows
         .iter()

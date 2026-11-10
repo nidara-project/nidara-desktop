@@ -422,6 +422,7 @@ impl Bar {
                 m::TOP + m::CAPSULE_H,
                 &self.frame.status,
                 &self.frame.cc_layout,
+                self.look.as_mut(),
             );
         }
         if self
@@ -963,7 +964,7 @@ impl Bar {
             }
         }
         self.cc_open = open;
-        self.cc.release();
+        let _ = self.cc.release();
         if !open {
             self.cc.back();
             self.cc.editor.close();
@@ -1112,7 +1113,8 @@ impl Bar {
                 if self.cc.detail.as_ref().is_some_and(|d| d.page == page) {
                     return;
                 }
-                self.cc.open_detail(page, &self.frame.status);
+                self.cc
+                    .open_detail(page, &self.frame.status, self.look.as_mut());
                 if page == "clipboard" {
                     if self.cc_writer.is_none() {
                         self.cc_writer = self
@@ -1238,7 +1240,7 @@ impl Bar {
                             }
                             d.error = "unsupported network authentication request".into();
                         }
-                        d.offset = 0;
+                        d.to_top();
                     }
                     crate::ccauth::Event::Closed(id) => {
                         if d.form.as_ref().is_some_and(|f| f.id == id) {
@@ -1540,7 +1542,7 @@ impl Bar {
             .cc
             .detail
             .as_ref()
-            .map(|d| d.text_input(self.look.as_mut()))
+            .map(|d| d.text_input())
             .unwrap_or_default();
         w.set_text_input(input);
     }
@@ -2262,7 +2264,11 @@ impl Application for Bar {
                 if let Some(act) = self.cc.release_edit(&self.frame.status) {
                     self.act(act, w);
                 }
-                if self.cc.release() || editing {
+                let (released, act) = self.cc.release();
+                if let Some(act) = act {
+                    self.act(act, w);
+                }
+                if released || editing {
                     // A rejected/outside drop has no Act but must still restore its layers.
                     self.refresh(w);
                 }
@@ -2412,7 +2418,7 @@ impl Application for Bar {
                         self.nc_view_tick(w);
                         self.publish_semantics(w);
                     }
-                } else if self.cc_open && self.cc.scroll_detail(delta, &self.frame.status) {
+                } else if self.cc_open && self.cc.scroll_detail(amount, &self.frame.status) {
                     self.refresh(w);
                 } else {
                     self.tray_scroll(delta, false);

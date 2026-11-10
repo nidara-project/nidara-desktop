@@ -1926,6 +1926,11 @@ fn a_slider_takes_the_value_under_the_pointer_and_holds_it_until_release() {
         .button(false, Instant::now())
         .expect("the release reports");
     assert_eq!(a.key, vol);
+    assert_eq!(
+        s.value(&vol),
+        Some(100.),
+        "where it was let go, until the rebuild"
+    );
     s.layout(
         &slider_view(100.),
         (360., 400.),
@@ -2055,7 +2060,10 @@ fn a_press_on_a_field_types_into_it_and_activates_nothing() {
     let r = rect(&s, "pw");
     s.pointer_motion(r[0] + 4., r[1] + r[3] / 2.);
     assert!(s.button(true, Instant::now()).is_none());
-    assert!(s.button(false, Instant::now()).is_none(), "a release activates nothing");
+    assert!(
+        s.button(false, Instant::now()).is_none(),
+        "a release activates nothing"
+    );
     let pw = Key::from("pw");
     assert_eq!(s.editing(), Some(&pw));
     // Enter is its action.

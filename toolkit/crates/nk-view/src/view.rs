@@ -392,6 +392,11 @@ impl Node {
             }),
         )
     }
+    /// Room the surface paints in itself, `size` square: a picture, a mark, a gauge
+    /// (VIEW.md §12.3). Placed, clipped and faded as any node; never a control.
+    pub fn slot(key: impl Into<Key>, size: f64) -> Self {
+        Self::icon(key, "", size)
+    }
     /// Stands in for a row the surface leaves unbuilt, outside a scroll region's window:
     /// `height` is what `ViewState::rect` gave for the row when it was built.
     pub fn placeholder(key: impl Into<Key>, height: f64) -> Self {
