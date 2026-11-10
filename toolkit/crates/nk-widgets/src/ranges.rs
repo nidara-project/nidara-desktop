@@ -33,9 +33,37 @@ impl ValueRange {
         Ok(())
     }
     /// Clamp and snap to the step.
-    pub(crate) fn snap(&self, value: f32) -> f32 {
+    pub fn snap(&self, value: f32) -> f32 {
         let steps = ((value.clamp(self.min, self.max) - self.min) / self.step).round();
         (self.min + steps * self.step).min(self.max)
+    }
+    /// `steps` steps on from `value` (back when negative), going round where the range wraps.
+    pub fn stepped(&self, value: f32, steps: f32) -> f32 {
+        let mut next = value + steps * self.step;
+        if self.wrap {
+            let span = self.max - self.min + self.step;
+            next = self.min + (next - self.min).rem_euclid(span);
+        }
+        self.snap(next)
+    }
+    /// The value at `fraction` of the way from the least to the greatest: a slider's pointer.
+    pub fn at(&self, fraction: f32) -> f32 {
+        self.snap(self.min + fraction.clamp(0., 1.) * (self.max - self.min))
+    }
+    /// What a key makes of `value`: None when the key is not a range key. Up and Down step any
+    /// range control, Left and Right a slider's, Page Up/Down `page` steps, Home and End the ends.
+    pub fn key(&self, value: f32, sym: u32, slider: bool, page: f32) -> Option<f32> {
+        Some(match sym {
+            RIGHT if slider => self.stepped(value, 1.),
+            LEFT if slider => self.stepped(value, -1.),
+            UP => self.stepped(value, 1.),
+            DOWN => self.stepped(value, -1.),
+            PAGE_UP => self.stepped(value, page),
+            PAGE_DOWN => self.stepped(value, -page),
+            HOME => self.min,
+            END => self.snap(self.max),
+            _ => return None,
+        })
     }
     pub fn text(&self, value: f32) -> String {
         let number = format!("{:.*}", self.decimals, value);
@@ -221,12 +249,7 @@ impl Tree {
     fn step_by(&mut self, id: NodeId, steps: f32) -> Result<bool> {
         let value = self.value(id).unwrap();
         let range = self.nodes[&id].range.clone().unwrap();
-        let mut next = value + steps * range.step;
-        if range.wrap {
-            let span = range.max - range.min + range.step;
-            next = range.min + (next - range.min).rem_euclid(span);
-        }
-        self.set_value(id, next)
+        self.set_value(id, range.stepped(value, steps))
     }
     pub(crate) fn range_key(&mut self, id: NodeId, sym: u32) -> Result<Option<Effect>> {
         let Some(range) = self.nodes[&id].range.clone() else {
@@ -234,17 +257,10 @@ impl Tree {
         };
         let page = self.range_style.map_or(10., |s| s.slider_page_steps);
         let slider = matches!(self.nodes[&id].kind, Kind::Slider { .. });
-        let changed = match sym {
-            RIGHT if slider => self.step_by(id, 1.)?,
-            LEFT if slider => self.step_by(id, -1.)?,
-            UP => self.step_by(id, 1.)?,
-            DOWN => self.step_by(id, -1.)?,
-            PAGE_UP => self.step_by(id, page)?,
-            PAGE_DOWN => self.step_by(id, -page)?,
-            HOME => self.set_value(id, range.min)?,
-            END => self.set_value(id, range.max)?,
-            _ => return Ok(None),
+        let Some(value) = self.value(id).and_then(|v| range.key(v, sym, slider, page)) else {
+            return Ok(None);
         };
+        let changed = self.set_value(id, value)?;
         Ok(Some(if changed {
             Effect::Changed(id)
         } else {
@@ -314,9 +330,8 @@ impl Tree {
             .slider_track(id)
             .ok_or("slider without its range style")?;
         let range = self.nodes[&id].range.clone().unwrap();
-        let f = ((p.x - x0) / (x1 - x0)).clamp(0., 1.);
         Ok(self
-            .set_value(id, range.min + f * (range.max - range.min))?
+            .set_value(id, range.at((p.x - x0) / (x1 - x0)))?
             .then_some(id))
     }
     /// A click released on a spin button's minus or plus steps it.
