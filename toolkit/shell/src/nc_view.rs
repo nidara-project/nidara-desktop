@@ -1,9 +1,10 @@
 // SPDX-License-Identifier: LGPL-3.0-or-later
-//! The notification centre on nk-view (VIEW.md, #1048): the pilot, behind `NK_NC_VIEW`, beside
-//! `nc.rs`. Separate glass cards, one per notification or group, as the TS centre had them
+//! The notification centre on nk-view (VIEW.md, #1048). Separate glass cards, one per
+//! notification or group, as the TS centre had them
 //! (`ui/shell/surfaces/control-center/NotificationCenter.tsx`); the calendar is a card above
 //! them. This module only builds the view from the history and says what an activation means;
-//! layout, hover, press, focus, scrolling, swipes and the regions are the kit's.
+//! layout, hover, press, focus, scrolling, swipes, reveals and the regions are the kit's. The
+//! month shown and the bulk dismissal are `nc.rs`'s.
 use crate::{
     nc,
     notification_card::{self, Artwork},
@@ -20,7 +21,7 @@ use nk_wayland::{Group, MaterialRect, Pane, Shadow, Tone};
 use std::{
     collections::{HashMap, HashSet},
     sync::Arc,
-    time::Instant,
+    time::{Duration, Instant},
 };
 
 /// Region ids of the pilot's controls start here, clear of the bar's and the CC's.
@@ -35,11 +36,8 @@ const GHOST_H: f64 = 76.;
 const PEEK: f64 = 14.;
 const STEP: f64 = 10.;
 
-/// Whether the shell draws the notification centre on nk-view (the pilot).
-pub fn enabled() -> bool {
-    static ON: std::sync::OnceLock<bool> = std::sync::OnceLock::new();
-    *ON.get_or_init(|| std::env::var_os("NK_NC_VIEW").is_some_and(|v| v != "0"))
-}
+/// A clear's cascade: the cards leave one after another this far apart (TS's `cascadeOut`).
+const CASCADE: Duration = Duration::from_millis(45);
 
 /// A card's corner, the CC's 4×1 (owner, 2026-11-10): `lg` of the radius scale, which a test
 /// holds equal to `cc::wide_radius`.
@@ -75,9 +73,11 @@ pub enum Act {
     Nc(nc::Target),
     /// Only the view changed (a group or a card opened or closed).
     Rebuild,
+    /// Something started to move (a clear's cascade): the bar ticks and draws.
+    Motion,
 }
 
-pub struct Pilot {
+pub struct View {
     pub state: ViewState,
     tokens: Option<Tokens>,
     groups_open: HashSet<String>,
@@ -100,9 +100,16 @@ pub struct Pilot {
     built: (f64, f64),
     /// Which control each semantic id published is.
     ids: HashMap<u64, Key>,
+    /// A clear whose cards are still leaving: carried out when the last is gone, or at once
+    /// if the centre closes first.
+    clearing: Option<nc::Target>,
+    /// Groups folding away, until their rows have rolled up.
+    folding: HashMap<String, Instant>,
+    /// Why the last bulk dismissal failed, shown under the list.
+    error: String,
 }
 
-impl Default for Pilot {
+impl Default for View {
     fn default() -> Self {
         Self {
             state: ViewState::new(REGIONS),
@@ -119,6 +126,9 @@ impl Default for Pilot {
             card_guess: 96.,
             built: (0., 0.),
             ids: HashMap::new(),
+            clearing: None,
+            folding: HashMap::new(),
+            error: String::new(),
         }
     }
 }
@@ -224,6 +234,8 @@ pub struct Model<'a> {
     pub strings: &'a Strings,
     pub weekdays: &'a [String],
     pub month_name: &'a str,
+    /// Why the last bulk dismissal failed; empty when it did not.
+    pub error: &'a str,
 }
 
 fn style(base: &TextStyle, size: f32, weight: f32) -> TextStyle {
@@ -243,7 +255,7 @@ fn ghosts(count: usize) -> usize {
     }
 }
 
-impl Pilot {
+impl View {
     /// The centre's view: the calendar card, then the list, which scrolls.
     pub fn view(&self, m: &Model<'_>) -> Node {
         let mut list = vec![];
@@ -279,68 +291,112 @@ impl Pilot {
         let px = |s: Space| self.tokens.as_ref().map_or(16., |t| t.spacing.px(s));
         let height = |key: &str, guess: f64| self.heights.get(key).copied().unwrap_or(guess);
         let mut y = 0.;
-        // A row at `y`, `h` tall: built if near the window, else a placeholder.
-        let mut row = |key: String, h: f64, gap: f64, build: &dyn Fn() -> Node| {
-            let near = y + h >= lo && y <= hi;
-            y += h + gap;
-            if near {
-                build()
-            } else {
-                Node::placeholder(key, h)
+        // Whether a row at `y`, `h` tall, is near enough to what shows to be built.
+        let near = |y: f64, h: f64| y + h >= lo && y <= hi;
+        // A group's open rows from `y`, each built if near, else a placeholder; and where
+        // they end.
+        let rows = |list_of: &[&Banner], mut y: f64| -> (Vec<Node>, f64) {
+            let mut out = vec![];
+            for (n, b) in list_of.iter().enumerate() {
+                let pane = format!("n{}/pane", b.instance);
+                let h = height(&pane, self.card_guess);
+                out.push(if near(y, h) {
+                    self.card(b, m, None)
+                } else {
+                    Node::placeholder(pane, h)
+                });
+                // The last card's gap is the list's, to the next row.
+                y += h + px(if n + 1 == list_of.len() {
+                    Space::S4
+                } else {
+                    Space::S3
+                });
             }
+            (out, y)
         };
         for (key, list_of) in &groups {
-            let open = list_of.len() > 1 && self.groups_open.contains(key);
-            if open {
-                let header = format!("g:{key}/header");
-                let mut children = vec![row(
-                    header.clone(),
-                    height(&header, 40.),
-                    px(Space::S3),
-                    &|| self.group_header(key, list_of, m),
-                )];
-                for (n, b) in list_of.iter().enumerate() {
-                    let pane = format!("n{}/pane", b.instance);
-                    // The last card's gap is the list's, to the next row.
-                    let gap = px(if n + 1 == list_of.len() {
-                        Space::S4
-                    } else {
-                        Space::S3
-                    });
-                    children.push(row(
-                        pane.clone(),
-                        height(&pane, self.card_guess),
-                        gap,
-                        &|| self.card(b, m, None),
-                    ));
-                }
-                list.push(Node::column(format!("g:{key}"), children).gap(Space::S3));
-            } else if list_of.len() > 1 {
-                let strip = PEEK + (ghosts(list_of.len()) - 1) as f64 * STEP;
+            if list_of.len() < 2 {
                 let pane = format!("n{}/pane", list_of[0].instance);
-                list.push(row(
-                    format!("g:{key}"),
-                    height(&pane, self.card_guess) + strip,
-                    px(Space::S4),
-                    &|| {
-                        Node::column(
-                            format!("g:{key}"),
-                            vec![
-                                self.card(list_of[0], m, Some((key, list_of.len()))),
-                                Node::placeholder(format!("g:{key}/ghosts"), strip),
-                            ],
-                        )
-                    },
-                ));
-            } else {
-                let pane = format!("n{}/pane", list_of[0].instance);
-                list.push(row(
-                    pane.clone(),
-                    height(&pane, self.card_guess),
-                    px(Space::S4),
-                    &|| self.card(list_of[0], m, None),
-                ));
+                let h = height(&pane, self.card_guess);
+                list.push(if near(y, h) {
+                    self.card(list_of[0], m, None)
+                } else {
+                    Node::placeholder(pane, h)
+                });
+                y += h + px(Space::S4);
+                continue;
             }
+            // A group is its front (the header open, the stacked card folded) over its rows,
+            // which unroll beneath it as TS's revealer did. Folding, the rows stay built
+            // until they have rolled up.
+            let open = self.groups_open.contains(key);
+            let folding = !open && self.folding.contains_key(key);
+            let front = if open {
+                let header = format!("g:{key}/header");
+                let h = height(&header, 40.);
+                let node = if near(y, h) {
+                    self.group_header(key, list_of, m)
+                } else {
+                    Node::placeholder(header, h)
+                };
+                y += h + px(Space::S3);
+                node
+            } else {
+                let strip = PEEK + (ghosts(list_of.len()) - 1) as f64 * STEP;
+                let pane = format!("f{}/pane", list_of[0].instance);
+                let h = height(&pane, self.card_guess) + strip;
+                let node = if near(y, h) {
+                    Node::column(
+                        format!("g:{key}/stack"),
+                        vec![
+                            self.card(list_of[0], m, Some((key, list_of.len()))),
+                            Node::placeholder(format!("g:{key}/ghosts"), strip),
+                        ],
+                    )
+                } else {
+                    Node::placeholder(format!("g:{key}/stack"), h)
+                };
+                y += h + px(Space::S4);
+                node
+            };
+            let built = if open || folding {
+                let (built, end) = rows(list_of, y);
+                if open {
+                    y = end;
+                }
+                built
+            } else {
+                vec![]
+            };
+            list.push(Node::column(
+                format!("g:{key}"),
+                vec![
+                    front,
+                    Node::reveal(
+                        format!("g:{key}/rows"),
+                        open,
+                        Node::column(format!("g:{key}/list"), built)
+                            .gap(Space::S3)
+                            .padding(Padding {
+                                top: Some(Space::S3),
+                                ..Padding::default()
+                            }),
+                    ),
+                ],
+            ));
+        }
+        if !m.error.is_empty() {
+            list.push(
+                Node::row(
+                    "error/row",
+                    vec![
+                        Node::text("error", m.error, style(m.text, 12., 400.))
+                            .lines(2)
+                            .ink(Ink::Secondary),
+                    ],
+                )
+                .justify(nk_view::Justify::Center),
+            );
         }
         if !groups.is_empty() {
             list.push(
@@ -527,14 +583,17 @@ impl Pilot {
                 .align(Align::Center)
                 .padding(Padding::symmetric(Space::S2, Space::S3)),
             )
-            .corner(Corner::Token(Radius::Md)),
+            .corner(Corner::Token(Radius::Md))
+            .swipe(format!("clear-group:{key}")),
         )
     }
 
     /// One card. `group`: the collapsed group it fronts and how many it holds; its close and
-    /// its swipe clear the group, and a tap opens it.
+    /// its swipe clear the group, and a tap opens it. A front's keys start with `f`, a row's
+    /// with `n`, so a folding group's rows and its front are never one node.
     fn card(&self, b: &Banner, m: &Model<'_>, group: Option<(&String, usize)>) -> Node {
-        let k = |s: &str| format!("n{}/{s}", b.instance);
+        let lead = if group.is_some() { 'f' } else { 'n' };
+        let k = |s: &str| format!("{lead}{}/{s}", b.instance);
         let pane = k("pane");
         let (i, c) = (b.instance, b.content);
         let summary = plain(&b.notice.summary);
@@ -550,30 +609,32 @@ impl Pilot {
             .iter()
             .filter(|a| a.id != "default" && !a.label.is_empty())
             .collect();
+        // What a reader hears after the title: the age, the body and any error, which are
+        // inside the card's control and so are not labels of their own.
+        let said = [nc::age(b.notice.time, m.now), body.clone(), b.error.clone()]
+            .into_iter()
+            .filter(|t| !t.is_empty())
+            .collect::<Vec<_>>()
+            .join(", ");
         let expanded = group.is_none() && self.items_open.contains(&i);
         let expandable = group.is_none() && (!actions.is_empty() || body.chars().count() > 70);
         let close_action = match group {
             Some((key, _)) => format!("clear-group:{key}"),
             None => format!("close:{i}:{c}"),
         };
-        let mut head = vec![
-            Node::text(k("title"), title.clone(), style(m.text, 13., 700.))
-                .lines(1)
-                .grow(),
-            Node::text(
-                k("age"),
-                nc::age(b.notice.time, m.now),
-                style(m.text, 11., 400.),
-            )
-            .ink(Ink::Dim),
-        ];
-        if let Some((_, count)) = group {
-            head.push(
-                Node::text(k("count"), count.to_string(), style(m.text, 11., 600.))
-                    .ink(Ink::Secondary),
-            );
-        } else if expandable {
-            head.push(
+        let age = Node::text(
+            k("age"),
+            nc::age(b.notice.time, m.now),
+            style(m.text, 11., 400.),
+        )
+        .ink(Ink::Dim);
+        // The chevron shows on hover in the age's place, as TS swapped them, so the title
+        // line never moves.
+        let age = if expandable {
+            Node::overlay(k("when"), age.hidden_with(pane.clone())).layer(
+                Align::Center,
+                Align::Center,
+                Padding::default(),
                 Node::control(
                     k("more"),
                     if expanded { "Show less" } else { "Show more" },
@@ -585,6 +646,20 @@ impl Pilot {
                     ),
                 )
                 .revealed_with(pane.clone()),
+            )
+        } else {
+            age
+        };
+        let mut head = vec![
+            Node::text(k("title"), title.clone(), style(m.text, 13., 700.))
+                .lines(1)
+                .grow(),
+            age,
+        ];
+        if let Some((_, count)) = group {
+            head.push(
+                Node::text(k("count"), count.to_string(), style(m.text, 11., 600.))
+                    .ink(Ink::Secondary),
             );
         }
         let mut text = vec![
@@ -594,8 +669,10 @@ impl Pilot {
         ];
         if !body.is_empty() {
             text.push(
+                // Two lines however short, so every card of its kind is one height (TS).
                 Node::text(k("body"), body, style(m.text, 12., 400.))
                     .lines(if expanded { 4 } else { 2 })
+                    .reserve(if expanded { 0 } else { 2 })
                     .ink(Ink::Secondary),
             );
         }
@@ -655,6 +732,7 @@ impl Pilot {
                 .align(Align::Center)
                 .padding(Padding::all(Space::S3)),
         )
+        .description(said)
         .wash(Wash::None)
         .corner(Corner::Token(CARD))
         .swipe(close_action.clone());
@@ -691,10 +769,12 @@ impl Pilot {
 
     /// Rebuilds the view from the history and the month shown, and lays it out. `cards`:
     /// where the cards lie (the list's scroll bar takes a lane right of them, up to `right`).
+    #[allow(clippy::too_many_arguments)]
     pub fn refresh(
         &mut self,
         look: &mut Look,
         history: Arc<Vec<Banner>>,
+        error: &str,
         month: (i32, i32),
         cards: [f64; 4],
         right: f64,
@@ -714,6 +794,7 @@ impl Pilot {
             .duration_since(std::time::UNIX_EPOCH)
             .unwrap_or_default()
             .as_secs();
+        self.error = error.into();
         self.lay(
             &mut look.text,
             &style,
@@ -746,6 +827,8 @@ impl Pilot {
         };
         let live: HashSet<u64> = history.iter().map(|b| b.instance).collect();
         self.items_open.retain(|i| live.contains(i));
+        let at = Instant::now();
+        self.folding.retain(|_, until| *until > at);
         self.history = history;
         self.minute = now / 60;
         let today = glib::DateTime::now_local()
@@ -777,6 +860,7 @@ impl Pilot {
             strings,
             weekdays: &weekdays,
             month_name: &month_name,
+            error: &self.error,
         });
         self.state
             .layout_in(&view, bounds, scale, &tokens, text, Instant::now());
@@ -785,7 +869,7 @@ impl Pilot {
         for p in self.state.placed() {
             let k = &p.key.0;
             if matches!(p.what, nk_view::What::Pane(_))
-                && (k.starts_with('n') || k.starts_with("g:"))
+                && (k.starts_with('n') || k.starts_with('f') || k.starts_with("g:"))
             {
                 self.heights.insert(k.clone(), p.rect[3]);
                 if k.starts_with('n') {
@@ -850,14 +934,53 @@ impl Pilot {
             Some((it.next()?.parse().ok()?, it.next()?.parse().ok()?))
         };
         if let Some(key) = s.strip_prefix("group:") {
-            if !self.groups_open.remove(key) {
+            if self.groups_open.remove(key) {
+                // Its rows stay built while they roll up.
+                let base = self
+                    .tokens
+                    .as_ref()
+                    .map_or(Duration::ZERO, |t| t.motion.base);
+                self.folding.insert(key.into(), Instant::now() + base);
+            } else {
                 self.groups_open.insert(key.into());
             }
             return Some(Act::Rebuild);
         }
         if let Some(key) = s.strip_prefix("clear-group:") {
-            self.groups_open.remove(key);
-            return Some(Act::Nc(nc::Target::ClearGroup(key.into())));
+            // The group's cards still showing leave one after another, then it is cleared.
+            let cards: Vec<Key> = groups_of(&self.history)
+                .into_iter()
+                .find(|(k, _)| k == key)
+                .map(|(_, list)| {
+                    std::iter::once(Key::from(format!("g:{key}/toggle")))
+                        .chain(list.iter().flat_map(|b| {
+                            ['f', 'n'].map(|lead| Key::from(format!("{lead}{}/card", b.instance)))
+                        }))
+                        .collect()
+                })
+                .unwrap_or_default();
+            return self.clear(&cards, nc::Target::ClearGroup(key.into()));
+        }
+        if s == "clear-all" {
+            let cards: Vec<Key> = self
+                .state
+                .placed()
+                .iter()
+                .filter(|p| {
+                    let k = &p.key.0;
+                    k.ends_with("/card") && (k.starts_with('n') || k.starts_with('f'))
+                        || k.starts_with("g:") && k.ends_with("/toggle")
+                })
+                .map(|p| p.key.clone())
+                .collect();
+            return self.clear(&cards, nc::Target::ClearAll);
+        }
+        if let Some(rest) = s.strip_prefix("cleared:") {
+            let target = self.clearing.take()?;
+            if let nc::Target::ClearGroup(key) = &target {
+                self.groups_open.remove(key);
+            }
+            return (rest == "now").then_some(Act::Nc(target));
         }
         if let Some(i) = s.strip_prefix("item:").and_then(|i| i.parse().ok()) {
             if !self.items_open.remove(&i) {
@@ -884,16 +1007,35 @@ impl Pilot {
             "previous" => nc::Target::Previous,
             "next" => nc::Target::Next,
             "today" => nc::Target::Today,
-            "clear-all" => nc::Target::ClearAll,
             _ => return None,
         }))
     }
 
-    /// Closed: groups and cards fold back, and nothing is held.
-    pub fn close(&mut self) {
+    /// Starts a clear: `cards` leave one after another, and the clear is carried out when
+    /// the last is gone (`cleared:now` from the kit), or at once when none shows. A clear
+    /// already under way is let finish.
+    fn clear(&mut self, cards: &[Key], target: nc::Target) -> Option<Act> {
+        if self.clearing.is_some() {
+            return None;
+        }
+        self.clearing = Some(target);
+        match self
+            .state
+            .cascade(cards, CASCADE, "cleared:now", Instant::now())
+        {
+            Some(done) => self.activated(&done),
+            None => Some(Act::Motion),
+        }
+    }
+
+    /// Closed: groups and cards fold back, and nothing is held. A clear still under way is
+    /// returned, to be carried out now, as TS settled it when the centre closed.
+    pub fn close(&mut self) -> Option<nc::Target> {
         self.groups_open.clear();
         self.items_open.clear();
+        self.folding.clear();
         self.state.pointer_leave();
+        self.clearing.take()
     }
 
     /// The panes and regions for Hyalo, from the frame `paint` declared: a collapsed group's
@@ -910,7 +1052,7 @@ impl Pilot {
             if list.len() < 2 || self.groups_open.contains(&key) {
                 continue;
             }
-            let pane_key = Key::from(format!("n{}/pane", list[0].instance));
+            let pane_key = Key::from(format!("f{}/pane", list[0].instance));
             let Some(fp) = frame.panes.iter().find(|p| p.key == pane_key) else {
                 continue;
             };
@@ -970,7 +1112,7 @@ impl Pilot {
         self.state
             .paint(c, tokens, icons, (!material).then_some(&self.last))?;
         for p in self.state.placed() {
-            let Some(rest) = p.key.0.strip_prefix('n') else {
+            let Some(rest) = p.key.0.strip_prefix(['n', 'f']) else {
                 continue;
             };
             let Some((instance, slot)) = rest.split_once('/') else {
@@ -1012,6 +1154,7 @@ impl Pilot {
     /// The semantics, under a panel named for the centre; its ids start at `first_id`.
     pub fn semantics(&mut self, first_id: u64) -> nk_a11y::Tree {
         let mut root = nk_a11y::Node::new(nc::PANEL, nk_a11y::Role::Panel, "Notification Center");
+        root.description = self.error.clone();
         root.bounds = nk_a11y::Bounds {
             x: self.bounds[0],
             y: self.bounds[1],
@@ -1021,6 +1164,11 @@ impl Pilot {
         let tree = self.state.semantics(root, first_id);
         self.ids = self.state.semantic_keys();
         tree
+    }
+
+    /// Whether a semantic id is one of the centre's controls.
+    pub fn knows(&self, id: u64) -> bool {
+        self.ids.contains_key(&id)
     }
 
     /// A reader's request on one of the centre's controls: None when the id is not the
@@ -1132,10 +1280,10 @@ mod tests {
         Some(tokens(&e, &appearance).unwrap())
     }
 
-    fn laid(history: Vec<Banner>, setup: impl FnOnce(&mut Pilot)) -> Option<Pilot> {
-        let mut p = Pilot {
+    fn laid(history: Vec<Banner>, setup: impl FnOnce(&mut View)) -> Option<View> {
+        let mut p = View {
             tokens: Some(exported()?),
-            ..Pilot::default()
+            ..View::default()
         };
         setup(&mut p);
         let mut text =
@@ -1159,7 +1307,7 @@ mod tests {
         Some(p)
     }
 
-    fn panes(p: &Pilot) -> Vec<String> {
+    fn panes(p: &View) -> Vec<String> {
         p.state
             .placed()
             .iter()
@@ -1208,11 +1356,11 @@ mod tests {
         };
         // One pane per card, never one around them all: the calendar, chat's card, mail's
         // front card (its older one hidden in the stack), the clear pill.
-        assert_eq!(panes(&p), ["calendar", "n2/pane", "n3/pane", "clear"]);
+        assert_eq!(panes(&p), ["calendar", "n2/pane", "f3/pane", "clear"]);
         let card = p.state.rect(&Key::from("n2/pane")).unwrap();
         assert_eq!((card[0], card[2]), (900., notification_card::WIDTH));
         let a = p.state.rect(&Key::from("n2/pane")).unwrap();
-        let b = p.state.rect(&Key::from("n3/pane")).unwrap();
+        let b = p.state.rect(&Key::from("f3/pane")).unwrap();
         assert!(b[1] >= a[1] + a[3] + 16., "a gap between the cards");
         // Opened, the group shows its header and both cards.
         let Some(mut p) = laid(history, |p| {
@@ -1274,7 +1422,7 @@ mod tests {
             offset: 0.,
         };
         let (groups, _) = p.glass(tone, shadow);
-        let card = p.state.rect(&Key::from("n3/pane")).unwrap();
+        let card = p.state.rect(&Key::from("f3/pane")).unwrap();
         let bottom = card[1] + card[3];
         // Two ghosts (three in the group), deepest first, then the panes in their groups.
         let ghosts: Vec<_> = groups
@@ -1313,13 +1461,13 @@ mod tests {
         let history: Vec<_> = (1..=300)
             .map(|i| banner(i, "mail", i, serde_json::json!({})))
             .collect();
-        let open = |p: &mut Pilot| {
+        let open = |p: &mut View| {
             p.groups_open.insert("mail".into());
         };
         let Some(mut p) = laid(history.clone(), open) else {
             return;
         };
-        let built = |p: &Pilot| -> Vec<u64> {
+        let built = |p: &View| -> Vec<u64> {
             p.state
                 .placed()
                 .iter()
@@ -1338,7 +1486,7 @@ mod tests {
         assert!(first.contains(&300), "the newest is built");
         assert!(first.len() < 40, "{} cards built of 300", first.len());
         // Placeholders keep the list its whole height: it scrolls as far as 300 cards go.
-        let laid_out = |p: &mut Pilot| {
+        let laid_out = |p: &mut View| {
             let mut text = nk_text::ParleyBackend::new(Arc::new(
                 nk_text::FontSet::discover_required().unwrap(),
             ))
@@ -1376,7 +1524,7 @@ mod tests {
 
     #[test]
     fn activations_name_the_card_and_the_action_whole() {
-        let mut p = Pilot::default();
+        let mut p = View::default();
         let a = |action: &str| Activated {
             key: Key::from("k"),
             action: action.into(),
@@ -1402,5 +1550,193 @@ mod tests {
         assert_eq!(p.activated(&a("item:7")), Some(Act::Rebuild));
         assert!(p.items_open.contains(&7));
         assert_eq!(p.activated(&a("")), None);
+    }
+
+    fn text() -> nk_text::ParleyBackend {
+        nk_text::ParleyBackend::new(Arc::new(nk_text::FontSet::discover_required().unwrap()))
+            .unwrap()
+    }
+    /// What the kit reports by `at`, each acted on as the bar does.
+    fn run_to(p: &mut View, at: Instant) -> Vec<Act> {
+        let tokens = p.tokens.clone().unwrap();
+        let done = p.state.tick(&tokens, &mut text(), at).activated;
+        done.iter().filter_map(|a| p.activated(a)).collect()
+    }
+    fn card_alpha(p: &View, key: &str) -> f64 {
+        p.state
+            .placed()
+            .iter()
+            .find(|q| q.key.0 == key)
+            .map_or(-1., |q| q.alpha)
+    }
+    fn singles(n: u64) -> Vec<Banner> {
+        (1..=n)
+            .map(|i| banner(i, &format!("app{i}"), i * 10, serde_json::json!({})))
+            .collect()
+    }
+
+    #[test]
+    fn clear_all_sends_the_cards_off_one_after_another_then_clears_once() {
+        let Some(mut p) = laid(singles(3), |_| {}) else {
+            return;
+        };
+        let t0 = Instant::now();
+        let clear = Activated {
+            key: Key::from("clear-all"),
+            action: "clear-all".into(),
+        };
+        assert_eq!(p.activated(&clear), Some(Act::Motion));
+        assert_eq!(p.activated(&clear), None, "a clear under way is let finish");
+        let base = p.tokens.as_ref().unwrap().motion.base;
+        // The newest (top) leaves first; the clear waits for the last.
+        assert!(run_to(&mut p, t0 + base + CASCADE / 2).is_empty());
+        assert_eq!(card_alpha(&p, "n3/pane"), 0., "the top card is gone");
+        assert!(card_alpha(&p, "n1/pane") > 0., "the bottom one still shows");
+        let done = run_to(&mut p, t0 + base + CASCADE * 3);
+        assert_eq!(done, [Act::Nc(nc::Target::ClearAll)]);
+        assert!(p.clearing.is_none());
+    }
+
+    #[test]
+    fn a_centre_closed_mid_clear_carries_the_clear_out_at_once() {
+        let Some(mut p) = laid(singles(2), |_| {}) else {
+            return;
+        };
+        let clear = Activated {
+            key: Key::from("clear-all"),
+            action: "clear-all".into(),
+        };
+        assert_eq!(p.activated(&clear), Some(Act::Motion));
+        assert_eq!(p.close(), Some(nc::Target::ClearAll));
+        assert_eq!(p.close(), None, "and only once");
+    }
+
+    #[test]
+    fn a_group_cleared_sends_its_header_and_cards_off_and_clears_only_it() {
+        let mut history: Vec<_> = (1..=3)
+            .map(|i| banner(i, "mail", i * 10, serde_json::json!({})))
+            .collect();
+        history.push(banner(9, "chat", 5, serde_json::json!({})));
+        let Some(mut p) = laid(history, |p| {
+            p.groups_open.insert("mail".into());
+        }) else {
+            return;
+        };
+        let t0 = Instant::now();
+        let a = Activated {
+            key: Key::from("g:mail/clear"),
+            action: "clear-group:mail".into(),
+        };
+        assert_eq!(p.activated(&a), Some(Act::Motion));
+        let base = p.tokens.as_ref().unwrap().motion.base;
+        let done = run_to(&mut p, t0 + base + CASCADE * 4);
+        assert_eq!(done, [Act::Nc(nc::Target::ClearGroup("mail".into()))]);
+        for k in ["g:mail/header", "n3/pane", "n2/pane", "n1/pane"] {
+            assert_eq!(card_alpha(&p, k), 0., "{k} left");
+        }
+        assert!(card_alpha(&p, "n9/pane") > 0., "the other app stays");
+        assert!(!p.groups_open.contains("mail"));
+    }
+
+    #[test]
+    fn a_group_folding_keeps_its_rows_built_until_they_have_rolled_up() {
+        let history: Vec<_> = (1..=3)
+            .map(|i| banner(i, "mail", i * 10, serde_json::json!({})))
+            .collect();
+        let Some(mut p) = laid(history.clone(), |p| {
+            p.groups_open.insert("mail".into());
+        }) else {
+            return;
+        };
+        let fold = Activated {
+            key: Key::from("g:mail/toggle"),
+            action: "group:mail".into(),
+        };
+        assert_eq!(p.activated(&fold), Some(Act::Rebuild));
+        let relay = |p: &mut View| {
+            let strings = Strings {
+                empty: String::new(),
+                clear_all: "Clear notifications".into(),
+            };
+            p.lay(
+                &mut text(),
+                &TextStyle::default(),
+                &strings,
+                Arc::new(history.clone()),
+                (2026, 11),
+                [900., 60., notification_card::WIDTH, 900.],
+                1300.,
+                1.,
+                2_000_000_000,
+            );
+        };
+        relay(&mut p);
+        // The front is the stacked card again, and the rows are still there, rolling up.
+        assert!(panes(&p).contains(&"f3/pane".to_string()));
+        assert!(
+            panes(&p).contains(&"n1/pane".to_string()),
+            "{:?}",
+            panes(&p)
+        );
+        assert!(p.state.animating(), "the reveal closes");
+        // Once rolled up, a rebuild leaves them out.
+        for until in p.folding.values_mut() {
+            *until = Instant::now();
+        }
+        relay(&mut p);
+        assert!(!panes(&p).contains(&"n1/pane".to_string()));
+        // Opening unrolls them from the front.
+        let open = Activated {
+            key: Key::from("f3/card"),
+            action: "group:mail".into(),
+        };
+        assert_eq!(p.activated(&open), Some(Act::Rebuild));
+        relay(&mut p);
+        assert!(panes(&p).contains(&"g:mail/header".to_string()));
+        assert!(p.state.animating(), "the reveal opens");
+    }
+
+    #[test]
+    fn every_card_reserves_two_body_lines_and_its_chevron_takes_the_ages_place() {
+        let long = "A body long enough to need both of its lines and then a good deal more, \
+            so that it is cut with an ellipsis and offers to show the rest of it.";
+        let history = vec![
+            banner(1, "a", 10, serde_json::json!({"body": "Short"})),
+            banner(2, "b", 20, serde_json::json!({"body": long})),
+        ];
+        let Some(mut p) = laid(history, |_| {}) else {
+            return;
+        };
+        let h = |p: &View, k: &str| p.state.rect(&Key::from(k)).unwrap()[3];
+        assert_eq!(h(&p, "n1/pane"), h(&p, "n2/pane"), "one height");
+        // The long one offers more; at rest its age shows, hovered its chevron instead.
+        let i = |p: &View, k: &str| p.state.placed().iter().position(|q| q.key.0 == k).unwrap();
+        let (age, more) = (i(&p, "n2/age"), i(&p, "n2/more"));
+        assert!(p.state.shown(age) && !p.state.shown(more));
+        let r = p.state.rect(&Key::from("n2/pane")).unwrap();
+        p.state.pointer_motion(r[0] + r[2] / 2., r[1] + r[3] / 2.);
+        assert!(!p.state.shown(age) && p.state.shown(more));
+        assert!(p.state.placed().iter().all(|q| q.key.0 != "n1/more"));
+    }
+
+    #[test]
+    fn a_failed_clear_is_said_under_the_list_and_to_readers() {
+        let Some(mut p) = laid(singles(1), |p| {
+            p.error = "Could not clear notifications".into();
+        }) else {
+            return;
+        };
+        let at = p.state.rect(&Key::from("error")).expect("the error shows");
+        let pill = p.state.rect(&Key::from("clear")).unwrap();
+        assert!(at[1] < pill[1], "above the clear pill");
+        let tree = p.semantics(nc::PANEL + 1);
+        assert_eq!(
+            tree.nodes[&nc::PANEL].description,
+            "Could not clear notifications"
+        );
+        // A card's reader hears its age and body after its title.
+        let card = tree.nodes.values().find(|n| n.name == "Summary 1").unwrap();
+        assert!(card.description.ends_with(", Body"), "{}", card.description);
+        assert!(card.description.len() > ", Body".len());
     }
 }

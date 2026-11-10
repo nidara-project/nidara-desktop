@@ -340,8 +340,9 @@ today's calendar.
 
 ## 11. Acceptance for the NC pilot
 
-The pilot replaces `nc.rs` and `notification_card.rs` with a view over the same model
-(`notifications.rs`), behind a flag, beside today's NC.
+The pilot replaced the old NC's drawing in `nc.rs` with a view over the same model
+(`notifications.rs`). It ran behind a flag first; since 2026-11-10 it is the only NC, and `nc.rs`
+keeps the month shown and the bulk dismissal.
 
 | Check | Passes when | Can fail because |
 |---|---|---|
