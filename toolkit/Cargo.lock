@@ -1280,6 +1280,20 @@ dependencies = [
 ]
 
 [[package]]
+name = "nk-view"
+version = "0.1.0"
+dependencies = [
+ "nk-a11y",
+ "nk-icons",
+ "nk-render",
+ "nk-text",
+ "nk-wayland",
+ "serde",
+ "serde_json",
+ "unicode-segmentation",
+]
+
+[[package]]
 name = "nk-wayland"
 version = "0.1.0"
 dependencies = [

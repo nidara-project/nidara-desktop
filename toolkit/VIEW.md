@@ -1,9 +1,9 @@
 <!-- SPDX-License-Identifier: LGPL-3.0-or-later -->
-# nk-view — layout and interaction for shell surfaces (contract, proposal)
+# nk-view — layout and interaction for shell surfaces (contract)
 
-Part of #1048 (read it first: why one description, what is out of scope). **Status: a proposal
-for the owner's review; the NC's behaviour is decided (end of file).** Nothing here is built yet. It is merged before the code that uses it,
-as `CONTRACT.md` asks.
+Part of #1048 (read it first: why one description, what is out of scope). **Status: accepted. Pieces 1
+to 3 (§2 to §5) are built in `toolkit/crates/nk-view`, which no surface uses yet. The NC's
+behaviour is decided (end of file).**
 
 This file covers the two pieces that the shell inventory of 2026-11-10 ranked first:
 
@@ -81,8 +81,8 @@ hit-testing, semantics and the material. Nothing computes a position twice.
 closed enum over the kit's spacing scale (`$space-1` … `$space-10`: 4, 8, 12, 16, 20, 24, 32,
 40 px, `ui/lib/nidara-kit/styles/_tokens.scss`). A text takes a style token (`$fs-*`), and a pane
 takes its piece of the exported glass. A ported surface's view code holds no number for a
-position, size or gap. The `Space` scale needs exporting to `toolkit/tokens/` with the
-others. Today only component tokens are exported.
+position, size or gap. The scale is already exported: `tokens/static.json` carries every
+variable of `_tokens.scss`, `space-1` to `space-10` among them, and `nk-view` reads it from there.
 
 **Stack rules:**
 

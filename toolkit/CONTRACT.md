@@ -708,11 +708,11 @@ it means for the toolkit:
 - No widget paints a blur, tone, rim or shadow imitating glass while the protocol is offered. A
   state Hyalo cannot express is a request added to the protocol (v1), not a client painting.
 
-## nk-view — shell layout and interaction (proposal, #1048)
+## nk-view — shell layout and interaction (#1048)
 
 The shell's own view vocabulary (stack, pane, text, icon, spacer, control), its layout from
-spacing tokens and the hover/press/focus state it declares to Hyalo per pane: `VIEW.md`. A
-proposal for the owner's review; nothing depends on it yet.
+spacing tokens and the hover/press/focus state it declares to Hyalo per pane: `VIEW.md`.
+Built in `crates/nk-view` (its README); no surface uses it yet.
 
 ## Floating control capsule — proposal for #889
 
