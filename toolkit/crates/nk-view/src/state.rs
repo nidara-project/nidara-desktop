@@ -9,6 +9,7 @@ use crate::view::{Key, Node, Role, Wash};
 use nk_a11y::{Action, Bounds, NodeId, Tree};
 use nk_render::Canvas;
 use nk_wayland::{Group, MaterialRect, Pane, Shadow, StateRegion, Tone};
+use nk_widgets::{BarGeometry, ScrollBar};
 use std::collections::{HashMap, HashSet};
 use std::time::{Duration, Instant};
 
@@ -22,14 +23,35 @@ pub struct Activated {
     pub action: String,
 }
 
-/// The keys that move focus or activate.
+/// The keys that move focus, activate or scroll.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum KeyInput {
     Tab,
     ShiftTab,
     /// Enter or Space on the focused control.
     Activate,
+    /// Page Up and Page Down: the scroll region holding the focus (else the one under the
+    /// pointer, else the first) moves by most of a page.
+    PageUp,
+    PageDown,
+    /// Ctrl+Home and Ctrl+End: that region goes to its start or its end.
+    Home,
+    End,
 }
+
+/// How far a wheel or a touchpad scrolled: in logical pixels (a touchpad), or in wheel
+/// detents, each a step that grows with the viewport (VIEW.md §8).
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub enum ScrollBy {
+    Pixels(f64),
+    Steps(f64),
+}
+
+/// What of a page Page Up and Page Down move, and a wheel detent's step: the viewport's
+/// height to this power. Both are GTK's (`GtkViewport`, `GtkScrolledWindow`), which the TS
+/// shell scrolled with.
+const PAGE: f64 = 0.9;
+const STEP_POWER: f64 = 2. / 3.;
 
 /// What one frame declares to Hyalo: a shape per visible pane, and the state regions.
 #[derive(Clone, Debug, Default)]
@@ -99,8 +121,15 @@ pub struct ViewState {
     laid: Vec<Placed>,
     now: Instant,
     drag: Option<Drag>,
-    /// The motion tokens of the last layout, for a release between frames.
-    motion_tokens: Option<crate::tokens::Motion>,
+    /// The tokens of the last layout, for input between frames.
+    tokens: Option<Tokens>,
+    /// Each scroll region's offset by key, as last clamped, or as input asked since.
+    offsets: HashMap<Key, f64>,
+    /// An offset changed since the last layout; the next `tick` lays the view out.
+    pending: bool,
+    bars: HashMap<Key, ScrollBar>,
+    /// A bar is showing, fading or waiting to hide.
+    bars_busy: bool,
     view: Option<Node>,
     size: (f64, f64),
     scale: f64,
@@ -129,7 +158,11 @@ impl ViewState {
             laid: vec![],
             now: Instant::now(),
             drag: None,
-            motion_tokens: None,
+            tokens: None,
+            offsets: HashMap::new(),
+            pending: false,
+            bars: HashMap::new(),
+            bars_busy: false,
             view: None,
             size: (0., 0.),
             scale: 1.,
@@ -168,7 +201,7 @@ impl ViewState {
             .map(|p| (p.key.clone(), p.rect))
             .collect();
         self.motion.view(view, now, &tokens.motion);
-        self.motion_tokens = Some(tokens.motion);
+        self.tokens = Some(tokens.clone());
         self.view = Some(view.clone());
         self.size = size;
         self.scale = scale;
@@ -200,26 +233,34 @@ impl ViewState {
         text: &mut dyn nk_text::TextBackend,
         now: Instant,
     ) -> Ticked {
-        if !self.motion.animating() {
+        if !self.animating() {
             return Ticked::default();
         }
+        let moving = self.motion.animating() || self.pending;
         let activated = self
             .motion
             .finished(now)
             .into_iter()
             .map(|(key, action)| Activated { key, action })
             .collect();
-        self.relayout(tokens, text, now, None);
-        self.rehover();
+        if moving {
+            self.relayout(tokens, text, now, None);
+            self.rehover();
+        }
+        self.bars_busy = false;
+        for bar in self.bars.values_mut() {
+            self.bars_busy |= bar.tick(&tokens.scrollbar, now).1;
+        }
         Ticked {
-            animating: self.motion.animating(),
+            animating: self.animating(),
             activated,
         }
     }
 
-    /// Whether a reveal eases or a pane slides.
+    /// Whether a reveal eases, a pane slides, a scroll waits to be laid out, or a scroll bar
+    /// shows: the surface keeps calling `tick`.
     pub fn animating(&self) -> bool {
-        self.motion.animating()
+        self.motion.animating() || self.pending || self.bars_busy
     }
 
     /// Reduced motion: reveals and slides land at once.
@@ -238,14 +279,53 @@ impl ViewState {
             return;
         };
         let reveals = self.motion.progress(now);
+        let anchors = if rebuilt.is_some() {
+            self.anchors()
+        } else {
+            vec![]
+        };
         let mut placed = Layouter {
             spacing: &tokens.spacing,
             reveals: &reveals,
-            text,
+            offsets: &self.offsets,
+            text: &mut *text,
             cache: &mut self.text,
             scale: self.scale,
         }
         .run(view, self.size);
+        // A rebuild keeps what the reader was looking at in place: each scrolled region's
+        // first pane in view stays where it was drawn, whatever changed above it.
+        let mut anchored = false;
+        for (region, pane, was) in anchors {
+            let at = |k: &Key| placed.iter().position(|p| &p.key == k);
+            if let (Some(r), Some(p)) = (at(&region), at(&pane)) {
+                let moved = placed[p].rect[1] - placed[r].rect[1] - was;
+                if moved.abs() > 1e-6 {
+                    *self.offsets.entry(region).or_default() += moved;
+                    anchored = true;
+                }
+            }
+        }
+        if anchored {
+            placed = Layouter {
+                spacing: &tokens.spacing,
+                reveals: &reveals,
+                offsets: &self.offsets,
+                text,
+                cache: &mut self.text,
+                scale: self.scale,
+            }
+            .run(view, self.size);
+        }
+        self.offsets = placed
+            .iter()
+            .filter_map(|p| match p.what {
+                What::Scroll { offset, .. } => Some((p.key.clone(), offset)),
+                _ => None,
+            })
+            .collect();
+        self.bars.retain(|k, _| self.offsets.contains_key(k));
+        self.pending = false;
         if let Some(before) = rebuilt {
             self.motion.moved(before, &placed, now);
         }
@@ -254,6 +334,26 @@ impl ViewState {
         self.now = now;
         self.laid = placed;
         self.reswipe();
+    }
+
+    /// Each scrolled region's first pane in view, and how far below the region's top it is.
+    fn anchors(&self) -> Vec<(Key, Key, f64)> {
+        let laid = &self.laid;
+        laid.iter()
+            .enumerate()
+            .filter_map(|(s, p)| {
+                let What::Scroll { offset, .. } = p.what else {
+                    return None;
+                };
+                let viewport = p.visible().filter(|_| offset > 0.)?;
+                let a = laid.iter().find(|q| {
+                    q.scroll == Some(s)
+                        && matches!(q.what, What::Pane(_))
+                        && q.visible().is_some_and(|v| overlaps(v, viewport))
+                })?;
+                Some((p.key.clone(), a.key.clone(), a.rect[1] - p.rect[1]))
+            })
+            .collect()
     }
 
     /// The placement with the swipes in force at the last instant laid out.
@@ -330,8 +430,12 @@ impl ViewState {
         pointer || focus
     }
 
-    /// The innermost shown, enabled control under a point.
+    /// The innermost shown, enabled control under a point; a shown scroll bar's lane takes
+    /// the point from what lies under it.
     fn hit(&self, pt: (f64, f64)) -> Option<usize> {
+        if self.on_bar(pt).is_some() {
+            return None;
+        }
         self.controls()
             .filter(|&i| {
                 self.enabled(i)
@@ -357,6 +461,9 @@ impl ViewState {
     pub fn pointer_motion(&mut self, x: f64, y: f64) -> bool {
         let revealed = self.revealed();
         self.pointer = Some((x, y));
+        if self.bar_motion((x, y)) {
+            return true;
+        }
         let mut swiped = false;
         if let Some(d) = &mut self.drag {
             let (dx, dy) = (x - d.origin.0, y - d.origin.1);
@@ -381,6 +488,9 @@ impl ViewState {
         let revealed = self.revealed();
         self.pointer = None;
         self.press = None;
+        for bar in self.bars.values_mut().filter(|b| !b.dragging()) {
+            bar.set_in_lane(false);
+        }
         let swiped = self.end_swipe(0., self.now).is_some();
         self.rehover() | (revealed != self.revealed()) | swiped
     }
@@ -389,7 +499,7 @@ impl ViewState {
     /// reduced motion a fling reports at once. None: there was no swipe.
     fn end_swipe(&mut self, dx: f64, now: Instant) -> Option<Option<Activated>> {
         let d = self.drag.take().filter(|d| d.claimed)?;
-        let motion = self.motion_tokens?;
+        let motion = self.tokens.as_ref()?.motion;
         let action = self
             .index(&d.key)
             .and_then(|i| self.control(i).swipe.clone())
@@ -417,6 +527,25 @@ impl ViewState {
     /// off past the dismiss distance or settles it back, and activates nothing then (`tick`
     /// reports the fling), except with reduced motion, where the fling lands at once.
     pub fn button(&mut self, pressed: bool, now: Instant) -> Option<Activated> {
+        if pressed && let Some((s, g)) = self.pointer.and_then(|pt| self.on_bar(pt)) {
+            // The bar's: a press on the empty track jumps there, then drags.
+            let key = self.placed[s].key.clone();
+            let offset = self.offset(s);
+            let y = self.pointer.map_or(0., |p| p.1) as f32;
+            let to = self
+                .bars
+                .entry(key)
+                .or_default()
+                .press(&g, y, offset as f32);
+            self.scroll_by(s, to as f64 - offset);
+            self.press = None;
+            self.drag = None;
+            return None;
+        }
+        if !pressed && self.bars.values_mut().any(|b| b.release()) {
+            self.bars_busy = true;
+            return None;
+        }
         if pressed {
             self.press = self.hover.clone();
             self.focus_visible = false;
@@ -452,6 +581,21 @@ impl ViewState {
     /// Tab and Shift+Tab move focus through every enabled control in tree order, revealed or
     /// not; Enter or Space activates the focused one.
     pub fn key(&mut self, k: KeyInput) -> Option<Activated> {
+        if matches!(
+            k,
+            KeyInput::PageUp | KeyInput::PageDown | KeyInput::Home | KeyInput::End
+        ) {
+            let s = self.key_region()?;
+            let (offset, h) = (self.offset(s), self.placed[s].rect[3]);
+            let delta = match k {
+                KeyInput::PageUp => -PAGE * h,
+                KeyInput::PageDown => PAGE * h,
+                KeyInput::Home => -offset,
+                _ => f64::INFINITY,
+            };
+            self.scroll_by(s, delta);
+            return None;
+        }
         let order: Vec<usize> = self.controls().filter(|&i| self.enabled(i)).collect();
         if order.is_empty() {
             return None;
@@ -471,6 +615,7 @@ impl ViewState {
                 };
                 self.focus = Some(self.placed[order[next]].key.clone());
                 self.focus_visible = true;
+                self.scroll_to_focus(order[next]);
                 None
             }
             KeyInput::Activate => {
@@ -480,7 +625,167 @@ impl ViewState {
                     action: self.control(i).action.clone(),
                 })
             }
+            _ => None,
         }
+    }
+
+    /// The wheel or the touchpad scrolled the innermost region under the pointer. False when
+    /// it could not move (nothing under the pointer scrolls, or it is at that end). The new
+    /// offset is laid out at the next `tick`.
+    pub fn scroll(&mut self, by: ScrollBy) -> bool {
+        let Some(pt) = self.pointer else {
+            return false;
+        };
+        let Some(s) = self.regions().filter(|&s| self.over(s, pt)).last() else {
+            return false;
+        };
+        let delta = match by {
+            ScrollBy::Pixels(d) => d,
+            ScrollBy::Steps(n) => n * self.placed[s].rect[3].powf(STEP_POWER),
+        };
+        self.scroll_by(s, delta)
+    }
+
+    /// What of a scroll region's content shows: its offset and its viewport's height. The
+    /// surface builds the rows inside it and leaves placeholders for the rest (VIEW.md §8).
+    pub fn window(&self, key: &Key) -> Option<(f64, f64)> {
+        let s = self.index(key)?;
+        matches!(self.placed[s].what, What::Scroll { .. })
+            .then(|| (self.offset(s), self.placed[s].rect[3]))
+    }
+
+    fn regions(&self) -> impl Iterator<Item = usize> + '_ {
+        self.placed
+            .iter()
+            .enumerate()
+            .filter(|(_, p)| matches!(p.what, What::Scroll { .. }) && p.alpha > 0.)
+            .map(|(i, _)| i)
+    }
+    fn over(&self, s: usize, pt: (f64, f64)) -> bool {
+        self.placed[s].visible().is_some_and(|r| inside(r, pt))
+    }
+    /// A region's offset: what input asked for since the last layout, or what was laid out.
+    fn offset(&self, s: usize) -> f64 {
+        let p = &self.placed[s];
+        self.offsets.get(&p.key).copied().unwrap_or(match p.what {
+            What::Scroll { offset, .. } => offset,
+            _ => 0.,
+        })
+    }
+    /// Moves region `s` by `delta`, within its content and on the device grid. False when it
+    /// could not move. Its bar shows.
+    fn scroll_by(&mut self, s: usize, delta: f64) -> bool {
+        let What::Scroll { content, .. } = self.placed[s].what else {
+            return false;
+        };
+        let old = self.offset(s);
+        let max = (content - self.placed[s].rect[3]).max(0.);
+        let to = ((old + delta).clamp(0., max) * self.scale).round() / self.scale;
+        if to == old {
+            return false;
+        }
+        let key = self.placed[s].key.clone();
+        self.offsets.insert(key.clone(), to);
+        self.pending = true;
+        self.bars.entry(key).or_default().reveal();
+        self.bars_busy = true;
+        true
+    }
+    /// The region the scroll keys act on: the focus's, else the pointer's, else the first.
+    fn key_region(&self) -> Option<usize> {
+        let focus = self.focus.as_ref().and_then(|k| self.index(k));
+        focus
+            .and_then(|f| self.placed[f].scroll)
+            .or_else(|| {
+                let pt = self.pointer?;
+                self.regions().filter(|&s| self.over(s, pt)).last()
+            })
+            .or_else(|| self.regions().next())
+    }
+    /// Keyboard focus that lands on a control out of its region's view scrolls it in, by as
+    /// little as shows it (GTK's viewport did the same).
+    fn scroll_to_focus(&mut self, i: usize) {
+        let Some(s) = self.placed[i].scroll else {
+            return;
+        };
+        let (r, v) = (self.placed[i].rect, self.placed[s].rect);
+        let delta = if r[1] < v[1] {
+            r[1] - v[1]
+        } else if r[1] + r[3] > v[1] + v[3] {
+            (r[1] + r[3] - v[1] - v[3]).min(r[1] - v[1])
+        } else {
+            0.
+        };
+        if delta != 0. {
+            self.scroll_by(s, delta);
+        }
+    }
+
+    /// A region's bar, where it sits: its viewport at the region's visible rect, with the
+    /// curve of its pane's corner at an end the region shares with that pane.
+    fn bar_geometry(&self, s: usize) -> Option<BarGeometry> {
+        let t = self.tokens.as_ref()?;
+        let p = &self.placed[s];
+        let What::Scroll { content, .. } = p.what else {
+            return None;
+        };
+        let v = p.visible()?;
+        let (mut top, mut bottom) = (0., 0.);
+        if let Some(q) = p.pane {
+            let pane = &self.placed[q];
+            if let What::Pane(c) = &pane.what {
+                let r = c.of(pane.rect[2], pane.rect[3], &t.radii) as f32;
+                let (y0, y1) = (pane.rect[1], pane.rect[1] + pane.rect[3]);
+                if (v[1] - y0).abs() < 0.5 {
+                    top = r;
+                }
+                if (v[1] + v[3] - y1).abs() < 0.5 {
+                    bottom = r;
+                }
+            }
+        }
+        t.scrollbar
+            .geometry(rect(&v), content as f32, self.offset(s) as f32, top, bottom)
+    }
+    /// The innermost region whose shown bar's lane holds a point, and where its bar sits.
+    fn on_bar(&self, pt: (f64, f64)) -> Option<(usize, BarGeometry)> {
+        let regions: Vec<usize> = self.regions().collect();
+        regions.into_iter().rev().find_map(|s| {
+            let shown = self
+                .bars
+                .get(&self.placed[s].key)
+                .is_some_and(|b| b.shown());
+            let g = self.bar_geometry(s).filter(|_| shown)?;
+            in_lane(&g, pt).then_some((s, g))
+        })
+    }
+    /// The pointer moved: a bar being dragged takes it (true); otherwise the regions under it
+    /// show their bars, and each bar learns whether the pointer is on its lane.
+    fn bar_motion(&mut self, pt: (f64, f64)) -> bool {
+        let regions: Vec<usize> = self.regions().collect();
+        for &s in &regions {
+            let key = self.placed[s].key.clone();
+            let Some(g) = self.bar_geometry(s) else {
+                continue;
+            };
+            if let Some(to) = self.bars.get(&key).and_then(|b| b.drag_to(&g, pt.1 as f32)) {
+                let offset = self.offset(s);
+                self.scroll_by(s, to as f64 - offset);
+                return true;
+            }
+        }
+        for s in regions {
+            let key = self.placed[s].key.clone();
+            let lane = self.bar_geometry(s).is_some_and(|g| in_lane(&g, pt));
+            let over = self.over(s, pt);
+            let bar = self.bars.entry(key).or_default();
+            bar.set_in_lane(lane);
+            if over {
+                bar.reveal();
+                self.bars_busy = true;
+            }
+        }
+        false
     }
 
     fn id(&mut self, key: &Key) -> u32 {
@@ -620,6 +925,7 @@ impl ViewState {
             }
             let node = match &p.what {
                 What::Pane(_) => nk_a11y::Node::new(next, nk_a11y::Role::Panel, ""),
+                What::Scroll { .. } => nk_a11y::Node::new(next, nk_a11y::Role::ScrollPane, ""),
                 What::Control(c) => {
                     let mut n = nk_a11y::Node::new(
                         next,
@@ -647,7 +953,10 @@ impl ViewState {
                 width: p.rect[2],
                 height: p.rect[3],
             };
-            let parent = p.pane.and_then(|q| ids.get(&q).copied()).unwrap_or(root_id);
+            let parent = std::iter::successors(p.parent, |&q| self.placed[q].parent)
+                .filter(|&q| matches!(self.placed[q].what, What::Pane(_) | What::Scroll { .. }))
+                .find_map(|q| ids.get(&q).copied())
+                .unwrap_or(root_id);
             nodes
                 .get_mut(&parent)
                 .expect("parent is placed first")
@@ -728,6 +1037,17 @@ impl ViewState {
                 _ => {}
             }
         }
+        for s in self.regions() {
+            if let (Some(bar), Some(g)) = (self.bars.get(&self.placed[s].key), self.bar_geometry(s))
+            {
+                bar.paint(
+                    &tokens.scrollbar,
+                    &g,
+                    nk_text::Point { x: 0., y: 0. },
+                    canvas,
+                );
+            }
+        }
         Ok(())
     }
 }
@@ -739,6 +1059,11 @@ fn rect(r: &Rect) -> nk_text::Rect {
         width: r[2] as f32,
         height: r[3] as f32,
     }
+}
+fn in_lane(g: &BarGeometry, p: (f64, f64)) -> bool {
+    let l = g.lane;
+    let (x, y) = (p.0 as f32, p.1 as f32);
+    x >= l.x && y >= l.y && x < l.x + l.width && y < l.y + l.height
 }
 fn inside(r: Rect, p: (f64, f64)) -> bool {
     p.0 >= r[0] && p.1 >= r[1] && p.0 < r[0] + r[2] && p.1 < r[1] + r[3]

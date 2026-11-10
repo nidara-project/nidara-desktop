@@ -274,7 +274,9 @@ constant width, revealed by scrolling or by motion over the pane, faded `hideMs`
 the pointer is on the lane or drags it; on the lane it widens and shows a faint track. A
 press on the empty track jumps there, then drags. The hit lane never grows. Time advances
 only through `Tree::tick_scrollbars(now)`, which the app calls from its idle; a press the bar
-takes never reaches the row under it. Without the style there is no bar.
+takes never reaches the row under it. Without the style there is no bar. The bar itself
+(`ScrollBar`, `BarGeometry`, `ScrollbarStyle::geometry`) stands apart from the Tree, so the
+shell's views (`nk-view`, VIEW.md §8) draw the same one.
 
 ### Dropdown menu list (#882/#915)
 

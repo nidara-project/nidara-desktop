@@ -3,6 +3,7 @@
 //! surface: the kit's spacing scale (`tokens/static.json`), the text and focus colours
 //! (`tokens/colors.json`) and the washes of a control's states (`tokens/glass.json`).
 use nk_render::Color;
+use nk_widgets::ScrollbarStyle;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
@@ -325,12 +326,49 @@ impl Washes {
     }
 }
 
+/// The kit's scroll bar (`components.json` `scrollbar`, from `toolkit/tokens/scrollbar.json`),
+/// its colours named by token and resolved in one set of `tokens/colors.json`: the one bar the
+/// native Tree draws too.
+pub fn scrollbar_from(component: &Value, set: &Value) -> Result<ScrollbarStyle, String> {
+    let n = |k: &str| {
+        component[k]
+            .as_f64()
+            .map(|v| v as f32)
+            .ok_or_else(|| format!("scrollbar: no {k}"))
+    };
+    let colour = |k: &str| -> Result<Color, String> {
+        let name = component[k]
+            .as_str()
+            .ok_or_else(|| format!("scrollbar: no {k}"))?;
+        set["tokens"][name]
+            .as_str()
+            .ok_or_else(|| format!("colors.json: no {name}"))
+            .and_then(parse_color)
+    };
+    ScrollbarStyle {
+        lane: n("lane")?,
+        thumb_rest: n("thumbRest")?,
+        thumb_hover: n("thumbHover")?,
+        thumb_min: n("thumbMin")?,
+        edge_clear: n("edgeClear")?,
+        corner_clear: n("cornerClear")?,
+        hide_ms: n("hideMs")?,
+        fade_ms: n("fadeMs")?,
+        width_tau_ms: n("widthTauMs")?,
+        track_opacity: n("trackOpacity")?,
+        color: colour("color")?,
+        active: colour("active")?,
+    }
+    .checked()
+}
+
 /// Everything a view is laid out and drawn with.
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug)]
 pub struct Tokens {
     pub spacing: Spacing,
     pub radii: Radii,
     pub motion: Motion,
     pub look: Look,
     pub washes: Washes,
+    pub scrollbar: ScrollbarStyle,
 }

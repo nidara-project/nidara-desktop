@@ -2,9 +2,9 @@
 # nk-view
 
 The shell's own view vocabulary, as `toolkit/VIEW.md` contracts it (#1048). It holds pieces 1
-to 4 and 8 of the 2026-11-10 shell inventory: the layout box, the shared interaction state, the
-pane, motion (reveals and slides) and swipe to dismiss. No surface uses it yet. The
-notification centre is the first, behind a flag, once scroll and overlay exist.
+to 5 and 8 of the 2026-11-10 shell inventory: the layout box, the shared interaction state, the
+pane, motion (reveals and slides), scrolling and swipe to dismiss. No surface uses it yet. The
+notification centre is the first, behind a flag, once overlay exists.
 
 A surface builds a `Node` tree from its model on every change, with each node's `Key` taken
 from the model. `ViewState` keeps what lasts between rebuilds:
@@ -12,11 +12,12 @@ from the model. `ViewState` keeps what lasts between rebuilds:
 | Call | What it does |
 |---|---|
 | `layout(view, size, scale, tokens, text, now)` | Measures, then places. Measured sizes are rounded up to whole device pixels and every edge is snapped to the device grid, so equal cards have equal sizes wherever they are. Texts are cached by key, string, style, line limit and width. A reveal whose `open` changed starts to ease, and a pane the rebuild moved slides from where it was drawn. |
-| `tick(tokens, text, now)` | Advances reveals, slides and swipes, and lays the view out again. It returns `Ticked`: whether anything still moves (while it does, the surface asks for frames), and the cards whose swipe just took them off the surface, as `Activated` with the swipe's action. |
-| `pointer_motion`, `pointer_leave`, `button(pressed, now)`, `key`, `reconcile_pointer` | Derive hover (the innermost shown, enabled control), press (cancelled by a release elsewhere), focus (Tab order) and swipes. The surface gets back only `Activated { key, action }`. |
+| `tick(tokens, text, now)` | Advances reveals, slides, swipes, scrolls and scroll bars, and lays the view out again. It returns `Ticked`: whether anything still moves (while it does, the surface asks for frames), and the cards whose swipe just took them off the surface, as `Activated` with the swipe's action. |
+| `pointer_motion`, `pointer_leave`, `button(pressed, now)`, `key`, `reconcile_pointer` | Derive hover (the innermost shown, enabled control), press (cancelled by a release elsewhere), focus (Tab order), swipes, and the scroll bars' drags. The surface gets back only `Activated { key, action }`. |
+| `scroll(ScrollBy)`, `window(key)` | Scroll the region under the pointer, by pixels or wheel detents; and say what of a region's content shows, so the surface builds only those rows. |
 | `frame(tokens, now)` | Returns a `FramePane` per visible pane (its whole shape, its clip, and its glass opacity, which is its content's), plus the state regions (see below). `Frame::groups(tone, shadow)` turns the panes into material groups. |
-| `semantics(root, first_id)` | Builds the AT-SPI tree: a panel per pane, a button per control, a label per text outside a control (whole, never cut). |
-| `paint(canvas, tokens, icons, fallback)` | Paints texts, icons and the keyboard focus ring. With `fallback` it also paints the washes (D5, no material protocol). |
+| `semantics(root, first_id)` | Builds the AT-SPI tree: a scroll pane per scroll region, a panel per pane, a button per control, a label per text outside a control (whole, never cut). |
+| `paint(canvas, tokens, icons, fallback)` | Paints texts, icons, the keyboard focus ring and the scroll bars. With `fallback` it also paints the washes (D5, no material protocol). |
 
 **State regions.** Each pane's lit regions come first: press, then hover, then those still
 fading, then markers. Every other shown control follows at rest, with alpha 0. Hyalo shows a
@@ -43,8 +44,18 @@ settles back (`ease-emphasized` over `dur-base`). `tick` reports the fling when 
 the card stays hidden until the surface drops it. These distances come from the TS shell
 (`ScaleRevealer.ts`).
 
+**Scroll.** A `Scroll` region is as tall as its content where there is room; a column that runs
+short takes the height from its scroll regions first. Its offset is kept by key and clamped.
+The wheel moves the innermost region under the pointer (a detent is the viewport's height to
+the 2/3, as GTK's), Page Up and Page Down move 0.9 of a page, Ctrl+Home and Ctrl+End go to the
+ends, and Tab onto a control out of view scrolls it in. On a rebuild, a scrolled region keeps
+its first pane in view where it was. Rows outside `window(key)` are left unbuilt, as
+`Node::placeholder(key, height)` at the height they had. The bar is `nk-widgets`' `ScrollBar`,
+the one the native Settings draws, from `tokens/scrollbar.json`.
+
 **Tokens, never literals.** Gaps and paddings are `Space` steps, corners are `Pill` or a
 `Radius` step (`ts.RADIUS`), and motion uses the kit's curves and durations, all from
 `tokens/static.json`. Washes come from `tokens/glass.json` (the control piece's `states`), and
-text and focus colours from `tokens/colors.json`. Icon sizes are still passed in by the surface
+text and focus colours from `tokens/colors.json`. The scroll bar's look is
+`components.json`'s `scrollbar` (`scrollbar_from`). Icon sizes are still passed in by the surface
 from its tokens.

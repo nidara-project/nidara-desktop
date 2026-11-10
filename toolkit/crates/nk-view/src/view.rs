@@ -35,12 +35,21 @@ pub enum Kind {
     Spacer,
     Control(Control),
     Reveal(Reveal),
+    Scroll(Scroll),
+    /// A row the surface did not build, at the height it had when it was (VIEW.md §8).
+    Placeholder(f64),
 }
 
 /// Something that opens and closes in place, unrolling downward (VIEW.md §6).
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub struct Reveal {
     pub open: bool,
+    pub child: Box<Node>,
+}
+
+/// A region that shows its child through a viewport, scrolled vertically (VIEW.md §8).
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+pub struct Scroll {
     pub child: Box<Node>,
 }
 
@@ -266,6 +275,19 @@ impl Node {
                 child: Box::new(child),
             }),
         )
+    }
+    pub fn scroll(key: impl Into<Key>, child: Node) -> Self {
+        Self::new(
+            key,
+            Kind::Scroll(Scroll {
+                child: Box::new(child),
+            }),
+        )
+    }
+    /// Stands in for a row the surface leaves unbuilt, outside a scroll region's window:
+    /// `height` is what `ViewState::rect` gave for the row when it was built.
+    pub fn placeholder(key: impl Into<Key>, height: f64) -> Self {
+        Self::new(key, Kind::Placeholder(height))
     }
     pub fn spacer(key: impl Into<Key>) -> Self {
         Self::new(key, Kind::Spacer)

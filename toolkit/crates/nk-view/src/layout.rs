@@ -158,6 +158,8 @@ struct Measure {
     children: Vec<Measure>,
     /// A horizontal stack with `FirstLine`: each child's offset from the top.
     cross: Vec<f64>,
+    /// How much height it can give up when its column runs short: its scroll regions'.
+    give: f64,
 }
 
 /// One placed node, in tree order.
@@ -175,6 +177,8 @@ pub struct Placed {
     pub clip: Option<Rect>,
     /// Its content's opacity: the product of the reveals' progress it lies in.
     pub alpha: f64,
+    /// The nearest scroll region it lies in.
+    pub scroll: Option<usize>,
 }
 impl Placed {
     /// Its rectangle as far as it shows; None when nothing of it does.
@@ -197,11 +201,21 @@ pub fn intersect(a: Rect, b: Rect) -> Option<Rect> {
 pub enum What {
     Stack,
     Pane(Corner),
-    Text { full: String, ink: Ink },
+    Text {
+        full: String,
+        ink: Ink,
+    },
     Icon(Icon),
     Spacer,
     Control(Control),
-    Reveal { progress: f64 },
+    Reveal {
+        progress: f64,
+    },
+    /// A scroll region: how far it is scrolled, and its content's height.
+    Scroll {
+        offset: f64,
+        content: f64,
+    },
 }
 
 /// Where a node is placed from: its parent, the pane and control it lies in, its clip and
@@ -213,12 +227,15 @@ struct Ctx {
     control: Option<usize>,
     clip: Option<Rect>,
     alpha: f64,
+    scroll: Option<usize>,
 }
 
 pub struct Layouter<'a> {
     pub spacing: &'a Spacing,
     /// Each reveal's progress by key; a reveal not in it is at its `open` state.
     pub reveals: &'a Map<Key, f64>,
+    /// Each scroll region's offset by key; one not in it is at the top. Clamped here.
+    pub offsets: &'a Map<Key, f64>,
     pub text: &'a mut dyn TextBackend,
     pub cache: &'a mut TextCache,
     pub scale: f64,
@@ -236,6 +253,7 @@ impl Layouter<'_> {
             control: None,
             clip: None,
             alpha: 1.,
+            scroll: None,
         };
         self.place(root, &m, [0., 0., size.0, size.1], ctx, &mut out);
         let live: std::collections::HashSet<Key> = out.iter().map(|p| p.key.clone()).collect();
@@ -251,6 +269,8 @@ impl Layouter<'_> {
             Kind::Pane(p) => self.natural(&p.child),
             Kind::Control(c) => self.natural(&c.child),
             Kind::Reveal(r) => self.natural(&r.child),
+            Kind::Scroll(sc) => self.natural(&sc.child),
+            Kind::Placeholder(_) => 0.,
             Kind::Stack(s) => {
                 let pad = self.spacing.of(s.padding.left) + self.spacing.of(s.padding.right);
                 let ws: Vec<f64> = s.children.iter().map(|c| self.natural(c)).collect();
@@ -266,6 +286,8 @@ impl Layouter<'_> {
             Kind::Pane(p) => self.min(&p.child),
             Kind::Control(c) => self.min(&c.child),
             Kind::Reveal(r) => self.min(&r.child),
+            Kind::Scroll(sc) => self.min(&sc.child),
+            Kind::Placeholder(_) => 0.,
             Kind::Stack(s) => {
                 let pad = self.spacing.of(s.padding.left) + self.spacing.of(s.padding.right);
                 let ws: Vec<f64> = s.children.iter().map(|c| self.min(c)).collect();
@@ -290,6 +312,7 @@ impl Layouter<'_> {
             first_line,
             children: vec![],
             cross: vec![],
+            give: 0.,
         };
         match &n.kind {
             Kind::Spacer => leaf(0., 0., None),
@@ -323,10 +346,24 @@ impl Layouter<'_> {
                     w: c.w,
                     h: c.h,
                     first_line: c.first_line,
+                    give: c.give,
                     children: vec![c],
                     cross: vec![],
                 }
             }
+            Kind::Scroll(sc) => {
+                // As tall as its content where there is room; it gives all of it up first.
+                let c = self.measure(&sc.child, width);
+                Measure {
+                    w: c.w,
+                    h: c.h,
+                    first_line: None,
+                    give: c.h,
+                    children: vec![c],
+                    cross: vec![],
+                }
+            }
+            Kind::Placeholder(h) => leaf(0., self.up(*h), None),
             Kind::Reveal(r) => {
                 let p = self.progress(&n.key, r.open);
                 let c = self.measure(&r.child, width);
@@ -336,6 +373,7 @@ impl Layouter<'_> {
                     first_line: if p >= 1. { c.first_line } else { None },
                     children: vec![c],
                     cross: vec![],
+                    give: 0.,
                 }
             }
             Kind::Control(ctl) => {
@@ -344,6 +382,7 @@ impl Layouter<'_> {
                     w: c.w,
                     h: c.h,
                     first_line: c.first_line,
+                    give: c.give,
                     children: vec![c],
                     cross: vec![],
                 }
@@ -434,6 +473,7 @@ impl Layouter<'_> {
                     first_line,
                     children,
                     cross,
+                    give: 0.,
                 }
             }
             Axis::Vertical => {
@@ -464,6 +504,7 @@ impl Layouter<'_> {
                     },
                     h: self.up(children.iter().map(|c| c.h).sum::<f64>() + gaps + pt + pb),
                     first_line,
+                    give: children.iter().map(|c| c.give).sum(),
                     children,
                     cross: vec![],
                 }
@@ -515,6 +556,11 @@ impl Layouter<'_> {
             Kind::Reveal(rv) => What::Reveal {
                 progress: self.progress(&n.key, rv.open),
             },
+            Kind::Placeholder(_) => What::Spacer,
+            Kind::Scroll(_) => What::Scroll {
+                offset: 0.,
+                content: m.children[0].h,
+            },
         };
         let rect = self.snap(r);
         out.push(Placed {
@@ -530,6 +576,7 @@ impl Layouter<'_> {
             },
             clip: ctx.clip,
             alpha: ctx.alpha,
+            scroll: ctx.scroll,
         });
         let mut inner = Ctx {
             parent: Some(index),
@@ -554,6 +601,33 @@ impl Layouter<'_> {
                 inner.alpha *= p;
                 let child = &m.children[0];
                 self.place(&rv.child, child, [r[0], r[1], r[2], child.h], inner, out)
+            }
+            Kind::Scroll(sc) => {
+                // The child at its full height, moved up by the offset, clipped to the region.
+                let child = &m.children[0];
+                let offset = self.round(
+                    self.offsets
+                        .get(&n.key)
+                        .copied()
+                        .unwrap_or(0.)
+                        .clamp(0., (child.h - rect[3]).max(0.)),
+                );
+                out[index].what = What::Scroll {
+                    offset,
+                    content: child.h,
+                };
+                inner.clip = Some(match ctx.clip {
+                    Some(c) => intersect(c, rect).unwrap_or([rect[0], rect[1], 0., 0.]),
+                    None => rect,
+                });
+                inner.scroll = Some(index);
+                self.place(
+                    &sc.child,
+                    child,
+                    [r[0], r[1] - offset, r[2], child.h],
+                    inner,
+                    out,
+                )
             }
             Kind::Stack(s) => self.place_stack(s, m, r, inner, out),
             _ => {}
@@ -581,12 +655,22 @@ impl Layouter<'_> {
         } else {
             (inner[3], inner[2])
         };
-        let sizes: Vec<f64> = m
+        let mut sizes: Vec<f64> = m
             .children
             .iter()
             .map(|c| if horizontal { c.w } else { c.h })
             .collect();
-        let used = sizes.iter().sum::<f64>() + gap * sizes.len().saturating_sub(1) as f64;
+        let mut used = sizes.iter().sum::<f64>() + gap * sizes.len().saturating_sub(1) as f64;
+        // A column that runs short takes the height from its scroll regions, each in
+        // proportion to what it can give.
+        let give: f64 = m.children.iter().map(|c| c.give).sum();
+        if !horizontal && used > main && give > 0. {
+            let take = (used - main).min(give);
+            for (size, c) in sizes.iter_mut().zip(&m.children) {
+                *size -= c.give * take / give;
+            }
+            used -= take;
+        }
         let left = (main - used).max(0.);
         let spacers = s
             .children

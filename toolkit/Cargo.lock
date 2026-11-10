@@ -1288,6 +1288,7 @@ dependencies = [
  "nk-render",
  "nk-text",
  "nk-wayland",
+ "nk-widgets",
  "serde",
  "serde_json",
  "unicode-segmentation",

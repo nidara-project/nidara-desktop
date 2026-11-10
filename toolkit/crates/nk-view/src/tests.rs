@@ -30,14 +30,22 @@ fn glass() -> serde_json::Value {
 }
 fn tokens() -> Tokens {
     let set = json!({"tokens": {"--nidara-text": "#ffffff", "--nidara-text-secondary": "rgba(255, 255, 255, 0.8)",
-        "--nidara-text-dim": "rgba(255, 255, 255, 0.6)", "--nidara-accent": "#0088FF"}});
+        "--nidara-text-dim": "rgba(255, 255, 255, 0.6)", "--nidara-accent": "#0088FF",
+        "--nidara-surface-raised": "rgba(255, 255, 255, 0.24)"}});
     Tokens {
         spacing: Spacing::from_static(&statics()).unwrap(),
         radii: Radii::from_static(&statics()).unwrap(),
         motion: Motion::from_static(&statics()).unwrap(),
         look: Look::from_colors(&set).unwrap(),
         washes: Washes::from_glass(&glass(), true, false).unwrap(),
+        scrollbar: scrollbar_from(&scrollbar(), &set).unwrap(),
     }
+}
+/// `components.json` `scrollbar`, as `toolkit/tokens/scrollbar.json` exports it.
+fn scrollbar() -> serde_json::Value {
+    json!({"lane": 12, "thumbRest": 4, "thumbHover": 8, "thumbMin": 28, "edgeClear": 4,
+        "cornerClear": 4, "hideMs": 1100, "fadeMs": 250, "widthTauMs": 45, "trackOpacity": 0.18,
+        "color": "--nidara-surface-raised", "active": "--nidara-text-dim"})
 }
 fn style(size: f32) -> TextStyle {
     TextStyle {
@@ -208,7 +216,7 @@ fn a_stack_places_by_gap_padding_justify_spacer_and_grow() {
     assert_eq!(rect(&s, "b"), [42., 32., 16., 16.]);
 }
 
-/// The acceptance check of VIEW.md §8: on every card, the icon's centre and the title's
+/// The acceptance check of VIEW.md §10: on every card, the icon's centre and the title's
 /// first line agree to one device pixel, at scale 1 and 1.25. Its control: `Center`.
 #[test]
 fn first_line_puts_the_icon_level_with_the_title_and_center_does_not() {
@@ -1006,4 +1014,317 @@ fn frame_groups_share_a_group_per_clip_and_opacity() {
     assert_eq!(g.len(), 1);
     assert_eq!(g[0].shapes.len(), 2);
     assert!(g[0].clip.is_none() && g[0].opacity == 1.);
+}
+
+fn feed_of(rows: Vec<Node>) -> Node {
+    Node::column(
+        "page",
+        vec![
+            Node::text("head", "Notifications", style(14.)),
+            Node::scroll("feed", Node::column("list", rows).gap(Space::S2)),
+        ],
+    )
+    .gap(Space::S2)
+}
+fn feed(n: usize) -> Node {
+    feed_of(
+        (0..n)
+            .map(|i| card(&format!("c{i}"), "Body", Align::FirstLine))
+            .collect(),
+    )
+}
+/// Ticks every 16 ms from `from` until nothing moves (at most 3 s); returns when it stopped.
+fn settle(s: &mut ViewState, t: &Tokens, text: &mut ParleyBackend, from: Instant) -> Instant {
+    let mut now = from;
+    while s.animating() && now < from + Duration::from_secs(3) {
+        now += Duration::from_millis(16);
+        s.tick(t, text, now);
+    }
+    now
+}
+fn offset(s: &ViewState) -> f64 {
+    s.window(&Key::from("feed")).unwrap().0
+}
+
+#[test]
+fn a_scroll_region_takes_its_content_height_and_gives_it_up_when_its_column_runs_short() {
+    let roomy = laid(&feed(10), (360., 2000.), 1.);
+    let content = 10. * rect(&roomy, "c0/pane")[3] + 9. * 8.;
+    assert_eq!(
+        rect(&roomy, "feed")[3],
+        content,
+        "with room, as tall as its content"
+    );
+    let s = laid(&feed(10), (360., 400.), 1.);
+    let feed = rect(&s, "feed");
+    assert_eq!(
+        feed[1] + feed[3],
+        400.,
+        "short of room, it takes what the column leaves"
+    );
+    assert_eq!(rect(&s, "head")[1], 0., "and the rest keeps its place");
+    assert_eq!(s.window(&Key::from("feed")), Some((0., feed[3])));
+    assert!(matches!(placed(&s, "feed").what, What::Scroll { content: c, .. } if c == content));
+    // What lies past the viewport is cut away: not declared, not hit.
+    let mut s = s;
+    let f = s.frame(&tokens(), Instant::now());
+    assert!(f.panes.iter().all(|p| p.pane.y < 400.));
+    let last = f.panes.last().unwrap();
+    assert_eq!(
+        last.clip.map(|c| c[1] + c[3]),
+        Some(400.),
+        "a card the viewport cuts is cut straight"
+    );
+}
+
+#[test]
+fn the_wheel_scrolls_the_region_under_the_pointer_within_its_content() {
+    let t = tokens();
+    let mut text = backend();
+    let mut s = ViewState::new(0);
+    let t0 = Instant::now();
+    s.layout(&feed(10), (360., 400.), 1., &t, &mut text, t0);
+    let (h, c0) = (rect(&s, "feed")[3], rect(&s, "c0/pane"));
+    let content = match placed(&s, "feed").what {
+        What::Scroll { content, .. } => content,
+        _ => unreachable!(),
+    };
+    assert!(
+        !s.scroll(ScrollBy::Pixels(100.)),
+        "no pointer, nothing scrolls"
+    );
+    s.pointer_motion(5., 5.);
+    assert!(
+        !s.scroll(ScrollBy::Pixels(100.)),
+        "the header does not scroll"
+    );
+    s.pointer_motion(60., 200.);
+    assert!(!s.scroll(ScrollBy::Pixels(-100.)), "already at the top");
+    assert!(s.scroll(ScrollBy::Pixels(100.)));
+    assert!(s.animating(), "laid out at the next tick");
+    s.tick(&t, &mut text, t0 + Duration::from_millis(16));
+    assert_eq!(rect(&s, "c0/pane")[1], c0[1] - 100.);
+    assert_eq!(offset(&s), 100.);
+    // A detent is the viewport's height to the 2/3, as GTK's.
+    assert!(s.scroll(ScrollBy::Steps(1.)));
+    s.tick(&t, &mut text, t0 + Duration::from_millis(32));
+    assert_eq!(offset(&s), (100. + h.powf(2. / 3.)).round());
+    assert!(s.scroll(ScrollBy::Pixels(1e6)));
+    s.tick(&t, &mut text, t0 + Duration::from_millis(48));
+    assert_eq!(offset(&s), content - h, "never past its content");
+    assert!(!s.scroll(ScrollBy::Pixels(10.)), "already at the end");
+    // Hover follows what moved under the pointer.
+    let under = s
+        .placed()
+        .iter()
+        .filter(|p| matches!(p.what, What::Control(_)) && p.key.0.ends_with("/card"))
+        .find(|p| {
+            p.visible()
+                .is_some_and(|r| r[1] <= 200. && 200. < r[1] + r[3])
+        })
+        .map(|p| p.key.clone());
+    assert_eq!(s.hover().cloned(), under);
+}
+
+#[test]
+fn page_keys_move_the_focused_region_and_tab_scrolls_the_focus_into_view() {
+    let t = tokens();
+    let mut text = backend();
+    let mut s = ViewState::new(0);
+    let t0 = Instant::now();
+    s.layout(&feed(10), (360., 400.), 1., &t, &mut text, t0);
+    let feed = rect(&s, "feed");
+    // Tab walks card, close, card, close...: the ninth stop is c4's card, below the view.
+    for _ in 0..9 {
+        s.key(KeyInput::Tab);
+    }
+    assert_eq!(s.focus(), Some(&Key::from("c4/card")));
+    let now = settle(&mut s, &t, &mut text, t0);
+    let r = rect(&s, "c4/card");
+    assert_eq!(
+        r[1] + r[3],
+        feed[1] + feed[3],
+        "scrolled by as little as shows it"
+    );
+    let at = offset(&s);
+    s.key(KeyInput::PageDown);
+    let now = settle(&mut s, &t, &mut text, now);
+    assert_eq!(offset(&s), (at + 0.9 * feed[3]).round());
+    s.key(KeyInput::End);
+    let now = settle(&mut s, &t, &mut text, now);
+    let content = match placed(&s, "feed").what {
+        What::Scroll { content, .. } => content,
+        _ => unreachable!(),
+    };
+    assert_eq!(offset(&s), content - feed[3]);
+    s.key(KeyInput::PageUp);
+    let now = settle(&mut s, &t, &mut text, now);
+    assert_eq!(offset(&s), (content - feed[3] - 0.9 * feed[3]).round());
+    s.key(KeyInput::Home);
+    settle(&mut s, &t, &mut text, now);
+    assert_eq!(offset(&s), 0.);
+    // Shift+Tab back to c0's card: already in view, nothing moves.
+    s.key(KeyInput::Tab);
+    assert_eq!(offset(&s), 0.);
+}
+
+#[test]
+fn the_bar_shows_on_scroll_hides_after_its_delay_and_its_lane_takes_presses_and_drags() {
+    let t = tokens();
+    let mut text = backend();
+    let mut s = ViewState::new(0);
+    let t0 = Instant::now();
+    s.layout(&feed(20), (360., 400.), 1., &t, &mut text, t0);
+    let feed = rect(&s, "feed");
+    let lane = (feed[0] + feed[2] - 6., feed[1] + feed[3] - 20.);
+    // Hidden, the lane is the content's: a press there presses the card under it.
+    s.pointer_leave();
+    let now = settle(&mut s, &t, &mut text, t0);
+    s.pointer_motion(lane.0, lane.1);
+    let now = settle(&mut s, &t, &mut text, now);
+    s.pointer_leave();
+    let now = settle(&mut s, &t, &mut text, now);
+    s.pointer_motion(lane.0, lane.1);
+    s.button(true, now);
+    assert!(
+        s.press().is_some(),
+        "motion over the region reveals it from the next tick only"
+    );
+    s.button(false, now);
+    // Shown (motion over the region revealed it), the lane takes the press: it jumps there
+    // and presses nothing below.
+    s.tick(&t, &mut text, now + Duration::from_millis(16));
+    let now = now + Duration::from_millis(16);
+    s.button(true, now);
+    assert_eq!(s.press(), None);
+    let now = now + Duration::from_millis(16);
+    s.tick(&t, &mut text, now);
+    let jumped = offset(&s);
+    assert!(jumped > 0., "a press low on the track jumps down");
+    // It drags from there, the thumb following the pointer.
+    s.pointer_motion(lane.0, lane.1 - 50.);
+    let now = now + Duration::from_millis(16);
+    s.tick(&t, &mut text, now);
+    assert!(offset(&s) < jumped, "dragging up scrolls up");
+    assert_eq!(s.hover(), None, "the lane keeps its hover from the content");
+    assert_eq!(s.button(false, now), None);
+    // Off the region, it fades after its delay; then the lane is the content's again.
+    s.pointer_leave();
+    let gone = settle(&mut s, &t, &mut text, now);
+    assert!(
+        gone - now >= Duration::from_millis(1100),
+        "{:?}",
+        gone - now
+    );
+    assert!(gone - now < Duration::from_millis(1100 + 250 + 64));
+    let y = s
+        .placed()
+        .iter()
+        .filter(|p| p.key.0.ends_with("/card"))
+        .find_map(|p| {
+            p.visible()
+                .filter(|r| r[3] == p.rect[3])
+                .map(|r| r[1] + r[3] / 2.)
+        })
+        .unwrap();
+    s.pointer_motion(lane.0, y);
+    s.button(true, gone);
+    assert!(s.press().is_some());
+}
+
+#[test]
+fn a_rebuild_keeps_the_first_card_in_view_where_it_was() {
+    let t = tokens();
+    let mut text = backend();
+    let mut s = ViewState::new(0);
+    let t0 = Instant::now();
+    s.layout(&feed(10), (360., 400.), 1., &t, &mut text, t0);
+    s.pointer_motion(60., 200.);
+    s.scroll(ScrollBy::Pixels(200.));
+    let now = settle(&mut s, &t, &mut text, t0);
+    let first = s
+        .placed()
+        .iter()
+        .filter(|p| matches!(p.what, What::Pane(_)))
+        .find(|p| p.visible().is_some())
+        .map(|p| (p.key.clone(), p.rect))
+        .unwrap();
+    // A notification arrives at the top while the reader is down the list.
+    let mut rows = vec![card("new", "Body", Align::FirstLine)];
+    rows.extend((0..10).map(|i| card(&format!("c{i}"), "Body", Align::FirstLine)));
+    s.layout(&feed_of(rows), (360., 400.), 1., &t, &mut text, now);
+    assert_eq!(s.rect(&first.0), Some(first.1), "what was read stays put");
+    assert_eq!(offset(&s), 200. + rect(&s, "new/pane")[3] + 8.);
+    s.tick(&t, &mut text, now + t.motion.base / 2);
+    assert_eq!(s.rect(&first.0), Some(first.1), "and nothing slides");
+    // At the top, a new card pushes the list down as it always did.
+    let mut s = ViewState::new(0);
+    s.layout(&feed(3), (360., 400.), 1., &t, &mut text, now);
+    let c0 = rect(&s, "c0/pane");
+    let mut rows = vec![card("new", "Body", Align::FirstLine)];
+    rows.extend((0..3).map(|i| card(&format!("c{i}"), "Body", Align::FirstLine)));
+    s.layout(&feed_of(rows), (360., 400.), 1., &t, &mut text, now);
+    assert_eq!(offset(&s), 0.);
+    let later = settle(&mut s, &t, &mut text, now);
+    assert!(later > now);
+    assert!(rect(&s, "c0/pane")[1] > c0[1]);
+}
+
+#[test]
+fn placeholders_stand_in_for_rows_outside_the_window_at_the_height_they_had() {
+    let t = tokens();
+    let mut text = backend();
+    let mut s = ViewState::new(0);
+    let t0 = Instant::now();
+    s.layout(&feed(30), (360., 400.), 1., &t, &mut text, t0);
+    let whole = placed(&s, "feed").what.clone();
+    let heights: Vec<f64> = (0..30)
+        .map(|i| rect(&s, &format!("c{i}/pane"))[3])
+        .collect();
+    // The surface builds what its window shows and keeps the rest's heights.
+    let (top, h) = s.window(&Key::from("feed")).unwrap();
+    let mut y = 0.;
+    let rows: Vec<Node> = (0..30)
+        .map(|i| {
+            let shown = y < top + h && y + heights[i] > top;
+            y += heights[i] + 8.;
+            if shown {
+                card(&format!("c{i}"), "Body", Align::FirstLine)
+            } else {
+                Node::placeholder(format!("c{i}/pane"), heights[i])
+            }
+        })
+        .collect();
+    let built = rows
+        .iter()
+        .filter(|n| matches!(n.kind, Kind::Pane(_)))
+        .count();
+    assert!(built < 10, "{built} built");
+    s.layout(&feed_of(rows), (360., 400.), 1., &t, &mut text, t0);
+    assert!(
+        matches!((placed(&s, "feed").what.clone(), whole), (What::Scroll { content: a, .. }, What::Scroll { content: b, .. }) if a == b),
+        "the content keeps its height"
+    );
+    assert_eq!(rect(&s, "c29/pane")[3], heights[29]);
+    assert!(
+        s.text().get(&Key::from("c29/title")).is_none(),
+        "nothing unbuilt is shaped"
+    );
+}
+
+#[test]
+fn a_scroll_region_is_a_scroll_pane_holding_its_cards() {
+    let s = laid(&feed(3), (360., 400.), 1.);
+    let tree = s.semantics(nk_a11y::Node::new(1, nk_a11y::Role::Panel, "NC"), 2);
+    let (&pane_id, _) = tree
+        .nodes
+        .iter()
+        .find(|(_, n)| n.role == nk_a11y::Role::ScrollPane)
+        .expect("a scroll pane");
+    let held = &tree.nodes[&pane_id].children;
+    assert_eq!(held.len(), 3);
+    assert!(
+        held.iter()
+            .all(|id| tree.nodes[id].role == nk_a11y::Role::Panel)
+    );
 }

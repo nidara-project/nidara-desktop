@@ -2,7 +2,7 @@
 # nk-view — layout and interaction for shell surfaces (contract)
 
 Part of #1048 (read it first: why one description, what is out of scope). **Status: accepted. Pieces 1
-to 4 and 8 (§2 to §7) are built in `toolkit/crates/nk-view`, which no surface uses yet. The NC's
+to 5 and 8 (§2 to §8) are built in `toolkit/crates/nk-view`, which no surface uses yet. The NC's
 behaviour is decided (end of file).**
 
 This file covers the two pieces that the shell inventory of 2026-11-10 ranked first:
@@ -12,8 +12,8 @@ This file covers the two pieces that the shell inventory of 2026-11-10 ranked fi
 
 A third piece is needed with them: **the pane** (a card of glass). It is the unit Hyalo's state
 budget counts in. Animation, scrolling, overlay, tile grid, gestures, tooltip and calendar are
-later contracts, except animation and the swipe, which §6 and §7 add. This one only keeps room
-for the rest (§8).
+later contracts, except animation, the swipe and scrolling, which §6 to §8 add. This one only
+keeps room for the rest (§9).
 
 ## Why
 
@@ -147,7 +147,7 @@ each card has its own eight. `nk-view` enforces the limit per pane, in this orde
 
 It never declares more than eight. If a pane would need more, the lowest are dropped and logged
 once per view. A pane that needs more than eight persistent markers is a design error that the
-check reports (§9).
+check reports (§10).
 
 **Revealed controls.** A `Control` may be `revealed_with(pane)`: it is drawn only while the
 pointer is over that pane or focus is inside it. A notification's close button is the example.
@@ -233,15 +233,67 @@ The distances are the kit's, transcribed from TS (`ui/shell/common/ScaleRevealer
 in `nk-view` once, not in a surface. A swipe has no keyboard form: the card's close button is
 the way to dismiss it from the keyboard, and it stays in the Tab order (§4).
 
-## 8. What this keeps room for
+## 8. Scroll (piece 5)
 
-- **Scroll (piece 5).** A scroll region becomes a node kind that places its child at an offset
-  and clips, as a reveal already clips. Hit-testing already goes through placed rects.
+A node kind, `Scroll { child }`: a region that shows its child through a viewport, scrolled
+vertically. It is the kit's `NidaraScrolled` (`ui/lib/nidara-kit/scrolled.ts`), which the TS
+centre's list used, over GTK's `ScrolledWindow`.
+
+- **Its height.** As tall as its content where there is room. In a column that runs short, the
+  scroll regions give up height first, each in proportion to its content, through any pane or
+  control between them and the column; the rest of the column keeps its place. The NC's list
+  under the calendar is that case.
+- **Its offset** is kept by key across rebuilds, clamped to the content and on the device grid.
+  The child is placed at its full height, moved up by the offset and clipped to the region, as
+  a reveal clips (§6): what is cut away is neither hit nor declared, and a card the viewport
+  cuts is declared whole, cut straight.
+- **Wheel and touchpad.** `ViewState::scroll(by)` moves the innermost region under the pointer:
+  by pixels as a touchpad gives them, or by wheel detents, each the viewport's height to the
+  power 2/3, GTK's step, which the TS list scrolled by. A region at its end does not pass the
+  scroll to an outer one, and a detent does not animate, as in GTK. The new offset is laid out
+  at the next `tick`, which `animating()` asks for.
+- **Keys.** Page Up and Page Down move by 0.9 of the viewport, and Ctrl+Home and Ctrl+End go to
+  the start and the end (GTK's bindings and page size). They act on the region that holds the
+  focus, else the one under the pointer, else the first. Tab onto a control out of view scrolls
+  it in, by as little as shows it, as GTK's viewport did.
+- **What is read stays put.** On a rebuild, a scrolled region keeps its first pane in view
+  where it was drawn: a notification that arrives at the top while the reader is further down,
+  or a row whose height changed above, does not move what is being read, and nothing slides
+  (§6). At the top, new content pushes the list down, as it always did.
+- **Only what shows is built.** `ViewState::window(key)` gives a region's offset and its
+  viewport's height. The surface builds the rows that overlap it and puts a
+  `Node::placeholder(key, height)` for each other row, at the height `ViewState::rect` gave
+  for it when it was built. Nothing unbuilt is shaped. This is what B3.2's index does today
+  for up to 2,000 records.
+- **The bar** is the kit's one scroll bar, `nk-widgets`' `ScrollBar`, which the native Settings
+  draws: moved out of its `Tree` so both share it, with its look exported in
+  `toolkit/tokens/scrollbar.json` (`Tokens::scrollbar`). It is a pill painted in a lane of
+  12 px at the trailing edge, shown by a scroll or by motion over the region, and faded out
+  1,100 ms later over 250 ms, unless the pointer is on the lane or drags it. On the lane it
+  widens from 4 to 8 px and shows a faint track. A press on the track jumps there, then drags,
+  the thumb following the pointer one to one. While shown, the lane takes the pointer from
+  what lies under it; hidden, it takes nothing. Its ends keep clear of the curve of the
+  region's pane, where the region meets the pane's edge. It is content, not glass: it is
+  painted with the view, as in TS.
+- **Semantics.** A region is a scroll pane holding its panes.
+
+What TS had and this does not, yet:
+
+- **Kinetic scrolling and the bounce at the ends** of a touchpad scroll. `nk-wayland` reports
+  neither the end of a touchpad scroll nor where it came from, and no Rust surface has either
+  today.
+- **Wheel detents as detents.** `nk-wayland` passes only pixels (Hyalo gives 15 per detent),
+  so a surface can only pass `ScrollBy::Pixels` until it also passes the detents
+  (`wl_pointer.axis_discrete`). The NC pilot needs that first: at 15 px a detent the wheel
+  would be about a third as fast as TS's.
+
+## 9. What this keeps room for
+
 - **Overlay (piece 6).** A third axis value, `Stack(Z)`, with children placed over each other.
 
-Neither of these is in this contract.
+It is not in this contract.
 
-## 9. Acceptance for the NC pilot
+## 10. Acceptance for the NC pilot
 
 The pilot replaces `nc.rs` and `notification_card.rs` with a view over the same model
 (`notifications.rs`), behind a flag, beside today's NC.
@@ -316,7 +368,7 @@ private nested Hyalo of `toolkit/widgets-demo/check-headless.sh` on this machine
 So each card adds about 0.06 ms of GPU time per redrawn frame over one panel of the same area.
 Textures and captures stay the same. The NC builds only the cards in its viewport, about ten,
 which costs about 0.3 ms per frame more than today's single pane, and only on frames where the
-glass is redrawn. That is within budget. The pilot's "Cost" check (§9) measures it again on the
+glass is redrawn. That is within budget. The pilot's "Cost" check (§10) measures it again on the
 real NC.
 
 That all N cards are drawn comes from the code (one call per shape, no cap) and from the GPU
