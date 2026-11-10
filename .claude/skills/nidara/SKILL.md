@@ -340,6 +340,11 @@ lays a view in part of its surface; `semantic_keys` + `request` answer a reader;
 several cards off in turn and reports once. The NC is the first consumer and the only NC:
 `toolkit/shell/src/nc_view.rs` (#1048), separate glass cards with the calendar as one more;
 `nc.rs` keeps only the month shown, the bulk-dismissal targets and the age and group names.
+`Node::slider` is the Settings slider's rules (one `ValueRange`); `Node::field` only SHOWS a
+field (the owner edits it, and a secret reaches the view as bullets, never its text);
+`Node::slot` is room the surface paints itself (`VIEW.md` §12). The CC's detail pages are the
+second consumer: `ccdetail.rs` keeps the model and ccauth's secret editing, and its rows act on
+release, like every nk-view control (`toolkit/shell/CC.md`).
 
 ### Applications1 catalogue and native dock pins
 
