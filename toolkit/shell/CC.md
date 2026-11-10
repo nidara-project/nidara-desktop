@@ -23,7 +23,7 @@ things (its detail, its panel, its control), never editing.
 |---|---|
 | `cclayout.rs` | Pure and unit-tested: the registry, `DEFAULT_LAYOUT`, membership, and the layout (DEFAULT = flow-packed; PERSONAL = the stored cells, clashes moved to the first free cell). Moves, resizing, gravity, lift and membership edits share these pure rules |
 | `cc.rs` | The panel: placement, glass, washes, paint, input, reader nodes, and coalesced writes |
-| `ccdetail.rs` | Detail rows, stable identities, scrolling, keyboard/AT-SPI, and typed actions |
+| `ccdetail.rs` | Detail rows, stable identities, AT-SPI and typed actions; its view on nk-view |
 | `ccedit.rs` | View-local edit mode, preview, gallery, keyboard and named reader actions |
 | `ccaux.rs` | Mapped-only resources, bounded clipboard helpers and visible image previews |
 | `ccdata.rs` | Audio/Media object snapshots from the status workers |
@@ -92,8 +92,17 @@ The body/right click of a tile with a detail opens it on this same surface. Its
 quick toggle/slider/player controls keep their action; reader nodes expose a
 separate Details entry where needed. Outside edit mode no edit menu is added.
 Back or Escape returns to the grid; a click outside closes the whole CC. Tab and
-arrows navigate, Enter/Space activate, sliders accept SetValue. Lists fit the
-output and scroll; offscreen rows remain in the reader tree and Focus reveals them.
+Up/Down navigate, Enter/Space activate, Left/Right step a slider (Night Light's
+temperature by 100), sliders accept SetValue. Lists fit the output and scroll;
+offscreen rows remain in the reader tree and Focus reveals them.
+
+The page is an nk-view view (`VIEW.md`, #1048): `ccdetail.rs` keeps the model
+(rows, identities, typed actions, the secret form) and nk-view lays it out and
+owns hover, press, focus, keys, the held slider and the scroll. A row acts on
+release over itself, as every nk-view control does; a slider reports while
+dragged and on release, and its thumb stays where it was let go until the
+service's value arrives. A secret row is a field that receives only its bullets
+(§12.2); a toggle's mark and a clipboard entry's picture are painted slots (§12.3).
 
 Wi-Fi retains the current AP, otherwise the strongest AP for each raw SSID,
 including saved hidden profiles. It joins supported existing profiles and ordinary
