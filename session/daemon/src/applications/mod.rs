@@ -6,6 +6,7 @@ mod desktop;
 mod icon_cache;
 mod icon_view;
 mod icons;
+mod identity;
 mod launch;
 mod layout;
 mod observation;
@@ -74,6 +75,7 @@ fn variant(v: &Json, key: &str) -> OwnedValue {
                 "Layout",
                 "Actions",
                 "WindowMatches",
+                "Narrowing",
                 "ActiveLaunches",
             ]
             .contains(&key) =>
@@ -990,7 +992,9 @@ impl Applications {
                     .windows
                     .get(&window_id)
                     .ok_or_else(|| Error::NotFound("window unavailable".into()))?;
-                Ok(dict(&s.index.resolve(w, &hyalo_epoch)))
+                Ok(dict(s.window_match(w.id).ok_or_else(|| {
+                    Error::Unavailable("matching pending".into())
+                })?))
             })
             .await
     }
@@ -1268,6 +1272,17 @@ pub async fn serve(conn: &Connection) -> Result<bool, Box<dyn std::error::Error>
 #[cfg(test)]
 mod page_tests {
     use super::*;
+    #[test]
+    fn identity_narrowing_is_typed_on_the_wire_even_when_empty() {
+        for rows in [
+            json!([]),
+            json!([{"Tier":"package","CandidateCount":2_u64}]),
+        ] {
+            let v = variant(&rows, "Narrowing");
+            assert_eq!(v.value_signature().to_string(), "aa{sv}");
+        }
+    }
+
     #[test]
     fn app_only_clients_can_close_a_window_only_paged_snapshot() {
         let mut p = Pages::default();

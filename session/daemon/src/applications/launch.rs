@@ -204,6 +204,11 @@ impl Book {
         }
         changed
     }
+    pub fn desktop_id(&self, id: &str) -> Option<String> {
+        self.entries.get(id)?.public["DesktopId"]
+            .as_str()
+            .map(str::to_owned)
+    }
     pub fn baseline(&mut self, id: &str, epoch: String, windows: std::collections::BTreeSet<u64>) {
         if let Some(e) = self.entries.get_mut(id) {
             e.baseline = Some((epoch, windows));
@@ -679,8 +684,10 @@ async fn dispatch(
                     .await
                     .map_err(remote_error)?;
                 let launch_id = id.to_owned();
+                let executable = a.first().cloned().unwrap_or_default();
                 store
                     .call(move |s| {
+                        s.record_identity_unit(unit.clone(), executable);
                         s.launches
                             .update(&launch_id, "accepted", "", false, Some(unit));
                         s.mark("launches");

@@ -157,11 +157,21 @@ have the same confinement.
 WindowMatch: HyaloEpoch, WindowId, DesktopId (empty if unknown), AppGeneration,
 MatchKind and Candidates. A3 bounds ambiguity diagnostics to 16 candidates/8 KiB,
 with CandidateCount:t and CandidatesComplete:b; a partial diagnostic never picks
-a winner. Exact current app_id/desktop ID first, then exact
-StartupWMClass, verified Flatpak ID, then the ID and StartupWMClass ignoring
-ASCII case (a unique hit only, owner 2026-11-02), then initial app_id. Bounded verified PID
-ancestry/systemd metadata can disambiguate; title and executable substring alone
-never choose an app. Ambiguous matches remain ambiguous. Same-executable web
+a winner. #998 orders compositor activation binding, sandbox identity, package
+ownership, launch unit, names, then dialog parent. Each tier produces a set;
+nonempty intersections narrow earlier ambiguity and a unique survivor chooses.
+Empty intersections cannot replace stronger evidence. `Narrowing:aa{sv}` names
+contributing tiers and their candidate counts. Names preserve exact current ID,
+StartupWMClass, verified Flatpak ID, ASCII case-insensitive ID/WMClass and initial
+ID. See `daemon/src/applications/WINDOW-IDENTITY.md` for bounds and invalidation.
+Package ownership means the pacman database owns both the actual executable and
+installed desktop file; a launcher-written systemd unit can also choose an
+identity when its main process or our recorded resolved Exec binary matches the
+window's own executable. Package ownership never comes from an ancestor. These
+explicitly replace the former disambiguation-only rule. An
+Exec/title substring or inherited launch environment never chooses. Browser
+packages are excluded from the package tier, including alternate desktop files;
+a browser's own window can still resolve by its names. Web
 apps/Steam entries must not steal each other's icons. Matching is presentation,
 not permission: kernel peer/Wayland identity still governs window control.
 Unknown windows get stable `window:<hyaloEpoch>:<id>` view keys; an exact unknown
@@ -173,12 +183,12 @@ matching availability, clears runtime links and stops accrual. Reconnect assigns
 a fresh connection epoch even if numeric window IDs recur. Focus/window events
 need a gap-free initial snapshot seam or an explicit resync event; there must be
 no race between reading Windows and starting EventStream. H1 provides the
-coherent observation seam for usage/correlation in A3/D2. Before H1, D1 takes
-window truth directly from Hyalo, subscribes before hydrating and refreshes on
-invalidation/reconnect; it does not depend on Applications1's later matching
-stream or claim timestamped usage/launch-correlation guarantees. Exact catalogue
-matching remains available as a pure lookup shared with the dock, without a TS
-bridge or a second WM.
+coherent observation seam for usage/correlation in A3/D2. The dock takes window
+truth directly from Hyalo, subscribes before hydrating and refreshes on
+invalidation/reconnect. Identity comes exclusively from Applications1's matching
+snapshot (including continuation pages), scoped to that compositor run.
+ResolveWindow returns the same published result. No client matcher or TS bridge
+is retained. Missing matching leaves window-backed unknown groups.
 
 ## 3. Catalogue, search and icons
 

@@ -94,6 +94,8 @@ pub struct Window {
     pub id: u64,
     pub app_id: String,
     pub initial_app_id: String,
+    /// The daemon's WindowMatch, hydrated for this compositor run. Empty = unknown.
+    pub desktop_id: String,
     pub title: String,
     pub parent: Option<u64>,
     pub minimized: bool,
@@ -194,40 +196,10 @@ impl View {
     }
 }
 
-/// Who a window belongs to, in the contract's order. `None` = no app or more than one.
-/// Last, when nothing matches exactly, the same names ignoring ASCII case (owner,
-/// 2026-11-02): an app whose window says `Chatgpt` for its `chatgpt.desktop` was left an
-/// unknown window beside its own pin. As GNOME's window tracker does, and as the TS dock
-/// did; still only a single match, so two apps that differ only in case stay ambiguous.
-pub fn match_window(apps: &[App], w: &Window) -> Option<usize> {
-    fn exact(apps: &[App], app_id: &str) -> Option<usize> {
-        if app_id.is_empty() {
-            return None;
-        }
-        let same = |a: &str, b: &str| a.eq_ignore_ascii_case(b);
-        let tiers: [&dyn Fn(&App) -> bool; 5] = [
-            &|a| a.id == app_id || a.id.strip_suffix(".desktop") == Some(app_id),
-            &|a| a.startup_wm_class == app_id,
-            &|a| !a.flatpak_id.is_empty() && a.flatpak_id == app_id,
-            &|a| {
-                same(&a.id, app_id)
-                    || a.id
-                        .strip_suffix(".desktop")
-                        .is_some_and(|i| same(i, app_id))
-            },
-            &|a| !a.startup_wm_class.is_empty() && same(&a.startup_wm_class, app_id),
-        ];
-        for tier in tiers {
-            let mut hits = apps.iter().enumerate().filter(|(_, a)| tier(a));
-            match (hits.next(), hits.next()) {
-                (Some((i, _)), None) => return Some(i),
-                (Some(_), Some(_)) => return None,
-                _ => {}
-            }
-        }
-        None
-    }
-    exact(apps, &w.app_id).or_else(|| exact(apps, &w.initial_app_id))
+/// Consume Applications1's answer. Identity policy lives exclusively in sessiond.
+pub fn resolved_app(apps: &[App], w: &Window) -> Option<usize> {
+    apps.iter()
+        .position(|a| !w.desktop_id.is_empty() && a.id == w.desktop_id)
 }
 
 /// The dock's memory between views: running groups keep the order in which their first
@@ -275,7 +247,7 @@ impl Model {
         let mut groups: BTreeMap<String, Vec<&Window>> = BTreeMap::new();
         let mut group_app: HashMap<String, usize> = HashMap::new();
         for w in i.windows {
-            let key = match match_window(i.apps, w) {
+            let key = match resolved_app(i.apps, w) {
                 Some(n) => {
                     let key = format!("app:{}", i.apps[n].id);
                     group_app.insert(key.clone(), n);
@@ -437,7 +409,7 @@ impl Model {
                 key: format!("minimized:{}:{}", i.hyalo_epoch, w.id),
                 kind: Kind::Minimized {
                     window: w.id,
-                    app: match_window(i.apps, w).map(|n| i.apps[n].id.clone()),
+                    app: resolved_app(i.apps, w).map(|n| i.apps[n].id.clone()),
                 },
                 label: w.title.clone(),
                 windows: vec![],
@@ -508,6 +480,11 @@ mod tests {
         Window {
             id,
             app_id: app_id.into(),
+            desktop_id: if app_id.is_empty() {
+                String::new()
+            } else {
+                format!("{}.desktop", app_id.trim_end_matches(".desktop"))
+            },
             focus_order: id,
             ..Default::default()
         }
@@ -531,35 +508,15 @@ mod tests {
     }
 
     #[test]
-    fn matching_follows_the_contract_order_and_never_guesses() {
-        let mut steam = app("com.valvesoftware.Steam.desktop");
-        steam.startup_wm_class = "steam".into();
-        let mut flat = app("org.gnome.Maps.desktop");
-        flat.flatpak_id = "org.gnome.Maps".into();
-        let apps = [app("firefox.desktop"), steam, flat, app("Foot.desktop")];
-        assert_eq!(match_window(&apps, &win(1, "firefox")), Some(0));
-        assert_eq!(match_window(&apps, &win(1, "firefox.desktop")), Some(0));
-        assert_eq!(match_window(&apps, &win(1, "steam")), Some(1));
-        assert_eq!(match_window(&apps, &win(1, "org.gnome.Maps")), Some(2));
-        // Case only when nothing matches exactly: "foot" is "Foot.desktop", and "Chatgpt"
-        // its "chatgpt.desktop"...
-        assert_eq!(match_window(&apps, &win(1, "foot")), Some(3));
-        let gpt = [app("chatgpt.desktop"), app("firefox.desktop")];
-        assert_eq!(match_window(&gpt, &win(1, "Chatgpt")), Some(0));
-        // ...but an exact match wins over one that differs in case,
-        let both = [app("foot.desktop"), app("Foot.desktop")];
-        assert_eq!(match_window(&both, &win(1, "Foot")), Some(1));
-        // and two that differ from it only in case stay ambiguous.
-        assert_eq!(match_window(&both, &win(1, "FOOT")), None);
-        let mut w = win(1, "");
-        w.initial_app_id = "firefox".into();
-        assert_eq!(match_window(&apps, &w), Some(0));
-        // Two apps claiming the same class: ambiguous, not the first one.
-        let mut a = app("a.desktop");
-        a.startup_wm_class = "x".into();
-        let mut b = app("b.desktop");
-        b.startup_wm_class = "x".into();
-        assert_eq!(match_window(&[a, b], &win(1, "x")), None);
+    fn window_identity_comes_only_from_applications1() {
+        let apps = [app("chatgpt.desktop"), app("firefox.desktop")];
+        let mut w = win(1, "Chatgpt");
+        w.desktop_id.clear();
+        assert_eq!(resolved_app(&apps, &w), None);
+        w.desktop_id = "firefox.desktop".into();
+        assert_eq!(resolved_app(&apps, &w), Some(1));
+        w.desktop_id = "missing.desktop".into();
+        assert_eq!(resolved_app(&apps, &w), None);
     }
 
     #[test]

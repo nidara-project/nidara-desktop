@@ -76,6 +76,7 @@ struct Watch {
 }
 
 struct Used {
+    launch: Option<u64>,
     token: String,
     deadline: Instant,
     outcome: Outcome,
@@ -108,8 +109,10 @@ impl Launches {
     pub fn watch(&mut self, token: &str, deadline: Option<Instant>, now: Instant) -> Result<(u64, Option<Outcome>), &'static str> {
         self.prune(now);
         if let Some(i) = self.used.iter().position(|u| u.token == token) {
-            let used = self.used.remove(i);
-            return Ok((self.number(), Some(used.outcome)));
+            if self.used[i].launch.is_some() { return Err("this launch is already watched"); }
+            let launch = self.number();
+            self.used[i].launch = Some(launch);
+            return Ok((launch, Some(self.used[i].outcome)));
         }
         // Used by a window not shown yet: Hyalo no longer has the token, the waiting record does.
         let deadline = deadline.or_else(|| self.waiting.iter().find(|w| w.token == token).map(|w| w.deadline));
@@ -131,16 +134,15 @@ impl Launches {
     /// it, if one is; else the use is remembered for a later `watch`, until the deadline.
     pub fn used(&mut self, token: &str, outcome: Outcome, deadline: Instant, now: Instant) -> Option<u64> {
         self.prune(now);
-        if let Some(i) = self.watched.iter().position(|w| w.token == token) {
-            return Some(self.watched.remove(i).launch);
+        if deadline <= now { return None; }
+        if let Some(i) = self.used.iter().position(|u| u.token == token) {
+            self.used[i].outcome = outcome;
+            return self.used[i].launch;
         }
-        if deadline > now {
-            if self.used.len() >= MAX_LAUNCHES {
-                self.used.remove(0);
-            }
-            self.used.push(Used { token: token.to_owned(), deadline, outcome });
-        }
-        None
+        let launch = self.watched.iter().position(|w| w.token == token).map(|i| self.watched.remove(i).launch);
+        if self.used.len() >= MAX_LAUNCHES { self.used.remove(0); }
+        self.used.push(Used { launch, token: token.to_owned(), deadline, outcome });
+        launch
     }
 
     /// A window not shown yet asked with `token`: its launch is answered when it is shown.
@@ -416,6 +418,17 @@ mod tests {
     use super::*;
 
     const T: Duration = LAUNCH_TIMEOUT;
+
+    #[test]
+    fn one_launch_identifies_multiple_windows_but_keeps_its_original_deadline() {
+        let mut l = Launches::default();
+        let t0 = Instant::now();
+        let (launch, _) = l.watch("same", Some(t0 + T), t0).unwrap();
+        assert_eq!(l.used("same", Outcome::Window { window: 1, honoured: true }, t0 + T, t0), Some(launch));
+        assert_eq!(l.used("same", Outcome::Window { window: 2, honoured: false }, t0 + T, t0), Some(launch));
+        assert!(l.watch("same", None, t0).is_err());
+        assert_eq!(l.used("same", Outcome::Window { window: 3, honoured: false }, t0 + T, t0 + T), None);
+    }
 
     #[test]
     fn a_launch_is_answered_whether_it_is_asked_about_before_or_after_its_use() {

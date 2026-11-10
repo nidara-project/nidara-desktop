@@ -23,6 +23,9 @@ type Dict = HashMap<String, OwnedValue>;
 #[derive(Clone, Debug, Default, PartialEq)]
 pub struct AppsState {
     pub owner: String,
+    pub hyalo_epoch: String,
+    pub matching_available: bool,
+    pub window_matches: Box<HashMap<u64, String>>,
     pub epoch: u64,
     pub revision: u64,
     pub apps: Vec<App>,
@@ -264,10 +267,39 @@ fn snapshot_data(conn: &Connection) -> Result<AppsState, String> {
         apps.extend(page);
         next = token;
     }
-    if !first.is_empty() {
-        let _: () = call(conn, "CloseSnapshot", &(epoch, first.as_str()))?;
+    let mut matching = records(&state, "WindowMatches");
+    let mut next = text(&state, "WindowMatchesNext");
+    let matching_first = next.clone();
+    while !next.is_empty() {
+        pages += 1;
+        if pages > 256 {
+            return Err("Applications1 snapshot has too many pages".into());
+        }
+        let (page, token): (Vec<Dict>, String) =
+            call(conn, "ReadSnapshotPage", &(epoch, next.as_str()))?;
+        matching.extend(page);
+        next = token;
     }
-    Ok(parse(epoch, revision, &state, &apps, capabilities))
+    let close = if first.is_empty() {
+        &matching_first
+    } else {
+        &first
+    };
+    if !close.is_empty() {
+        let _: () = call(conn, "CloseSnapshot", &(epoch, close.as_str()))?;
+    }
+    let mut parsed = parse(epoch, revision, &state, &apps, capabilities);
+    parsed.window_matches = Box::new(
+        matching
+            .iter()
+            .filter_map(|m| {
+                let id = number(m, "WindowId");
+                let app = text(m, "DesktopId");
+                (text(m, "HyaloEpoch") == parsed.hyalo_epoch).then_some((id, app))
+            })
+            .collect(),
+    );
+    Ok(parsed)
 }
 
 fn parse(
@@ -352,6 +384,9 @@ fn parse(
     let default = text(state, "DefaultDirectoryApp");
     AppsState {
         owner: String::new(),
+        hyalo_epoch: text(state, "HyaloEpoch"),
+        matching_available: flag(state, "MatchingAvailable"),
+        window_matches: Box::default(),
         epoch,
         revision,
         apps,

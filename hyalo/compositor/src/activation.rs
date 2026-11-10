@@ -38,6 +38,15 @@ pub const TOKEN_KEPT: Duration = Duration::from_secs(60);
 
 /// Attached to a token when it is made: whether the user was in the client that made it.
 struct FromTheUser(bool);
+// A token may identify several windows, but grants foreground activation only once.
+#[derive(Default)]
+struct ActivationConsumed(std::sync::atomic::AtomicBool);
+struct IdentityClient(smithay::reexports::wayland_server::backend::ClientId);
+
+fn identity_client(data: &XdgActivationTokenData, client: &smithay::reexports::wayland_server::backend::ClientId) -> bool {
+    data.user_data.insert_if_missing(|| IdentityClient(client.clone()));
+    data.user_data.get::<IdentityClient>().is_some_and(|first| first.0 == *client)
+}
 
 /// How long after a drop the client it landed in may make a token from it: reading the
 /// dropped data and asking for the token take a moment, a late one is not the drop's.
@@ -87,7 +96,8 @@ impl XdgActivationHandler for Hyalo {
             valid = true;
         }
         data.user_data.insert_if_missing(|| FromTheUser(valid));
-        // Smithay keeps every token until it is used: forget those long past their time. Not
+        // Keep token identity for multiple windows; its foreground grant is single-use.
+        // Forget those long past their time. Not
         // at once: a late request must still be known to be refused, and ask for attention.
         self.activation_state.retain_tokens(|_, d| d.timestamp.elapsed() < TOKEN_KEPT);
         // Kept either way: a request with a token we know is refused knowingly, and said so.
@@ -95,10 +105,15 @@ impl XdgActivationHandler for Hyalo {
     }
 
     fn request_activation(&mut self, token: XdgActivationToken, token_data: XdgActivationTokenData, surface: WlSurface) {
+        let Some((id, mapped, x11)) = self.wm.by_surface(&surface).map(|m| (m.id, m.mapped, m.window.x11_surface().is_some())) else { return };
+        use smithay::reexports::wayland_server::Resource;
+        let Ok(client) = self.display_handle.get_client(surface.id()) else { return };
+        // An inherited token in a child's different Wayland connection is no evidence
+        // for the launching app, even while the token remains in time.
+        if !identity_client(&token_data, &client.id()) { return; }
         let valid = from_the_user(&token_data);
         let deadline = token_data.timestamp + ACTIVATION_TIMEOUT;
-        self.activation_state.remove_token(&token);
-        let Some((id, mapped)) = self.wm.by_surface(&surface).map(|m| (m.id, m.mapped)) else { return };
+        if x11 { self.activation_state.remove_token(&token); }
         if !mapped {
             // Not shown yet: Hyalo focuses a new window anyway, and its launch is answered when
             // it is shown, if in time (`window_shown_with_token`).
@@ -122,7 +137,9 @@ impl XdgActivationHandler for Hyalo {
 
 /// Whether the token was made from what the user did, and is still in time.
 fn from_the_user(data: &XdgActivationTokenData) -> bool {
-    data.user_data.get::<FromTheUser>().is_some_and(|v| v.0) && data.timestamp.elapsed() < ACTIVATION_TIMEOUT
+    data.user_data.insert_if_missing(ActivationConsumed::default);
+    let first = !data.user_data.get::<ActivationConsumed>().unwrap().0.swap(true, std::sync::atomic::Ordering::Relaxed);
+    first && data.user_data.get::<FromTheUser>().is_some_and(|v| v.0) && data.timestamp.elapsed() < ACTIVATION_TIMEOUT
 }
 
 impl Hyalo {
@@ -133,8 +150,43 @@ impl Hyalo {
         let id = window.x11_surface()?.startup_id()?;
         let token = XdgActivationToken::from(id);
         let data = self.activation_state.data_for_token(&token)?;
+        // Xwayland shares one Wayland connection between independent X11 clients.
+        // Startup IDs remain single-use; never reuse a Wayland app's token here.
+        if data.user_data.get::<IdentityClient>().is_some() { return None; }
         let (valid, deadline) = (from_the_user(data), data.timestamp + ACTIVATION_TIMEOUT);
         self.activation_state.remove_token(&token);
         Some((token.into(), valid, deadline))
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    #[test]
+    fn repeated_identity_never_replays_the_foreground_grant() {
+        let data = XdgActivationTokenData {
+            client_id: None, serial: None, app_id: None, surface: None,
+            timestamp: std::time::Instant::now(), user_data: std::sync::Arc::default(),
+        };
+        data.user_data.insert_if_missing(|| FromTheUser(true));
+        assert!(from_the_user(&data));
+        assert!(!from_the_user(&data));
+    }
+    #[test]
+    fn a_second_wayland_client_cannot_inherit_the_first_clients_identity() {
+        let display = smithay::reexports::wayland_server::Display::<()>::new().unwrap();
+        let mut handle = display.handle();
+        let (a, _peer_a) = std::os::unix::net::UnixStream::pair().unwrap();
+        let (b, _peer_b) = std::os::unix::net::UnixStream::pair().unwrap();
+        let a = handle.insert_client(a, std::sync::Arc::new(())).unwrap();
+        let b = handle.insert_client(b, std::sync::Arc::new(())).unwrap();
+        let data = XdgActivationTokenData {
+            client_id: None, serial: None, app_id: None, surface: None,
+            timestamp: std::time::Instant::now(), user_data: std::sync::Arc::default(),
+        };
+        assert!(identity_client(&data, &a.id()));
+        assert!(identity_client(&data, &a.id()));
+        assert!(!identity_client(&data, &b.id()));
+        assert!(identity_client(&data, &a.id()));
     }
 }

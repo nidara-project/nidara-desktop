@@ -141,12 +141,14 @@ that travels is the picture, and the dock's own picture replaces it where it lan
 lists the window again when its animation ends, which is how the dock knows. Before, the
 picture appeared at once and a second one flew into it.
 
-Window → app matching before H1 is a pure lookup against the catalogue, in the
-contract's order: exact current app_id as DesktopId (with and without `.desktop`), exact
-StartupWMClass, verified Flatpak ID; when none of those hits, the id and StartupWMClass
-again ignoring ASCII case (owner, 2026-11-02: ChatGPT's window says `Chatgpt` for
-`chatgpt.desktop` and was left an iconless stranger beside its own pin); then the same
-for the initial app_id. Ambiguous stays ambiguous and gets its own `window:<epoch>:<id>` group; title and executable never choose an app.
+Window → app identity comes exclusively from Applications1 WindowMatches (#998).
+The reader hydrates app and matching pages before closing their shared snapshot.
+The hub accepts matches only for the current compositor run and clears them on
+source loss; it does not resolve names locally. Its H1 snapshot supplies the
+compositor run; the separate local reconnection counter still scopes view keys. The daemon's token, sandbox,
+package, launch-unit, names and parent tiers are documented in
+`session/daemon/src/applications/WINDOW-IDENTITY.md`. Ambiguous/unknown stays window
+backed. Matching updates alone can bring an unpinned app's icon into the dock.
 
 **Signals (D2).** Each slot carries a `Signal` beside its windows: a **count** and a
 **progress** from the app's Unity record in Applications1 (`Launcher`, shown only while
