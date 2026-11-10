@@ -3,7 +3,8 @@
 //! across rebuilds; the panes and state regions a frame declares to Hyalo, within its budget;
 //! the semantics; and the content paint (texts, icons, the focus ring, and the D5 washes).
 use crate::layout::{Layouter, Placed, Rect, TextCache, What};
-use crate::tokens::{Tokens, Washes};
+use crate::motion::MotionState;
+use crate::tokens::Tokens;
 use crate::view::{Key, Node, Role, Wash};
 use nk_a11y::{Action, Bounds, NodeId, Tree};
 use nk_render::Canvas;
@@ -39,7 +40,10 @@ pub struct Frame {
 
 pub struct ViewState {
     placed: Vec<Placed>,
+    view: Option<Node>,
     size: (f64, f64),
+    scale: f64,
+    motion: MotionState,
     text: TextCache,
     pointer: Option<(f64, f64)>,
     hover: Option<Key>,
@@ -61,7 +65,10 @@ impl ViewState {
     pub fn new(id_base: u32) -> Self {
         Self {
             placed: vec![],
+            view: None,
             size: (0., 0.),
+            scale: 1.,
+            motion: MotionState::default(),
             text: TextCache::default(),
             pointer: None,
             hover: None,
@@ -76,8 +83,10 @@ impl ViewState {
         }
     }
 
-    /// Lays a rebuilt view out. States whose control left, or was disabled, are cleared;
-    /// hover is recomputed under the pointer, since the layout may have moved under it.
+    /// Lays a rebuilt view out at `now`. A reveal whose `open` changed starts to ease, and a
+    /// pane the rebuild moved slides from where it was drawn (VIEW.md §6). States whose control
+    /// left, or was disabled, are cleared; hover is recomputed under the pointer, since the
+    /// layout may have moved under it.
     pub fn layout(
         &mut self,
         view: &Node,
@@ -85,15 +94,19 @@ impl ViewState {
         scale: f64,
         tokens: &Tokens,
         text: &mut dyn nk_text::TextBackend,
+        now: Instant,
     ) {
-        self.placed = Layouter {
-            spacing: &tokens.spacing,
-            text,
-            cache: &mut self.text,
-            scale,
-        }
-        .run(view, size);
+        let before: HashMap<Key, Rect> = self
+            .placed
+            .iter()
+            .filter(|p| matches!(p.what, What::Pane(_)))
+            .map(|p| (p.key.clone(), p.rect))
+            .collect();
+        self.motion.view(view, now, &tokens.motion);
+        self.view = Some(view.clone());
         self.size = size;
+        self.scale = scale;
+        self.relayout(tokens, text, now, Some(&before));
         let live: HashSet<Key> = self
             .controls()
             .filter(|&i| self.enabled(i))
@@ -106,6 +119,59 @@ impl ViewState {
         }
         self.ids.retain(|k, _| live.contains(k));
         self.rehover();
+    }
+
+    /// Advances the motion to `now` and lays the view out again if anything moved. Returns
+    /// whether something still moves, so the surface asks for another frame.
+    pub fn tick(
+        &mut self,
+        tokens: &Tokens,
+        text: &mut dyn nk_text::TextBackend,
+        now: Instant,
+    ) -> bool {
+        if !self.motion.animating() {
+            return false;
+        }
+        self.relayout(tokens, text, now, None);
+        self.rehover();
+        self.motion.animating()
+    }
+
+    /// Whether a reveal eases or a pane slides.
+    pub fn animating(&self) -> bool {
+        self.motion.animating()
+    }
+
+    /// Reduced motion: reveals and slides land at once.
+    pub fn set_reduced_motion(&mut self, on: bool) {
+        self.motion.reduced = on;
+    }
+
+    fn relayout(
+        &mut self,
+        tokens: &Tokens,
+        text: &mut dyn nk_text::TextBackend,
+        now: Instant,
+        rebuilt: Option<&HashMap<Key, Rect>>,
+    ) {
+        let Some(view) = &self.view else {
+            return;
+        };
+        let reveals = self.motion.progress(now);
+        let mut placed = Layouter {
+            spacing: &tokens.spacing,
+            reveals: &reveals,
+            text,
+            cache: &mut self.text,
+            scale: self.scale,
+        }
+        .run(view, self.size);
+        if let Some(before) = rebuilt {
+            self.motion.moved(before, &placed, now);
+        }
+        self.motion
+            .slide(&mut placed, now, &tokens.motion, self.scale);
+        self.placed = placed;
     }
 
     pub fn placed(&self) -> &[Placed] {
@@ -131,7 +197,7 @@ impl ViewState {
         self.placed
             .iter()
             .enumerate()
-            .filter(|(_, p)| matches!(p.what, What::Control(_)))
+            .filter(|(_, p)| matches!(p.what, What::Control(_)) && p.alpha > 0.)
             .map(|(i, _)| i)
     }
     fn control(&self, i: usize) -> &crate::view::Control {
@@ -154,6 +220,9 @@ impl ViewState {
     /// Whether a control is drawn: always, or while its pane is under the pointer or holds
     /// the focus.
     pub fn shown(&self, i: usize) -> bool {
+        if self.placed[i].visible().is_none() {
+            return false;
+        }
         let Some(pane) = &self.control(i).revealed_with else {
             return true;
         };
@@ -174,7 +243,11 @@ impl ViewState {
     /// The innermost shown, enabled control under a point.
     fn hit(&self, pt: (f64, f64)) -> Option<usize> {
         self.controls()
-            .filter(|&i| self.enabled(i) && self.shown(i) && inside(self.placed[i].rect, pt))
+            .filter(|&i| {
+                self.enabled(i)
+                    && self.shown(i)
+                    && self.placed[i].visible().is_some_and(|r| inside(r, pt))
+            })
             .last()
     }
 
@@ -274,22 +347,23 @@ impl ViewState {
     /// The panes inside the viewport, and the state regions in Hyalo's order: per pane, the
     /// shown washes by priority (press, hover, fading, markers), never more than eight, then
     /// every other control at rest (alpha 0, so a hover fades in).
-    pub fn frame(&mut self, washes: &Washes, now: Instant) -> Frame {
+    pub fn frame(&mut self, tokens: &Tokens, now: Instant) -> Frame {
+        let washes = &tokens.washes;
         let fade = Duration::from_millis(washes.fade_ms as u64);
         self.fading.retain(|_, until| *until > now);
         let viewport = [0., 0., self.size.0, self.size.1];
         let panes = self
             .placed
             .iter()
-            .filter_map(|p| match p.what {
-                What::Pane(c) if overlaps(p.rect, viewport) => Some((
+            .filter_map(|p| match (&p.what, p.visible()) {
+                (What::Pane(c), Some(r)) if p.alpha > 0. && overlaps(r, viewport) => Some((
                     p.key.clone(),
                     Pane {
-                        x: p.rect[0],
-                        y: p.rect[1],
-                        width: p.rect[2],
-                        height: p.rect[3],
-                        radius: c.of(p.rect[2], p.rect[3]),
+                        x: r[0],
+                        y: r[1],
+                        width: r[2],
+                        height: r[3],
+                        radius: c.of(r[2], r[3], &tokens.radii),
                         exponent: 2.,
                         pointer: None,
                     },
@@ -301,7 +375,12 @@ impl ViewState {
         let mut regions: Vec<(u8, Option<usize>, usize, [f64; 4])> = vec![];
         for i in self.controls().collect::<Vec<_>>() {
             let c = self.control(i);
-            if c.wash == Wash::None || !self.shown(i) || !overlaps(self.placed[i].rect, viewport) {
+            if c.wash == Wash::None
+                || !self.shown(i)
+                || !self.placed[i]
+                    .visible()
+                    .is_some_and(|r| overlaps(r, viewport))
+            {
                 continue;
             }
             let key = &self.placed[i].key;
@@ -353,7 +432,9 @@ impl ViewState {
             } else if self.lit.contains(&key) {
                 self.fading.insert(key.clone(), now + fade);
             }
-            let r = self.placed[i].rect;
+            let Some(r) = self.placed[i].visible() else {
+                continue;
+            };
             let corner = self.control(i).corner;
             states.push(StateRegion {
                 id: self.id(&key),
@@ -363,7 +444,7 @@ impl ViewState {
                     width: r[2],
                     height: r[3],
                 },
-                radius: corner.of(r[2], r[3]),
+                radius: corner.of(r[2], r[3], &tokens.radii),
                 wash,
                 fade_ms: washes.fade_ms,
             });
@@ -381,6 +462,9 @@ impl ViewState {
         let mut ids: HashMap<usize, NodeId> = HashMap::new();
         let mut next = first_id;
         for (i, p) in self.placed.iter().enumerate() {
+            if p.alpha <= 0. {
+                continue;
+            }
             let node = match &p.what {
                 What::Pane(_) => nk_a11y::Node::new(next, nk_a11y::Role::Panel, ""),
                 What::Control(c) => {
@@ -455,14 +539,18 @@ impl ViewState {
             if p.control.is_some_and(|c| !self.shown(c)) {
                 continue;
             }
+            let Some(visible) = p.visible().filter(|_| p.alpha > 0.) else {
+                continue;
+            };
+            let ink = |c: nk_render::Color| c.with_alpha(c.components[3] * p.alpha as f32);
             match &p.what {
-                What::Text { ink, .. } => {
+                What::Text { ink: tier, .. } => {
                     if let Some(f) = self.text.get(&p.key) {
-                        canvas.clip(rect(&p.rect));
+                        canvas.clip(rect(&visible));
                         let r = canvas.layout(
                             &f.layout,
                             (p.rect[0] as f32, p.rect[1] as f32),
-                            tokens.look.ink(*ink),
+                            ink(tokens.look.ink(*tier)),
                         );
                         canvas.pop_clip();
                         r?;
@@ -470,16 +558,18 @@ impl ViewState {
                 }
                 What::Icon(icon) => {
                     if let Some(glyph) = icons(&icon.name, icon.size) {
-                        canvas.icon(&glyph, rect(&p.rect), tokens.look.ink(icon.ink));
+                        canvas.clip(rect(&visible));
+                        canvas.icon(&glyph, rect(&p.rect), ink(tokens.look.ink(icon.ink)));
+                        canvas.pop_clip();
                     }
                 }
                 What::Control(c) if self.focus_visible && self.focus.as_ref() == Some(&p.key) => {
-                    let r = p.rect;
+                    let r = visible;
                     canvas.rounded_ring(
                         rect(&r),
-                        c.corner.of(r[2], r[3]),
+                        c.corner.of(r[2], r[3], &tokens.radii),
                         tokens.look.focus_width,
-                        tokens.look.focus,
+                        ink(tokens.look.focus),
                     );
                 }
                 _ => {}

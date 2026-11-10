@@ -72,6 +72,131 @@ impl Spacing {
     }
 }
 
+/// The kit's radius scale, `RADIUS` of `platform/tokens.ts`.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub enum Radius {
+    Xs,
+    Sm,
+    Md,
+    Lg,
+    Xl,
+}
+impl Radius {
+    pub const ALL: [Radius; 5] = [Radius::Xs, Radius::Sm, Radius::Md, Radius::Lg, Radius::Xl];
+    fn token(self) -> &'static str {
+        match self {
+            Radius::Xs => "xs",
+            Radius::Sm => "sm",
+            Radius::Md => "md",
+            Radius::Lg => "lg",
+            Radius::Xl => "xl",
+        }
+    }
+}
+/// The radius scale's values in logical pixels, as exported.
+#[derive(Clone, Debug, PartialEq)]
+pub struct Radii([f64; 5]);
+impl Radii {
+    /// From `tokens/static.json`: its `ts.RADIUS` map, every step.
+    pub fn from_static(statics: &Value) -> Result<Self, String> {
+        let mut out = [0.; 5];
+        for (i, r) in Radius::ALL.iter().enumerate() {
+            out[i] = statics["ts"]["RADIUS"][r.token()]
+                .as_f64()
+                .filter(|v| v.is_finite() && *v >= 0.)
+                .ok_or_else(|| format!("static.json: no RADIUS.{}", r.token()))?;
+        }
+        Ok(Self(out))
+    }
+    pub fn px(&self, r: Radius) -> f64 {
+        self.0[Radius::ALL.iter().position(|x| *x == r).unwrap_or(0)]
+    }
+}
+
+/// A CSS `cubic-bezier(x1, y1, x2, y2)` easing.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct Bezier(pub [f64; 4]);
+impl Bezier {
+    pub fn parse(s: &str) -> Result<Self, String> {
+        let bad = || format!("not a cubic-bezier: {s:?}");
+        let inner = s
+            .trim()
+            .strip_prefix("cubic-bezier(")
+            .and_then(|r| r.strip_suffix(')'))
+            .ok_or_else(bad)?;
+        let v: Vec<f64> = inner
+            .split(',')
+            .map(|p| p.trim().parse::<f64>().map_err(|_| bad()))
+            .collect::<Result<_, _>>()?;
+        match v[..] {
+            [x1, y1, x2, y2]
+                if (0. ..=1.).contains(&x1)
+                    && (0. ..=1.).contains(&x2)
+                    && y1.is_finite()
+                    && y2.is_finite() =>
+            {
+                Ok(Self([x1, y1, x2, y2]))
+            }
+            _ => Err(bad()),
+        }
+    }
+    /// The eased value at time `t` in 0..1: the curve's y where its x is `t`.
+    pub fn at(self, t: f64) -> f64 {
+        if t <= 0. {
+            return 0.;
+        }
+        if t >= 1. {
+            return 1.;
+        }
+        let [x1, y1, x2, y2] = self.0;
+        let cubic = |a: f64, b: f64, u: f64| {
+            3. * (1. - u).powi(2) * u * a + 3. * (1. - u) * u * u * b + u.powi(3)
+        };
+        // x is monotonic in u for x1, x2 in 0..1: bisect.
+        let (mut lo, mut hi) = (0., 1.);
+        for _ in 0..40 {
+            let mid = (lo + hi) / 2.;
+            if cubic(x1, x2, mid) < t {
+                lo = mid;
+            } else {
+                hi = mid;
+            }
+        }
+        cubic(y1, y2, (lo + hi) / 2.)
+    }
+}
+
+/// The kit's motion: its two curves and its durations (`_tokens.scss`).
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct Motion {
+    pub ease: Bezier,
+    pub emphasized: Bezier,
+    pub base: std::time::Duration,
+    pub slow: std::time::Duration,
+}
+impl Motion {
+    pub fn from_static(statics: &Value) -> Result<Self, String> {
+        let scss = |k: &str| {
+            statics["scss"][k]
+                .as_str()
+                .ok_or_else(|| format!("static.json: no {k}"))
+        };
+        let ms = |k: &str| -> Result<std::time::Duration, String> {
+            let raw = scss(k)?;
+            raw.strip_suffix("ms")
+                .and_then(|n| n.trim().parse::<u64>().ok())
+                .map(std::time::Duration::from_millis)
+                .ok_or_else(|| format!("static.json: {k} is {raw:?}, not milliseconds"))
+        };
+        Ok(Self {
+            ease: Bezier::parse(scss("ease")?)?,
+            emphasized: Bezier::parse(scss("ease-emphasized")?)?,
+            base: ms("dur-base")?,
+            slow: ms("dur-slow")?,
+        })
+    }
+}
+
 /// The colours a view paints content in: text tiers, and the focus ring (content, D8).
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct Look {
@@ -204,6 +329,8 @@ impl Washes {
 #[derive(Clone, Debug, PartialEq)]
 pub struct Tokens {
     pub spacing: Spacing,
+    pub radii: Radii,
+    pub motion: Motion,
     pub look: Look,
     pub washes: Washes,
 }

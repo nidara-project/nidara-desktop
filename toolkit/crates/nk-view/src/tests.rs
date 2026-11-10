@@ -10,7 +10,10 @@ fn backend() -> ParleyBackend {
 }
 fn statics() -> serde_json::Value {
     json!({"scss": {"space-1": "4px", "space-2": "8px", "space-3": "12px", "space-4": "16px",
-        "space-5": "20px", "space-6": "24px", "space-8": "32px", "space-10": "40px"}})
+        "space-5": "20px", "space-6": "24px", "space-8": "32px", "space-10": "40px",
+        "ease": "cubic-bezier(0.4, 0, 0.2, 1)", "ease-emphasized": "cubic-bezier(0.2, 0, 0, 1)",
+        "dur-fast": "100ms", "dur-base": "180ms", "dur-slow": "260ms"},
+        "ts": {"RADIUS": {"xs": 6, "sm": 10, "md": 16, "lg": 24, "xl": 32}}})
 }
 fn glass() -> serde_json::Value {
     let states = |a: f64| {
@@ -30,6 +33,8 @@ fn tokens() -> Tokens {
         "--nidara-text-dim": "rgba(255, 255, 255, 0.6)", "--nidara-accent": "#0088FF"}});
     Tokens {
         spacing: Spacing::from_static(&statics()).unwrap(),
+        radii: Radii::from_static(&statics()).unwrap(),
+        motion: Motion::from_static(&statics()).unwrap(),
         look: Look::from_colors(&set).unwrap(),
         washes: Washes::from_glass(&glass(), true, false).unwrap(),
     }
@@ -43,7 +48,7 @@ fn style(size: f32) -> TextStyle {
 }
 fn laid(view: &Node, size: (f64, f64), scale: f64) -> ViewState {
     let mut s = ViewState::new(1000);
-    s.layout(view, size, scale, &tokens(), &mut backend());
+    s.layout(view, size, scale, &tokens(), &mut backend(), Instant::now());
     s
 }
 fn rect(s: &ViewState, k: &str) -> Rect {
@@ -87,10 +92,10 @@ fn card(id: &str, body: &str, align: Align) -> Node {
     .align(align);
     Node::pane(
         format!("{id}/pane"),
-        Corner::Radius(22.),
+        Corner::Token(Radius::Xl),
         Node::control(format!("{id}/card"), "Open", "open", content)
             .wash(Wash::None)
-            .corner(Corner::Radius(22.)),
+            .corner(Corner::Token(Radius::Xl)),
     )
 }
 const LONG: &str = "A body long enough to wrap onto a second and a third line in a card of this width, \
@@ -203,7 +208,7 @@ fn a_stack_places_by_gap_padding_justify_spacer_and_grow() {
     assert_eq!(rect(&s, "b"), [42., 32., 16., 16.]);
 }
 
-/// The acceptance check of VIEW.md §7: on every card, the icon's centre and the title's
+/// The acceptance check of VIEW.md §8: on every card, the icon's centre and the title's
 /// first line agree to one device pixel, at scale 1 and 1.25. Its control: `Center`.
 #[test]
 fn first_line_puts_the_icon_level_with_the_title_and_center_does_not() {
@@ -285,6 +290,7 @@ fn a_text_keeps_its_layout_until_its_string_style_or_width_changes() {
         1.,
         &t,
         &mut text,
+        Instant::now(),
     );
     let after_first = s.text().shaped;
     s.layout(
@@ -293,6 +299,7 @@ fn a_text_keeps_its_layout_until_its_string_style_or_width_changes() {
         1.,
         &t,
         &mut text,
+        Instant::now(),
     );
     assert_eq!(
         s.text().shaped,
@@ -305,6 +312,7 @@ fn a_text_keeps_its_layout_until_its_string_style_or_width_changes() {
         1.,
         &t,
         &mut text,
+        Instant::now(),
     );
     assert!(s.text().shaped > after_first, "a new string is shaped");
 }
@@ -392,8 +400,9 @@ fn a_disabled_control_takes_no_hover_and_leaves_the_tab_order() {
 #[test]
 fn a_card_without_wash_declares_nothing_and_its_close_declares_the_destructive_hover() {
     let mut s = laid(&card("n", "Body", Align::FirstLine), (360., 400.), 1.);
-    let w = tokens().washes;
-    let f = s.frame(&w, Instant::now());
+    let tk = tokens();
+    let w = tk.washes;
+    let f = s.frame(&tk, Instant::now());
     assert_eq!(f.panes.len(), 1);
     assert!(
         f.states.is_empty(),
@@ -401,16 +410,16 @@ fn a_card_without_wash_declares_nothing_and_its_close_declares_the_destructive_h
     );
     let pane = rect(&s, "n/pane");
     s.pointer_motion(pane[0] + 40., pane[1] + 4.);
-    let f = s.frame(&w, Instant::now());
+    let f = s.frame(&tk, Instant::now());
     assert_eq!(f.states.len(), 1, "the revealed close, at rest");
     assert_eq!(f.states[0].wash[3], 0.);
     let close = rect(&s, "n/close");
     s.pointer_motion(close[0] + 2., close[1] + 2.);
-    let f = s.frame(&w, Instant::now());
+    let f = s.frame(&tk, Instant::now());
     assert_eq!(f.states[0].wash, w.destructive_hover);
     s.button(true);
     assert_eq!(
-        s.frame(&w, Instant::now()).states[0].wash,
+        s.frame(&tk, Instant::now()).states[0].wash,
         w.destructive_press
     );
 }
@@ -428,15 +437,16 @@ fn a_pane_never_declares_more_than_eight_washes_and_the_hover_wins_over_markers(
             .marked(true)
         })
         .collect();
-    let view = Node::pane("p", Corner::Radius(16.), Node::row("r", days));
+    let view = Node::pane("p", Corner::Token(Radius::Md), Node::row("r", days));
     let mut s = laid(&view, (400., 40.), 1.);
-    let w = tokens().washes;
+    let tk = tokens();
+    let w = tk.washes;
     let lit = |f: &Frame| f.states.iter().filter(|r| r.wash[3] > 0.).count();
-    let f = s.frame(&w, Instant::now());
+    let f = s.frame(&tk, Instant::now());
     assert_eq!(lit(&f), BUDGET, "nine markers, eight shown");
     let last = rect(&s, "d8");
     s.pointer_motion(last[0] + 2., last[1] + 2.);
-    let f = s.frame(&w, Instant::now());
+    let f = s.frame(&tk, Instant::now());
     assert_eq!(lit(&f), BUDGET);
     assert_eq!(f.states[0].wash, w.hover, "the hover is declared first");
     // Hyalo takes the first eight lit regions in order: every lit one precedes every rest one.
@@ -452,7 +462,7 @@ fn a_pane_never_declares_more_than_eight_washes_and_the_hover_wins_over_markers(
 fn a_hover_that_left_still_counts_while_it_fades() {
     let view = Node::pane(
         "p",
-        Corner::Radius(16.),
+        Corner::Token(Radius::Md),
         Node::row(
             "r",
             (0..9)
@@ -468,13 +478,13 @@ fn a_hover_that_left_still_counts_while_it_fades() {
         ),
     );
     let mut s = laid(&view, (400., 40.), 1.);
-    let w = tokens().washes;
+    let tk = tokens();
     let t0 = Instant::now();
     let r0 = rect(&s, "d0");
     s.pointer_motion(r0[0] + 2., r0[1] + 2.);
-    let lit = s.frame(&w, t0).states[0].id;
+    let lit = s.frame(&tk, t0).states[0].id;
     s.pointer_leave();
-    let f = s.frame(&w, t0);
+    let f = s.frame(&tk, t0);
     assert!(
         f.states.iter().all(|r| r.wash[3] == 0.),
         "it fades in Hyalo, declared at rest"
@@ -482,7 +492,7 @@ fn a_hover_that_left_still_counts_while_it_fades() {
     // While it fades it is ordered before the rest: it holds one of Hyalo's eight.
     assert_eq!(f.states[0].id, lit);
     let ids = s
-        .frame(&w, t0 + Duration::from_millis(100))
+        .frame(&tk, t0 + Duration::from_millis(100))
         .states
         .iter()
         .map(|r| r.id)
@@ -492,7 +502,7 @@ fn a_hover_that_left_still_counts_while_it_fades() {
     // through a later hover on d8 that it no longer takes a place.
     let r8 = rect(&s, "d8");
     s.pointer_motion(r8[0] + 2., r8[1] + 2.);
-    let later = s.frame(&w, t0 + Duration::from_millis(200));
+    let later = s.frame(&tk, t0 + Duration::from_millis(200));
     assert_eq!(later.states.iter().filter(|r| r.wash[3] > 0.).count(), 1);
     assert_eq!(later.states.len(), 9);
 }
@@ -509,9 +519,9 @@ fn region_ids_follow_keys_across_rebuilds_and_states_clear_when_the_control_goes
             Node::control("b", "B", "b", Node::icon("bi", "nd-b", 16.)),
         ],
     );
-    s.layout(&two, (100., 20.), 1., &t, &mut text);
+    s.layout(&two, (100., 20.), 1., &t, &mut text, Instant::now());
     let ids = |s: &mut ViewState| {
-        s.frame(&t.washes, Instant::now())
+        s.frame(&t, Instant::now())
             .states
             .iter()
             .map(|r| r.id)
@@ -529,7 +539,7 @@ fn region_ids_follow_keys_across_rebuilds_and_states_clear_when_the_control_goes
             Node::control("a", "A", "a", Node::icon("ai", "nd-a", 16.)),
         ],
     );
-    s.layout(&swapped, (100., 20.), 1., &t, &mut text);
+    s.layout(&swapped, (100., 20.), 1., &t, &mut text, Instant::now());
     let after = ids(&mut s);
     assert_eq!(before, [after[1], after[0]], "each key kept its id");
     assert_eq!(s.focus(), Some(&Key::from("b")), "focus followed the key");
@@ -542,6 +552,7 @@ fn region_ids_follow_keys_across_rebuilds_and_states_clear_when_the_control_goes
         1.,
         &t,
         &mut text,
+        Instant::now(),
     );
     assert_eq!(s.focus(), None);
 }
@@ -556,7 +567,7 @@ fn only_panes_in_the_viewport_are_declared() {
     )
     .gap(Space::S2);
     let mut s = laid(&view, (360., 200.), 1.);
-    let f = s.frame(&tokens().washes, Instant::now());
+    let f = s.frame(&tokens(), Instant::now());
     assert!(
         !f.panes.is_empty() && f.panes.len() < 10,
         "{} panes",
@@ -590,10 +601,188 @@ fn the_focus_ring_is_painted_only_after_keyboard_focus_and_the_fallback_paints_w
     assert!(paint(&s, None, &mut none) > 0, "the ring");
     let mut s = laid(&view, (40., 40.), 1.);
     s.pointer_motion(5., 5.);
-    let f = s.frame(&t.washes, Instant::now());
+    let f = s.frame(&t, Instant::now());
     assert_eq!(paint(&s, None, &mut none), 0, "Hyalo draws the hover");
     assert!(
         paint(&s, Some(&f), &mut none) > 0,
         "the D5 fallback draws it"
     );
+}
+
+#[test]
+fn motion_and_radius_tokens_are_read_from_their_exports() {
+    let m = Motion::from_static(&statics()).unwrap();
+    assert_eq!(m.base, Duration::from_millis(180));
+    assert_eq!(m.slow, Duration::from_millis(260));
+    assert_eq!(m.ease.at(0.), 0.);
+    assert!((m.ease.at(1.) - 1.).abs() < 1e-9);
+    let path: Vec<f64> = (0..=20).map(|i| m.ease.at(i as f64 / 20.)).collect();
+    assert!(path.windows(2).all(|w| w[1] >= w[0]), "monotonic");
+    assert!(m.ease.at(0.5) > 0.6, "decelerates: {}", m.ease.at(0.5));
+    let mut v = statics();
+    v["scss"]["dur-base"] = json!("0.18s");
+    assert!(Motion::from_static(&v).is_err());
+    assert!(Bezier::parse("ease-in").is_err());
+    assert_eq!(Radii::from_static(&statics()).unwrap().px(Radius::Xl), 32.);
+    assert_eq!(
+        Corner::Token(Radius::Xl).of(100., 40., &tokens().radii),
+        20.,
+        "never past half the side"
+    );
+}
+
+/// A group: its header, and its cards in a reveal; another card below it.
+fn group(open: bool) -> Node {
+    Node::column(
+        "list",
+        vec![
+            Node::control(
+                "head",
+                "Group",
+                "toggle",
+                Node::text("head/t", "Group", style(13.)),
+            ),
+            Node::reveal(
+                "cards",
+                open,
+                Node::column(
+                    "cards/list",
+                    vec![
+                        card("a", "One", Align::FirstLine),
+                        card("b", "Two", Align::FirstLine),
+                    ],
+                )
+                .gap(Space::S2),
+            ),
+            card("below", "Three", Align::FirstLine),
+        ],
+    )
+    .gap(Space::S2)
+}
+
+#[test]
+fn a_reveal_first_seen_takes_its_state_at_once_and_closed_it_hides_its_controls() {
+    let t = tokens();
+    let mut s = laid(&group(false), (360., 800.), 1.);
+    assert!(!s.animating());
+    assert_eq!(rect(&s, "cards")[3], 0.);
+    let tree = s.semantics(nk_a11y::Node::new(1, nk_a11y::Role::Window, "NC"), 2);
+    assert_eq!(
+        tree.nodes
+            .values()
+            .filter(|n| n.role == nk_a11y::Role::Panel)
+            .count(),
+        1,
+        "only the card below"
+    );
+    let f = s.frame(&t, Instant::now());
+    assert_eq!(f.panes.len(), 1);
+    s.key(KeyInput::Tab);
+    s.key(KeyInput::Tab);
+    assert_eq!(
+        s.focus(),
+        Some(&Key::from("below/card")),
+        "the hidden cards are not in Tab order"
+    );
+    let s = laid(&group(true), (360., 800.), 1.);
+    assert!(!s.animating());
+    assert!(rect(&s, "cards")[3] > 100.);
+}
+
+#[test]
+fn a_reveal_unrolls_with_the_tokens_and_what_is_below_follows_without_sliding() {
+    let t = tokens();
+    let mut text = backend();
+    let mut s = ViewState::new(0);
+    let t0 = Instant::now();
+    s.layout(&group(false), (360., 800.), 1., &t, &mut text, t0);
+    let below0 = rect(&s, "below/pane")[1];
+    s.layout(&group(true), (360., 800.), 1., &t, &mut text, t0);
+    assert!(s.animating());
+    assert_eq!(rect(&s, "cards")[3], 0., "it starts closed");
+    let half = t0 + t.motion.slow / 2;
+    assert!(s.tick(&t, &mut text, half));
+    let mid = rect(&s, "cards")[3];
+    let full = rect(&s, "cards/list")[3];
+    assert!(mid > 0. && mid < full, "{mid} of {full}");
+    assert!(
+        mid > full / 2.,
+        "ease-emphasized is past half at half time: {mid} of {full}"
+    );
+    // The card below follows the reveal, frame by frame: it is the reveal's height lower.
+    assert_eq!(rect(&s, "below/pane")[1], below0 + mid);
+    // Content is clipped and fading: a pane cut by the reveal is declared cut.
+    let a = placed(&s, "a/pane");
+    assert!(a.alpha > 0. && a.alpha < 1.);
+    let f = s.frame(&t, half);
+    let cards = rect(&s, "cards");
+    assert!(
+        f.panes.iter().all(
+            |(_, p)| p.y + p.height <= cards[1] + cards[3] + 1e-9 || p.y >= cards[1] + cards[3]
+        )
+    );
+    assert!(!s.tick(&t, &mut text, t0 + t.motion.slow));
+    assert_eq!(rect(&s, "cards")[3], full);
+    assert_eq!(placed(&s, "a/pane").alpha, 1.);
+}
+
+#[test]
+fn a_reveal_turned_back_midway_eases_from_where_it_is() {
+    let t = tokens();
+    let mut text = backend();
+    let mut s = ViewState::new(0);
+    let t0 = Instant::now();
+    s.layout(&group(false), (360., 800.), 1., &t, &mut text, t0);
+    s.layout(&group(true), (360., 800.), 1., &t, &mut text, t0);
+    let t1 = t0 + t.motion.slow / 2;
+    s.tick(&t, &mut text, t1);
+    let mid = rect(&s, "cards")[3];
+    s.layout(&group(false), (360., 800.), 1., &t, &mut text, t1);
+    assert_eq!(rect(&s, "cards")[3], mid, "no jump");
+    s.tick(&t, &mut text, t1 + t.motion.base / 2);
+    let closing = rect(&s, "cards")[3];
+    assert!(closing < mid && closing > 0.);
+    assert!(!s.tick(&t, &mut text, t1 + t.motion.base));
+    assert_eq!(rect(&s, "cards")[3], 0.);
+}
+
+#[test]
+fn a_pane_the_model_moved_slides_from_where_it_was_drawn() {
+    let t = tokens();
+    let mut text = backend();
+    let mut s = ViewState::new(0);
+    let t0 = Instant::now();
+    let list = |ids: &[&str]| {
+        Node::column(
+            "list",
+            ids.iter()
+                .map(|i| card(i, "Body", Align::FirstLine))
+                .collect(),
+        )
+        .gap(Space::S2)
+    };
+    s.layout(&list(&["a", "b"]), (360., 800.), 1., &t, &mut text, t0);
+    let was = rect(&s, "b/pane");
+    let close_was = rect(&s, "b/close");
+    s.layout(&list(&["b"]), (360., 800.), 1., &t, &mut text, t0);
+    assert_eq!(rect(&s, "b/pane"), was, "drawn where it was");
+    assert_eq!(rect(&s, "b/close"), close_was, "with what is in it");
+    s.tick(&t, &mut text, t0 + t.motion.base / 2);
+    let mid = rect(&s, "b/pane")[1];
+    assert!(mid > 0. && mid < was[1], "{mid}");
+    assert!(!s.tick(&t, &mut text, t0 + t.motion.base));
+    assert_eq!(rect(&s, "b/pane")[1], 0.);
+}
+
+#[test]
+fn with_reduced_motion_everything_lands_at_once() {
+    let t = tokens();
+    let mut text = backend();
+    let mut s = ViewState::new(0);
+    s.set_reduced_motion(true);
+    let t0 = Instant::now();
+    s.layout(&group(false), (360., 800.), 1., &t, &mut text, t0);
+    s.layout(&group(true), (360., 800.), 1., &t, &mut text, t0);
+    assert!(!s.animating());
+    assert!(rect(&s, "cards")[3] > 100.);
 }

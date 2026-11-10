@@ -5,16 +5,19 @@
 //! state regions), the semantics, and the content paint. The surface keeps only its model
 //! and what an `Activated` means.
 mod layout;
+mod motion;
 mod state;
 mod tokens;
 mod view;
 
 pub use layout::{Fitted, Placed, Rect, TextCache, What, first_line_centre};
 pub use state::{Activated, BUDGET, Frame, KeyInput, ViewState};
-pub use tokens::{Look, Space, Spacing, Tokens, Washes, parse_color};
+pub use tokens::{
+    Bezier, Look, Motion, Radii, Radius, Space, Spacing, Tokens, Washes, parse_color,
+};
 pub use view::{
-    Align, Axis, Control, Corner, Icon, Ink, Justify, Key, Kind, Node, Padding, Pane, Role, Stack,
-    Text, Wash,
+    Align, Axis, Control, Corner, Icon, Ink, Justify, Key, Kind, Node, Padding, Pane, Reveal, Role,
+    Stack, Text, Wash,
 };
 
 #[cfg(test)]

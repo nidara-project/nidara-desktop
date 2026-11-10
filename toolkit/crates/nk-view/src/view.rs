@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: LGPL-3.0-or-later
 //! The view: a value a surface builds from its model on each change (VIEW.md §2).
-use crate::tokens::Space;
+use crate::tokens::{Radii, Radius, Space};
 use nk_text::TextStyle;
 use serde::{Deserialize, Serialize};
 
@@ -34,6 +34,14 @@ pub enum Kind {
     Icon(Icon),
     Spacer,
     Control(Control),
+    Reveal(Reveal),
+}
+
+/// Something that opens and closes in place, unrolling downward (VIEW.md §6).
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+pub struct Reveal {
+    pub open: bool,
+    pub child: Box<Node>,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
@@ -94,18 +102,20 @@ pub struct Stack {
 }
 
 /// A corner, as the glass and the washes draw it.
-#[derive(Clone, Copy, Debug, PartialEq, Serialize, Deserialize)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub enum Corner {
     /// Half the shorter side.
     Pill,
-    /// A radius from the exported tokens (a piece's radius, a control's).
-    Radius(f64),
+    /// A step of the kit's radius scale.
+    Token(Radius),
 }
 impl Corner {
-    pub fn of(self, w: f64, h: f64) -> f64 {
+    /// The radius for a `w` × `h` box, never more than half its shorter side.
+    pub fn of(self, w: f64, h: f64, radii: &Radii) -> f64 {
+        let half = w.min(h) / 2.;
         match self {
-            Corner::Pill => w.min(h) / 2.,
-            Corner::Radius(r) => r.min(w.min(h) / 2.),
+            Corner::Pill => half,
+            Corner::Token(r) => radii.px(r).min(half),
         }
     }
 }
@@ -242,6 +252,15 @@ impl Node {
                 name: name.into(),
                 size,
                 ink: Ink::Primary,
+            }),
+        )
+    }
+    pub fn reveal(key: impl Into<Key>, open: bool, child: Node) -> Self {
+        Self::new(
+            key,
+            Kind::Reveal(Reveal {
+                open,
+                child: Box::new(child),
             }),
         )
     }

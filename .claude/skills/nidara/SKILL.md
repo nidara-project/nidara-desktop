@@ -329,8 +329,9 @@ logs for this work belong in target/ or ~/Nidara/ChatGPT/, never /tmp.
 
 New shell surfaces and ports are built on `toolkit/crates/nk-view` (#1048), not by placing,
 hit-testing and painting by hand. Its contract is `toolkit/VIEW.md` and its README covers the
-API. Gaps and paddings are `Space` steps read from `tokens/static.json`. Hover, press and focus
-are derived by key. A pane never declares more than Hyalo's eight lit washes, and every other
+API. Gaps, corners and motion are tokens read from `tokens/static.json` (`Space`, `Radius`, the
+kit's curves and durations). Hover, press and focus are derived by key. A `Reveal` opens and
+closes in place, and moved panes slide; the surface calls `tick` while `animating()`. A pane never declares more than Hyalo's eight lit washes, and every other
 shown control is declared at rest so its hover fades in. The NC is the first consumer.
 
 ### Applications1 catalogue and native dock pins

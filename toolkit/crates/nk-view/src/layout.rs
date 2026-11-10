@@ -5,6 +5,7 @@
 use crate::tokens::Spacing;
 use crate::view::{Align, Axis, Control, Corner, Icon, Ink, Justify, Key, Kind, Node, Stack};
 use nk_text::{Layout, TextBackend, TextStyle};
+use std::collections::HashMap as Map;
 use std::collections::HashMap;
 use unicode_segmentation::UnicodeSegmentation;
 
@@ -170,6 +171,27 @@ pub struct Placed {
     pub pane: Option<usize>,
     /// The nearest control this node lies in (itself for a control).
     pub control: Option<usize>,
+    /// What of it may show: the reveals it lies in, intersected. None: all of it.
+    pub clip: Option<Rect>,
+    /// Its content's opacity: the product of the reveals' progress it lies in.
+    pub alpha: f64,
+}
+impl Placed {
+    /// Its rectangle as far as it shows; None when nothing of it does.
+    pub fn visible(&self) -> Option<Rect> {
+        match self.clip {
+            None => Some(self.rect),
+            Some(c) => intersect(self.rect, c),
+        }
+    }
+}
+pub fn intersect(a: Rect, b: Rect) -> Option<Rect> {
+    let (x0, y0) = (a[0].max(b[0]), a[1].max(b[1]));
+    let (x1, y1) = (
+        (a[0] + a[2]).min(b[0] + b[2]),
+        (a[1] + a[3]).min(b[1] + b[3]),
+    );
+    (x1 > x0 && y1 > y0).then_some([x0, y0, x1 - x0, y1 - y0])
 }
 #[derive(Clone, Debug)]
 pub enum What {
@@ -179,10 +201,24 @@ pub enum What {
     Icon(Icon),
     Spacer,
     Control(Control),
+    Reveal { progress: f64 },
+}
+
+/// Where a node is placed from: its parent, the pane and control it lies in, its clip and
+/// its opacity.
+#[derive(Clone, Copy)]
+struct Ctx {
+    parent: Option<usize>,
+    pane: Option<usize>,
+    control: Option<usize>,
+    clip: Option<Rect>,
+    alpha: f64,
 }
 
 pub struct Layouter<'a> {
     pub spacing: &'a Spacing,
+    /// Each reveal's progress by key; a reveal not in it is at its `open` state.
+    pub reveals: &'a Map<Key, f64>,
     pub text: &'a mut dyn TextBackend,
     pub cache: &'a mut TextCache,
     pub scale: f64,
@@ -194,15 +230,14 @@ impl Layouter<'_> {
     pub fn run(&mut self, root: &Node, size: (f64, f64)) -> Vec<Placed> {
         let m = self.measure(root, size.0);
         let mut out = Vec::new();
-        self.place(
-            root,
-            &m,
-            [0., 0., size.0, size.1],
-            None,
-            None,
-            None,
-            &mut out,
-        );
+        let ctx = Ctx {
+            parent: None,
+            pane: None,
+            control: None,
+            clip: None,
+            alpha: 1.,
+        };
+        self.place(root, &m, [0., 0., size.0, size.1], ctx, &mut out);
         let live: std::collections::HashSet<Key> = out.iter().map(|p| p.key.clone()).collect();
         self.cache.retain(&live);
         out
@@ -215,6 +250,7 @@ impl Layouter<'_> {
             Kind::Spacer => 0.,
             Kind::Pane(p) => self.natural(&p.child),
             Kind::Control(c) => self.natural(&c.child),
+            Kind::Reveal(r) => self.natural(&r.child),
             Kind::Stack(s) => {
                 let pad = self.spacing.of(s.padding.left) + self.spacing.of(s.padding.right);
                 let ws: Vec<f64> = s.children.iter().map(|c| self.natural(c)).collect();
@@ -229,6 +265,7 @@ impl Layouter<'_> {
             Kind::Spacer => 0.,
             Kind::Pane(p) => self.min(&p.child),
             Kind::Control(c) => self.min(&c.child),
+            Kind::Reveal(r) => self.min(&r.child),
             Kind::Stack(s) => {
                 let pad = self.spacing.of(s.padding.left) + self.spacing.of(s.padding.right);
                 let ws: Vec<f64> = s.children.iter().map(|c| self.min(c)).collect();
@@ -256,7 +293,7 @@ impl Layouter<'_> {
         };
         match &n.kind {
             Kind::Spacer => leaf(0., 0., None),
-            Kind::Icon(i) => leaf(i.size, i.size, None),
+            Kind::Icon(i) => leaf(self.up(i.size), self.up(i.size), None),
             Kind::Text(t) => {
                 let (w, h, first) = match self.cache.fit(
                     self.text,
@@ -277,7 +314,8 @@ impl Layouter<'_> {
                     }
                     None => (0., 0., None),
                 };
-                leaf(if t.lines.is_some() { w.min(width) } else { w }, h, first)
+                let w = self.up(if t.lines.is_some() { w.min(width) } else { w });
+                leaf(w, self.up(h), first)
             }
             Kind::Pane(p) => {
                 let c = self.measure(&p.child, width);
@@ -285,6 +323,17 @@ impl Layouter<'_> {
                     w: c.w,
                     h: c.h,
                     first_line: c.first_line,
+                    children: vec![c],
+                    cross: vec![],
+                }
+            }
+            Kind::Reveal(r) => {
+                let p = self.progress(&n.key, r.open);
+                let c = self.measure(&r.child, width);
+                Measure {
+                    w: c.w,
+                    h: self.round(c.h * p),
+                    first_line: if p >= 1. { c.first_line } else { None },
                     children: vec![c],
                     cross: vec![],
                 }
@@ -380,8 +429,8 @@ impl Layouter<'_> {
                     (h, vec![], first)
                 };
                 Measure {
-                    w,
-                    h: h + pt + pb,
+                    w: self.up(w),
+                    h: self.up(h + pt + pb),
                     first_line,
                     children,
                     cross,
@@ -407,18 +456,38 @@ impl Layouter<'_> {
                 }
                 let w = children.iter().map(|c| c.w).fold(0., f64::max) + pl + pr;
                 Measure {
+                    // Stretched, it takes the width it is given, as placed by its parent.
                     w: if s.align == Align::Stretch {
-                        width.max(w)
+                        width.max(self.up(w))
                     } else {
-                        w
+                        self.up(w)
                     },
-                    h: children.iter().map(|c| c.h).sum::<f64>() + gaps + pt + pb,
+                    h: self.up(children.iter().map(|c| c.h).sum::<f64>() + gaps + pt + pb),
                     first_line,
                     children,
                     cross: vec![],
                 }
             }
         }
+    }
+
+    fn progress(&self, key: &Key, open: bool) -> f64 {
+        self.reveals
+            .get(key)
+            .copied()
+            .unwrap_or(if open { 1. } else { 0. })
+            .clamp(0., 1.)
+    }
+
+    /// A measured size, rounded up to whole device pixels: a node measures the same wherever
+    /// it is placed, so equal cards have equal sizes, and sums of sizes stay on the grid.
+    fn up(&self, v: f64) -> f64 {
+        let s = self.scale.max(f64::MIN_POSITIVE);
+        (v * s - 1e-6).ceil().max(0.) / s
+    }
+    fn round(&self, v: f64) -> f64 {
+        let s = self.scale.max(f64::MIN_POSITIVE);
+        (v * s).round() / s
     }
 
     fn snap(&self, r: Rect) -> Rect {
@@ -428,17 +497,7 @@ impl Layouter<'_> {
         [x0, y0, (x1 - x0).max(0.), (y1 - y0).max(0.)]
     }
 
-    #[allow(clippy::too_many_arguments)]
-    fn place(
-        &mut self,
-        n: &Node,
-        m: &Measure,
-        r: Rect,
-        parent: Option<usize>,
-        pane: Option<usize>,
-        control: Option<usize>,
-        out: &mut Vec<Placed>,
-    ) {
+    fn place(&mut self, n: &Node, m: &Measure, r: Rect, ctx: Ctx, out: &mut Vec<Placed>) {
         let index = out.len();
         let what = match &n.kind {
             Kind::Stack(_) => What::Stack,
@@ -453,55 +512,55 @@ impl Layouter<'_> {
                 child: Box::new(Node::spacer("")),
                 ..c.clone()
             }),
+            Kind::Reveal(rv) => What::Reveal {
+                progress: self.progress(&n.key, rv.open),
+            },
         };
-        let (own_pane, own_control) = match &n.kind {
-            Kind::Pane(_) => (Some(index), control),
-            Kind::Control(_) => (pane, Some(index)),
-            _ => (pane, control),
-        };
+        let rect = self.snap(r);
         out.push(Placed {
             key: n.key.clone(),
-            rect: self.snap(r),
+            rect,
             what,
-            parent,
-            pane,
-            control: own_control,
+            parent: ctx.parent,
+            pane: ctx.pane,
+            control: if matches!(n.kind, Kind::Control(_)) {
+                Some(index)
+            } else {
+                ctx.control
+            },
+            clip: ctx.clip,
+            alpha: ctx.alpha,
         });
+        let mut inner = Ctx {
+            parent: Some(index),
+            ..ctx
+        };
         match &n.kind {
-            Kind::Pane(p) => self.place(
-                &p.child,
-                &m.children[0],
-                r,
-                Some(index),
-                own_pane,
-                own_control,
-                out,
-            ),
-            Kind::Control(c) => self.place(
-                &c.child,
-                &m.children[0],
-                r,
-                Some(index),
-                own_pane,
-                own_control,
-                out,
-            ),
-            Kind::Stack(s) => self.place_stack(s, m, r, index, own_pane, own_control, out),
+            Kind::Pane(p) => {
+                inner.pane = Some(index);
+                self.place(&p.child, &m.children[0], r, inner, out)
+            }
+            Kind::Control(c) => {
+                inner.control = Some(index);
+                self.place(&c.child, &m.children[0], r, inner, out)
+            }
+            Kind::Reveal(rv) => {
+                // The child at its full height, top-anchored, clipped to the reveal.
+                let p = self.progress(&n.key, rv.open);
+                inner.clip = Some(match ctx.clip {
+                    Some(c) => intersect(c, rect).unwrap_or([rect[0], rect[1], 0., 0.]),
+                    None => rect,
+                });
+                inner.alpha *= p;
+                let child = &m.children[0];
+                self.place(&rv.child, child, [r[0], r[1], r[2], child.h], inner, out)
+            }
+            Kind::Stack(s) => self.place_stack(s, m, r, inner, out),
             _ => {}
         }
     }
 
-    #[allow(clippy::too_many_arguments)]
-    fn place_stack(
-        &mut self,
-        s: &Stack,
-        m: &Measure,
-        r: Rect,
-        index: usize,
-        pane: Option<usize>,
-        control: Option<usize>,
-        out: &mut Vec<Placed>,
-    ) {
+    fn place_stack(&mut self, s: &Stack, m: &Measure, r: Rect, ctx: Ctx, out: &mut Vec<Placed>) {
         let sp = self.spacing;
         let (pt, pr, pb, pl) = (
             sp.of(s.padding.top),
@@ -575,7 +634,7 @@ impl Layouter<'_> {
             } else {
                 [inner[0] + offset, inner[1] + at, across, len]
             };
-            self.place(c, cm, rect, Some(index), pane, control, out);
+            self.place(c, cm, rect, ctx, out);
             at += len + gap;
         }
     }

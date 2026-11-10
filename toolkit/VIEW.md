@@ -12,7 +12,7 @@ This file covers the two pieces that the shell inventory of 2026-11-10 ranked fi
 
 A third piece is needed with them: **the pane** (a card of glass). It is the unit Hyalo's state
 budget counts in. Animation, scrolling, overlay, tile grid, gestures, tooltip and calendar are
-later contracts. This one only keeps room for them (§6).
+later contracts, except animation, which §6 adds. This one only keeps room for the rest (§7).
 
 ## Why
 
@@ -77,7 +77,9 @@ The view is `serde`-serializable, as #1048 asks. Actions are names, never code.
 the `nk-text` layout that paint will use. Then it is placed. The same placed rectangles feed paint,
 hit-testing, semantics and the material. Nothing computes a position twice.
 
-**Measures are tokens, never literals.** A `Stack`'s gap and padding take a `Space`. It is a
+**Measures are tokens, never literals.** A `Stack`'s gap and padding take a `Space`, and a
+corner takes `Pill` or a step of the radius scale (`RADIUS`, `xs` to `xl`, exported in
+`tokens/static.json`). It is a
 closed enum over the kit's spacing scale (`$space-1` … `$space-10`: 4, 8, 12, 16, 20, 24, 32,
 40 px, `ui/lib/nidara-kit/styles/_tokens.scss`). A text takes a style token (`$fs-*`), and a pane
 takes its piece of the exported glass. A ported surface's view code holds no number for a
@@ -144,7 +146,7 @@ each card has its own eight. `nk-view` enforces the limit per pane, in this orde
 
 It never declares more than eight. If a pane would need more, the lowest are dropped and logged
 once per view. A pane that needs more than eight persistent markers is a design error that the
-check reports (§7).
+check reports (§8).
 
 **Revealed controls.** A `Control` may be `revealed_with(pane)`: it is drawn only while the
 pointer is over that pane or focus is inside it. A notification's close button is the example.
@@ -165,17 +167,45 @@ root material for pieces that are not panes, as today. `nk-view` adds one shape 
 Only panes inside the viewport are declared, as B3.2 already does for cards. Whether Hyalo holds
 a limit on shapes per surface is open: see the questions.
 
-## 6. What this keeps room for
+## 6. Motion (piece 4)
 
-- **Animation (piece 4).** Placement is a pure function of view, size and scale. A revealer can
-  interpolate between two placements by key, and Hyalo layers keep moving panes.
+Two motions, both timed by the kit's motion tokens (`_tokens.scss`, exported in
+`tokens/static.json`): the curves `ease` and `ease-emphasized`, and the durations `dur-base`
+and `dur-slow`. A view holds no duration or curve of its own. With reduced motion, both land at
+once.
+
+**Reveal.** A node kind, `Reveal { open, child }`, for whatever opens and closes in place: a
+group's cards, an expanded card's body and actions, a row that leaves. Its height is its
+child's measured height times its progress, from 0 (closed) to 1 (open). The child is placed at
+its full height, top-anchored, and clipped to the reveal, so it unrolls downward as
+`Gtk.Revealer`'s slide down did in TS. The content's opacity follows the progress. Opening eases
+with `ease-emphasized` over `dur-slow`, and closing with `ease` over `dur-base`. A change of
+direction mid-way starts from where the reveal is. A reveal seen for the first time takes its
+state at once, without animating.
+
+While a reveal is not fully open, what is clipped away is neither hit nor declared. While it is
+closed, its controls leave the Tab order and its subtree is hidden in the semantics. A pane
+inside a reveal is declared clipped to the reveal.
+
+**Slide.** When a rebuilt view moves a pane that was already placed (a card above it removed,
+a group above it opened by the model), the pane and its contents move from where they were
+drawn to their new place, with `ease` over `dur-base`. A pane that is new appears in place.
+The per-frame relayout of a reveal in progress never starts a slide: the panes below it follow
+the reveal directly.
+
+Placement stays a pure function of the view, its size, its scale and the motion state at one
+instant. `ViewState::tick(now)` advances the motion state, and reports whether anything still
+moves so the surface asks for another frame.
+
+## 7. What this keeps room for
+
 - **Scroll (piece 5).** A scroll region becomes a node kind that places its child at an offset
-  and clips. Hit-testing already goes through placed rects.
+  and clips, as a reveal already clips. Hit-testing already goes through placed rects.
 - **Overlay (piece 6).** A third axis value, `Stack(Z)`, with children placed over each other.
 
-None of these is in this contract.
+Neither of these is in this contract.
 
-## 7. Acceptance for the NC pilot
+## 8. Acceptance for the NC pilot
 
 The pilot replaces `nc.rs` and `notification_card.rs` with a view over the same model
 (`notifications.rs`), behind a flag, beside today's NC.
@@ -251,7 +281,7 @@ private nested Hyalo of `toolkit/widgets-demo/check-headless.sh` on this machine
 So each card adds about 0.06 ms of GPU time per redrawn frame over one panel of the same area.
 Textures and captures stay the same. The NC builds only the cards in its viewport, about ten,
 which costs about 0.3 ms per frame more than today's single pane, and only on frames where the
-glass is redrawn. That is within budget. The pilot's "Cost" check (§7) measures it again on the
+glass is redrawn. That is within budget. The pilot's "Cost" check (§8) measures it again on the
 real NC.
 
 That all N cards are drawn comes from the code (one call per shape, no cap) and from the GPU
