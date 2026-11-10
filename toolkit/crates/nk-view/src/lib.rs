@@ -18,7 +18,7 @@ pub use tokens::{
 };
 pub use view::{
     Align, Axis, Control, Corner, Icon, Ink, Justify, Key, Kind, Layer, Node, Overlay, Padding,
-    Pane, Reveal, Role, Scroll, Slider, Stack, Text, Wash,
+    Field, Pane, Reveal, Role, Scroll, Slider, Stack, Text, Wash,
 };
 
 #[cfg(test)]

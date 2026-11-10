@@ -456,6 +456,63 @@ impl ViewState {
         self.control(i).enabled
     }
 
+    /// The field being typed into: the focused one (VIEW.md §12.2). Its owner routes keys
+    /// to its editor while this is Some, and rebuilds the view with what the editor shows.
+    pub fn editing(&self) -> Option<&Key> {
+        let f = self.focus.as_ref()?;
+        self.index(f)
+            .filter(|&i| self.control(i).field.is_some())
+            .map(|_| f)
+    }
+    /// Where a field's caret is drawn, in surface coordinates: for an input method's
+    /// cursor rectangle.
+    pub fn caret(&self, key: &Key) -> Option<Rect> {
+        let i = self.index(key)?;
+        let f = self.control(i).field.as_ref()?;
+        let text = format!("{}/text", key.0);
+        let p = self.placed.iter().find(|p| p.key.0 == text)?;
+        let r = self
+            .text
+            .get(&p.key)?
+            .layout
+            .caret_rect(f.caret, nk_text::Affinity::Downstream)
+            .ok()?;
+        Some([
+            p.rect[0] + r.x as f64,
+            p.rect[1] + r.y as f64,
+            1.,
+            r.height as f64,
+        ])
+    }
+    /// A field's selection, in surface coordinates.
+    pub(crate) fn selection(&self, key: &Key) -> Vec<Rect> {
+        let Some(f) = self.index(key).and_then(|i| self.control(i).field.as_ref()) else {
+            return Vec::new();
+        };
+        let text = format!("{}/text", key.0);
+        let Some(p) = self.placed.iter().find(|p| p.key.0 == text) else {
+            return Vec::new();
+        };
+        let range = f.caret.min(f.anchor)..f.caret.max(f.anchor);
+        if range.is_empty() {
+            return Vec::new();
+        }
+        self.text
+            .get(&p.key)
+            .and_then(|t| t.layout.selection_rects(range).ok())
+            .unwrap_or_default()
+            .into_iter()
+            .map(|r| {
+                [
+                    p.rect[0] + r.x as f64,
+                    p.rect[1] + r.y as f64,
+                    r.width as f64,
+                    r.height as f64,
+                ]
+            })
+            .collect()
+    }
+
     /// A slider's value: the one the pointer holds it at, else one a key or a reader set
     /// since the last rebuild, else the view's, on a step.
     pub fn value(&self, key: &Key) -> Option<f64> {
@@ -771,6 +828,17 @@ impl ViewState {
             self.held = Some((key, v));
             return changed;
         }
+        if pressed
+            && let Some(i) = self.hover.as_ref().and_then(|k| self.index(k))
+            && self.control(i).field.is_some()
+        {
+            // A field's: focus, never activation; Enter is its action (VIEW.md §12.2).
+            self.press = None;
+            self.focus = self.hover.clone();
+            self.focus_visible = false;
+            self.drag = None;
+            return None;
+        }
         if !pressed && let Some((key, _)) = self.held.take() {
             // The release reports the final value; a change not yet asked for is in it.
             self.press = None;
@@ -782,6 +850,10 @@ impl ViewState {
             });
         }
         if pressed {
+            if self.editing().is_some() {
+                // A press anywhere else ends the typing.
+                self.focus = self.hover.clone();
+            }
             self.press = self.hover.clone();
             self.focus_visible = false;
             self.drag = self
@@ -1204,6 +1276,25 @@ impl ViewState {
                         });
                         n.actions = vec![Action::Focus, Action::SetValue];
                     }
+                    if let Some(f) = &c.field {
+                        // A secret is said as nothing: its bullets are not its text.
+                        let text = if f.secret { String::new() } else { f.shown.clone() };
+                        let end = text.len();
+                        n.text = Some(nk_a11y::TextInfo {
+                            caret: f.caret.min(end),
+                            anchor: f.anchor.min(end),
+                            words: Vec::new(),
+                            lines: std::iter::once(0..end).collect(),
+                            geometry: None,
+                            text,
+                        });
+                        n.role = if f.secret {
+                            nk_a11y::Role::Password
+                        } else {
+                            nk_a11y::Role::TextInput
+                        };
+                        n.actions = vec![Action::Focus, Action::Activate, Action::SetText];
+                    }
                     n
                 }
                 What::Text { full, .. } if p.control.is_none() => {
@@ -1364,6 +1455,23 @@ impl ViewState {
                         canvas.rounded_rect(rect(&inner), inner[2] / 2., ink_of(1.));
                         canvas.pop_clip();
                     }
+                    if c.field.is_some() && self.focus.as_ref() == Some(&p.key) {
+                        // The field being typed into: its selection, then its caret.
+                        canvas.clip(rect(&visible));
+                        let sel = tokens.look.focus;
+                        for r in self.selection(&p.key) {
+                            canvas.rounded_rect(
+                                rect(&r),
+                                0.,
+                                ink(sel.with_alpha(sel.components[3] * 0.3)),
+                            );
+                        }
+                        if let Some(r) = self.caret(&p.key) {
+                            let primary = tokens.look.ink(crate::view::Ink::Primary);
+                            canvas.rounded_rect(rect(&r), 0., ink(primary));
+                        }
+                        canvas.pop_clip();
+                    }
                     if self.focus_visible
                         && self.focus.as_ref() == Some(&p.key)
                         && let Some(r) = self.silhouette(i)
@@ -1412,6 +1520,7 @@ fn a11y_role(role: Role) -> nk_a11y::Role {
         Role::Button => nk_a11y::Role::Button,
         Role::Toggle => nk_a11y::Role::ToggleButton,
         Role::Slider => nk_a11y::Role::Slider,
+        Role::Field => nk_a11y::Role::TextInput,
     }
 }
 fn inside(r: Rect, p: (f64, f64)) -> bool {

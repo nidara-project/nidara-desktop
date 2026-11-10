@@ -2022,3 +2022,83 @@ fn a_sliders_hover_lights_its_thumb_not_its_track() {
     assert!((b.x + 9. - centre).abs() < 1e-9, "{b:?}");
     assert_eq!(lit[0].radius, 9.);
 }
+
+fn field_view(shown: &str, caret: usize, anchor: usize, secret: bool) -> Node {
+    Node::pane(
+        "p",
+        Corner::Token(Radius::Lg),
+        Node::column(
+            "c",
+            vec![
+                Node::field(
+                    "pw",
+                    "Password",
+                    "join",
+                    Field {
+                        shown: shown.into(),
+                        caret,
+                        anchor,
+                        secret,
+                    },
+                    style(13.),
+                ),
+                Node::control("b", "Join", "join", Node::text("b/t", "Join", style(12.))),
+            ],
+        )
+        .padding(Padding::all(Space::S4)),
+    )
+}
+
+#[test]
+fn a_press_on_a_field_types_into_it_and_activates_nothing() {
+    let mut s = laid(&field_view("ab", 2, 2, false), (360., 400.), 1.);
+    let r = rect(&s, "pw");
+    s.pointer_motion(r[0] + 4., r[1] + r[3] / 2.);
+    assert!(s.button(true, Instant::now()).is_none());
+    assert!(s.button(false, Instant::now()).is_none(), "a release activates nothing");
+    let pw = Key::from("pw");
+    assert_eq!(s.editing(), Some(&pw));
+    // Enter is its action.
+    let a = s.key(KeyInput::Activate).expect("Enter");
+    assert_eq!((a.key, a.action.as_str()), (pw.clone(), "join"));
+    // A press elsewhere ends the typing.
+    let b = rect(&s, "b");
+    s.pointer_motion(b[0] + 2., b[1] + b[3] / 2.);
+    s.button(true, Instant::now());
+    assert!(s.editing().is_none());
+}
+
+#[test]
+fn a_fields_caret_stands_after_the_text_it_follows() {
+    let mut s = laid(&field_view("abc", 0, 0, false), (360., 400.), 1.);
+    let pw = Key::from("pw");
+    let at0 = s.caret(&pw).expect("a caret");
+    let text = rect(&s, "pw/text");
+    assert!((at0[0] - text[0]).abs() < 0.5, "{at0:?} {text:?}");
+    assert_eq!(at0[2], 1.);
+    s = laid(&field_view("abc", 3, 3, false), (360., 400.), 1.);
+    let at3 = s.caret(&pw).unwrap();
+    assert!(at3[0] > at0[0] + 10., "{at0:?} {at3:?}");
+    assert!(s.selection(&pw).is_empty());
+    s = laid(&field_view("abc", 3, 1, false), (360., 400.), 1.);
+    let sel = s.selection(&pw);
+    assert_eq!(sel.len(), 1);
+    assert!(sel[0][0] > at0[0] && (sel[0][0] + sel[0][2] - at3[0]).abs() < 0.5);
+}
+
+#[test]
+fn a_reader_hears_a_secret_field_as_a_password_with_no_text() {
+    let mut s = laid(&field_view("•••", 9, 9, true), (360., 400.), 1.);
+    let tree = s.semantics(nk_a11y::Node::new(1, nk_a11y::Role::Panel, "root"), 10);
+    let n = tree.nodes.values().find(|n| n.name == "Password").unwrap();
+    assert_eq!(n.role, nk_a11y::Role::Password);
+    let t = n.text.as_ref().unwrap();
+    assert_eq!((t.text.as_str(), t.caret), ("", 0));
+    assert!(n.actions.contains(&nk_a11y::Action::SetText));
+    let mut s = laid(&field_view("me", 2, 0, false), (360., 400.), 1.);
+    let tree = s.semantics(nk_a11y::Node::new(1, nk_a11y::Role::Panel, "root"), 10);
+    let n = tree.nodes.values().find(|n| n.name == "Password").unwrap();
+    assert_eq!(n.role, nk_a11y::Role::TextInput);
+    let t = n.text.as_ref().unwrap();
+    assert_eq!((t.text.as_str(), t.caret, t.anchor), ("me", 2, 0));
+}

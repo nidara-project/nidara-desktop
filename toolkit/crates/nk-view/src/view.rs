@@ -230,7 +230,21 @@ pub struct Control {
     /// A slider's value and range (VIEW.md §12.1); its role is `Slider`.
     #[serde(default)]
     pub slider: Option<Slider>,
+    /// A text field's text, caret and selection (VIEW.md §12.2); its role is `Field`.
+    #[serde(default)]
+    pub field: Option<Field>,
     pub child: Box<Node>,
+}
+
+/// What a text field shows (VIEW.md §12.2). The owner of the text edits it; the view only
+/// shows it. A secret field is handed over as its bullets, never its text.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+pub struct Field {
+    pub shown: String,
+    /// The caret and the selection's other end, as byte offsets into `shown`.
+    pub caret: usize,
+    pub anchor: usize,
+    pub secret: bool,
 }
 
 /// What a slider holds: its value in a range, and how the value is said. The rules (steps,
@@ -287,6 +301,8 @@ pub enum Role {
     Toggle,
     /// A value in a range, set by dragging or by the keys (VIEW.md §12.1).
     Slider,
+    /// One line of text being typed (VIEW.md §12.2).
+    Field,
 }
 
 /// The constructors a surface builds its view with.
@@ -404,6 +420,7 @@ impl Node {
                 revealed_with: None,
                 swipe: None,
                 slider: None,
+                field: None,
                 child: Box::new(child),
             }),
         )
@@ -423,6 +440,24 @@ impl Node {
         if let Kind::Control(c) = &mut n.kind {
             c.role = Role::Slider;
             c.slider = Some(slider);
+        }
+        n
+    }
+
+    /// A text field (VIEW.md §12.2), its text in `style`; `action` is its Enter.
+    pub fn field(
+        key: impl Into<Key>,
+        name: impl Into<String>,
+        action: impl Into<String>,
+        field: Field,
+        style: TextStyle,
+    ) -> Self {
+        let key = key.into();
+        let text = Self::text(format!("{}/text", key.0), field.shown.clone(), style);
+        let mut n = Self::control(key, name, action, text);
+        if let Kind::Control(c) = &mut n.kind {
+            c.role = Role::Field;
+            c.field = Some(field);
         }
         n
     }

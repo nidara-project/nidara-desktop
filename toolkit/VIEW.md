@@ -457,16 +457,25 @@ as the scroll bar did (§8), so there is one slider and its rules are written on
 
 ### 12.2 Text field
 
-`Node::field(key, name, editor, secret)`: one line of text being typed, over `nk-text`'s
-`Editor`, the one the Settings search field uses (caret, selection, word moves, undo, the input
-method's preedit). Secret fields show one bullet per character and never give their text to
-readers or to the clipboard (AT-SPI `Password` with EditableText, as `ccauth` does now).
+`Node::field(key, name, action, Field { shown, caret, anchor, secret })`: one line of text being
+typed. nk-view **shows** it (its text, the caret and the selection), focuses it, gives the input
+method the caret's rect and gives readers the field. It does **not edit** it: the text belongs to
+whoever owns it, which edits it with its own rules. In Settings that is `nk-text`'s `Editor`; in
+the CC it is `ccauth`'s password form, which bounds the length, refuses a paste that outlived its
+question or field, and has no way to copy. Those rules are tested and guard secrets, so moving
+the CC does not rewrite them.
 
-- Focus by press or Tab; the focused field reports the caret's rect for the input method
-  (`TextInput`), and its keys go to the editor before §4's.
-- The surface owns the text: `nk-view` edits the `Editor` it is handed and reports changes,
-  Enter as the field's action, Escape as its cancel.
-- Look from `components.json` `search` (padding, border, radius, selection), without the icon.
+- **A secret never enters the view.** The view is `Debug` and serializable, so a secret field is
+  handed over as its bullets, one per character as typed, with the caret and the selection as
+  offsets into them. Its reader node is a `Password` with EditableText and no text.
+- **Focus.** A press or Tab focuses a field; a press never activates it. While a field has the
+  focus, `ViewState::editing()` names it (a press anywhere else ends that), and the surface sends typed keys and the input
+  method's text to its editor before §4's keys. Enter activates the field's action (submit);
+  Tab and Shift+Tab move on; Escape is the surface's.
+- **Input method.** `ViewState::caret(key)` is the caret's rect on the surface, for
+  `TextInput`.
+- **Look.** The caret is drawn while the field holds the focus, in the primary ink, 1 px wide and
+  a line tall; the selection in the accent at 30 %, as the `search` component has it.
 
 ### 12.3 Painted slot
 
