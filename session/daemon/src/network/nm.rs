@@ -178,8 +178,10 @@ impl Nm {
             ] {
                 let ip = text(Some(&p), key);
                 if !ip.is_empty() && ip != "/" {
-                    let p = self.props(&ip, iface).await?;
-                    d[target] = json!({"addresses":json_prop(&p,"AddressData"),"gateway":text(Some(&p),"Gateway"),"nameservers":dns_live(&p, target == "ip6"),"domains":json_prop(&p,"Domains")});
+                    // Gone mid-read (a disconnect removes it): the device has no address.
+                    if let Some(p) = unless_gone(self.props(&ip, iface).await)? {
+                        d[target] = json!({"addresses":json_prop(&p,"AddressData"),"gateway":text(Some(&p),"Gateway"),"nameservers":dns_live(&p, target == "ip6"),"domains":json_prop(&p,"Domains")});
+                    }
                 }
             }
             if kind == 2 {
@@ -190,9 +192,13 @@ impl Nm {
                 let aps: Vec<Path> = self.call(&path, WIFI, "GetAllAccessPoints", &()).await?;
                 let mut rows = Vec::new();
                 for ap in aps {
-                    let p = self
-                        .props(&ap, "org.freedesktop.NetworkManager.AccessPoint")
-                        .await?;
+                    let Some(p) = unless_gone(
+                        self.props(&ap, "org.freedesktop.NetworkManager.AccessPoint")
+                            .await,
+                    )?
+                    else {
+                        continue;
+                    };
                     let ssid = bytes(Some(&p), "Ssid");
                     let wpa = number(Some(&p), "WpaFlags");
                     let rsn = number(Some(&p), "RsnFlags");
@@ -228,7 +234,9 @@ impl Nm {
             .unwrap_or_default();
         let mut active = Vec::new();
         for path in active_paths {
-            let p = self.props(&path, ACTIVE).await?;
+            let Some(p) = unless_gone(self.props(&path, ACTIVE).await)? else {
+                continue;
+            };
             active.push(json!({"path":path.as_str(),"uuid":text(Some(&p),"Uuid"),"type":text(Some(&p),"Type"),"state":number(Some(&p),"State"),"vpn":boolean(Some(&p),"Vpn",false),"default":boolean(Some(&p),"Default",false),"devices":json_prop(&p,"Devices")}));
         }
         active.sort_by(|a, b| a["path"].as_str().cmp(&b["path"].as_str()));
@@ -371,6 +379,22 @@ impl Nm {
             self.call::<()>(device, DEVICE, "Disconnect", &()).await?;
         }
         Ok(None)
+    }
+}
+/// A read of an object NetworkManager removed while the snapshot was being assembled (an IP
+/// configuration or active connection a disconnect takes away, an access point out of
+/// range): None, so the snapshot leaves it out instead of failing whole and staying stale.
+fn unless_gone<T>(r: Result<T, Error>) -> Result<Option<T>, Error> {
+    match r {
+        Ok(v) => Ok(Some(v)),
+        Err(Error::ZBus(zbus::Error::MethodError(ref name, _, _)))
+            if ["UnknownObject", "UnknownMethod", "UnknownInterface"]
+                .iter()
+                .any(|gone| name.as_str().ends_with(gone)) =>
+        {
+            Ok(None)
+        }
+        Err(e) => Err(e),
     }
 }
 pub fn root_path() -> Path {
