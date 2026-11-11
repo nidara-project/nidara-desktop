@@ -1587,13 +1587,18 @@ fn pane_of(p: &Placed) -> Pane {
     }
 }
 
-/// A 1×1 is a circle, a 2×1 or 1×2 a capsule, a 2×2 the corner; a 4×1 is not a capsule
-/// but the dock's shape, its corner at the dock's default icon (owner, 2026-11-03).
+/// A 4×1's corner: not a capsule but the dock's shape, its corner at the dock's default
+/// icon (owner, 2026-11-03). The notification cards take it too (owner, 2026-11-10).
+pub(crate) fn wide_radius() -> f64 {
+    crate::geometry::capsule_radius(64.)
+}
+
+/// A 1×1 is a circle, a 2×1 or 1×2 a capsule, a 2×2 the corner; a 4×1 is `wide_radius`.
 fn radius_of(p: &Placed) -> f64 {
     let r = p.rect;
     match p.tile.size {
         Size::Square => SQUARE_RADIUS,
-        Size::FullWidth => crate::geometry::capsule_radius(64.),
+        Size::FullWidth => wide_radius(),
         _ => r[2].min(r[3]) / 2.,
     }
 }

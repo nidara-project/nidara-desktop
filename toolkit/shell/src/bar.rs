@@ -201,10 +201,11 @@ pub struct Bar {
     cc_menu_layer: Option<(nk_wayland::LayerId, [f64; 4])>,
     cc_motion_serial: u32,
     cc_resources_visible: bool,
-    nc: crate::nc::Center,
+    /// The notification centre (#1048): its month, and its view on nk-view.
+    nc: crate::nc::Month,
     nc_open: bool,
+    nc_view: crate::nc_view::View,
     nc_generation: u64,
-    nc_ghost: Option<(nk_wayland::LayerId, Instant, u8)>,
     cc_writer: Option<crate::cc::Writer>,
     cc_auth: Option<crate::ccauth::Auth>,
     cc_paste: Option<(u64, (u64, usize, u64))>,
@@ -296,8 +297,8 @@ impl Bar {
             cc_resources_visible: false,
             nc: Default::default(),
             nc_open: false,
+            nc_view: Default::default(),
             nc_generation: 0,
-            nc_ghost: None,
             cc_writer: None,
             cc_auth: None,
             cc_paste: None,
@@ -447,13 +448,6 @@ impl Bar {
             self.output_height,
             &self.card_pages,
         );
-        if self.nc_open {
-            self.nc.set_history(self.frame.history.clone());
-            self.nc.error = self.frame.nc_error.clone();
-            self.nc
-                .place(self.panel_right(), self.output_height, &self.card_pages);
-            self.cards.extend(self.nc.cards.iter().cloned());
-        }
         if self
             .card_keyboard
             .is_some_and(|id| !self.cards.iter().any(|c| c.target_for(id).is_some()))
@@ -478,7 +472,6 @@ impl Bar {
         self.cards
             .iter()
             .rev()
-            .filter(|c| c.age.is_none() || self.nc_open && inside(self.nc.viewport, p))
             .find_map(|c| c.hit(p).map(|t| (c.banner.instance, c.banner.content, t)))
     }
     fn card_current(&self, instance: u64, content: u64) -> bool {
@@ -963,7 +956,9 @@ impl Bar {
             self.close_popup(w);
             self.end_tray_menu();
             if self.frame.nc_active {
-                self.nc_open = false;
+                if std::mem::take(&mut self.nc_open) {
+                    self.nc_closed(w);
+                }
                 let _ = self.requests.send(crate::hub::Request::CloseNc);
             }
         }
@@ -980,6 +975,87 @@ impl Bar {
         self.refresh(w);
     }
 
+    /// The centre's rect: its cards' right edge where the panels end, its scroll bar's lane
+    /// past it, from under the bar's capsules to the output's foot.
+    fn relayout_nc_view(&mut self, scale: f64) {
+        let right = self.panel_right();
+        let Some(look) = self.look.as_mut() else {
+            return;
+        };
+        if !self.nc_open {
+            self.nc_view.close();
+            return;
+        }
+        let w = crate::notification_card::WIDTH.min((right - 4.).max(1.));
+        let x = right - w;
+        let y = crate::barmodel::TOP + crate::barmodel::CAPSULE_H + crate::cc::HANG;
+        let cards = [x, y, w, (self.output_height as f64 - y - 4.).max(1.)];
+        self.nc_view.refresh(
+            look,
+            self.frame.history.clone(),
+            &self.frame.nc_error,
+            (self.nc.year, self.nc.month),
+            cards,
+            self.width,
+            scale,
+        );
+    }
+    /// What an activation in the centre asks for.
+    fn nc_view_act(&mut self, a: nk_view::Activated, serial: Option<u32>, w: &mut Window) {
+        let Some(act) = self.nc_view.activated(&a) else {
+            return;
+        };
+        match act {
+            crate::nc_view::Act::Card(instance, content, target) => {
+                self.card_activate(instance, content, target, serial, w)
+            }
+            crate::nc_view::Act::Nc(target) => self.nc_act(target, w),
+            crate::nc_view::Act::Rebuild => self.refresh(w),
+            crate::nc_view::Act::Motion => {
+                self.nc_view_tick(w);
+                w.redraw();
+            }
+        }
+    }
+    /// Advances the centre's motion; what a finished swipe or cascade asks for is acted on.
+    fn nc_view_tick(&mut self, w: &mut Window) {
+        let Some(look) = self.look.as_mut() else {
+            return;
+        };
+        let ticked = self.nc_view.tick(&mut look.text);
+        if self.nc_view.stale() {
+            // Scrolled past the rows it built: the view is built again around the window.
+            self.refresh(w);
+        }
+        let Some(t) = ticked else {
+            return;
+        };
+        w.redraw();
+        for a in t.activated {
+            self.nc_view_act(a, None, w);
+        }
+    }
+    fn nc_view_key(&mut self, key: &nk_wayland::Key, w: &mut Window) {
+        use nk_view::KeyInput as K;
+        let input = match key.sym {
+            0xff09 if key.shift => K::ShiftTab,
+            0xff09 => K::Tab,
+            0xfe20 => K::ShiftTab,
+            0xff0d | 0xff8d | 0x20 => K::Activate,
+            0xff55 => K::PageUp,
+            0xff56 => K::PageDown,
+            0xff50 if key.ctrl => K::Home,
+            0xff57 if key.ctrl => K::End,
+            _ => return,
+        };
+        let activated = self.nc_view.key(input);
+        self.nc_view_tick(w);
+        w.redraw();
+        self.publish_semantics(w);
+        if let Some(a) = activated {
+            self.nc_view_act(a, key.serial, w);
+        }
+    }
     fn toggle_nc(&mut self, w: &mut Window) {
         if self.frame.locked {
             return;
@@ -987,12 +1063,8 @@ impl Bar {
         // Close locally at once; opening waits for the hub's chosen output/generation.
         if self.nc_open {
             self.nc_open = false;
-            self.nc.clearing = false;
             self.card_keyboard = None;
-            self.nc.focus = None;
-            if let Some((layer, _, _)) = self.nc_ghost.take() {
-                let _ = w.destroy_layer(layer);
-            }
+            self.nc_closed(w);
             if self.card_pending.as_ref().is_some_and(|p| p.1 >= 1 << 32)
                 && let Some((request, _, _, _)) = self.card_pending.take()
             {
@@ -1006,6 +1078,12 @@ impl Bar {
             output: Some(self.name.clone()),
         });
         self.refresh(w);
+    }
+    /// The centre closed: a clear still flinging its cards is carried out at once, as TS did.
+    fn nc_closed(&mut self, w: &mut Window) {
+        if let Some(target) = self.nc_view.close() {
+            self.nc_act(target, w);
+        }
     }
     fn nc_act(&mut self, target: crate::nc::Target, w: &mut Window) {
         if let Some(group) = self.nc.change(&target) {
@@ -1025,130 +1103,7 @@ impl Bar {
             self.toggle_nc(w);
             return;
         }
-        if key.sym == 0xff55 || key.sym == 0xff56 {
-            self.nc
-                .scroll(self.nc.viewport[3] * if key.sym == 0xff55 { -0.8 } else { 0.8 });
-            self.refresh(w);
-            return;
-        }
-        let mut ids: Vec<_> = self.nc.controls.iter().map(|c| c.id).collect();
-        ids.extend(self.cards.iter().flat_map(|c| {
-            std::iter::once(c.node_id())
-                .chain((0..c.buttons.len()).map(|i| c.node_id() + 1 + i as u64))
-        }));
-        if matches!(key.sym, 0xff09 | 0xfe20) && !ids.is_empty() {
-            let old = self.nc.focus.or(self.card_keyboard);
-            let at = ids.iter().position(|id| Some(*id) == old);
-            let next = at.map_or(
-                if key.shift || key.sym == 0xfe20 {
-                    ids.len() - 1
-                } else {
-                    0
-                },
-                |i| {
-                    if key.shift || key.sym == 0xfe20 {
-                        (i + ids.len() - 1) % ids.len()
-                    } else {
-                        (i + 1) % ids.len()
-                    }
-                },
-            );
-            let id = ids[next];
-            if self.nc.control(id).is_some() {
-                self.nc.focus = Some(id);
-                self.card_keyboard = None;
-            } else {
-                self.card_keyboard = Some(id);
-                if let Some(c) = self.cards.iter().find(|c| c.target_for(id).is_some()) {
-                    self.nc.reveal(c.banner.instance);
-                }
-                self.nc.focus = None;
-            }
-            self.refresh(w);
-        } else if matches!(key.sym, 0xff0d | 0x20) {
-            if let Some(t) = self.nc.focus.and_then(|id| self.nc.control(id)) {
-                self.nc_act(t, w);
-            } else if let Some((instance, content, target)) = self.card_keyboard.and_then(|id| {
-                self.cards.iter().find_map(|c| {
-                    c.target_for(id)
-                        .map(|t| (c.banner.instance, c.banner.content, t))
-                })
-            }) {
-                self.card_activate(instance, content, target, key.serial, w);
-            }
-        }
-    }
-    fn finish_nc_clear(&mut self, w: &mut Window) {
-        crate::icon_metrics::emit(
-            "nc-clear-finished",
-            serde_json::json!({"stage":self.nc_ghost.map(|(_,_,s)|s),"elapsed_us":self.nc_ghost.map(|(_,t,_)|t.elapsed().as_micros())}),
-        );
-        if let Some((layer, _, _)) = self.nc_ghost.take() {
-            let _ = w.destroy_layer(layer);
-        }
-        self.nc.clearing = false;
-        self.refresh(w);
-    }
-    fn nc_clear_animation(
-        &mut self,
-        next: &Arc<Vec<crate::notifications::Banner>>,
-        w: &mut Window,
-    ) {
-        if !self.nc_open || Arc::ptr_eq(next, &self.frame.history) || !w.supports_layers() {
-            return;
-        }
-        let mut cards: Vec<_> = self
-            .cards
-            .iter()
-            .filter(|c| c.age.is_some() && !next.iter().any(|b| b.instance == c.banner.instance))
-            .cloned()
-            .collect();
-        if cards.is_empty() {
-            return;
-        }
-        crate::icon_metrics::emit(
-            "nc-clear-capture",
-            serde_json::json!({"visible":cards.len()}),
-        );
-        let r = self.nc.viewport;
-        for c in &mut cards {
-            c.translate(-r[0], -r[1]);
-        }
-        let Some(look) = self.look.as_mut() else {
-            return;
-        };
-        let result = (|| -> nk_wayland::Result<nk_wayland::LayerId> {
-            let layer = w.create_layer((r[2].ceil().max(1.) as u32, r[3].ceil().max(1.) as u32))?;
-            w.set_layer_input_region(layer, Some(&[]))?;
-            w.set_position(layer, r[0], r[1])?;
-            let art = crate::notification_card::Artwork {
-                theme: &self.frame.notification_theme,
-                catalogue: &self.frame.catalogue,
-                namespace: &self.name,
-                scale: w.scale(),
-            };
-            w.paint_layer(layer, |f| {
-                let mut c = Canvas::new(f.pixel_width, f.pixel_height, f.scale);
-                for card in &cards {
-                    card.paint(&mut c, look, true, &art)?;
-                }
-                Ok(c.finish())
-            })?;
-            w.set_opacity(layer, 1.)?;
-            w.redraw();
-            Ok(layer)
-        })();
-        match result {
-            Ok(layer) => {
-                if let Some((old, _, _)) = self.nc_ghost.take() {
-                    let _ = w.destroy_layer(old);
-                }
-                // The first commit establishes opacity 1; idle arms the compositor transition.
-                self.nc_ghost = Some((layer, Instant::now(), 0));
-                self.nc.clearing = true;
-            }
-            Err(e) => eprintln!("nidara-shell: clear animation: {e}"),
-        }
+        self.nc_view_key(key, w);
     }
     /// A Control Center act, to its service off the bar's thread.
     fn act(&mut self, act: crate::cc::Act, w: &mut Window) {
@@ -1552,6 +1507,7 @@ impl Bar {
         }
 
         self.relayout();
+        self.relayout_nc_view(w.scale());
         let viewport = self.cc.editor.viewport;
         let resources = self.cc_open
             && self.cc.detail.is_none()
@@ -1606,10 +1562,12 @@ impl Bar {
             n.states.expanded = self.nc_open;
         }
         if self.nc_open {
-            self.nc.semantics(&mut tree);
+            let centre = self.nc_view.semantics(crate::nc::PANEL + 1);
             if let Some(root) = tree.nodes.get_mut(&tree.root) {
+                root.children.push(centre.root);
                 root.states.active = self.card_keyboard_active;
             }
+            tree.nodes.extend(centre.nodes);
         }
         if self.cc_open {
             let panel = self.cc.panel();
@@ -1646,44 +1604,7 @@ impl Bar {
                 root.states.hidden = false;
             }
             for c in &self.cards {
-                let root = tree.root;
-                if c.age.is_some() {
-                    tree.root = crate::nc::PANEL;
-                }
                 c.semantics(&mut tree);
-                tree.root = root;
-                if c.age.is_some() {
-                    let ids = std::iter::once(c.node_id())
-                        .chain((0..c.buttons.len()).map(|i| c.node_id() + 1 + i as u64));
-                    for id in ids {
-                        if let Some(n) = tree.nodes.get_mut(&id) {
-                            let b = n.bounds;
-                            let r = crate::nc::intersection(
-                                [b.x, b.y, b.width, b.height],
-                                self.nc.viewport,
-                            );
-                            n.bounds = Bounds {
-                                x: r[0],
-                                y: r[1],
-                                width: r[2],
-                                height: r[3],
-                            };
-                            n.states.offscreen = r[2] == 0. || r[3] == 0.;
-                            if n.states.offscreen {
-                                n.actions = vec![Action::Focus];
-                            }
-                        }
-                    }
-                }
-            }
-            if self.nc_open
-                && let Some(id) = self.nc.focus
-                && let Some(n) = tree.nodes.get_mut(&id)
-            {
-                n.states.focused = true;
-                if let Some(root) = tree.nodes.get_mut(&tree.root) {
-                    root.states.active = self.card_keyboard_active;
-                }
             }
             if let Some(id) = self.card_keyboard.filter(|_| self.card_keyboard_active) {
                 if let Some(n) = tree.nodes.get_mut(&id) {
@@ -1790,11 +1711,11 @@ impl Bar {
         let requests: Vec<_> = rx.try_iter().collect();
         for (revision, request) in requests {
             if revision != self.revision {
-                // A header remains the same command while cards arrive. Its id is
-                // retired on every view/owner change, independently of tree revisions.
+                // A centre's control keeps its id while cards arrive (ids stay with their
+                // keys), so a request made against an older tree still names it.
                 let current_nc = match &request {
                     nk_a11y::Request::Activate(id) | nk_a11y::Request::Focus(id) => {
-                        self.nc_open && self.nc.control(*id).is_some()
+                        self.nc_open && self.nc_view.knows(*id)
                     }
                     _ => false,
                 };
@@ -1873,14 +1794,15 @@ impl Bar {
             };
             let activate = matches!(request, nk_a11y::Request::Activate(_));
             if self.nc_open
-                && let Some(target) = self.nc.control(id)
+                && let Some(answer) = self.nc_view.request(id, activate)
             {
-                if activate {
-                    self.nc_act(target, w);
-                } else {
-                    self.nc.focus = Some(id);
-                    self.card_keyboard = None;
-                    self.refresh(w);
+                match answer {
+                    Some(a) => self.nc_view_act(a, None, w),
+                    None => {
+                        self.nc_view_tick(w);
+                        w.redraw();
+                        self.publish_semantics(w);
+                    }
                 }
                 continue;
             }
@@ -1892,8 +1814,6 @@ impl Bar {
                     self.card_activate(instance, content, target, None, w);
                 } else {
                     self.card_keyboard = Some(id);
-                    self.nc.reveal(instance);
-                    self.nc.focus = None;
                     self.card_hover(Some(instance));
                     self.refresh(w);
                 }
@@ -2138,27 +2058,14 @@ fn rect(r: [f64; 4]) -> Rect {
 
 impl Application for Bar {
     fn poll_interval_ms(&self) -> u32 {
-        match self.nc_ghost {
-            Some((_, start, 2)) => (crate::nc::CLEAR_MS + 50)
-                .saturating_sub(start.elapsed().as_millis().min(u32::MAX as u128) as u32)
-                .clamp(1, 1000),
-            Some(_) => 8,
-            None => 1000,
+        if self.nc_open && self.nc_view.animating() {
+            8
+        } else {
+            1000
         }
     }
     fn event(&mut self, event: Event, w: &mut Window) -> nk_wayland::Result<()> {
         match event {
-            Event::Layer {
-                id,
-                event:
-                    nk_wayland::LayerEvent::Done { serial: 1, .. }
-                    | nk_wayland::LayerEvent::Cancelled { serial: 1 },
-            } if self
-                .nc_ghost
-                .is_some_and(|(layer, _, stage)| layer == id && stage == 2) =>
-            {
-                self.finish_nc_clear(w)
-            }
             Event::Configure => {
                 self.width = f64::from(w.size().0);
                 if !self.tried_look {
@@ -2186,30 +2093,24 @@ impl Application for Bar {
                     }
                 }
                 if let Some(f) = latest {
-                    self.nc_clear_animation(&f.history, w);
                     if f.nc_generation != self.nc_generation {
                         self.nc_generation = f.nc_generation;
-                        self.nc.retire_view();
+                        let was_open = self.nc_open;
                         self.nc_open = f.nc_open && !f.locked;
+                        if was_open && !self.nc_open {
+                            self.nc_closed(w);
+                        }
                         if f.nc_active && self.cc_open {
                             self.toggle_cc(w);
                         }
                         if self.nc_open {
                             self.close_popup(w);
                             self.end_tray_menu();
-                        } else {
-                            self.nc.clearing = false;
-                            if let Some((layer, _, _)) = self.nc_ghost.take() {
-                                let _ = w.destroy_layer(layer);
-                            }
                         }
                     }
-                    if f.locked {
+                    if f.locked && self.nc_open {
                         self.nc_open = false;
-                        self.nc.focus = None;
-                        if let Some((layer, _, _)) = self.nc_ghost.take() {
-                            let _ = w.destroy_layer(layer);
-                        }
+                        self.nc_closed(w);
                     }
                     self.frame = f;
                     if self.frame.output_size.1 > 0 {
@@ -2248,7 +2149,7 @@ impl Application for Bar {
             Event::Motion(x, y) => {
                 self.pointer = (x, y);
                 self.pointer_inside = true;
-                if self.nc_open && self.nc.motion((x, y)) {
+                if self.nc_open && self.nc_view.state.pointer_motion(x, y) {
                     w.redraw();
                 }
                 self.card_hover(self.card_at((x, y)).map(|(id, _, _)| id));
@@ -2274,7 +2175,9 @@ impl Application for Bar {
             }
             Event::PointerLeave => {
                 self.pointer_inside = false;
-                self.nc.hover = None;
+                if self.nc_view.state.pointer_leave() {
+                    w.redraw();
+                }
                 self.card_hover(None);
                 self.card_press = None;
                 let cc = self.cc.leave();
@@ -2301,10 +2204,9 @@ impl Application for Bar {
                         start: p,
                         serial,
                     });
-                } else if self.nc_open && self.nc.contains(p) {
-                    if let Some(target) = self.nc.hit(p) {
-                        self.nc_act(target, w);
-                    }
+                } else if self.nc_open && self.nc_view.contains(p) {
+                    self.nc_view.state.button(true, Instant::now());
+                    w.redraw();
                 } else if self.cc_open && self.cc.contains(p) {
                     if let Some(act) = self.cc.press(p, &self.frame.status) {
                         self.act(act, w);
@@ -2328,8 +2230,16 @@ impl Application for Bar {
             Event::Button {
                 button: LEFT_BUTTON,
                 pressed: false,
+                serial,
                 ..
             } => {
+                if self.nc_open {
+                    let activated = self.nc_view.state.button(false, Instant::now());
+                    w.redraw();
+                    if let Some(a) = activated {
+                        self.nc_view_act(a, Some(serial), w);
+                    }
+                }
                 if let Some(CardPress {
                     instance,
                     content,
@@ -2495,10 +2405,13 @@ impl Application for Bar {
                     self.tray_click(i, button, Some(serial), w);
                 }
             }
-            Event::Scroll(nk_wayland::ScrollAmount { pixels: delta, .. }) => {
+            Event::Scroll(amount) => {
+                let delta = amount.pixels;
                 if self.nc_open {
-                    self.nc.scroll(delta * 32.);
-                    self.refresh(w);
+                    if self.nc_view.scroll(amount.into()) {
+                        self.nc_view_tick(w);
+                        self.publish_semantics(w);
+                    }
                 } else if self.cc_open && self.cc.scroll_detail(delta, &self.frame.status) {
                     self.refresh(w);
                 } else {
@@ -2619,38 +2532,15 @@ impl Application for Bar {
 
     fn idle(&mut self, w: &mut Window) -> nk_wayland::Result<()> {
         self.auth_events(w);
-        if let Some((layer, start, stage)) = self.nc_ghost {
-            if stage == 2
-                && start.elapsed()
-                    >= std::time::Duration::from_millis(crate::nc::CLEAR_MS as u64 + 50)
-            {
-                crate::icon_metrics::emit("nc-clear-fallback", serde_json::json!({}));
-                self.finish_nc_clear(w);
-            } else if stage == 1 {
-                crate::icon_metrics::emit("nc-clear-armed", serde_json::json!({}));
-                let _ = w.set_transition(
-                    layer,
-                    nk_wayland::Property::Opacity,
-                    1,
-                    nk_wayland::Curve::Bezier {
-                        x1: 0.2,
-                        y1: 0.,
-                        x2: 0.2,
-                        y2: 1.,
-                        duration_ms: crate::nc::CLEAR_MS,
-                    },
-                );
-                let _ = w.set_opacity(layer, 0.);
-                self.nc_ghost = Some((layer, Instant::now(), 2));
-                // The pending child state commits without repainting the root.
-            }
+        if self.nc_open {
+            self.nc_view_tick(w);
         }
         let minute = std::time::SystemTime::now()
             .duration_since(std::time::UNIX_EPOCH)
             .unwrap_or_default()
             .as_secs()
             / 60;
-        if self.nc_open && minute != self.nc.minute {
+        if self.nc_open && minute != self.nc_view.minute {
             self.refresh(w);
         }
         if self
@@ -2784,8 +2674,22 @@ impl Application for Bar {
             self.cc.paint(&mut c, look, &self.frame.status, fallback)?;
         }
         if self.nc_open {
-            self.nc
-                .paint(&mut c, self.look.as_mut().unwrap(), f.material)?;
+            let icons = &mut self.icons;
+            let mut glyph = |name: &str, size: f64| {
+                if name.is_empty() {
+                    return None;
+                }
+                icons.as_mut()?.get(name, size.round() as u32).ok()
+            };
+            let art = crate::notification_card::Artwork {
+                theme: &self.frame.notification_theme,
+                catalogue: &self.frame.catalogue,
+                namespace: &self.name,
+                scale: f.scale,
+            };
+            if let Err(e) = self.nc_view.paint(&mut c, &mut glyph, &art, f.material) {
+                eprintln!("nidara-shell: the NC view cannot be drawn: {e}");
+            }
         }
         // The dots, centred in the island's capsule.
         if !self.frame.hidden {
@@ -2804,13 +2708,10 @@ impl Application for Bar {
         }
         let look = self.look.as_mut().unwrap();
         for card in &self.cards {
-            if card.age.is_some() {
-                c.clip(rect(self.nc.viewport));
-            }
             card.paint(
                 &mut c,
                 look,
-                f.material || card.age.is_some(),
+                f.material,
                 &crate::notification_card::Artwork {
                     theme: &self.frame.notification_theme,
                     catalogue: &self.frame.catalogue,
@@ -2818,13 +2719,6 @@ impl Application for Bar {
                     scale: f.scale,
                 },
             )?;
-            if card.age.is_some() {
-                c.pop_clip();
-            }
-        }
-        if let Some((layer, _, 0)) = self.nc_ghost {
-            crate::icon_metrics::emit("nc-clear-first-commit", serde_json::json!({}));
-            self.nc_ghost = Some((layer, Instant::now(), 1));
         }
         Ok(c.finish())
     }
@@ -2851,16 +2745,14 @@ impl Application for Bar {
                 pointer: None,
             })
             .collect();
-        let cards: Vec<_> = self
-            .cards
-            .iter()
-            .filter(|c| c.age.is_none())
-            .map(|c| c.pane())
-            .collect();
+        let cards: Vec<_> = self.cards.iter().map(|c| c.pane()).collect();
         if self.frame.hidden {
             panes = cards.clone();
-            if self.nc_open {
-                panes.push(self.nc.pane());
+            if self.nc_open && panes.is_empty() {
+                panes.extend(self.nc_view.first_pane());
+            }
+            if panes.is_empty() {
+                return None;
             }
         }
         let tokens = self.frame.tokens.as_ref()?;
@@ -2906,19 +2798,12 @@ impl Application for Bar {
                 "controlCenter",
                 true,
                 self.frame.reduce_transparency,
-                self.nc.pane(),
+                material.shapes[0],
             )
         {
-            if !self.frame.hidden {
-                material.groups.push(nk_wayland::Group {
-                    clip: None,
-                    opacity: 1.,
-                    tone: nc.tone,
-                    shadow: nc.shadow,
-                    shapes: vec![self.nc.pane()],
-                });
-            }
-            material.states.extend(self.nc.states());
+            let (groups, states) = self.nc_view.glass(nc.tone, nc.shadow);
+            material.groups.extend(groups);
+            material.states.extend(states);
         }
         Some(material)
     }
@@ -2962,10 +2847,6 @@ pub fn run(bar: Bar, output: LayerOutput, wake: WakeSource) -> nk_wayland::Resul
         Some(wake),
         Instant::now(),
     )
-}
-
-fn inside(r: [f64; 4], p: (f64, f64)) -> bool {
-    p.0 >= r[0] && p.0 < r[0] + r[2] && p.1 >= r[1] && p.1 < r[1] + r[3]
 }
 
 impl Drop for Bar {

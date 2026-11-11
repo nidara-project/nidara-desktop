@@ -50,9 +50,8 @@ before changing history, hydration, bulk dismissal, restoration or retention.
 History snapshots have a sequence barrier; never replay them as fresh banners.
 Notification store errors must not stop sessiond or live delivery/dismissal.
 Preserve damaged input, log write outages once and compact the live model on recovery.
-Only viewport cards are built. Hyalo applies eight positive washes per pane:
-reserve that budget for today, navigation, hover and focus, rather than declaring
-rest washes on every row of one large pane.
+Only viewport cards are built. The NC is drawn by `nc_view.rs` on nk-view: one
+pane per card, so each card has Hyalo's eight washes to itself (#1048).
 Notification ownership is signal-driven; do not add idle GetNameOwner polling.
 Sender expiry is presentation-only for ordinary records; transient records expire with their banner. Token actions are
 revision checked and directed to the sender. App/place/tray/banner artwork uses one process-wide
@@ -336,7 +335,11 @@ closes in place, moved panes slide, and a `swipe(action)` control is swiped off 
 only the rows inside `window(key)` (placeholders for the rest), keeps what is read in place on a
 rebuild, and draws the kit's one scroll bar (`nk-widgets` `ScrollBar`, shared with Settings). An `Overlay` places layers (a card's floating close) over a base without changing its size. Panes are declared whole,
 with their clip and their content's opacity. A pane never declares more than Hyalo's eight lit
-washes, and every other shown control is declared at rest so its hover fades in. The NC is the first consumer.
+washes, and every other shown control is declared at rest so its hover fades in. `layout_in`
+lays a view in part of its surface; `semantic_keys` + `request` answer a reader; `cascade` flings
+several cards off in turn and reports once. The NC is the first consumer and the only NC:
+`toolkit/shell/src/nc_view.rs` (#1048), separate glass cards with the calendar as one more;
+`nc.rs` keeps only the month shown, the bulk-dismissal targets and the age and group names.
 
 ### Applications1 catalogue and native dock pins
 

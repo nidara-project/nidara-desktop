@@ -125,6 +125,14 @@ impl Canvas {
         self.context
             .stroke_path(&corner_path(bounds, (radius - inset).max(0.), self.scale));
     }
+    /// Everything painted until `pop_opacity` is composited as one layer at `alpha`, so a
+    /// picture fades with what it belongs to.
+    pub fn push_opacity(&mut self, alpha: f64) {
+        self.context.push_opacity_layer(alpha.clamp(0., 1.) as f32);
+    }
+    pub fn pop_opacity(&mut self) {
+        self.context.pop_layer();
+    }
     pub fn clip(&mut self, r: Rect) {
         self.context.push_clip_rect(&rect(r));
     }
