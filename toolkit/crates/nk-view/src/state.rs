@@ -1407,6 +1407,14 @@ impl ViewState {
         self.focus = None;
         self.focus_visible = false;
     }
+    /// Whether the focus shows its ring: it came from the keyboard.
+    pub fn focus_visible(&self) -> bool {
+        self.focus.is_some() && self.focus_visible
+    }
+    /// The focus stays where it is without its ring, as when the pointer put it there.
+    pub fn hide_ring(&mut self) {
+        self.focus_visible = false;
+    }
 
     /// A reader's request on a control: focus moves to it (scrolled into view, its ring
     /// shown), or it is activated. A disabled or absent control does nothing.

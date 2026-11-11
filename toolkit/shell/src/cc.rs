@@ -115,8 +115,9 @@ pub struct Cc {
     appearance: Option<nk_settings::portal::Appearance>,
     /// The frame last painted: the washes Hyalo is given.
     last: nk_view::Frame,
-    /// The tile to focus once the grid is laid out again (back from a detail).
-    refocus: Option<Target>,
+    /// The tile to focus once the grid is laid out again (back from a detail), and whether
+    /// it shows the ring: only when the keyboard went back.
+    refocus: Option<(Target, bool)>,
     icons: Option<nk_icons::Icons>,
     glyphs: HashMap<(String, u32), Option<Arc<nk_icons::Icon>>>,
     /// The cover being shown and its picture.
@@ -226,8 +227,11 @@ impl Cc {
             text,
             std::time::Instant::now(),
         );
-        if let Some(t) = self.refocus.take() {
+        if let Some((t, ring)) = self.refocus.take() {
             self.focus(t);
+            if !ring {
+                self.state.hide_ring();
+            }
         }
     }
 
@@ -247,7 +251,17 @@ impl Cc {
     pub fn view_id(&self) -> u64 {
         self.detail_generation
     }
+    /// Back from a detail or edit mode, the ring on the tile it returns to as its page's own
+    /// focus had it: a Back row pressed with the keyboard shows it, with the pointer not.
     pub fn back(&mut self) -> bool {
+        let keyboard = self
+            .detail
+            .as_ref()
+            .is_some_and(|d| d.state.focus_visible());
+        self.back_by(keyboard)
+    }
+    /// Back, `keyboard` saying whether a key asked (Escape) or not (the panel closing).
+    pub fn back_by(&mut self, keyboard: bool) -> bool {
         if self.editor.active {
             self.state.blur();
             self.editor.toggle();
@@ -257,7 +271,7 @@ impl Cc {
         if let Some(detail) = detail {
             self.detail_generation += 1;
             self.editor.focus = None;
-            self.refocus = Some(Target::OpenDetail(detail.page));
+            self.refocus = Some((Target::OpenDetail(detail.page), keyboard));
             true
         } else {
             false
@@ -2511,11 +2525,20 @@ mod tests {
         let Some((mut cc, _)) = laid(&s, &Default::default()) else {
             return;
         };
+        // The pointer pressed Back: the tile has the focus, without its ring.
         cc.open_detail("screenshot", &s, None);
         assert!(cc.back());
         cc.place(1916., 36., &s, &Default::default(), None);
         relaid(&mut cc, &s);
         assert_eq!(cc.focused(), Some(Target::OpenDetail("screenshot")));
+        assert!(!cc.state.focus_visible());
+        // Escape: with it.
+        cc.open_detail("screenshot", &s, None);
+        assert!(cc.back_by(true));
+        cc.place(1916., 36., &s, &Default::default(), None);
+        relaid(&mut cc, &s);
+        assert_eq!(cc.focused(), Some(Target::OpenDetail("screenshot")));
+        assert!(cc.state.focus_visible());
     }
 
     #[test]

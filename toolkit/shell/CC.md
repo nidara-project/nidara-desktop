@@ -74,6 +74,8 @@ pointer toggles and Tab and readers still reach the detail.
   leaves the grid, unless it holds a slider.
 - **Tab** follows the readers' order: the Edit button, then each tile's primary control,
   its player buttons, then its Details entry.
+- **Back** from a detail focuses the tile that opened it; its ring shows only when a key
+  went back (Escape, or the Back row pressed with the keyboard), never after the pointer.
 - What is neither text nor glyph is painted in slots: covers, the battery, the resource
   rings with their numbers, and a slider's value as it moves (dark over a 1×2's fill).
 - The reader tree is still built by hand with the same ids and names; its bounds and

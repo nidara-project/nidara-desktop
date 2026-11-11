@@ -966,7 +966,7 @@ impl Bar {
         self.cc_open = open;
         self.cc.cancel();
         if !open {
-            self.cc.back();
+            self.cc.back_by(false);
             self.cc.editor.close();
         }
         let _ = self.requests.send(crate::hub::Request::NotificationPanel {
@@ -2385,7 +2385,7 @@ impl Application for Bar {
                 if self.cc.editor.active {
                     self.cc.key(&key, &self.frame.status);
                     self.refresh(w);
-                } else if self.cc.back() {
+                } else if self.cc.back_by(true) {
                     self.refresh(w);
                 } else {
                     self.toggle_cc(w);
