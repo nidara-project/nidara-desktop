@@ -537,6 +537,9 @@ on or off.
 - **It moves.** A switch whose `on` changes between two views slides its thumb and blends its
   track over the motion tokens' `base` with `ease`, the same both ways, from wherever it is
   (§6); seen for the first time, or with reduced motion, it is at its state at once.
+  Like a reveal, it moves only while the surface calls `tick` as long as `animating()`: a
+  surface that never ticks leaves it at the start of its slide until something else lays it
+  out (the CC's detail pages did, at first).
 
 Not carried, as in the native switch: the kit's inset shadow, the checked glow and the thumb's
 drop shadow (`nk-render` draws no shadows yet).

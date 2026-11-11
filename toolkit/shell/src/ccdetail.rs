@@ -622,6 +622,25 @@ impl Detail {
             rect: [r[0] as i32, r[1] as i32, 1, r[3].ceil() as i32],
         }
     }
+    /// Whether something in the page still moves (a switch sliding, the scroll bar fading):
+    /// the bar keeps calling `tick` while it does.
+    pub fn animating(&self) -> bool {
+        self.state.animating()
+    }
+    /// A frame of motion; true when anything changed and the page must be drawn again.
+    pub fn tick(&mut self, text: &mut dyn nk_text::TextBackend) -> bool {
+        self.tick_at(text, std::time::Instant::now())
+    }
+    fn tick_at(&mut self, text: &mut dyn nk_text::TextBackend, now: std::time::Instant) -> bool {
+        let Some(tokens) = self.tokens.as_ref() else {
+            return false;
+        };
+        if !self.state.animating() {
+            return false;
+        }
+        self.state.tick(tokens, text, now);
+        true
+    }
     pub fn scroll(&mut self, by: nk_view::ScrollBy) -> bool {
         self.state.scroll(by)
     }
@@ -1861,6 +1880,48 @@ mod tests {
                 assert!(d.offset() > 0.);
             }
         }
+    }
+    #[test]
+    fn a_switch_the_service_turned_on_slides_there_as_the_page_is_ticked() {
+        let mut d = Detail::new("night_light", 1);
+        let mut s = status();
+        s.night = Some(crate::status::Night {
+            enabled: false,
+            temperature: 4000,
+        });
+        if !laid(&mut d, &s, [0., 50., 396., 400.]) {
+            return;
+        }
+        let id = d.rows[1].id;
+        let progress = |d: &Detail| {
+            let key = format!("r{id}/switch").into();
+            match d
+                .state
+                .placed()
+                .iter()
+                .find(|p| p.key == key)
+                .map(|p| &p.what)
+            {
+                Some(nk_view::What::Switch { progress, .. }) => *progress,
+                w => panic!("no switch: {w:?}"),
+            }
+        };
+        assert_eq!(progress(&d), 0.);
+        assert!(!d.animating());
+        s.night = Some(crate::status::Night {
+            enabled: true,
+            temperature: 4000,
+        });
+        laid(&mut d, &s, [0., 50., 396., 400.]);
+        assert!(d.animating(), "the bar must keep ticking the page");
+        let mut text =
+            nk_text::ParleyBackend::new(Arc::new(nk_text::FontSet::discover_required().unwrap()))
+                .unwrap();
+        let later = std::time::Instant::now() + std::time::Duration::from_secs(1);
+        assert!(d.tick_at(&mut text, later), "a frame to draw");
+        assert_eq!(progress(&d), 1., "on, once ticked");
+        assert!(!d.animating());
+        assert!(!d.tick_at(&mut text, later), "nothing left to draw");
     }
     #[test]
     fn a_slider_action_is_explicit_and_clamped_and_mode_changes_have_no_effect() {
