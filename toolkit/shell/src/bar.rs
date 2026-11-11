@@ -2525,6 +2525,9 @@ impl Application for Bar {
             }
             if let Some(d) = &mut self.cc.detail {
                 d.error = result.clone().err().unwrap_or_default();
+                if result.is_err() {
+                    d.write_failed();
+                }
             }
             self.refresh(w);
         }
@@ -2551,6 +2554,10 @@ impl Application for Bar {
             && d.tick(&mut look.text)
         {
             w.redraw();
+        }
+        if self.cc_open && self.cc.detail.as_ref().is_some_and(|d| d.pending_due()) {
+            // A switch the service never confirmed goes back to what the service says.
+            self.refresh(w);
         }
         let minute = std::time::SystemTime::now()
             .duration_since(std::time::UNIX_EPOCH)

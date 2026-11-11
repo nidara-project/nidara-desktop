@@ -83,6 +83,19 @@ impl Action {
             _ => return None,
         })
     }
+    /// The same switch action, asking for `on`: what a click on a switch the user has just
+    /// moved sends next, whatever the service last said.
+    fn toward(self, on: bool) -> Self {
+        match self {
+            Self::WiredPower(device, _) => Self::WiredPower(device, on),
+            Self::WifiPower(_) => Self::WifiPower(on),
+            Self::BluetoothPower(adapter, _) => Self::BluetoothPower(adapter, on),
+            Self::Pref(key, crate::menu::PrefValue::Bool(_)) => {
+                Self::Pref(key, crate::menu::PrefValue::Bool(on))
+            }
+            other => other,
+        }
+    }
     pub fn connects(&self) -> bool {
         match self {
             Self::Connect { .. } | Self::Activate(_) => true,
@@ -197,7 +210,13 @@ pub struct Detail {
     appearance: Option<nk_platform::portal::Appearance>,
     /// What the last painted frame declared: `states` reads it after `paint`.
     last: nk_view::Frame,
+    /// Switches the user moved, by row key: the state asked for and when. A switch shows it,
+    /// and its next click asks for the other, until the service reports it or `PENDING`
+    /// passes (VIEW.md §12.6); a stale snapshot never turns a click into a repeat.
+    pending: HashMap<String, (bool, std::time::Instant)>,
 }
+/// How long a switch shows what was asked for without the service confirming it.
+const PENDING: std::time::Duration = std::time::Duration::from_secs(6);
 /// The view's scroll region: the rows past the output's height scroll.
 const LIST: &str = "list";
 /// Ids for the view's few regions, under the CC's other washes.
@@ -247,6 +266,7 @@ impl Detail {
             tokens: None,
             appearance: None,
             last: nk_view::Frame::default(),
+            pending: HashMap::new(),
         }
     }
     /// The rows for `status`, laid out in `panel` when the look is there (without it, as in
@@ -348,7 +368,31 @@ impl Detail {
                 self.next_id
             });
         }
+        let now = std::time::Instant::now();
+        for row in rows.iter_mut().filter(|r| r.switch) {
+            let (Some(truth), Some(&(want, at))) = (row.checked, self.pending.get(&row.key)) else {
+                continue;
+            };
+            if truth == want || now.saturating_duration_since(at) >= PENDING {
+                self.pending.remove(&row.key);
+            } else if row.action.is_some() {
+                row.checked = Some(want);
+                row.action = row.action.take().map(|a| a.toward(!want));
+            }
+        }
         self.rows = rows;
+    }
+    /// A switch waits past `PENDING` for its service: the page must be built again to show
+    /// what the service says.
+    pub fn pending_due(&self) -> bool {
+        let now = std::time::Instant::now();
+        self.pending
+            .values()
+            .any(|&(_, at)| now.saturating_duration_since(at) >= PENDING)
+    }
+    /// A write failed: no switch keeps showing what it asked for.
+    pub fn write_failed(&mut self) {
+        self.pending.clear();
     }
 
     /// The view: one control per row, in a region that scrolls when the output is short.
@@ -701,6 +745,12 @@ impl Detail {
         let row = self.rows.iter().find(|r| r.id == id)?;
         let mut a = row.action.clone()?;
         let owner = row.owner.clone();
+        if row.switch
+            && let Some(on) = row.checked
+        {
+            self.pending
+                .insert(row.key.clone(), (!on, std::time::Instant::now()));
+        }
         if let Some((min, max, current)) = row.value {
             let v = value.unwrap_or(current).clamp(min, max);
             a = match a {
@@ -1954,6 +2004,53 @@ mod tests {
         assert_ne!(cc.detail.as_ref().unwrap().audio, before);
         // A release that held nothing changes nothing.
         assert_eq!(cc.release(&s), (false, None));
+    }
+    #[test]
+    fn a_switch_shows_what_was_asked_and_never_repeats_it_on_a_stale_snapshot() {
+        let s = status(); // Wi-Fi on, and the service has not answered yet.
+        let mut d = Detail::new("wifi", 1);
+        d.refresh(&s, [0., 50., 396., 400.], None);
+        let power = |d: &Detail| {
+            d.rows
+                .iter()
+                .find(|r| matches!(r.label, Label::Key("cc.wifi.name")))
+                .unwrap()
+                .clone()
+        };
+        let id = power(&d).id;
+        assert_eq!(d.action(id, None), Some(Action::WifiPower(false)));
+        d.refresh(&s, d.panel, None);
+        assert_eq!(power(&d).checked, Some(false), "shows off at once");
+        // Clicked again before the service answered: on, not off a second time.
+        assert_eq!(d.action(id, None), Some(Action::WifiPower(true)));
+        d.refresh(&s, d.panel, None);
+        assert_eq!(power(&d).checked, Some(true));
+        assert!(d.pending.is_empty(), "the service already says on");
+        // Off again; the service confirms it: nothing is pending any more.
+        assert_eq!(d.action(id, None), Some(Action::WifiPower(false)));
+        let mut off = s.clone();
+        let mut n = (**off.details.network.as_ref().unwrap()).clone();
+        n["wirelessEnabled"] = json!(false);
+        off.apply(crate::status::Update::Network(Arc::new(n)));
+        d.refresh(&off, d.panel, None);
+        assert!(d.pending.is_empty());
+        assert_eq!(power(&d).checked, Some(false));
+        // Never confirmed: after PENDING the switch shows what the service says.
+        assert_eq!(d.action(id, None), Some(Action::WifiPower(true)));
+        assert!(!d.pending_due());
+        for v in d.pending.values_mut() {
+            v.1 -= PENDING;
+        }
+        assert!(d.pending_due());
+        d.refresh(&off, d.panel, None);
+        assert_eq!(power(&d).checked, Some(false));
+        assert_eq!(power(&d).action, Some(Action::WifiPower(true)));
+        assert!(!d.pending_due());
+        // A failed write drops it at once.
+        d.action(id, None);
+        d.write_failed();
+        d.refresh(&off, d.panel, None);
+        assert_eq!(power(&d).checked, Some(false));
     }
     #[test]
     fn the_night_light_switch_stays_usable_while_the_schedule_is_on() {
