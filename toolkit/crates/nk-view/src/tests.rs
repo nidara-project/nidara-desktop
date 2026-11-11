@@ -32,7 +32,8 @@ fn tokens() -> Tokens {
     let set = json!({"tokens": {"--nidara-text": "#ffffff", "--nidara-text-secondary": "rgba(255, 255, 255, 0.8)",
         "--nidara-text-dim": "rgba(255, 255, 255, 0.6)", "--nidara-accent": "#0088FF",
         "--nidara-surface-raised": "rgba(255, 255, 255, 0.24)", "--nidara-on": "#ffffff",
-        "--nidara-surface": "rgba(255, 255, 255, 0.08)"}});
+        "--nidara-surface": "rgba(255, 255, 255, 0.08)", "--nidara-border": "rgba(255, 255, 255, 0.2)",
+        "--nidara-thumb": "#ffffff"}});
     Tokens {
         spacing: Spacing::from_static(&statics()).unwrap(),
         radii: Radii::from_static(&statics()).unwrap(),
@@ -45,7 +46,15 @@ fn tokens() -> Tokens {
             "valueGap": 12, "fillOpacity": 0.9, "pageSteps": 10}}),
         )
         .unwrap(),
+        switch: switch_from(&switch(), &set).unwrap(),
     }
+}
+/// `components.json` `switch`, as `toolkit/tokens/switch.json` exports it.
+fn switch() -> serde_json::Value {
+    json!({"width": 44, "height": 24, "border": 1, "borderColor": "--nidara-border",
+        "checkedBorderColor": "rgba(0, 0, 0, 0.1)", "trackColor": "--nidara-surface",
+        "checkedColor": "--nidara-accent", "thumbColor": "--nidara-thumb", "thumbMargin": 3,
+        "disabledOpacity": 0.45})
 }
 /// `components.json` `scrollbar`, as `toolkit/tokens/scrollbar.json` exports it.
 fn scrollbar() -> serde_json::Value {
@@ -2296,4 +2305,168 @@ fn a_tile_slider_takes_the_value_up_its_height_and_its_hover_is_the_tile() {
     let a = s.key(KeyInput::Up).unwrap();
     assert_eq!(a.action, "volume");
     assert_eq!(s.value(&Key::from("v")), Some(5.));
+}
+
+/// A row that ends with a switch, as the CC's detail pages build one (VIEW.md §12.6).
+fn switch_row(on: bool, enabled: bool) -> Node {
+    Node::control("row", "Wi-Fi", "toggle", Node::switch("sw", on))
+        .role(Role::Toggle)
+        .marked(on)
+        .enabled(enabled)
+}
+fn switch_progress(s: &ViewState) -> f64 {
+    match placed(s, "sw").what {
+        What::Switch { progress, .. } => progress,
+        ref w => panic!("not a switch: {w:?}"),
+    }
+}
+
+#[test]
+fn a_switch_is_the_tokens_size_and_its_row_is_what_is_pressed() {
+    let view = Node::row(
+        "line",
+        vec![
+            Node::text("t", "Wi-Fi", style(13.)),
+            Node::switch("sw", true),
+        ],
+    )
+    .align(Align::Center);
+    let s = laid(&view, (300., 40.), 1.);
+    let r = rect(&s, "sw");
+    assert_eq!((r[2], r[3]), (44., 24.));
+    let s = laid(&switch_row(true, true), (44., 24.), 1.);
+    let row = s
+        .placed()
+        .iter()
+        .position(|p| p.key == Key::from("row"))
+        .unwrap();
+    assert_eq!(placed(&s, "sw").control, Some(row), "the row holds it");
+    assert!(matches!(
+        placed(&s, "sw").what,
+        What::Switch { on: true, .. }
+    ));
+    assert_eq!(switch_progress(&s), 1., "seen first, it is at its state");
+    assert!(!s.animating());
+}
+
+#[test]
+fn a_switch_slides_the_same_both_ways_from_where_it_is() {
+    let t = tokens();
+    let mut text = backend();
+    let mut s = ViewState::new(0);
+    let t0 = Instant::now();
+    s.layout(&switch_row(false, true), (44., 24.), 1., &t, &mut text, t0);
+    s.layout(&switch_row(true, true), (44., 24.), 1., &t, &mut text, t0);
+    assert!(s.animating());
+    s.tick(&t, &mut text, t0 + t.motion.base / 2);
+    let mid = switch_progress(&s);
+    assert!(mid > 0. && mid < 1., "{mid}");
+    s.layout(
+        &switch_row(false, true),
+        (44., 24.),
+        1.,
+        &t,
+        &mut text,
+        t0 + t.motion.base / 2,
+    );
+    assert_eq!(switch_progress(&s), mid, "no jump");
+    let t1 = t0 + t.motion.base / 2;
+    assert!(
+        !s.tick(&t, &mut text, t1 + t.motion.base).animating,
+        "base, not slow"
+    );
+    assert_eq!(switch_progress(&s), 0.);
+    s.layout(
+        &switch_row(true, true),
+        (44., 24.),
+        1.,
+        &t,
+        &mut text,
+        t1 + t.motion.base,
+    );
+    assert!(
+        !s.tick(&t, &mut text, t1 + t.motion.base * 2).animating,
+        "opening takes base too"
+    );
+    assert_eq!(switch_progress(&s), 1.);
+    let mut s = ViewState::new(0);
+    s.set_reduced_motion(true);
+    s.layout(&switch_row(false, true), (44., 24.), 1., &t, &mut text, t0);
+    s.layout(&switch_row(true, true), (44., 24.), 1., &t, &mut text, t0);
+    assert!(!s.animating());
+    assert_eq!(switch_progress(&s), 1.);
+}
+
+#[test]
+fn a_switch_is_painted_with_the_native_switch_colours_and_fades_when_disabled() {
+    let t = tokens();
+    let mut none = |_: &str, _: f64| None;
+    // The canvas's BGRA at (x, y) of the switch row painted alone.
+    let mut pixel = |on: bool, enabled: bool, x: usize, y: usize| {
+        let s = laid(&switch_row(on, enabled), (44., 24.), 1.);
+        let mut c = nk_render::Canvas::new(44, 24, 1.);
+        s.paint(&mut c, &t, &mut none, None).unwrap();
+        let px = c.finish();
+        let i = (y * 44 + x) * 4;
+        [px[i], px[i + 1], px[i + 2], px[i + 3]]
+    };
+    // Off: the thumb at the left, white; the right of the track the faint surface.
+    let thumb = pixel(false, true, 12, 12);
+    assert!(
+        thumb[0] > 240 && thumb[2] > 240 && thumb[3] > 240,
+        "{thumb:?}"
+    );
+    assert!(
+        pixel(false, true, 32, 12)[3] < 60,
+        "the track at rest is faint"
+    );
+    // On: the thumb at the right; where it was, the accent.
+    let track = pixel(true, true, 12, 12);
+    assert!(
+        track[2] < 20 && track[0] > 240 && track[3] > 240,
+        "{track:?}"
+    );
+    let thumb = pixel(true, true, 32, 12);
+    assert!(thumb[0] > 240 && thumb[3] > 240, "{thumb:?}");
+    // Stretched taller by its stack, it is drawn at its own size, centred.
+    let s = laid(
+        &Node::row("line", vec![switch_row(false, true)]),
+        (44., 40.),
+        1.,
+    );
+    assert_eq!(rect(&s, "sw")[3], 40.);
+    let mut c = nk_render::Canvas::new(44, 40, 1.);
+    s.paint(&mut c, &t, &mut |_: &str, _: f64| None, None)
+        .unwrap();
+    let px = c.finish();
+    assert_eq!(px[(2 * 44 + 22) * 4 + 3], 0, "nothing above the track");
+    assert!(px[(20 * 44 + 12) * 4] > 240, "the thumb in the middle");
+    // Disabled: the same, at the disabled opacity.
+    let faded = pixel(true, false, 12, 12)[3] as f64;
+    assert!((faded / 255. - 0.45).abs() < 0.03, "{faded}");
+}
+
+#[test]
+fn the_switch_tokens_are_read_from_their_export_with_nothing_defaulted() {
+    let set = json!({"tokens": {"--nidara-border": "#ffffff", "--nidara-surface": "#000000",
+        "--nidara-accent": "#0088ff", "--nidara-thumb": "#ffffff"}});
+    let sw = switch_from(&switch(), &set).unwrap();
+    assert_eq!((sw.width, sw.height, sw.thumb_margin), (44., 24., 3.));
+    assert!(
+        (sw.checked_border_color.components[3] - 0.1).abs() < 0.01,
+        "an rgba() written out"
+    );
+    for k in [
+        "width",
+        "thumbColor",
+        "disabledOpacity",
+        "checkedBorderColor",
+    ] {
+        let mut c = switch();
+        c.as_object_mut().unwrap().remove(k);
+        assert!(switch_from(&c, &set).is_err(), "{k} missing");
+    }
+    let mut c = switch();
+    c["thumbMargin"] = json!(12);
+    assert!(switch_from(&c, &set).is_err(), "no room for the thumb");
 }

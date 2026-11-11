@@ -127,7 +127,9 @@ owns hover, press, focus, keys, the held slider and the scroll. A row acts on
 release over itself, as every nk-view control does; a slider reports while
 dragged and on release, and its thumb stays where it was let go until the
 service's value arrives. A secret row is a field that receives only its bullets
-(§12.2); a toggle's mark and a clipboard entry's picture are painted slots (§12.3).
+(§12.2); a choice's mark and a clipboard entry's picture are painted slots (§12.3), and a
+setting that is on or off (Ethernet, Wi-Fi, Bluetooth power, Night Light and its schedule,
+recording audio) ends its row with a switch (§12.6).
 
 Wi-Fi retains the current AP, otherwise the strongest AP for each raw SSID,
 including saved hidden profiles. It joins supported existing profiles and ordinary

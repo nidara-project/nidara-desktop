@@ -100,6 +100,9 @@ pub struct Row {
     pub action: Option<Action>,
     pub value: Option<(f64, f64, f64)>,
     checked: Option<bool>,
+    /// Whether `checked` is shown as a switch at the row's end (VIEW.md §12.6) rather than as
+    /// a choice's mark at its start.
+    switch: bool,
     prefix: Option<&'static str>,
     max_write: Option<f64>,
     owner: String,
@@ -115,6 +118,7 @@ impl Row {
             action,
             value: None,
             checked: None,
+            switch: false,
             prefix: None,
             max_write: None,
             owner: String::new(),
@@ -155,8 +159,15 @@ impl Row {
             format!("{} · {}", text(&Label::Key(key)), label)
         })
     }
+    /// A choice among several: a mark at the row's start.
     fn toggle(mut self, checked: bool) -> Self {
         self.checked = Some(checked);
+        self
+    }
+    /// A setting that is on or off: a switch at the row's end, where TS had a `Gtk.Switch`.
+    fn switch(mut self, on: bool) -> Self {
+        self.checked = Some(on);
+        self.switch = true;
         self
     }
     fn slider(mut self, min: f64, max: f64, current: f64) -> Self {
@@ -419,7 +430,7 @@ impl Detail {
                         .padding(Padding::symmetric(Space::S2, Space::S3));
                 }
                 let mut line = vec![];
-                if row.checked.is_some() {
+                if row.checked.is_some() && !row.switch {
                     line.push(Node::slot(k("check"), 10.));
                 }
                 if row.thumbnail.is_some() {
@@ -442,6 +453,9 @@ impl Detail {
                         ..
                     })
                 );
+                if let (true, Some(on)) = (row.switch, row.checked) {
+                    line.push(Node::switch(k("switch"), on));
+                }
                 if clip_row {
                     line.push(
                         Node::control(
@@ -952,7 +966,7 @@ fn rows(page: &str, s: &Status, mode: &'static str, audio: bool) -> Vec<Row> {
                         "cc.ethernet.name",
                         Action::WiredPower(text(d, "path"), d["wiredEnabled"] != true),
                     )
-                    .toggle(d["wiredEnabled"] == true),
+                    .switch(d["wiredEnabled"] == true),
                 );
                 for (key, value) in [
                     (
@@ -1001,7 +1015,7 @@ fn rows(page: &str, s: &Status, mode: &'static str, audio: bool) -> Vec<Row> {
                         "cc.wifi.name",
                         Action::WifiPower(!n["wirelessEnabled"].as_bool().unwrap_or(false)),
                     )
-                    .toggle(n["wirelessEnabled"] == true),
+                    .switch(n["wirelessEnabled"] == true),
                 );
                 let profiles: Vec<_> = array(n, "profiles").collect();
                 let mut networks: std::collections::BTreeMap<String, (&Value, &Value)> =
@@ -1097,7 +1111,7 @@ fn rows(page: &str, s: &Status, mode: &'static str, audio: bool) -> Vec<Row> {
                         "widget.bluetooth.name",
                         Action::BluetoothPower(b.adapter.clone(), !b.powered),
                     )
-                    .toggle(b.powered),
+                    .switch(b.powered),
                 );
                 if let Some(snapshot) = &s.details.bluetooth {
                     for d in array(snapshot, "devices")
@@ -1268,7 +1282,7 @@ fn rows(page: &str, s: &Status, mode: &'static str, audio: bool) -> Vec<Row> {
                             crate::menu::PrefValue::Bool(!n.enabled),
                         ),
                     )
-                    .toggle(n.enabled),
+                    .switch(n.enabled),
                 );
                 if s.night_schedule.0
                     && let Some(row) = out.last_mut()
@@ -1290,7 +1304,7 @@ fn rows(page: &str, s: &Status, mode: &'static str, audio: bool) -> Vec<Row> {
                             crate::menu::PrefValue::Bool(!s.night_schedule.0),
                         ),
                     )
-                    .toggle(s.night_schedule.0),
+                    .switch(s.night_schedule.0),
                 );
                 if s.night_schedule.0 {
                     for (value, key, pref) in [
@@ -1390,7 +1404,7 @@ fn rows(page: &str, s: &Status, mode: &'static str, audio: bool) -> Vec<Row> {
             ] {
                 out.push(Row::key(key, Action::SetMode(m)).toggle(mode == m));
             }
-            out.push(Row::key("widget.screenrecord.audio", Action::ToggleAudio).toggle(audio));
+            out.push(Row::key("widget.screenrecord.audio", Action::ToggleAudio).switch(audio));
             out.push(Row::key(
                 "widget.screenrecord.start",
                 Action::Record { mode, audio },
@@ -1896,6 +1910,42 @@ mod tests {
             .rect(&d.focus_key(d.focused().unwrap()).unwrap())
             .unwrap();
         assert!(f64::from(caret[0]) > field[0] + 20., "{caret:?} {field:?}");
+    }
+    #[test]
+    fn a_setting_that_is_on_or_off_ends_with_a_switch_and_a_choice_keeps_its_mark() {
+        let mut d = Detail::new("screenrecord", 1);
+        if !laid(&mut d, &status(), [0., 50., 396., 400.]) {
+            return;
+        }
+        let id = |a: Action| {
+            d.rows
+                .iter()
+                .find(|r| r.action == Some(a.clone()))
+                .unwrap()
+                .id
+        };
+        let (audio, region) = (id(Action::ToggleAudio), id(Action::SetMode("region")));
+        let at = |key: String| d.state.rect(&key.into());
+        let row = d.state.rect(&row_key(audio)).unwrap();
+        let switch = at(format!("r{audio}/switch")).expect("the audio row's switch");
+        assert!(at(format!("r{audio}/check")).is_none(), "no mark beside it");
+        assert!(
+            (row[0] + row[2]) - (switch[0] + switch[2]) < 20.,
+            "at the row's end: {row:?} {switch:?}"
+        );
+        assert!(
+            at(format!("r{region}/check")).is_some(),
+            "a mode keeps its mark"
+        );
+        assert!(at(format!("r{region}/switch")).is_none());
+        // Said as GTK says a switch: one toggle button, the whole row, with its state.
+        let nodes = d.nodes(1, None);
+        let said: Vec<_> = nodes
+            .iter()
+            .filter(|(n, _)| n.bounds.y == row[1] && n.bounds.height == row[3])
+            .collect();
+        assert_eq!(said.len(), 1, "one node for the row and its switch");
+        assert_eq!(said[0].0.role, nk_a11y::Role::ToggleButton);
     }
     #[test]
     fn a_row_acts_when_released_over_itself_and_not_elsewhere() {

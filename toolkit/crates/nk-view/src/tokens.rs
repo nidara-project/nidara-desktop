@@ -398,6 +398,64 @@ pub fn slider_from(range: &Value) -> Result<SliderStyle, String> {
     Ok(style)
 }
 
+/// The on/off switch's measures and colours (`components.json` `switch`), the native
+/// switch's (VIEW.md §12.6).
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct SwitchStyle {
+    pub width: f64,
+    pub height: f64,
+    pub border: f64,
+    pub border_color: Color,
+    pub checked_border_color: Color,
+    pub track: Color,
+    pub checked: Color,
+    pub thumb: Color,
+    pub thumb_margin: f64,
+    pub disabled_opacity: f64,
+}
+
+/// The switch from its component, its colours named by token and resolved in one set of
+/// `tokens/colors.json`, or written out (`checkedBorderColor` is an `rgba()`).
+pub fn switch_from(component: &Value, set: &Value) -> Result<SwitchStyle, String> {
+    let n = |k: &str| {
+        component[k]
+            .as_f64()
+            .filter(|v| v.is_finite() && *v >= 0.)
+            .ok_or_else(|| format!("switch: no {k}"))
+    };
+    let colour = |k: &str| -> Result<Color, String> {
+        let name = component[k]
+            .as_str()
+            .ok_or_else(|| format!("switch: no {k}"))?;
+        if !name.starts_with("--") {
+            return parse_color(name);
+        }
+        set["tokens"][name]
+            .as_str()
+            .ok_or_else(|| format!("colors.json: no {name}"))
+            .and_then(parse_color)
+    };
+    let style = SwitchStyle {
+        width: n("width")?,
+        height: n("height")?,
+        border: n("border")?,
+        border_color: colour("borderColor")?,
+        checked_border_color: colour("checkedBorderColor")?,
+        track: colour("trackColor")?,
+        checked: colour("checkedColor")?,
+        thumb: colour("thumbColor")?,
+        thumb_margin: n("thumbMargin")?,
+        disabled_opacity: n("disabledOpacity")?,
+    };
+    if style.disabled_opacity > 1.
+        || style.height <= 2. * style.thumb_margin
+        || style.width < style.height
+    {
+        return Err("switch: invalid measures".into());
+    }
+    Ok(style)
+}
+
 /// Everything a view is laid out and drawn with.
 #[derive(Clone, Debug)]
 pub struct Tokens {
@@ -408,4 +466,5 @@ pub struct Tokens {
     pub washes: Washes,
     pub scrollbar: ScrollbarStyle,
     pub slider: SliderStyle,
+    pub switch: SwitchStyle,
 }

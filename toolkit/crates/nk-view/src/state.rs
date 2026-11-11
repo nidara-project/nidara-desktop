@@ -352,6 +352,7 @@ impl ViewState {
             cache: &mut self.text,
             scale: self.scale,
             slider: 2. * tokens.slider.thumb_radius,
+            switch: (tokens.switch.width, tokens.switch.height),
         }
         .run(view, self.bounds);
         // A rebuild keeps what the reader was looking at in place: each scrolled region's
@@ -376,6 +377,7 @@ impl ViewState {
                 cache: &mut self.text,
                 scale: self.scale,
                 slider: 2. * tokens.slider.thumb_radius,
+                switch: (tokens.switch.width, tokens.switch.height),
             }
             .run(view, self.bounds);
         }
@@ -1501,6 +1503,42 @@ impl ViewState {
                         canvas.pop_clip();
                     }
                 }
+                What::Switch { progress, .. } => {
+                    // VIEW.md §12.6: the native switch's track, border and thumb, blended from
+                    // off to on as the thumb slides; faded while its row is disabled.
+                    let s = &tokens.switch;
+                    let t = progress.clamp(0., 1.) as f32;
+                    let enabled = p.control.is_none_or(|o| self.enabled(o));
+                    let fade = |c: nk_render::Color| {
+                        let a = if enabled {
+                            1.
+                        } else {
+                            s.disabled_opacity as f32
+                        };
+                        ink(c.with_alpha(c.components[3] * a))
+                    };
+                    // At its own size, centred in what a stretching stack gave it.
+                    let (w, h) = (s.width.min(p.rect[2]), s.height.min(p.rect[3]));
+                    let r = [
+                        p.rect[0] + (p.rect[2] - w) / 2.,
+                        p.rect[1] + (p.rect[3] - h) / 2.,
+                        w,
+                        h,
+                    ];
+                    let radius = r[3] / 2.;
+                    canvas.clip(rect(&visible));
+                    canvas.rounded_rect(rect(&r), radius, fade(mix(s.track, s.checked, t)));
+                    if s.border > 0. {
+                        let edge = mix(s.border_color, s.checked_border_color, t);
+                        canvas.rounded_ring(rect(&r), radius, s.border, fade(edge));
+                    }
+                    let d = r[3] - 2. * s.thumb_margin;
+                    let travel = r[2] - 2. * s.thumb_margin - d;
+                    let x = r[0] + s.thumb_margin + travel * t as f64;
+                    let thumb = [x, r[1] + s.thumb_margin, d, d];
+                    canvas.rounded_rect(rect(&thumb), d / 2., fade(s.thumb));
+                    canvas.pop_clip();
+                }
                 What::Control(c) => {
                     if let Some(top) = self.fill_top(i) {
                         // The tile slider: the control filled from its bottom to its value.
@@ -1579,6 +1617,19 @@ impl ViewState {
         }
         Ok(())
     }
+}
+
+/// `a` blended towards `b` by `t`, each channel straight.
+fn mix(a: nk_render::Color, b: nk_render::Color, t: f32) -> nk_render::Color {
+    let mut c = a;
+    for (o, (x, y)) in c
+        .components
+        .iter_mut()
+        .zip(a.components.iter().zip(b.components.iter()))
+    {
+        *o = x + (y - x) * t;
+    }
+    c
 }
 
 /// What a tile slider's fill holds is drawn in where the fill has reached it: the dark

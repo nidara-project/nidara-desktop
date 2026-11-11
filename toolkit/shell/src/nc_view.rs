@@ -68,6 +68,7 @@ pub fn tokens(
         washes: nk_view::Washes::from_glass(&e.glass, true, skin.reduce_transparency)?,
         scrollbar: nk_view::scrollbar_from(&set.components["scrollbar"], &colors)?,
         slider: nk_view::slider_from(&set.components["range"])?,
+        switch: nk_view::switch_from(&set.components["switch"], &colors)?,
     })
 }
 
