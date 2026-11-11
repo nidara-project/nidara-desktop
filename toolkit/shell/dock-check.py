@@ -1170,7 +1170,7 @@ try:
 
     shell1('ToggleSurface', GLib.Variant('(sb)', ('app-grid', True)), quiet=False)
     until('the Apps layer', apps_layers)
-    assert shell1('GetState')[1] == [('app-grid', True)], shell1('GetState')
+    assert shell1('GetState')[1] == [('app-grid', True), ('nc', False)], shell1('GetState')
     every = until('Apps in AT-SPI', lambda: (a := apps_shown()) and len(a) >= 3 and a)
     assert every == sorted(every, key=str.lower), every
     time.sleep(2)  # icons and glass (software Hyalo)
