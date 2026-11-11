@@ -15,7 +15,7 @@
 //! (`nidara_shell_ipc::drag`): the panel steps aside so the dock can be reached, and it
 //! closes when the drag ends.
 //!
-//! The panel's glass is Hyalo's (the panel material of `nk-settings`' exports, as the
+//! The panel's glass is Hyalo's (the panel material of `nk-platform`'s exports, as the
 //! dock's menus); its content is ours, in the shell's dark skin.
 use crate::apps::Icon;
 use crate::hub::{HubEvent, Request};

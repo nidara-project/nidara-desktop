@@ -51,10 +51,10 @@ const HERO_CORNER: Radius = Radius::Md;
 
 /// The kit's tokens for the shell's skin (always dark) in this appearance.
 pub fn tokens(
-    e: &nk_settings::exports::Exports,
-    appearance: &nk_settings::portal::Appearance,
+    e: &nk_platform::exports::Exports,
+    appearance: &nk_platform::portal::Appearance,
 ) -> Result<Tokens, String> {
-    let skin = nk_settings::portal::Appearance {
+    let skin = nk_platform::portal::Appearance {
         dark: true,
         ..appearance.clone()
     };
@@ -98,7 +98,7 @@ pub struct View {
     /// What the last painted frame declared: `material` reads it after `paint`.
     last: Frame,
     /// The appearance the tokens were read for.
-    appearance: Option<nk_settings::portal::Appearance>,
+    appearance: Option<nk_platform::portal::Appearance>,
     /// Each row's height when it was last laid out, by its key; a card never laid out is
     /// guessed at the last card's.
     heights: HashMap<String, f64>,
@@ -1305,7 +1305,7 @@ pub(crate) fn exported_tokens() -> Option<Tokens> {
         eprintln!("skipped: no build/settings-data");
         return None;
     }
-    let e = nk_settings::exports::Exports::load(&root).unwrap();
+    let e = nk_platform::exports::Exports::load(&root).unwrap();
     let set = e.colors["sets"]
         .as_array()
         .unwrap()
@@ -1316,7 +1316,7 @@ pub(crate) fn exported_tokens() -> Option<Tokens> {
         .as_str()
         .unwrap();
     let c = nk_view::parse_color(hex).unwrap().components;
-    let appearance = nk_settings::portal::Appearance {
+    let appearance = nk_platform::portal::Appearance {
         accent: [c[0] as f64, c[1] as f64, c[2] as f64],
         dark: true,
         reduce_transparency: false,

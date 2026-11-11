@@ -1,0 +1,17 @@
+# SPDX-License-Identifier: LGPL-3.0-or-later
+[package]
+name = "nk-platform"
+description = "How a Nidara program learns its appearance: the exported tokens, the portal, the styles and the glass (#1072)"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+publish.workspace = true
+
+[dependencies]
+nk-render = { path = "../nk-render" }
+nk-text = { path = "../nk-text", features = ["system-fonts"] }
+nk-wayland = { path = "../nk-wayland" }
+nk-widgets = { path = "../nk-widgets" }
+serde_json = "1"
+zbus = "5.19"

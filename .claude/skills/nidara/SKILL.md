@@ -324,6 +324,14 @@ phase0 stays independent. The fixed-data demo and libatspi controls live in
 `toolkit/widgets-demo` and `scripts/ci/nk-widgets-check.py`. Builds, evidence and
 logs for this work belong in target/ or ~/Nidara/ChatGPT/, never /tmp.
 
+### Appearance for a native program (nk-platform)
+
+Any Rust program of ours learns its appearance from `toolkit/crates/nk-platform` (#1072): the
+portal, the exported tokens and strings, the `nk-widgets` styles and the glass readers. Never
+depend on `nk-settings` for that — it is an application, and the shell compiled it in until
+#1072. Settings adds its pages and its header/wallpaper looks on top, through wrappers that
+dereference to the platform's `Exports` and `Styles`. `toolkit/CONTRACT.md` → "The platform".
+
 ### Shell views (nk-view)
 
 New shell surfaces and ports are built on `toolkit/crates/nk-view` (#1048), not by placing,

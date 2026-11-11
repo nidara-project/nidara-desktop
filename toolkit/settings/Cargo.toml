@@ -14,6 +14,7 @@ nk-render = { path = "../crates/nk-render" }
 nk-text = { path = "../crates/nk-text", features = ["system-fonts"] }
 nk-widgets = { path = "../crates/nk-widgets" }
 nk-wayland = { path = "../crates/nk-wayland" }
+nk-platform = { path = "../crates/nk-platform" }
 serde_json = "1"
 serde = { version = "1", features = ["derive"] }
 libc = "0.2"

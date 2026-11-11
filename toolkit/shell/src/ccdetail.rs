@@ -183,7 +183,7 @@ pub struct Detail {
     /// The rows' layout, hover, press, focus, held slider and scroll: nk-view's (#1048).
     pub state: nk_view::ViewState,
     pub tokens: Option<nk_view::Tokens>,
-    appearance: Option<nk_settings::portal::Appearance>,
+    appearance: Option<nk_platform::portal::Appearance>,
     /// What the last painted frame declared: `states` reads it after `paint`.
     last: nk_view::Frame,
 }

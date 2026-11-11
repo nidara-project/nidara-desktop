@@ -22,7 +22,7 @@ nk-a11y = { path = "../crates/nk-a11y" }
 nk-icons = { path = "../crates/nk-icons" }
 nk-render = { path = "../crates/nk-render" }
 nk-view = { path = "../crates/nk-view" }
-nk-settings = { path = "../settings" }
+nk-platform = { path = "../crates/nk-platform" }
 nk-text = { path = "../crates/nk-text", features = ["system-fonts"] }
 nk-wayland = { path = "../crates/nk-wayland" }
 nk-widgets = { path = "../crates/nk-widgets" }

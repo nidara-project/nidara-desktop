@@ -1,12 +1,12 @@
 // SPDX-License-Identifier: LGPL-3.0-or-later
 //! Demo data is fixed; appearance is selected from the Settings portal, never Config1.
-//! The tokens become `nk-widgets`' styles in `nk_settings::styles`, the one mapping the app
+//! The tokens become `nk-widgets`' styles in `nk_platform::styles`, the one mapping the app
 //! and this demo share; only the demo's own pieces (its panel, its title bar recipe) are here.
 use crate::panel::PanelMaterial;
+use nk_platform::exports::Exports;
+use nk_platform::portal::{self, NAMESPACES};
+use nk_platform::styles::Styles;
 use nk_render::Color;
-use nk_settings::exports::Exports;
-use nk_settings::portal::{self, NAMESPACES};
-use nk_settings::styles::Styles;
 use nk_widgets::{Metrics, Palette, Result};
 use serde_json::Value;
 use std::{collections::HashMap, path::Path, sync::mpsc};
