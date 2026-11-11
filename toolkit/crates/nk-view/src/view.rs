@@ -37,6 +37,7 @@ pub enum Kind {
     Reveal(Reveal),
     Scroll(Scroll),
     Overlay(Overlay),
+    Grid(Grid),
     /// A row the surface did not build, at the height it had when it was (VIEW.md §8).
     Placeholder(f64),
 }
@@ -63,6 +64,46 @@ pub struct Layer {
     pub down: Align,
     pub inset: Padding,
     pub child: Node,
+}
+
+/// Tiles on a grid of square cells (VIEW.md §12.4): `columns` cells of `unit` across,
+/// `gap` between them, as many rows as the tiles reach. Where each tile goes is the
+/// surface's to decide; the grid places what it is given, its child filling its cells.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+pub struct Grid {
+    pub columns: usize,
+    pub unit: f64,
+    pub gap: f64,
+    pub cells: Vec<Cell>,
+}
+/// One tile: its first cell and how many cells it spans across and down.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+pub struct Cell {
+    pub at: (usize, usize),
+    pub span: (usize, usize),
+    pub child: Node,
+}
+impl Grid {
+    /// The rows its tiles reach.
+    pub fn rows(&self) -> usize {
+        self.cells
+            .iter()
+            .map(|c| c.at.1 + c.span.1)
+            .max()
+            .unwrap_or(0)
+    }
+    /// The length of `n` cells and the gaps between them.
+    pub fn span(&self, n: usize) -> f64 {
+        if n == 0 {
+            0.
+        } else {
+            n as f64 * self.unit + (n - 1) as f64 * self.gap
+        }
+    }
+    /// Where a cell starts, from the grid's edge.
+    pub fn start(&self, n: usize) -> f64 {
+        n as f64 * (self.unit + self.gap)
+    }
 }
 
 /// A region that shows its child through a viewport, scrolled vertically (VIEW.md §8).
@@ -135,6 +176,8 @@ pub enum Corner {
     Pill,
     /// A step of the kit's radius scale.
     Token(Radius),
+    /// A radius the surface's own measures fix: the CC's 2×2 takes its 1×1's, half a cell.
+    Fixed(u32),
 }
 impl Corner {
     /// The radius for a `w` × `h` box, never more than half its shorter side.
@@ -143,6 +186,7 @@ impl Corner {
         match self {
             Corner::Pill => half,
             Corner::Token(r) => radii.px(r).min(half),
+            Corner::Fixed(r) => (r as f64).min(half),
         }
     }
 }
@@ -233,7 +277,22 @@ pub struct Control {
     /// A text field's text, caret and selection (VIEW.md §12.2); its role is `Field`.
     #[serde(default)]
     pub field: Option<Field>,
+    /// On (VIEW.md §12.4): the glass under it is white, the primary ink at full, and what it
+    /// holds is drawn in the accent. Hover and press do not show over it.
+    #[serde(default)]
+    pub on: bool,
+    /// At rest it shows the surface wash (`--nidara-surface`), a well in the glass: the CC's
+    /// badges. Hover and press lie over it.
+    #[serde(default)]
+    pub surface: bool,
+    /// False: the pointer passes through it to what lies under. Keys and readers still reach
+    /// it (a tile's second way in, its detail, under the tile's own control).
+    #[serde(default = "yes")]
+    pub pointer: bool,
     pub child: Box<Node>,
+}
+fn yes() -> bool {
+    true
 }
 
 /// What a text field shows (VIEW.md §12.2). The owner of the text edits it; the view only
@@ -260,6 +319,10 @@ pub struct Slider {
     pub decimals: usize,
     #[serde(default)]
     pub unit: String,
+    /// The tile slider (VIEW.md §12.1): the control's whole box, filled from the bottom up to
+    /// its value, what it holds drawn dark where the fill has reached it. Else the row slider.
+    #[serde(default)]
+    pub fill: bool,
 }
 impl Slider {
     pub fn new(min: f64, max: f64, step: f64, value: f64) -> Self {
@@ -270,7 +333,13 @@ impl Slider {
             value,
             decimals: 0,
             unit: String::new(),
+            fill: false,
         }
+    }
+    /// The tile slider: it fills its control from the bottom.
+    pub fn fill(mut self) -> Self {
+        self.fill = true;
+        self
     }
     pub fn unit(mut self, unit: impl Into<String>) -> Self {
         self.unit = unit.into();
@@ -384,6 +453,24 @@ impl Node {
             }),
         )
     }
+    /// A grid of `columns` cells of `unit`, `gap` apart, holding `cells` (VIEW.md §12.4).
+    pub fn grid(
+        key: impl Into<Key>,
+        columns: usize,
+        unit: f64,
+        gap: f64,
+        cells: Vec<Cell>,
+    ) -> Self {
+        Self::new(
+            key,
+            Kind::Grid(Grid {
+                columns,
+                unit,
+                gap,
+                cells,
+            }),
+        )
+    }
     pub fn scroll(key: impl Into<Key>, child: Node) -> Self {
         Self::new(
             key,
@@ -426,6 +513,9 @@ impl Node {
                 swipe: None,
                 slider: None,
                 field: None,
+                on: false,
+                surface: false,
+                pointer: true,
                 child: Box::new(child),
             }),
         )
@@ -564,6 +654,25 @@ impl Node {
     pub fn marked(mut self, on: bool) -> Self {
         if let Kind::Control(c) = &mut self.kind {
             c.marked = on;
+        }
+        self
+    }
+    pub fn on(mut self, on: bool) -> Self {
+        if let Kind::Control(c) = &mut self.kind {
+            c.on = on;
+        }
+        self
+    }
+    pub fn surface(mut self) -> Self {
+        if let Kind::Control(c) = &mut self.kind {
+            c.surface = true;
+        }
+        self
+    }
+    /// The pointer passes through it; keys and readers reach it.
+    pub fn keys_only(mut self) -> Self {
+        if let Kind::Control(c) = &mut self.kind {
+            c.pointer = false;
         }
         self
     }
