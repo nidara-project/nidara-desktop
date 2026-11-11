@@ -269,6 +269,8 @@ pub struct Layouter<'a> {
     pub text: &'a mut dyn TextBackend,
     pub cache: &'a mut TextCache,
     pub scale: f64,
+    /// A slider's height: its thumb's diameter.
+    pub slider: f64,
 }
 
 impl Layouter<'_> {
@@ -434,9 +436,14 @@ impl Layouter<'_> {
             }
             Kind::Control(ctl) => {
                 let c = self.measure(&ctl.child, width);
+                let h = if ctl.slider.is_some() {
+                    c.h.max(self.up(self.slider))
+                } else {
+                    c.h
+                };
                 Measure {
                     w: c.w,
-                    h: c.h,
+                    h,
                     first_line: c.first_line,
                     give: c.give,
                     children: vec![c],

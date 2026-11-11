@@ -599,7 +599,7 @@ try:
         drop_check(globals())
         raise SystemExit(0)
     state = shell1('GetState')
-    assert state == (False, [('app-grid', False)], ''), state
+    assert state == (False, [('app-grid', False), ('nc', False)], ''), state
     for surface, error in [('bar', 'Unavailable'), ('Dock', 'Invalid')]:
         try:
             shell1('FocusSurface', GLib.Variant('(s)', (surface,)), quiet=False)
@@ -1192,7 +1192,7 @@ try:
     until('Apps again', apps_layers)
     shell1('ToggleSurface', GLib.Variant('(sb)', ('app-grid', True)), quiet=False)
     until('a second toggle closes Apps', lambda: not apps_layers())
-    until('Shell1 says Apps closed', lambda: shell1('GetState')[1] == [('app-grid', False)])
+    until('Shell1 says Apps closed', lambda: shell1('GetState')[1] == [('app-grid', False), ('nc', False)])
     result['apps'] = {'listed': every, 'kit': narrowed}
     assert shell.poll() is None, 'the dock exited'
     (LOG / 'layers.json').write_text(json.dumps(result, indent=2))

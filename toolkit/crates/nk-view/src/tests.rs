@@ -39,6 +39,11 @@ fn tokens() -> Tokens {
         look: Look::from_colors(&set).unwrap(),
         washes: Washes::from_glass(&glass(), true, false).unwrap(),
         scrollbar: scrollbar_from(&scrollbar(), &set).unwrap(),
+        slider: slider_from(
+            &json!({"slider": {"width": 140, "track": 6, "thumbRadius": 9,
+            "valueGap": 12, "fillOpacity": 0.9, "pageSteps": 10}}),
+        )
+        .unwrap(),
     }
 }
 /// `components.json` `scrollbar`, as `toolkit/tokens/scrollbar.json` exports it.
@@ -1857,4 +1862,251 @@ fn a_controls_description_reaches_its_reader() {
         "nothing left to fling: it reports at once"
     );
     assert!(!s.animating());
+}
+
+/// A pane holding a 0–100 slider, 220 wide with a 16 px inset, at `value`.
+fn slider_view(value: f64) -> Node {
+    Node::pane(
+        "p",
+        Corner::Token(Radius::Lg),
+        Node::column(
+            "c",
+            vec![
+                Node::slider(
+                    "vol",
+                    "Volume",
+                    "volume",
+                    Slider::new(0., 100., 1., value).unit(" %"),
+                ),
+                Node::control("b", "Mute", "mute", Node::text("b/t", "Mute", style(12.))),
+            ],
+        )
+        .padding(Padding::all(Space::S4)),
+    )
+}
+/// The x where a 0–100 slider's thumb centre stands at `value`.
+fn slider_x(s: &ViewState, value: f64) -> f64 {
+    let r = rect(s, "vol");
+    r[0] + 9. + value / 100. * (r[2] - 18.)
+}
+
+#[test]
+fn a_slider_takes_the_value_under_the_pointer_and_holds_it_until_release() {
+    let t = tokens();
+    let mut s = laid(&slider_view(20.), (360., 400.), 1.);
+    let r = rect(&s, "vol");
+    assert_eq!(r[3], 18., "as tall as its thumb");
+    let y = r[1] + r[3] / 2.;
+    let vol = Key::from("vol");
+    s.pointer_motion(slider_x(&s, 60.), y);
+    let a = s
+        .button(true, Instant::now())
+        .expect("the press changes it");
+    assert_eq!((a.key.0.as_str(), a.action.as_str()), ("vol", "volume"));
+    assert_eq!(s.value(&vol), Some(60.));
+    // Dragged, each change is reported; past the end it stops at the end.
+    assert!(s.pointer_motion(slider_x(&s, 75.), y + 40.));
+    assert_eq!(s.slid().map(|a| a.key), Some(vol.clone()));
+    assert_eq!(s.value(&vol), Some(75.));
+    assert!(s.slid().is_none(), "asked once");
+    s.pointer_motion(r[0] + r[2] + 200., y);
+    assert_eq!(s.value(&vol), Some(100.));
+    // A rebuild with the model's older value does not move what the pointer holds.
+    s.layout(
+        &slider_view(20.),
+        (360., 400.),
+        1.,
+        &t,
+        &mut backend(),
+        Instant::now(),
+    );
+    assert_eq!(s.value(&vol), Some(100.));
+    // Released, it reports once more, and the view's value counts again.
+    let a = s
+        .button(false, Instant::now())
+        .expect("the release reports");
+    assert_eq!(a.key, vol);
+    assert_eq!(
+        s.value(&vol),
+        Some(100.),
+        "where it was let go, until the rebuild"
+    );
+    s.layout(
+        &slider_view(100.),
+        (360., 400.),
+        1.,
+        &t,
+        &mut backend(),
+        Instant::now(),
+    );
+    assert_eq!(s.value(&vol), Some(100.));
+    s.pointer_motion(slider_x(&s, 10.), y);
+    assert!(s.slid().is_none(), "no longer held");
+    assert_eq!(s.value(&vol), Some(100.));
+}
+
+#[test]
+fn a_focused_slider_steps_with_the_keys_and_stops_at_its_ends() {
+    // Each key is reported from the view's value, the model's, which the surface writes back
+    // before the next key, as ccdetail does today.
+    let vol = Key::from("vol");
+    let key = |v: f64, k| {
+        let mut s = laid(&slider_view(v), (360., 400.), 1.);
+        s.key(KeyInput::Tab);
+        assert_eq!(s.focus(), Some(&vol));
+        let a = s.key(k)?;
+        assert_eq!((&a.key, a.action.as_str()), (&vol, "volume"));
+        s.value(&vol)
+    };
+    for (k, to) in [
+        (KeyInput::Right, 51.),
+        (KeyInput::Up, 51.),
+        (KeyInput::Left, 49.),
+        (KeyInput::PageUp, 60.),
+        (KeyInput::PageDown, 40.),
+        (KeyInput::LineStart, 0.),
+        (KeyInput::LineEnd, 100.),
+    ] {
+        assert_eq!(key(50., k), Some(to), "{k:?}");
+    }
+    // The value a key set holds until the surface rebuilds, so the next key steps from it.
+    let mut s = laid(&slider_view(50.), (360., 400.), 1.);
+    s.key(KeyInput::Tab);
+    s.key(KeyInput::Right);
+    s.key(KeyInput::Right);
+    assert_eq!(s.value(&vol), Some(52.));
+    assert_eq!(key(0., KeyInput::Left), None, "at its start");
+    assert_eq!(key(100., KeyInput::LineEnd), None, "at its end");
+    // With the button focused, the arrows leave the slider alone.
+    let mut s = laid(&slider_view(50.), (360., 400.), 1.);
+    s.key(KeyInput::Tab);
+    s.key(KeyInput::Tab);
+    assert_eq!(s.focus(), Some(&Key::from("b")));
+    assert!(s.key(KeyInput::Right).is_none());
+}
+
+#[test]
+fn a_reader_hears_a_slider_and_sets_its_value() {
+    let mut s = laid(&slider_view(40.), (360., 400.), 1.);
+    let tree = s.semantics(nk_a11y::Node::new(1, nk_a11y::Role::Panel, "root"), 10);
+    let n = tree.nodes.values().find(|n| n.name == "Volume").unwrap();
+    assert_eq!(n.role, nk_a11y::Role::Slider);
+    let v = n.value.as_ref().unwrap();
+    assert_eq!((v.min, v.max, v.current, v.step), (0., 100., 40., 1.));
+    assert_eq!(v.text, "40 %");
+    assert!(n.actions.contains(&nk_a11y::Action::SetValue));
+    let vol = Key::from("vol");
+    assert_eq!(s.semantic_keys().get(&n.id), Some(&vol));
+    assert_eq!(
+        s.request_value(&vol, 62.4).map(|a| a.key),
+        Some(vol.clone())
+    );
+    assert_eq!(s.value(&vol), Some(62.), "on a step");
+    let s0 = laid(&slider_view(40.), (360., 400.), 1.);
+    let mut s = s0;
+    assert!(s.request_value(&vol, 40.).is_none(), "its value already");
+}
+
+#[test]
+fn a_sliders_hover_lights_its_thumb_not_its_track() {
+    let t = tokens();
+    let mut s = laid(&slider_view(50.), (360., 400.), 1.);
+    let r = rect(&s, "vol");
+    s.pointer_motion(r[0] + 2., r[1] + r[3] / 2.);
+    assert_eq!(
+        s.hover(),
+        Some(&Key::from("vol")),
+        "the whole track takes the pointer"
+    );
+    let frame = s.frame(&t, Instant::now());
+    let lit: Vec<_> = frame.states.iter().filter(|st| st.wash[3] > 0.).collect();
+    assert_eq!(lit.len(), 1);
+    let b = lit[0].bounds;
+    let centre = slider_x(&s, 50.);
+    assert_eq!((b.width, b.height), (18., 18.));
+    assert!((b.x + 9. - centre).abs() < 1e-9, "{b:?}");
+    assert_eq!(lit[0].radius, 9.);
+}
+
+fn field_view(shown: &str, caret: usize, anchor: usize, secret: bool) -> Node {
+    Node::pane(
+        "p",
+        Corner::Token(Radius::Lg),
+        Node::column(
+            "c",
+            vec![
+                Node::field(
+                    "pw",
+                    "Password",
+                    "join",
+                    Field {
+                        shown: shown.into(),
+                        caret,
+                        anchor,
+                        secret,
+                    },
+                    style(13.),
+                ),
+                Node::control("b", "Join", "join", Node::text("b/t", "Join", style(12.))),
+            ],
+        )
+        .padding(Padding::all(Space::S4)),
+    )
+}
+
+#[test]
+fn a_press_on_a_field_types_into_it_and_activates_nothing() {
+    let mut s = laid(&field_view("ab", 2, 2, false), (360., 400.), 1.);
+    let r = rect(&s, "pw");
+    s.pointer_motion(r[0] + 4., r[1] + r[3] / 2.);
+    assert!(s.button(true, Instant::now()).is_none());
+    assert!(
+        s.button(false, Instant::now()).is_none(),
+        "a release activates nothing"
+    );
+    let pw = Key::from("pw");
+    assert_eq!(s.editing(), Some(&pw));
+    // Enter is its action.
+    let a = s.key(KeyInput::Activate).expect("Enter");
+    assert_eq!((a.key, a.action.as_str()), (pw.clone(), "join"));
+    // A press elsewhere ends the typing.
+    let b = rect(&s, "b");
+    s.pointer_motion(b[0] + 2., b[1] + b[3] / 2.);
+    s.button(true, Instant::now());
+    assert!(s.editing().is_none());
+}
+
+#[test]
+fn a_fields_caret_stands_after_the_text_it_follows() {
+    let mut s = laid(&field_view("abc", 0, 0, false), (360., 400.), 1.);
+    let pw = Key::from("pw");
+    let at0 = s.caret(&pw).expect("a caret");
+    let text = rect(&s, "pw/text");
+    assert!((at0[0] - text[0]).abs() < 0.5, "{at0:?} {text:?}");
+    assert_eq!(at0[2], 1.);
+    s = laid(&field_view("abc", 3, 3, false), (360., 400.), 1.);
+    let at3 = s.caret(&pw).unwrap();
+    assert!(at3[0] > at0[0] + 10., "{at0:?} {at3:?}");
+    assert!(s.selection(&pw).is_empty());
+    s = laid(&field_view("abc", 3, 1, false), (360., 400.), 1.);
+    let sel = s.selection(&pw);
+    assert_eq!(sel.len(), 1);
+    assert!(sel[0][0] > at0[0] && (sel[0][0] + sel[0][2] - at3[0]).abs() < 0.5);
+}
+
+#[test]
+fn a_reader_hears_a_secret_field_as_a_password_with_no_text() {
+    let mut s = laid(&field_view("•••", 9, 9, true), (360., 400.), 1.);
+    let tree = s.semantics(nk_a11y::Node::new(1, nk_a11y::Role::Panel, "root"), 10);
+    let n = tree.nodes.values().find(|n| n.name == "Password").unwrap();
+    assert_eq!(n.role, nk_a11y::Role::Password);
+    let t = n.text.as_ref().unwrap();
+    assert_eq!((t.text.as_str(), t.caret), ("", 0));
+    assert!(n.actions.contains(&nk_a11y::Action::SetText));
+    let mut s = laid(&field_view("me", 2, 0, false), (360., 400.), 1.);
+    let tree = s.semantics(nk_a11y::Node::new(1, nk_a11y::Role::Panel, "root"), 10);
+    let n = tree.nodes.values().find(|n| n.name == "Password").unwrap();
+    assert_eq!(n.role, nk_a11y::Role::TextInput);
+    let t = n.text.as_ref().unwrap();
+    assert_eq!((t.text.as_str(), t.caret, t.anchor), ("me", 2, 0));
 }

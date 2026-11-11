@@ -67,6 +67,7 @@ pub fn tokens(
         look: nk_view::Look::from_colors(&colors)?,
         washes: nk_view::Washes::from_glass(&e.glass, true, skin.reduce_transparency)?,
         scrollbar: nk_view::scrollbar_from(&set.components["scrollbar"], &colors)?,
+        slider: nk_view::slider_from(&set.components["range"])?,
     })
 }
 
@@ -1288,6 +1289,45 @@ fn rect(r: [f64; 4]) -> Rect {
     }
 }
 
+/// The exported tokens in the dark skin, for tests; None (skipped) without an export.
+#[cfg(test)]
+pub(crate) fn exported_tokens() -> Option<Tokens> {
+    let root = std::env::var_os("NK_SETTINGS_DATA")
+        .map(std::path::PathBuf::from)
+        .unwrap_or_else(|| {
+            std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../build/settings-data")
+        });
+    if !root.join("version").exists() {
+        assert!(
+            std::env::var_os("NK_REQUIRE_EXPORT").is_none(),
+            "NK_REQUIRE_EXPORT set and no build/settings-data"
+        );
+        eprintln!("skipped: no build/settings-data");
+        return None;
+    }
+    let e = nk_settings::exports::Exports::load(&root).unwrap();
+    let set = e.colors["sets"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|s| s["dark"] == true && s["reduceTransparency"] == false)
+        .unwrap();
+    let hex = e.colors["accents"][set["accent"].as_str().unwrap()]
+        .as_str()
+        .unwrap();
+    let c = nk_view::parse_color(hex).unwrap().components;
+    let appearance = nk_settings::portal::Appearance {
+        accent: [c[0] as f64, c[1] as f64, c[2] as f64],
+        dark: true,
+        reduce_transparency: false,
+        window_background: set["windowBackground"].as_str().unwrap().into(),
+        reduced_motion: false,
+        font: "Sans 11".into(),
+        text_scale: 1.,
+    };
+    Some(tokens(&e, &appearance).unwrap())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -1314,42 +1354,8 @@ mod tests {
     /// The exported tokens, as the Settings tests read them; None (skipped) without an
     /// export unless CI requires one.
     fn exported() -> Option<Tokens> {
-        let root = std::env::var_os("NK_SETTINGS_DATA")
-            .map(std::path::PathBuf::from)
-            .unwrap_or_else(|| {
-                std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../build/settings-data")
-            });
-        if !root.join("version").exists() {
-            assert!(
-                std::env::var_os("NK_REQUIRE_EXPORT").is_none(),
-                "NK_REQUIRE_EXPORT set and no build/settings-data"
-            );
-            eprintln!("skipped: no build/settings-data");
-            return None;
-        }
-        let e = nk_settings::exports::Exports::load(&root).unwrap();
-        let set = e.colors["sets"]
-            .as_array()
-            .unwrap()
-            .iter()
-            .find(|s| s["dark"] == true && s["reduceTransparency"] == false)
-            .unwrap();
-        let hex = e.colors["accents"][set["accent"].as_str().unwrap()]
-            .as_str()
-            .unwrap();
-        let c = nk_view::parse_color(hex).unwrap().components;
-        let appearance = nk_settings::portal::Appearance {
-            accent: [c[0] as f64, c[1] as f64, c[2] as f64],
-            dark: true,
-            reduce_transparency: false,
-            window_background: set["windowBackground"].as_str().unwrap().into(),
-            reduced_motion: false,
-            font: "Sans 11".into(),
-            text_scale: 1.,
-        };
-        Some(tokens(&e, &appearance).unwrap())
+        exported_tokens()
     }
-
     fn laid(history: Vec<Banner>, setup: impl FnOnce(&mut View)) -> Option<View> {
         let mut p = View {
             tokens: Some(exported()?),

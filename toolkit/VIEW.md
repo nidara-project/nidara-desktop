@@ -3,7 +3,7 @@
 
 Part of #1048 (read it first: why one description, what is out of scope). **Status: accepted. Pieces 1
 to 6 and 8 (§2 to §9) are built in `toolkit/crates/nk-view`, which no surface uses yet. The NC's
-behaviour is decided (end of file).**
+behaviour is decided (end of file). §12, the Control Center's, is proposed (2026-11-11).**
 
 This file covers the two pieces that the shell inventory of 2026-11-10 ranked first:
 
@@ -45,7 +45,8 @@ toolkit/crates/nk-view     nk-view → nk-text, nk-render, nk-a11y, nk-wayland (
 ```
 
 - `nk-view` depends on nothing in `toolkit/shell`. The shell depends on it.
-- It does not depend on `nk-widgets`, and `nk-widgets` does not depend on it.
+- It uses `nk-widgets` only for models two surfaces share with the native Settings: the scroll
+  bar (§8) and the slider's range (§12.1). `nk-widgets` does not depend on it.
 - It owns no Wayland connection. The surface hands `nk-view`'s output (placed rects, paint,
   semantics, panes with their state regions) to `nk-wayland`, as today.
 
@@ -335,8 +336,8 @@ and an overlay does not.
 
 ## 10. Not in this contract
 
-The tile grid (piece 7), the tooltip (piece 9) and the calendar (piece 10). The first NC keeps
-today's calendar.
+The tooltip (piece 9) and the calendar (piece 10). The NC keeps today's calendar. The tile grid
+(piece 7) is §12, with the three things the Control Center needs besides it.
 
 ## 11. Acceptance for the NC pilot
 
@@ -421,3 +422,89 @@ real NC.
 That all N cards are drawn comes from the code (one call per shape, no cap) and from the GPU
 time growing with N. It is not seen in a screenshot. The private Hyalo refuses screenshots,
 because the run has no consent for computer control.
+
+## 12. The Control Center (owner, 2026-11-11)
+
+The CC is about 7,700 lines (`toolkit/shell/src/cc*.rs`) that place, hit-test, focus, wash and
+paint by hand, as the NC did. It moves onto `nk-view` in three steps, each merged before the
+next: **the detail pages** (`ccdetail.rs`: Wi-Fi, Bluetooth, VPN, Ethernet, sound, brightness,
+battery, clipboard, media, screenshot, recording, network passwords), then **the grid and its
+tiles**, then **edit mode**. Behaviour does not change in any of them: `CC.md` stays the
+description of what the CC does, and each step is checked against it. Four kinds of node are
+missing, and this section adds them.
+
+### 12.1 Slider
+
+`Node::slider(key, name, range, value, action)`: a control holding a value. The range is
+`nk-widgets`' `ValueRange` (min, max, step, how the value is said, "4500 K"), the one the native
+Settings slider holds. Its stepping, clamping and keys move out of `Tree` into a model both use,
+as the scroll bar did (§8), so there is one slider and its rules are written once:
+
+- **Pointer.** A press on the track puts the value under the pointer and captures the pointer;
+  a drag keeps doing so, past the ends too; the release ends it. The press never starts a swipe.
+- **Keys.** Left/Down a step back, Right/Up a step on, Page Up/Down `pageSteps` (10), Home/End
+  the ends, as Settings has them.
+- **Readers.** An AT-SPI slider with its value, minimum, maximum and step and the value's text;
+  `SetValue` is a change like any other.
+- **What the surface gets.** `Activated { key, action }` carrying the new value, on every change
+  of a drag (the surface coalesces, as `ccdetail` does by `coalescing_key`), and once more on
+  release. While the pointer holds it, a rebuild with an older value from the model does not move
+  the thumb: the held value wins until release (`held` today).
+- **Look.** Two, from tokens, never numbers in the surface: the **row slider** of a list
+  (`components.json` `range.slider`: track 6, thumb 9, fill at 0.9, its value said beside it), and
+  the **tile slider** of the CC (§12.4), which fills its tile as today. Hover, press and focus are
+  §4's; the thumb is the hover's silhouette.
+
+### 12.2 Text field
+
+`Node::field(key, name, action, Field { shown, caret, anchor, secret })`: one line of text being
+typed. nk-view **shows** it (its text, the caret and the selection), focuses it, gives the input
+method the caret's rect and gives readers the field. It does **not edit** it: the text belongs to
+whoever owns it, which edits it with its own rules. In Settings that is `nk-text`'s `Editor`; in
+the CC it is `ccauth`'s password form, which bounds the length, refuses a paste that outlived its
+question or field, and has no way to copy. Those rules are tested and guard secrets, so moving
+the CC does not rewrite them.
+
+- **A secret never enters the view.** The view is `Debug` and serializable, so a secret field is
+  handed over as its bullets, one per character as typed, with the caret and the selection as
+  offsets into them. Its reader node is a `Password` with EditableText and no text.
+- **Focus.** A press or Tab focuses a field; a press never activates it. While a field has the
+  focus, `ViewState::editing()` names it (a press anywhere else ends that), and the surface sends typed keys and the input
+  method's text to its editor before §4's keys. Enter activates the field's action (submit);
+  Tab and Shift+Tab move on; Escape is the surface's.
+- **Input method.** `ViewState::caret(key)` is the caret's rect on the surface, for
+  `TextInput`.
+- **Look.** The caret is drawn while the field holds the focus, in the primary ink, 1 px wide and
+  a line tall; the selection in the accent at 30 %, as the `search` component has it.
+
+### 12.3 Painted slot
+
+`Node::slot(key, size)`: room the surface draws in itself, for what is neither text nor glyph:
+an app's or a notice's picture (the NC does this today by key, `nc_view.rs` `artwork`), the
+battery ring, the resource gauges, a media cover, a clipboard thumbnail. `nk-view` places it,
+clips it and gives its opacity (§6, §7); the surface paints it after the view, at that opacity
+(`nk-render` `push_opacity`). A slot is not a control and has no hover; a control can hold one.
+
+### 12.4 Tile grid (piece 7)
+
+`Node::grid(key, columns, unit, gap, tiles)`: cells of `unit` with `gap` between them, each tile a
+child at `(column, row)` spanning `(width, height)` cells. Today: 4 columns of 76, gaps of 20, at
+most 8 rows; sizes 1×1, 2×1, 1×2, 2×2 and 4×1 (`cclayout.rs`).
+
+- **Where tiles go is not decided here.** `cclayout.rs`'s pure rules (default packing, personal
+  cells, moves, swaps, gravity, refusals) stay the surface's; the grid places what it is given.
+- **Shapes.** A tile is a pane whose corner follows its size, as `CC.md` says: a 1×1 a circle,
+  2×1 and 1×2 a capsule, a 2×2 corner 38, the 4×1 the dock's corner (24), never a capsule.
+- **Edit mode.** A tile being dragged follows the pointer from its press offset; the others move
+  to the preview the surface computes. The motion stays Hyalo's: tiles are its synchronized
+  layers with the viewport's clip (`CC.md`, "Persistence and motion"), and no client timer
+  drives them. Tab, Ctrl+arrows, Menu/Shift+F10, Delete and the named reader actions (Move,
+  Resize, Remove) are the grid's keys, mapped to the surface's actions.
+- **Rows past the viewport** scroll (§8): edit shows all eight rows.
+
+### 12.5 Acceptance, per step
+
+As the NC's (§11): the CC alone, in Rust, never compared with TS on screen; the lines before and
+after; every behaviour in `CC.md` kept, each with a check that fails without it; the headless CC
+runs (`check-cc-headless.sh`, and `check-cc-edit-headless.sh` for edit mode) passing; and a look
+in the owner's session with their OK.
