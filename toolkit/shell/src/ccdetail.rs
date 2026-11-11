@@ -674,6 +674,10 @@ impl Detail {
         a.and_then(|a| self.activated(&a))
     }
     /// A release: a row activates when released over itself; a slider reports its last value.
+    /// Whether the pointer holds a row down.
+    pub fn held(&self) -> bool {
+        self.state.press().is_some()
+    }
     pub fn release(&mut self) -> Option<Action> {
         let a = self.state.button(false, std::time::Instant::now());
         a.and_then(|a| self.activated(&a))
@@ -1919,6 +1923,37 @@ mod tests {
         assert_eq!(progress(&d), 1., "on, once ticked");
         assert!(!d.animating());
         assert!(!d.tick_at(&mut text, later), "nothing left to draw");
+    }
+    #[test]
+    fn a_click_the_page_acts_on_itself_asks_the_bar_to_build_it_again() {
+        let s = status();
+        let mut d = Detail::new("screenrecord", 1);
+        if !laid(&mut d, &s, [0., 50., 396., 400.]) {
+            return;
+        }
+        let audio = d
+            .rows
+            .iter()
+            .find(|r| r.action == Some(Action::ToggleAudio))
+            .unwrap()
+            .id;
+        let r = d.state.rect(&row_key(audio)).unwrap();
+        let at = (r[0] + 20., r[1] + r[3] / 2.);
+        let mut cc = super::super::Cc::new();
+        cc.detail = Some(d);
+        let d = cc.detail.as_mut().unwrap();
+        d.motion(at);
+        d.press();
+        let before = d.audio;
+        // Audio is the page's own: no action for the bar, and yet the page changed.
+        assert_eq!(
+            cc.release(&s),
+            (true, None),
+            "the bar must rebuild the page"
+        );
+        assert_ne!(cc.detail.as_ref().unwrap().audio, before);
+        // A release that held nothing changes nothing.
+        assert_eq!(cc.release(&s), (false, None));
     }
     #[test]
     fn the_night_light_switch_stays_usable_while_the_schedule_is_on() {

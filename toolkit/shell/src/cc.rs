@@ -531,8 +531,11 @@ impl Cc {
     /// button released over itself, a slider's last value, a detail's row).
     pub fn release(&mut self, status: &Status) -> (bool, Option<Act>) {
         if let Some(d) = &mut self.detail {
+            // A row the page acts on itself (recording audio, a mode) asks for nothing, yet
+            // the page must be built again to show it: any held row's release rebuilds.
+            let held = d.held();
             let act = d.release().map(Act::Detail);
-            return (act.is_some(), act);
+            return (held || act.is_some(), act);
         }
         let held = self.holding() || self.state.press().is_some();
         let act = self
