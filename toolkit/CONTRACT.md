@@ -274,7 +274,9 @@ constant width, revealed by scrolling or by motion over the pane, faded `hideMs`
 the pointer is on the lane or drags it; on the lane it widens and shows a faint track. A
 press on the empty track jumps there, then drags. The hit lane never grows. Time advances
 only through `Tree::tick_scrollbars(now)`, which the app calls from its idle; a press the bar
-takes never reaches the row under it. Without the style there is no bar.
+takes never reaches the row under it. Without the style there is no bar. The bar itself
+(`ScrollBar`, `BarGeometry`, `ScrollbarStyle::geometry`) stands apart from the Tree, so the
+shell's views (`nk-view`, VIEW.md §8) draw the same one.
 
 ### Dropdown menu list (#882/#915)
 
@@ -621,6 +623,9 @@ Phase 0 remains an independent client of those four crates.
   clamped vertical offset and reveals focused pages below its fixed header. Vertical
   layer scroll routes to sidebar/content for sidebar/title respectively; horizontal
   layer scroll routes to content through nk-wayland::LayerEvent::HorizontalScroll.
+  A scroll event carries a `ScrollAmount`: its pixels, and its wheel detents when a wheel
+  gave it (seat v8 `axis_value120`, or `axis_discrete` from an older seat). This Tree scrolls
+  by the pixels; `nk-view` scrolls a wheel by its detents (VIEW.md §8).
   The no-layers fallback uses one
   sampled client timeline for paint/hit-testing/focus, with AT-SPI bounds at model values;
   reduced motion omits the transition. Hyalo's layer glass is separate work.
@@ -708,11 +713,11 @@ it means for the toolkit:
 - No widget paints a blur, tone, rim or shadow imitating glass while the protocol is offered. A
   state Hyalo cannot express is a request added to the protocol (v1), not a client painting.
 
-## nk-view — shell layout and interaction (proposal, #1048)
+## nk-view — shell layout and interaction (#1048)
 
 The shell's own view vocabulary (stack, pane, text, icon, spacer, control), its layout from
-spacing tokens and the hover/press/focus state it declares to Hyalo per pane: `VIEW.md`. A
-proposal for the owner's review; nothing depends on it yet.
+spacing tokens and the hover/press/focus state it declares to Hyalo per pane: `VIEW.md`.
+Built in `crates/nk-view` (its README); no surface uses it yet.
 
 ## Floating control capsule — proposal for #889
 

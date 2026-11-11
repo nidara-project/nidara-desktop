@@ -1174,6 +1174,7 @@ dependencies = [
  "nk-render",
  "nk-settings",
  "nk-text",
+ "nk-view",
  "nk-wayland",
  "nk-widgets",
  "png 0.18.1",
@@ -1276,6 +1277,21 @@ dependencies = [
  "serde",
  "serde_json",
  "ttf-parser",
+ "unicode-segmentation",
+]
+
+[[package]]
+name = "nk-view"
+version = "0.1.0"
+dependencies = [
+ "nk-a11y",
+ "nk-icons",
+ "nk-render",
+ "nk-text",
+ "nk-wayland",
+ "nk-widgets",
+ "serde",
+ "serde_json",
  "unicode-segmentation",
 ]
 

@@ -654,7 +654,7 @@ impl Composition {
                     tree,
                     kind == Kind::Sidebar,
                     matches!(event, LayerEvent::HorizontalScroll(_)),
-                    *delta,
+                    delta.pixels,
                     false,
                 )?;
                 Ok(true)
@@ -760,7 +760,7 @@ impl Composition {
                     tree,
                     sidebar,
                     matches!(event, Event::HorizontalScroll(_)),
-                    *delta,
+                    delta.pixels,
                     true,
                 )?;
             }
@@ -867,6 +867,7 @@ impl Composition {
 mod tests {
     use super::*;
     use nk_text::{FontSet, ParleyBackend};
+    use nk_wayland::ScrollAmount;
     use std::sync::Arc;
     fn fixture() -> (Tree, ParleyBackend, NodeId, NodeId, NodeId) {
         let mut t = Tree::new(
@@ -1060,8 +1061,12 @@ mod tests {
         let (mut t, _, sidebar, _, content) = fixture();
         let mut c = Composition::default();
         assert!(
-            c.layer_scroll(&mut t, Kind::Sidebar, &LayerEvent::Scroll(10000.))
-                .unwrap()
+            c.layer_scroll(
+                &mut t,
+                Kind::Sidebar,
+                &LayerEvent::Scroll(ScrollAmount::pixels(10000.))
+            )
+            .unwrap()
         );
         let max = t.node(sidebar).unwrap().measured().height - t.sidebar_viewport().height;
         assert_eq!(t.node(sidebar).unwrap().scroll().y, max);
@@ -1069,8 +1074,12 @@ mod tests {
         let page = *t.node(sidebar).unwrap().children().last().unwrap();
         let point = t.node(page).unwrap().bounds().center();
         assert_eq!(t.hit_test(point), Some(page));
-        c.layer_scroll(&mut t, Kind::Sidebar, &LayerEvent::Scroll(-10000.))
-            .unwrap();
+        c.layer_scroll(
+            &mut t,
+            Kind::Sidebar,
+            &LayerEvent::Scroll(ScrollAmount::pixels(-10000.)),
+        )
+        .unwrap();
         assert_eq!(t.node(sidebar).unwrap().scroll().y, 0.);
         assert!(!t.showing(page));
         t.focus(page).unwrap();
@@ -1082,14 +1091,22 @@ mod tests {
         let (mut t, _, sidebar, _, content) = fixture();
         let mut c = Composition::default();
         assert!(
-            c.layer_scroll(&mut t, Kind::TitleBar, &LayerEvent::Scroll(90.))
-                .unwrap()
+            c.layer_scroll(
+                &mut t,
+                Kind::TitleBar,
+                &LayerEvent::Scroll(ScrollAmount::pixels(90.))
+            )
+            .unwrap()
         );
         assert_eq!(t.node(content).unwrap().scroll().y, 90.);
         assert_eq!(t.node(sidebar).unwrap().scroll().y, 0.);
         assert!(
-            c.layer_scroll(&mut t, Kind::TitleBar, &LayerEvent::HorizontalScroll(70.))
-                .unwrap()
+            c.layer_scroll(
+                &mut t,
+                Kind::TitleBar,
+                &LayerEvent::HorizontalScroll(ScrollAmount::pixels(70.))
+            )
+            .unwrap()
         );
         assert_eq!(t.node(content).unwrap().scroll().x, 70.);
         assert_eq!(t.node(content).unwrap().scroll().y, 90.);
@@ -1133,8 +1150,12 @@ mod tests {
         );
         let old_list = t.node(list).unwrap().scroll();
         let old_content = t.node(content).unwrap().scroll();
-        c.layer_scroll(&mut t, Kind::TitleBar, &LayerEvent::Scroll(-30.))
-            .unwrap();
+        c.layer_scroll(
+            &mut t,
+            Kind::TitleBar,
+            &LayerEvent::Scroll(ScrollAmount::pixels(-30.)),
+        )
+        .unwrap();
         assert_eq!(
             t.node(list).unwrap().scroll(),
             old_list,

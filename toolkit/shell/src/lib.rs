@@ -28,6 +28,7 @@ pub mod material;
 pub mod menu;
 pub mod model;
 pub mod nc;
+pub mod nc_view;
 pub mod notification_card;
 pub mod notification_wire;
 pub mod notifications;

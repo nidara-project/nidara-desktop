@@ -15,7 +15,7 @@ mod latest;
 pub use geometry::{TextGeometry, TextSpan};
 pub type Result<T> = std::result::Result<T, String>;
 pub type NodeId = u64;
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub enum Role {
     Notification,
     Alert,

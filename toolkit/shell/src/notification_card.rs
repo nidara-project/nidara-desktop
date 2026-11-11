@@ -32,7 +32,7 @@ pub struct Artwork<'a> {
     pub scale: f64,
 }
 impl Artwork<'_> {
-    fn pixels(&self, logical: u32) -> u32 {
+    pub(crate) fn pixels(&self, logical: u32) -> u32 {
         (f64::from(logical) * self.scale).ceil().clamp(1., 1024.) as u32
     }
 }
@@ -358,7 +358,7 @@ impl Card {
         Ok(())
     }
 }
-fn asset_image(
+pub(crate) fn asset_image(
     namespace: &str,
     b: &Banner,
     path: &str,
@@ -432,7 +432,7 @@ fn sender_icon(b: &Banner) -> &str {
 }
 /// The art of a sender no app or icon names: the information glyph, as the TS card had it.
 const UNKNOWN_SENDER: &str = "nd-dialog-information-symbolic";
-fn app_asset(art: &Artwork<'_>, b: &Banner) -> Option<Arc<crate::icon_memory::Asset>> {
+pub(crate) fn app_asset(art: &Artwork<'_>, b: &Banner) -> Option<Arc<crate::icon_memory::Asset>> {
     let theme = art.theme;
     let apps = art.catalogue;
     let namespace = art.namespace;

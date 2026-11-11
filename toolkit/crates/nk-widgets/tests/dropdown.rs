@@ -970,7 +970,10 @@ fn embedded_lists_keep_styles_and_wheel_offsets_independent() {
         y: r.y + 2.,
     };
     composition
-        .event(&mut tree, &nk_wayland::Event::Scroll(30.))
+        .event(
+            &mut tree,
+            &nk_wayland::Event::Scroll(nk_wayland::ScrollAmount::pixels(30.)),
+        )
         .unwrap();
     assert_eq!(tree.node(list).unwrap().scroll().y, 30.);
     assert_eq!(tree.node(other).unwrap().scroll().y, 0.);

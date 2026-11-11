@@ -59,9 +59,11 @@ impl ScrollbarStyle {
     }
 }
 
-/// One pane's bar: what reveals it and where its animation stands.
+/// One scrolling pane's bar: what reveals it and where its animation stands. The kit's
+/// one bar: the native Tree uses it for its content Scroll and Sidebar, and `nk-view` for
+/// its scroll regions, so both paint, fade and drag alike.
 #[derive(Clone, Copy, Debug, Default)]
-pub(crate) struct Bar {
+pub struct ScrollBar {
     /// Something revealed it since the last tick (a scroll, motion over the pane).
     revealed: bool,
     shown_at: Option<Instant>,
@@ -73,15 +75,191 @@ pub(crate) struct Bar {
     last: Option<Instant>,
 }
 
-/// Where the thumb sits, in window coordinates.
-struct Geometry {
-    lane: Rect,
-    track: Rect,
-    thumb_y: f32,
-    thumb_h: f32,
+/// Where a bar's thumb sits, in the coordinates its viewport was given in.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct BarGeometry {
+    /// The hit lane at the viewport's trailing edge; it never grows.
+    pub lane: Rect,
+    pub track: Rect,
+    pub thumb_y: f32,
+    pub thumb_h: f32,
     /// Scroll range and thumb travel, for converting a pointer delta into an offset.
-    range: f32,
-    travel: f32,
+    pub range: f32,
+    pub travel: f32,
+}
+
+impl ScrollbarStyle {
+    /// The style, if it is valid.
+    pub fn checked(self) -> Result<Self> {
+        self.validate()?;
+        Ok(self)
+    }
+    /// What a rounded corner of radius `r` at an end of the lane takes from the track: the
+    /// pill keeps `corner_clear` from the curve as it keeps `edge_clear` from the wall
+    /// (scrolled.ts cornerClearFor). A square end takes `corner_clear`.
+    fn corner(&self, r: f32) -> f32 {
+        if r <= self.edge_clear {
+            self.corner_clear
+        } else {
+            (r - (r * r - (r - self.edge_clear).powi(2)).sqrt()).ceil() + self.corner_clear
+        }
+    }
+    /// The bar of a `viewport` showing `content` px of height scrolled to `offset`, with
+    /// corners of the given radii at its top and bottom ends. None when nothing scrolls.
+    pub fn geometry(
+        &self,
+        viewport: Rect,
+        content: f32,
+        offset: f32,
+        top_radius: f32,
+        bottom_radius: f32,
+    ) -> Option<BarGeometry> {
+        // Half a pixel of slack: a rounding difference must not flash a bar that cannot move.
+        let range = content - viewport.height;
+        if range <= 0.5 || viewport.height <= 0. {
+            return None;
+        }
+        let lane = Rect {
+            x: viewport.x + viewport.width - self.lane,
+            y: viewport.y,
+            width: self.lane,
+            height: viewport.height,
+        };
+        let (top, bottom) = (self.corner(top_radius), self.corner(bottom_radius));
+        let track = Rect {
+            y: viewport.y + top,
+            height: (viewport.height - top - bottom).max(1.),
+            ..lane
+        };
+        let thumb_h = self
+            .thumb_min
+            .max((track.height * viewport.height / content).round())
+            .min(track.height);
+        let travel = (track.height - thumb_h).max(1.);
+        let progress = (offset / range).clamp(0., 1.);
+        Some(BarGeometry {
+            lane,
+            track,
+            thumb_y: track.y + progress * travel,
+            thumb_h,
+            range,
+            travel,
+        })
+    }
+}
+
+impl ScrollBar {
+    /// A scroll, or motion over the pane: the bar shows from the next tick.
+    pub fn reveal(&mut self) {
+        self.revealed = true;
+    }
+    /// Whether the pointer is on the lane; true when that changed.
+    pub fn set_in_lane(&mut self, on: bool) -> bool {
+        std::mem::replace(&mut self.in_lane, on) != on
+    }
+    /// Whether it is drawn at all (a hidden bar takes no press).
+    pub fn shown(&self) -> bool {
+        self.opacity > 0.
+    }
+    pub fn opacity(&self) -> f32 {
+        self.opacity
+    }
+    pub fn width(&self) -> f32 {
+        self.width
+    }
+    pub fn dragging(&self) -> bool {
+        self.drag.is_some()
+    }
+    /// A press at `y` on the lane of a pane scrolled to `offset`: on the empty track it
+    /// jumps there first, then the drag starts from that position. Returns the offset to
+    /// scroll to.
+    pub fn press(&mut self, g: &BarGeometry, y: f32, offset: f32) -> f32 {
+        let start = if y < g.thumb_y || y > g.thumb_y + g.thumb_h {
+            ((y - g.track.y - g.thumb_h / 2.) / g.travel * g.range).clamp(0., g.range)
+        } else {
+            offset
+        };
+        self.drag = Some((y, start));
+        start
+    }
+    /// The pointer at `y` during a drag: the offset it asks for, the thumb following it one
+    /// to one. None without a drag.
+    pub fn drag_to(&self, g: &BarGeometry, y: f32) -> Option<f32> {
+        self.drag
+            .map(|(start_y, start)| start + (y - start_y) * g.range / g.travel)
+    }
+    /// A release: true when it ended a drag, which reveals the bar again.
+    pub fn release(&mut self) -> bool {
+        let ended = self.drag.take().is_some();
+        self.revealed |= ended;
+        ended
+    }
+    /// Advance to `now`: whether it changed, and whether it still moves or waits to hide.
+    pub fn tick(&mut self, s: &ScrollbarStyle, now: Instant) -> (bool, bool) {
+        if std::mem::take(&mut self.revealed) {
+            self.shown_at = Some(now);
+        }
+        let held = self.in_lane || self.drag.is_some();
+        let recent = self
+            .shown_at
+            .is_some_and(|t| (now - t).as_secs_f32() * 1000. < s.hide_ms);
+        let target_opacity = if held || recent { 1. } else { 0. };
+        let target_width = if held { s.thumb_hover } else { s.thumb_rest };
+        let dt = self
+            .last
+            .map_or(0., |t| ((now - t).as_secs_f32() * 1000.).min(50.));
+        self.last = Some(now);
+        let (opacity, width) = (self.opacity, self.width.max(s.thumb_rest));
+        // Showing is immediate, as the kit's opacity flip; hiding fades.
+        self.opacity = if target_opacity > opacity {
+            1.
+        } else {
+            (opacity - dt / s.fade_ms).max(0.)
+        };
+        self.width = width + (target_width - width) * (1. - (-dt / s.width_tau_ms).exp());
+        if (target_width - self.width).abs() < 0.25 {
+            self.width = target_width;
+        }
+        let changed = self.opacity != opacity || self.width != width;
+        (changed, self.opacity > 0. || self.width != target_width)
+    }
+    /// Paint the bar at `g`, shifted by `-origin`.
+    pub fn paint(&self, s: &ScrollbarStyle, g: &BarGeometry, origin: Point, canvas: &mut Canvas) {
+        if self.opacity <= 0. {
+            return;
+        }
+        let width = self.width.max(s.thumb_rest);
+        let held = self.in_lane || self.drag.is_some();
+        let mut ink = if held { s.active } else { s.color };
+        ink.components[3] *= self.opacity;
+        let x = g.lane.x + g.lane.width - s.edge_clear - width - origin.x;
+        let expand = ((width - s.thumb_rest) / (s.thumb_hover - s.thumb_rest).max(f32::EPSILON))
+            .clamp(0., 1.);
+        if expand > 0.01 {
+            let mut track = ink;
+            track.components[3] *= s.track_opacity * expand;
+            canvas.rounded_rect(
+                Rect {
+                    x,
+                    y: g.track.y - origin.y,
+                    width,
+                    height: g.track.height,
+                },
+                (width / 2.) as f64,
+                track,
+            );
+        }
+        canvas.rounded_rect(
+            Rect {
+                x,
+                y: g.thumb_y - origin.y,
+                width,
+                height: g.thumb_h,
+            },
+            (width / 2.) as f64,
+            ink,
+        );
+    }
 }
 
 impl Tree {
@@ -106,64 +284,28 @@ impl Tree {
             })
             .collect()
     }
-    fn bar_geometry(&self, id: NodeId) -> Option<Geometry> {
+    fn bar_geometry(&self, id: NodeId) -> Option<BarGeometry> {
         let s = self.scrollbar_style.as_ref()?;
         let n = self.nodes.get(&id)?;
-        let (viewport, radius) = match n.kind {
+        // The window's own corner is the compositor's; the sidebar's frame shares its radius,
+        // so the bottom clearance is taken from the same curve. The content pane's top edge
+        // meets the header line, not a corner.
+        let (viewport, top) = match n.kind {
             Kind::Sidebar => (self.sidebar_viewport(), self.sidebar_radius),
-            // The window's own corner is the compositor's; the sidebar's frame shares its
-            // radius, so the bottom clearance is taken from the same curve.
-            Kind::Scroll => (self.content_viewport(), self.sidebar_radius),
+            Kind::Scroll => (self.content_viewport(), 0.),
             _ => return None,
         };
-        // Half a pixel of slack: a rounding difference must not flash a bar that cannot move.
-        let range = n.measured.height - viewport.height;
-        if range <= 0.5 || viewport.height <= 0. {
-            return None;
-        }
-        // A rounded corner clips what is drawn inside its arc; the pill keeps corner_clear
-        // from the curve as it keeps edge_clear from the wall (scrolled.ts cornerClearFor).
-        let corner = if radius <= s.edge_clear {
-            s.corner_clear
-        } else {
-            (radius - (radius * radius - (radius - s.edge_clear).powi(2)).sqrt()).ceil()
-                + s.corner_clear
-        };
-        let lane = Rect {
-            x: viewport.x + viewport.width - s.lane,
-            y: viewport.y,
-            width: s.lane,
-            height: viewport.height,
-        };
-        // The top edge meets the header line, not a corner, in the content pane.
-        let top = if n.kind == Kind::Sidebar {
-            corner
-        } else {
-            s.corner_clear
-        };
-        let track = Rect {
-            y: viewport.y + top,
-            height: (viewport.height - top - corner).max(1.),
-            ..lane
-        };
-        let thumb_h = s
-            .thumb_min
-            .max((track.height * viewport.height / n.measured.height).round())
-            .min(track.height);
-        let travel = (track.height - thumb_h).max(1.);
-        let progress = (n.scroll.y / range).clamp(0., 1.);
-        Some(Geometry {
-            lane,
-            track,
-            thumb_y: track.y + progress * travel,
-            thumb_h,
-            range,
-            travel,
-        })
+        s.geometry(
+            viewport,
+            n.measured.height,
+            n.scroll.y,
+            top,
+            self.sidebar_radius,
+        )
     }
     fn reveal_bar(&mut self, id: NodeId) {
         if self.scrollbar_style.is_some() {
-            self.bars.entry(id).or_default().revealed = true;
+            self.bars.entry(id).or_default().reveal();
         }
     }
     /// A scroll offset changed: the pane's bar shows.
@@ -181,15 +323,12 @@ impl Tree {
                 continue;
             };
             let bar = self.bars.entry(id).or_default();
-            if let Some((start_y, start)) = bar.drag {
-                let offset = start + (p.y - start_y) * g.range / g.travel;
+            if let Some(offset) = bar.drag_to(&g, p.y) {
                 let x = self.nodes[&id].scroll.x;
                 self.scroll_to(id, Point { x, y: offset })?;
                 return Ok(true);
             }
-            let in_lane = contains(g.lane, p);
-            if in_lane != bar.in_lane {
-                bar.in_lane = in_lane;
+            if bar.set_in_lane(contains(g.lane, p)) {
                 self.invalidate(id, Invalid::STATE);
             }
             let pane = Rect {
@@ -219,17 +358,14 @@ impl Tree {
             let Some(g) = self.bar_geometry(id) else {
                 continue;
             };
-            if !contains(g.lane, p) || self.bars.get(&id).is_none_or(|b| b.opacity <= 0.) {
+            if !contains(g.lane, p) || self.bars.get(&id).is_none_or(|b| !b.shown()) {
                 continue;
             }
-            let x = self.nodes[&id].scroll.x;
-            if p.y < g.thumb_y || p.y > g.thumb_y + g.thumb_h {
-                let y = (p.y - g.track.y - g.thumb_h / 2.) / g.travel * g.range;
+            let (x, offset) = (self.nodes[&id].scroll.x, self.nodes[&id].scroll.y);
+            let y = self.bars.entry(id).or_default().press(&g, p.y, offset);
+            if y != offset {
                 self.scroll_to(id, Point { x, y })?;
             }
-            let start = self.nodes[&id].scroll.y;
-            let bar = self.bars.entry(id).or_default();
-            bar.drag = Some((p.y, start));
             self.invalidate(id, Invalid::STATE);
             return Ok(true);
         }
@@ -239,8 +375,7 @@ impl Tree {
     pub fn scrollbar_release(&mut self) -> bool {
         let mut ended = None;
         for (&id, bar) in self.bars.iter_mut() {
-            if bar.drag.take().is_some() {
-                bar.revealed = true;
+            if bar.release() {
                 ended = Some(id);
             }
         }
@@ -253,18 +388,15 @@ impl Tree {
         let left: Vec<_> = self
             .bars
             .iter_mut()
-            .filter(|(_, b)| b.in_lane && b.drag.is_none())
-            .map(|(id, b)| {
-                b.in_lane = false;
-                *id
-            })
+            .filter(|(_, b)| !b.dragging())
+            .filter_map(|(id, b)| b.set_in_lane(false).then_some(*id))
             .collect();
         for id in left {
             self.invalidate(id, Invalid::STATE);
         }
     }
     pub fn scrollbar_dragging(&self) -> bool {
-        self.bars.values().any(|b| b.drag.is_some())
+        self.bars.values().any(|b| b.dragging())
     }
     /// Advance the bars to `now`. True while any of them still moves or waits to hide, so
     /// the caller keeps ticking.
@@ -275,34 +407,11 @@ impl Tree {
         let mut busy = false;
         let mut changed = Vec::new();
         for (&id, bar) in self.bars.iter_mut() {
-            if std::mem::take(&mut bar.revealed) {
-                bar.shown_at = Some(now);
-            }
-            let held = bar.in_lane || bar.drag.is_some();
-            let recent = bar
-                .shown_at
-                .is_some_and(|t| (now - t).as_secs_f32() * 1000. < s.hide_ms);
-            let target_opacity = if held || recent { 1. } else { 0. };
-            let target_width = if held { s.thumb_hover } else { s.thumb_rest };
-            let dt = bar
-                .last
-                .map_or(0., |t| ((now - t).as_secs_f32() * 1000.).min(50.));
-            bar.last = Some(now);
-            let (opacity, width) = (bar.opacity, bar.width.max(s.thumb_rest));
-            // Showing is immediate, as the kit's opacity flip; hiding fades.
-            bar.opacity = if target_opacity > opacity {
-                1.
-            } else {
-                (opacity - dt / s.fade_ms).max(0.)
-            };
-            bar.width = width + (target_width - width) * (1. - (-dt / s.width_tau_ms).exp());
-            if (target_width - bar.width).abs() < 0.25 {
-                bar.width = target_width;
-            }
-            if bar.opacity != opacity || bar.width != width {
+            let (moved, moving) = bar.tick(&s, now);
+            if moved {
                 changed.push(id);
             }
-            busy |= bar.opacity > 0. || bar.width != target_width;
+            busy |= moving;
         }
         for id in changed {
             self.invalidate(id, Invalid::STATE);
@@ -311,46 +420,12 @@ impl Tree {
     }
     /// Paint `id`'s bar; `origin` is the surface's position in window coordinates.
     pub(crate) fn paint_scrollbar(&self, id: NodeId, origin: Point, canvas: &mut Canvas) {
-        let (Some(s), Some(bar), Some(g)) = (
+        if let (Some(s), Some(bar), Some(g)) = (
             self.scrollbar_style.as_ref(),
             self.bars.get(&id),
             self.bar_geometry(id),
-        ) else {
-            return;
-        };
-        if bar.opacity <= 0. {
-            return;
+        ) {
+            bar.paint(s, &g, origin, canvas);
         }
-        let width = bar.width.max(s.thumb_rest);
-        let held = bar.in_lane || bar.drag.is_some();
-        let mut ink = if held { s.active } else { s.color };
-        ink.components[3] *= bar.opacity;
-        let x = g.lane.x + g.lane.width - s.edge_clear - width - origin.x;
-        let expand = ((width - s.thumb_rest) / (s.thumb_hover - s.thumb_rest).max(f32::EPSILON))
-            .clamp(0., 1.);
-        if expand > 0.01 {
-            let mut track = ink;
-            track.components[3] *= s.track_opacity * expand;
-            canvas.rounded_rect(
-                Rect {
-                    x,
-                    y: g.track.y - origin.y,
-                    width,
-                    height: g.track.height,
-                },
-                (width / 2.) as f64,
-                track,
-            );
-        }
-        canvas.rounded_rect(
-            Rect {
-                x,
-                y: g.thumb_y - origin.y,
-                width,
-                height: g.thumb_h,
-            },
-            (width / 2.) as f64,
-            ink,
-        );
     }
 }
