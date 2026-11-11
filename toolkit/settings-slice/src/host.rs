@@ -131,7 +131,7 @@ impl Application for Slice {
             }
             Event::Motion(x, _) => self.pointer_x = x,
             Event::Scroll(delta) => {
-                self.scroll(delta as f32, w.size().1)?;
+                self.scroll(delta.pixels as f32, w.size().1)?;
                 w.redraw();
             }
             Event::PreferredScale(scale) => {

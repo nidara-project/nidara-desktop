@@ -325,6 +325,19 @@ phase0 stays independent. The fixed-data demo and libatspi controls live in
 `toolkit/widgets-demo` and `scripts/ci/nk-widgets-check.py`. Builds, evidence and
 logs for this work belong in target/ or ~/Nidara/ChatGPT/, never /tmp.
 
+### Shell views (nk-view)
+
+New shell surfaces and ports are built on `toolkit/crates/nk-view` (#1048), not by placing,
+hit-testing and painting by hand. Its contract is `toolkit/VIEW.md` and its README covers the
+API. Gaps, corners and motion are tokens read from `tokens/static.json` (`Space`, `Radius`, the
+kit's curves and durations). Hover, press and focus are derived by key. A `Reveal` opens and
+closes in place, moved panes slide, and a `swipe(action)` control is swiped off and reported by
+`tick` when it is gone; the surface calls `tick` while `animating()`. A `Scroll` region builds
+only the rows inside `window(key)` (placeholders for the rest), keeps what is read in place on a
+rebuild, and draws the kit's one scroll bar (`nk-widgets` `ScrollBar`, shared with Settings). An `Overlay` places layers (a card's floating close) over a base without changing its size. Panes are declared whole,
+with their clip and their content's opacity. A pane never declares more than Hyalo's eight lit
+washes, and every other shown control is declared at rest so its hover fades in. The NC is the first consumer.
+
 ### Applications1 catalogue and native dock pins
 
 `nidara-sessiond --applications` opts into A1's catalogue, search, full-colour app

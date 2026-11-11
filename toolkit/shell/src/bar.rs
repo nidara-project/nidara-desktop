@@ -2495,7 +2495,7 @@ impl Application for Bar {
                     self.tray_click(i, button, Some(serial), w);
                 }
             }
-            Event::Scroll(delta) => {
+            Event::Scroll(nk_wayland::ScrollAmount { pixels: delta, .. }) => {
                 if self.nc_open {
                     self.nc.scroll(delta * 32.);
                     self.refresh(w);
@@ -2505,7 +2505,9 @@ impl Application for Bar {
                     self.tray_scroll(delta, false);
                 }
             }
-            Event::HorizontalScroll(delta) => self.tray_scroll(delta, true),
+            Event::HorizontalScroll(nk_wayland::ScrollAmount { pixels: delta, .. }) => {
+                self.tray_scroll(delta, true)
+            }
             Event::PopupOverlay { id, event } => {
                 if let Some(popup) = self.popup.as_mut().filter(|p| p.id == id) {
                     let outcome = popup.event(w, event);

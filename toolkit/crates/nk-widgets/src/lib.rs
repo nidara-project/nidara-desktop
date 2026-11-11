@@ -11,7 +11,7 @@ mod dropdown;
 mod scrollbar;
 pub use button::ButtonStyle;
 pub use dropdown::DropdownStyle;
-pub use scrollbar::ScrollbarStyle;
+pub use scrollbar::{BarGeometry, ScrollBar, ScrollbarStyle};
 mod dialog;
 mod dropdown_popup;
 pub use dialog::DialogTree;
@@ -318,7 +318,7 @@ pub struct Tree {
     dropdown_style: Option<DropdownStyle>,
     button_style: Option<ButtonStyle>,
     scrollbar_style: Option<ScrollbarStyle>,
-    bars: BTreeMap<NodeId, scrollbar::Bar>,
+    bars: BTreeMap<NodeId, scrollbar::ScrollBar>,
     label_styles: BTreeMap<NodeId, TextStyle>,
     images: BTreeMap<NodeId, image::Image>,
     thumbnail_styles: BTreeMap<NodeId, ThumbnailStyle>,

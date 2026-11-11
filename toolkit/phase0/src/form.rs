@@ -842,7 +842,7 @@ impl Form {
                     .labels
                     .last()
                     .map_or(570., |l| l.bounds.y + l.bounds.height);
-                self.corpus_scroll = (self.corpus_scroll + delta as f32 * 3.)
+                self.corpus_scroll = (self.corpus_scroll + delta.pixels as f32 * 3.)
                     .clamp(0., (last - self.height + 16.).max(0.));
             }
             Event::Key(k) => self.key(k, w)?,

@@ -183,12 +183,18 @@ fn viewport_shared_pixels_pointer_keyboard_and_semantics_agree() {
         ),
     )
     .unwrap();
-    c.event(&mut t, &nk_wayland::Event::HorizontalScroll(1000.))
-        .unwrap();
+    c.event(
+        &mut t,
+        &nk_wayland::Event::HorizontalScroll(nk_wayland::ScrollAmount::pixels(1000.)),
+    )
+    .unwrap();
     assert!(t.node(strip).unwrap().scroll().x > 0.);
     assert_eq!(t.node(scroll).unwrap().scroll().x, 0.);
-    c.event(&mut t, &nk_wayland::Event::Scroll(-10000.))
-        .unwrap();
+    c.event(
+        &mut t,
+        &nk_wayland::Event::Scroll(nk_wayland::ScrollAmount::pixels(-10000.)),
+    )
+    .unwrap();
     assert_eq!(t.node(strip).unwrap().scroll().x, 0.);
 }
 #[test]

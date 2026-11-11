@@ -936,7 +936,7 @@ impl Application for Launcher {
                 }
                 self.outside_press = false;
             }
-            Event::Scroll(delta) if !self.dragging => {
+            Event::Scroll(nk_wayland::ScrollAmount { pixels: delta, .. }) if !self.dragging => {
                 self.scroll = (self.scroll + delta).clamp(0., self.max_scroll());
                 self.hover = self.tile_at(self.pointer);
                 self.want_icons();
