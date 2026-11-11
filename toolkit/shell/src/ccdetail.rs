@@ -1303,11 +1303,8 @@ fn rows(page: &str, s: &Status, mode: &'static str, audio: bool) -> Vec<Row> {
                     )
                     .switch(n.enabled),
                 );
-                if s.night_schedule.0
-                    && let Some(row) = out.last_mut()
-                {
-                    row.action = None;
-                }
+                // The schedule acts only when it crosses a boundary, so the switch stays
+                // usable while it is on: a change by hand lasts until the next one (#957).
                 out.push(
                     Row::key(
                         "settings.appearance.night-light-temp",
@@ -1922,6 +1919,29 @@ mod tests {
         assert_eq!(progress(&d), 1., "on, once ticked");
         assert!(!d.animating());
         assert!(!d.tick_at(&mut text, later), "nothing left to draw");
+    }
+    #[test]
+    fn the_night_light_switch_stays_usable_while_the_schedule_is_on() {
+        let mut s = status();
+        s.night = Some(crate::status::Night {
+            enabled: true,
+            temperature: 4000,
+        });
+        s.night_schedule = (true, "22:00".into(), "07:00".into());
+        let rows = rows("night_light", &s, "screen", false);
+        let master = rows
+            .iter()
+            .find(|r| matches!(r.label, Label::Key("settings.appearance.night-light")))
+            .unwrap();
+        assert!(master.switch && master.checked == Some(true));
+        assert_eq!(
+            master.action,
+            Some(Action::Pref(
+                "nightlight.enabled",
+                crate::menu::PrefValue::Bool(false)
+            )),
+            "turned off by hand until the next boundary"
+        );
     }
     #[test]
     fn a_slider_action_is_explicit_and_clamped_and_mode_changes_have_no_effect() {

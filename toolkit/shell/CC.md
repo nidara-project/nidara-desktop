@@ -138,8 +138,9 @@ not invented here. Bluetooth reconnects paired devices, as the TS detail does;
 pairing/forgetting is a Settings responsibility. Volume selects an output and
 provides capability-gated device/application volume and mute. Media offers Auto,
 player selection, transport, and seek with the actual player/track revision. Night
-Light includes temperature and schedule times; its master switch is disabled while
-a schedule drives it. Brightness has a detail slider at 1×1. Focus and Appearance
+Light includes temperature and schedule times; its master switch stays usable while
+the schedule is on, since the schedule acts only when it crosses a boundary and a
+change by hand lasts until the next one (#957). Brightness has a detail slider at 1×1. Focus and Appearance
 have no TS detail and remain quick toggles.
 
 Object lists/actions pin the unique service owner that supplied them; network and
