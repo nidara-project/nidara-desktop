@@ -2861,7 +2861,7 @@ the appearance portal and exported tokens. `tokens/glass.json` is required: sele
 `variants[]` by `dark`/`reduceTransparency`, then the last `pieces.panel[]` step
 with `fromSide` at or below each pane's rounded shorter side. The composition
 resolves material separately for sidebar/title on resize; the export's wash is an
-object, not an array. Every token becomes a style in `nk_settings::styles` (the switch too: `components.json` `switch`), shared with the native Settings. Hyalo's own
+object, not an array. Every token becomes a style in `nk_platform::styles` (the switch too: `components.json` `switch`), shared with the native Settings. Hyalo's own
 layer glass and its window-layer IPC listing are Claude's separate work. The
 libatspi acceptance is `scripts/ci/nk-widgets-check.py`; each assertion has its own
 logged, applied fault, and timeouts/crashes never count as caught controls. New
@@ -2928,7 +2928,7 @@ retain a usable layout mirror checked against that source, so close works even
 without exported data.
 
 Window-control capsule glyphs (#936) are `WindowGlyph` kinds, never font
-characters. The shared strict reader in nk_settings::styles loads capsule.glyph
+characters. The shared strict reader in nk_platform::styles loads capsule.glyph
 from components.json into WindowGlyphStyle; the app calls
 Tree::set_window_glyph_style before painting (and on appearance changes).
 nk-render strokes the paths; both capsule layer coverage and D5 use that painter.
@@ -3061,7 +3061,7 @@ A post-screenshot-only readiness test has a settling race and is insufficient.
 
 
 Settings and the diagnostic widgets demo share one installed material reader in
-nk_settings::material::{panel,control}. The demo modules only re-export it; no
+nk_platform::material::{panel,control}. The demo modules only re-export it; no
 application-specific copy of ControlRecipe/PanelMaterial/capsule_metrics remains.
 Source-fixture and mandatory generated-export tests live with the shared reader
 in settings/tests/fixtures and settings/src/material. Null/absent state ink and

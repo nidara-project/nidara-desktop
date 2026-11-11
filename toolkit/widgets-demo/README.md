@@ -30,7 +30,7 @@ come from that entry; reduce transparency uses the exported variant directly.
 The switch's size and look come from `components.json` `switch` (`toolkit/tokens/switch.json`), through `nk_settings::styles` like every other token.
 The demo does not yet enable backdrop-driven `ink`/`inkTone`. The header reads
 `blur.panel` for its blur-only material.
-`../settings/tests/fixtures/glass.json` is the real #881 export with unrelated pieces removed;
+`../crates/nk-platform/tests/fixtures/glass.json` is the real #881 export with unrelated pieces removed;
 tests cover all four variants, the size ramp and malformed/stub input.
 
 The header uses the owner's provisional curve C in `titlebar-provisional.json`:

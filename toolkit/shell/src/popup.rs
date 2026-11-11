@@ -4,14 +4,14 @@
 //! dock's own event queue: no nested loop, so the dock keeps drawing and Hyalo keeps
 //! answering while it is open. Hyalo paints its glass; the rows are ours.
 //!
-//! Its look is Settings' (`nk-settings`' exports and styles) with the shell's dark skin:
+//! Its look is the platform's (`nk-platform`'s exports and styles) with the shell's dark skin:
 //! the accent, the font and the text scale follow the appearance portal, and no portal
 //! is an error said once, never a guessed palette (PHASE1.md D4).
 use crate::menu::{Command, Label, Mark, Row};
-use nk_settings::exports::Exports;
-use nk_settings::material::panel::PanelMaterial;
-use nk_settings::portal::{Appearance, Portal};
-use nk_settings::styles::Styles;
+use nk_platform::exports::Exports;
+use nk_platform::material::panel::PanelMaterial;
+use nk_platform::portal::{Appearance, Portal};
+use nk_platform::styles::Styles;
 use nk_text::{FontSet, ParleyBackend, Size, TextBackend};
 use nk_wayland::{
     Event, LayerEvent, Material, MenuPopupPlacement, Pane, PopupEvent, PopupId, PopupPlacement,

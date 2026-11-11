@@ -10,12 +10,12 @@
 //! | `routing` | the bus names (D1 [A1]) and where a request to open Settings goes (D3) |
 //! | `session` | the store and every ordering rule of [A3], pure (no bus) |
 //! | `client` | `Config1` over one bus connection, feeding the session |
-//! | `portal` | the four appearance values that pick the token set, plus reduced motion |
-//! | `exports` | `settings-data`: the manifest, the strings, the token sets |
+//! | `portal` | `nk_platform::portal`: the appearance values that pick the token set |
+//! | `exports` | the manifest's pages, on top of `nk_platform::exports` (strings, token sets) |
 //! | `builders` | Claude's named builders: `accentPicker`, `nightScheduleTimes` |
 //! | `render` | a manifest page drawn into a tree: the generic rows, predicates, builders |
 //! | `manifest` | the pages, groups, items and predicates, typed |
-//! | `styles` | the exported tokens as `nk-widgets`' styles, once for every reader |
+//! | `styles` | `nk_platform::styles` plus this app's header and wallpaper looks |
 //! | `value` | a setting's value as `Config1` carries it |
 
 pub mod builders;
@@ -26,13 +26,10 @@ pub mod exports;
 pub mod font_builder;
 pub mod font_catalog;
 pub mod font_chooser;
-pub mod font_description;
 pub mod header;
 pub mod image_load;
 pub mod manifest;
-pub mod material;
 pub mod page;
-pub mod portal;
 pub mod render;
 pub mod routing;
 pub mod session;
@@ -40,6 +37,7 @@ pub mod styles;
 pub mod value;
 pub mod window;
 
+pub use nk_platform::{font_description, material, portal};
 pub use value::Value;
 
 pub mod wallpaper;

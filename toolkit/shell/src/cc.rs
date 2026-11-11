@@ -112,7 +112,7 @@ pub struct Cc {
     /// §12.4). The editor still places the tiles and scrolls them (edit mode is step 4).
     state: nk_view::ViewState,
     tokens: Option<nk_view::Tokens>,
-    appearance: Option<nk_settings::portal::Appearance>,
+    appearance: Option<nk_platform::portal::Appearance>,
     /// The frame last painted: the washes Hyalo is given.
     last: nk_view::Frame,
     /// The tile to focus once the grid is laid out again (back from a detail), and whether

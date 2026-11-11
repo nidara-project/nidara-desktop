@@ -37,6 +37,7 @@ toolkit/                     its own Cargo workspace, like hyalo/ and session/ (
     nk-wayland/              the connection: window, buffers, input, IME, our protocols
     nk-widgets/              retained structural widgets, derived semantics (phase 1)
     nk-icons/                interface icons by name, as vector shapes      (pure, no Wayland)
+    nk-platform/             how a program learns its appearance: tokens, portal, styles, glass
   phase0/                    the test window (a binary, nk-phase0), and its checks
   widgets-demo/              the fixed-data structural-widget demo (phase 1)
   settings/                  the native Settings (phase 1, #915): nk-settings
@@ -48,8 +49,11 @@ hyalo/compositor/src/protocols/layers.rs   its server half
 - **Dependencies point one way:** `phase0 → nk-wayland, nk-render, nk-a11y, nk-text`;
   `nk-render → nk-text` (it paints glyph runs); phase 1 adds
   `nk-widgets → nk-text, nk-render, nk-a11y, nk-wayland` and `widgets-demo → nk-widgets`
-  (the demo also uses the transport/provider/text public APIs), and `settings → nk-widgets`
-  and the rest (its data layer depends on nothing of ours: `zbus` and `serde_json` only). `nk-text` and `nk-a11y` never
+  (the demo also uses the transport/provider/text public APIs), `nk-platform → nk-widgets,
+  nk-wayland, nk-render, nk-text`, and `settings → nk-platform, nk-widgets` and the rest (its
+  data layer depends on nothing of ours: `zbus` and `serde_json` only). An app never depends on
+  another app: the shell and the widgets demo reach their appearance through `nk-platform`,
+  never through `nk-settings` (#1072). `nk-text` and `nk-a11y` never
   import Wayland or each other, so they are built and tested with no compositor.
 - **One workspace for the toolkit, separate from Hyalo's.** Nothing Rust is shared with Hyalo in
   phase 0: what both ends share is the protocol XML in `protocols/`, which each end generates
@@ -254,7 +258,7 @@ cannot choose an option. Programmatic selection updates emit no application
 write. This model is a prerequisite, not acceptance of the popup list or builder;
 its popup list remains pending. `DropdownStyle` supplies the closed trigger's
 geometry/colours/type/arrow exclusively from `components.json.dropdown.trigger`
-(`toolkit/tokens/dropdown.json`); `nk-settings::Styles::apply` sets it. It follows
+(`toolkit/tokens/dropdown.json`); `nk-platform::Styles::apply` sets it. It follows
 the current kit's dropdown trigger, not Button's geometry. Missing style is an
 error. Its border reserves space at rest, keyboard focus uses that same border,
 and the arrow uses the shared icon theme with externally supplied ink.
@@ -893,9 +897,27 @@ The wire and token schema above incorporate the Hyalo-side review; visual number
 remain the owner's live decision. Visual acceptance is still the owner's, in the
 native demo.
 
+## The platform (`crates/nk-platform`, #1072)
+
+The one door to appearance for any Nidara program: the shell, Settings, the widgets demo and
+every later app (Apps, bar apps). Nothing in it is an app's own, and it carries no window.
+
+| Module | Offers |
+|---|---|
+| `portal` | `Portal::watch(connection)`, `read()` → `Appearance` (accent, dark, reduce transparency, window background, reduced motion, interface font and text scale), `changed()`. What a program paints with; `Config1` is for editing only |
+| `exports` | `Exports::load(root)` (`NK_SETTINGS_DATA`, else `/usr/share/nidara/settings-data`; another `version` is an error), `text(i18n key)` (the shell's locale rule from `LANG`, English per key), `tokens(&Appearance)` → the colour set, the glass variant, the components variant — or an error, never the nearest; `read(root, file)` for one more file of the export |
+| `styles` | `Styles::new(&Exports, &Appearance)` → `Palette`, `Metrics`, the controls' styles, the accents by name and the interface `TextStyle`; `apply(&mut Tree)`. The ONE mapping from the exports to `nk-widgets`' styles |
+| `material` | `panel::PanelMaterial`, `control::ControlRecipe`, `capsule_metrics`: the strict readers of the exported glass |
+| `font_description` | a `Config1`/portal Pango font description, parsed |
+
+Settings keeps what only it has on top: its pages (`nk_settings::exports::Exports` = the
+platform's plus `pages`/`page(id)`) and its header and wallpaper looks
+(`nk_settings::styles::Styles` = the platform's plus `header`/`wallpaper`); both dereference to
+the platform's type.
+
 ## The native Settings (`settings/`, #915)
 
-`nk_settings::material::{panel,control}` owns the existing strict installed-export
+`nk_platform::material::{panel,control}` (formerly `nk_settings::material`) owns the existing strict installed-export
 readers: PanelMaterial, ControlRecipe and capsule_metrics. Settings and the
 widgets demo consume these same readers; neither re-parses a material recipe.
 The move preserves exact portal variants, short-side selection, validation,
@@ -913,8 +935,8 @@ either half depends on it.
 | `session` | `Session`: `store()` (epoch, revision, each key's schema `entry`, `value`, `available`, `writable()`), `available()` (false while the service is gone or restarting), `shown(key)` (the value asked and not yet answered, else the value in force), `pending(key)`. Every [A3] rule — subscribe-then-snapshot, revisions by one, other epochs never applied, owner lost/back, one `Apply` in flight per key with the latest waiting — is in this module and tested without a bus |
 | `client` | `Client` (one bus connection, also the one that will own `org.nidara.SettingsNative`): `apply(key, Value)` (`Err(Unavailable)` when not sent), `poll()`/`wait(deadline)` → `Vec<Notice>`, `session()`, `connection()` |
 | `Notice` | `Ready` (a fresh store: redraw all, sensitive again), `Changed(keys)`, `Unavailable` (every control insensitive), `Failed { key, error }` (the row shows the value in force again and says why: `Invalid`, `Denied`, `Failed`, `NoReply` — never retried), `Error(text)` (no snapshot: said, never a default) |
-| `portal` | `Portal::watch(connection)`, `read()` → `Appearance` (accent, dark, reduce transparency, window background, reduced motion, interface font and text scale), `changed()`. What the app paints with; `Config1` is for editing only |
-| `exports` | `Exports::load(root)` (`NK_SETTINGS_DATA`, else `/usr/share/nidara/settings-data`; another `version` is an error), `pages`, `page(id)`, `text(i18n key)` (the shell's locale rule from `LANG`, English per key), `tokens(&Appearance)` → the colour set, the glass variant, the components variant — or an error, never the nearest |
+| `portal` | re-exported from `nk-platform` (above) |
+| `exports` | the platform's `Exports` plus this app's `pages` and `page(id)` |
 | `routing` | D1 [A1] and D3: `Router::start(connection, Mode, legacy launcher, args)` takes `org.nidara.SettingsNative` (always) and, as `Mode::EntryPoint` after the takeover, `org.nidara.Settings` with the legacy `Request(as) → s` (`open`, `page`, `app`, `queryUI`); a second native Settings hands its request over (`AlreadyRunning`). `route()` decides: a page on `DRAWN` (`appearance`, `display`, `dock`; of those, `MANIFEST` — `appearance`, `dock` — are drawn from their manifest page alone, `display` has code of its own) is the window's (`Router::poll()` → `Incoming`, answered with `respond`), any other page and `app` go to `org.nidara.SettingsLegacy` — started by the launcher if it has no owner — and its answer is the answer |
 | `manifest` | `Page`, `Group` (`footer`/`footerWhen`, a group-level `custom`), `Item::{Key, Custom, Decoration, Disclosure}` with `visible_when()`/`sensitive_when()`/`key()`; a page's `header` builder, `Predicate::holds(&Session)` (against what the controls show, compared as JavaScript's `String()`). An unknown field is an error, not skipped |
 
@@ -947,11 +969,9 @@ either half depends on it.
   are the manifest's `custom`/`decoration` and `dropdown` (every row whose `ui.control` is
   `dropdown`). Claude's are in `builders` (`accentPicker`, `nightScheduleTimes`); Sol's in their
   own modules.
-- `styles`: `Styles::new(&Exports, &Appearance)` → `Palette`, `Metrics`, `ChoiceStyle`,
-  `RangeStyle`, `SwitchStyle`, the accents by name and the interface `TextStyle` (the portal's
-  font at its text scale). The ONE mapping from the exports to `nk-widgets`' styles: the
-  widgets demo uses it too (`widgets-demo → nk-settings`); its own panel and title bar recipe
-  stay in the demo.
+- `styles`: the platform's `Styles` (above) plus this app's `header` and `wallpaper` looks. The
+  widgets demo uses the platform's alone (`widgets-demo → nk-platform`); its own panel and title
+  bar recipe stay in the demo.
 
 The Router exports its Request interface in both Native and EntryPoint modes;
 only EntryPoint takes the legacy entry-point name. A second native process hands
@@ -1250,7 +1270,7 @@ face. A style request can resolve to a synthesized face; it does not promise a s
 
 ### Config1 font descriptions and chooser styles (#915)
 
-nk-settings::font_description interprets the supported Config1 Pango description
+nk-platform::font_description (re-exported by nk-settings) interprets the supported Config1 Pango description
 attributes (single family, weight/slant/stretch, positive point or px size, explicit
 axis settings) in Rust, without another layout engine or startup enumeration.
 Canonical output is a Pango-compatible point description, with an ambiguity comma
