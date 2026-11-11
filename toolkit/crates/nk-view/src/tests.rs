@@ -811,6 +811,28 @@ fn a_pane_the_model_moved_slides_from_where_it_was_drawn() {
 }
 
 #[test]
+fn without_slides_a_moved_pane_is_laid_where_it_is() {
+    let t = tokens();
+    let mut text = backend();
+    let mut s = ViewState::new(0);
+    s.set_slides(false);
+    let t0 = Instant::now();
+    let list = |ids: &[&str]| {
+        Node::column(
+            "list",
+            ids.iter()
+                .map(|i| card(i, "Body", Align::FirstLine))
+                .collect(),
+        )
+        .gap(Space::S2)
+    };
+    s.layout(&list(&["a", "b"]), (360., 800.), 1., &t, &mut text, t0);
+    s.layout(&list(&["b"]), (360., 800.), 1., &t, &mut text, t0);
+    assert_eq!(rect(&s, "b/pane")[1], 0.);
+    assert!(!s.animating());
+}
+
+#[test]
 fn with_reduced_motion_everything_lands_at_once() {
     let t = tokens();
     let mut text = backend();

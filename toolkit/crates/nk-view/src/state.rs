@@ -174,6 +174,9 @@ pub struct ViewState {
     slid: Option<Activated>,
     /// A slider value a key or a reader set, until the surface rebuilds with its model.
     set: Option<(Key, f64)>,
+    /// Off: a rebuild lays panes where they are, for a surface whose glass is placed by
+    /// something else (the CC's grid, under its editor's glass and scroll).
+    slides: bool,
 }
 
 impl ViewState {
@@ -210,6 +213,7 @@ impl ViewState {
             held: None,
             slid: None,
             set: None,
+            slides: true,
         }
     }
 
@@ -252,7 +256,8 @@ impl ViewState {
         self.view = Some(view.clone());
         self.bounds = bounds;
         self.scale = scale;
-        self.relayout(tokens, text, now, Some(&before));
+        let before = self.slides.then_some(&before);
+        self.relayout(tokens, text, now, before);
         let live: HashSet<Key> = self
             .controls()
             .filter(|&i| self.enabled(i))
@@ -316,6 +321,11 @@ impl ViewState {
     /// Reduced motion: reveals and slides land at once.
     pub fn set_reduced_motion(&mut self, on: bool) {
         self.motion.reduced = on;
+    }
+    /// Whether a pane a rebuild moved slides from where it was drawn (VIEW.md §6); off for a
+    /// view whose glass moves without it.
+    pub fn set_slides(&mut self, on: bool) {
+        self.slides = on;
     }
 
     fn relayout(
@@ -1390,6 +1400,12 @@ impl ViewState {
                 _ => None,
             })
             .collect()
+    }
+
+    /// Focus leaves the view: the surface moved it to something of its own.
+    pub fn blur(&mut self) {
+        self.focus = None;
+        self.focus_visible = false;
     }
 
     /// A reader's request on a control: focus moves to it (scrolled into view, its ring

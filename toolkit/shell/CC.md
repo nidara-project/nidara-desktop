@@ -22,7 +22,7 @@ things (its detail, its panel, its control), never editing.
 | File | What |
 |---|---|
 | `cclayout.rs` | Pure and unit-tested: the registry, `DEFAULT_LAYOUT`, membership, and the layout (DEFAULT = flow-packed; PERSONAL = the stored cells, clashes moved to the first free cell). Moves, resizing, gravity, lift and membership edits share these pure rules |
-| `cc.rs` | The panel: placement, glass, washes, paint, input, reader nodes, and coalesced writes |
+| `cc.rs` | The panel: placement, glass, reader nodes, coalesced writes; the grid's view on nk-view |
 | `ccdetail.rs` | Detail rows, stable identities, AT-SPI and typed actions; its view on nk-view |
 | `ccedit.rs` | View-local edit mode, preview, gallery, keyboard and named reader actions |
 | `ccaux.rs` | Mapped-only resources, bounded clipboard helpers and visible image previews |
@@ -54,7 +54,30 @@ The material carries more than one kind of pane now (`nk-wayland` `Material`):
 - `veils` — the variant's `veil` (`glass.json`, now exported; null with reduce
   transparency) over the tiles' bounding box, inset by its `inset`.
 - `states` — Hyalo-drawn washes (commandment 12): an active 1×1 tile white, a badge's
-  rest and "on", the hovers. Ids `1000 + tile*8 + n`, fade 150 ms.
+  rest and "on", the hover, the press. They are the grid view's frame (below): region ids
+  from 200000, the fade and the washes from the exported tokens, eight per tile at most.
+
+## The grid on nk-view (#1048, step 3)
+
+Outside edit mode the grid is an nk-view view (`VIEW.md` §12.4): `cc.rs` builds a pane per
+tile in its size's corner on its cells, and nk-view lays it out and owns hover, press,
+focus, keys and the washes. The controls are keyed by what they do: `t:` the whole tile (a
+toggle), `d:` its detail, `b:` a capsule's badge, `s:` a slider, `m:` the player's
+buttons. A 1×1 toggle with a detail carries that detail as a keys-only control, so the
+pointer toggles and Tab and readers still reach the detail.
+
+- **Buttons act on release** over themselves; a press that leaves does nothing. A slider
+  acts on its press and on every move, and shows where it was let go until the service's
+  value is laid out.
+- **The editor still places and scrolls the tiles** (edit mode moves in step 4), so the
+  view lays panes where they are (`set_slides(false)`) and the pointer outside the viewport
+  leaves the grid, unless it holds a slider.
+- **Tab** follows the readers' order: the Edit button, then each tile's primary control,
+  its player buttons, then its Details entry.
+- What is neither text nor glyph is painted in slots: covers, the battery, the resource
+  rings with their numbers, and a slider's value as it moves (dark over a 1×2's fill).
+- The reader tree is still built by hand with the same ids and names; its bounds and
+  focus come from the view.
 
 ## Tiles and their sources
 

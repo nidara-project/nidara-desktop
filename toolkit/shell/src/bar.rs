@@ -964,7 +964,7 @@ impl Bar {
             }
         }
         self.cc_open = open;
-        let _ = self.cc.release();
+        self.cc.cancel();
         if !open {
             self.cc.back();
             self.cc.editor.close();
@@ -2265,7 +2265,7 @@ impl Application for Bar {
                 if let Some(act) = self.cc.release_edit(&self.frame.status) {
                     self.act(act, w);
                 }
-                let (released, act) = self.cc.release();
+                let (released, act) = self.cc.release(&self.frame.status);
                 if let Some(act) = act {
                     self.act(act, w);
                 }
