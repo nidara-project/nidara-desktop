@@ -33,7 +33,9 @@ is hidden.
 following the progress. It opens with `ease-emphasized` over `dur-slow`, and closes with
 `ease` over `dur-base`. While it is closed, its controls leave the Tab order and the semantics.
 Panes below a reveal follow it frame by frame. A slide (`ease` over `dur-base`) starts only
-when a rebuilt view moves a pane. With `set_reduced_motion` everything lands at once. A pane
+when a rebuilt view moves a pane, unless the surface turned slides off (`set_slides(false)`,
+for glass it places itself, as the CC's grid). With `set_reduced_motion` everything lands at
+once. A pane
 cut by a reveal is declared whole with a clip, so it is cut straight, and its glass fades with
 its content.
 

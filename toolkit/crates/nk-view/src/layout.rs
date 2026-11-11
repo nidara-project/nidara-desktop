@@ -237,7 +237,7 @@ pub enum What {
     },
     Icon(Icon),
     Spacer,
-    Control(Control),
+    Control(Box<Control>),
     Reveal {
         progress: f64,
     },
@@ -303,6 +303,7 @@ impl Layouter<'_> {
             Kind::Reveal(r) => self.natural(&r.child),
             Kind::Scroll(sc) => self.natural(&sc.child),
             Kind::Overlay(o) => self.natural(&o.base),
+            Kind::Grid(g) => g.span(g.columns),
             Kind::Placeholder(_) => 0.,
             Kind::Stack(s) => {
                 let pad = self.spacing.of(s.padding.left) + self.spacing.of(s.padding.right);
@@ -321,6 +322,7 @@ impl Layouter<'_> {
             Kind::Reveal(r) => self.min(&r.child),
             Kind::Scroll(sc) => self.min(&sc.child),
             Kind::Overlay(o) => self.min(&o.base),
+            Kind::Grid(g) => g.span(g.columns),
             Kind::Placeholder(_) => 0.,
             Kind::Stack(s) => {
                 let pad = self.spacing.of(s.padding.left) + self.spacing.of(s.padding.right);
@@ -448,6 +450,22 @@ impl Layouter<'_> {
                     give: c.give,
                     children: vec![c],
                     cross: vec![],
+                }
+            }
+            Kind::Grid(g) => {
+                // Its size is its cells'; each tile is measured at the width it spans.
+                let children = g
+                    .cells
+                    .iter()
+                    .map(|c| self.measure(&c.child, g.span(c.span.0)))
+                    .collect();
+                Measure {
+                    w: g.span(g.columns),
+                    h: g.span(g.rows()),
+                    first_line: None,
+                    children,
+                    cross: vec![],
+                    give: 0.,
                 }
             }
             Kind::Stack(s) => self.measure_stack(s, width),
@@ -613,15 +631,15 @@ impl Layouter<'_> {
             },
             Kind::Icon(i) => What::Icon(i.clone()),
             Kind::Spacer => What::Spacer,
-            Kind::Control(c) => What::Control(Control {
+            Kind::Control(c) => What::Control(Box::new(Control {
                 child: Box::new(Node::spacer("")),
                 ..c.clone()
-            }),
+            })),
             Kind::Reveal(rv) => What::Reveal {
                 progress: self.progress(&n.key, rv.open),
             },
             Kind::Placeholder(_) => What::Spacer,
-            Kind::Overlay(_) => What::Stack,
+            Kind::Overlay(_) | Kind::Grid(_) => What::Stack,
             Kind::Scroll(_) => What::Scroll {
                 offset: 0.,
                 content: m.children[0].h,
@@ -715,6 +733,17 @@ impl Layouter<'_> {
                     let (x, w) = at(l.across, x0, x1, lm.w);
                     let (y, h) = at(l.down, y0, y1, lm.h);
                     self.place(&l.child, lm, [x, y, w, h], inner, out);
+                }
+            }
+            Kind::Grid(g) => {
+                for (c, cm) in g.cells.iter().zip(&m.children) {
+                    let cell = [
+                        r[0] + g.start(c.at.0),
+                        r[1] + g.start(c.at.1),
+                        g.span(c.span.0),
+                        g.span(c.span.1),
+                    ];
+                    self.place(&c.child, cm, cell, inner, out);
                 }
             }
             Kind::Stack(s) => self.place_stack(s, m, r, inner, out),

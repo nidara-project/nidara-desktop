@@ -205,6 +205,10 @@ pub struct Look {
     pub secondary: Color,
     pub dim: Color,
     pub focus: Color,
+    /// What is on is filled with (`--nidara-on`), and a well in the glass at rest
+    /// (`--nidara-surface`) (VIEW.md §12.4).
+    pub on: Color,
+    pub surface: Color,
     /// The ring's width, as `nk-widgets` draws it (D8).
     pub focus_width: f64,
 }
@@ -223,6 +227,8 @@ impl Look {
             secondary: token("--nidara-text-secondary")?,
             dim: token("--nidara-text-dim")?,
             focus: token("--nidara-accent")?,
+            on: token("--nidara-on")?,
+            surface: token("--nidara-surface")?,
             focus_width: 2.,
         })
     }

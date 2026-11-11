@@ -214,7 +214,8 @@ inside a reveal is declared clipped to the reveal.
 a group above it opened by the model), the pane and its contents move from where they were
 drawn to their new place, with `ease` over `dur-base`. A pane that is new appears in place.
 The per-frame relayout of a reveal in progress never starts a slide: the panes below it follow
-the reveal directly.
+the reveal directly. A view whose glass something else places turns slides off
+(`set_slides(false)`): its panes land where each rebuild puts them.
 
 Placement stays a pure function of the view, its size, its scale and the motion state at one
 instant. `ViewState::tick(now)` advances the motion state, and reports whether anything still
@@ -501,6 +502,14 @@ most 8 rows; sizes 1×1, 2×1, 1×2, 2×2 and 4×1 (`cclayout.rs`).
   drives them. Tab, Ctrl+arrows, Menu/Shift+F10, Delete and the named reader actions (Move,
   Resize, Remove) are the grid's keys, mapped to the surface's actions.
 - **Rows past the viewport** scroll (§8): edit shows all eight rows.
+
+Built (step 3): `Kind::Grid`; `Corner::Fixed` for the 2×2's 38 and the 4×1's 24; on a
+control, `on` (filled with `--nidara-on`, its content in the accent), `surface` (a **well**:
+at rest in `--nidara-surface`, its hover and press composited over it) and `keys_only` (no
+pointer, still a Tab stop and a reader node); `Slider::fill`, the tile slider, whose value
+runs up its height and whose content turns dark below the fill's top. Until edit mode moves
+too, the editor places and scrolls the tiles, so the CC's view turns slides off
+(`ViewState::set_slides(false)`, §6): its content stays with glass it does not move.
 
 ### 12.5 Acceptance, per step
 

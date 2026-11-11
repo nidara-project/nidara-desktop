@@ -31,7 +31,8 @@ fn glass() -> serde_json::Value {
 fn tokens() -> Tokens {
     let set = json!({"tokens": {"--nidara-text": "#ffffff", "--nidara-text-secondary": "rgba(255, 255, 255, 0.8)",
         "--nidara-text-dim": "rgba(255, 255, 255, 0.6)", "--nidara-accent": "#0088FF",
-        "--nidara-surface-raised": "rgba(255, 255, 255, 0.24)"}});
+        "--nidara-surface-raised": "rgba(255, 255, 255, 0.24)", "--nidara-on": "#ffffff",
+        "--nidara-surface": "rgba(255, 255, 255, 0.08)"}});
     Tokens {
         spacing: Spacing::from_static(&statics()).unwrap(),
         radii: Radii::from_static(&statics()).unwrap(),
@@ -807,6 +808,28 @@ fn a_pane_the_model_moved_slides_from_where_it_was_drawn() {
     assert!(mid > 0. && mid < was[1], "{mid}");
     assert!(!s.tick(&t, &mut text, t0 + t.motion.base).animating);
     assert_eq!(rect(&s, "b/pane")[1], 0.);
+}
+
+#[test]
+fn without_slides_a_moved_pane_is_laid_where_it_is() {
+    let t = tokens();
+    let mut text = backend();
+    let mut s = ViewState::new(0);
+    s.set_slides(false);
+    let t0 = Instant::now();
+    let list = |ids: &[&str]| {
+        Node::column(
+            "list",
+            ids.iter()
+                .map(|i| card(i, "Body", Align::FirstLine))
+                .collect(),
+        )
+        .gap(Space::S2)
+    };
+    s.layout(&list(&["a", "b"]), (360., 800.), 1., &t, &mut text, t0);
+    s.layout(&list(&["b"]), (360., 800.), 1., &t, &mut text, t0);
+    assert_eq!(rect(&s, "b/pane")[1], 0.);
+    assert!(!s.animating());
 }
 
 #[test]
@@ -2109,4 +2132,168 @@ fn a_reader_hears_a_secret_field_as_a_password_with_no_text() {
     assert_eq!(n.role, nk_a11y::Role::TextInput);
     let t = n.text.as_ref().unwrap();
     assert_eq!((t.text.as_str(), t.caret, t.anchor), ("me", 2, 0));
+}
+
+/// The CC's grid: four cells of 76 across, 20 apart (VIEW.md §12.4).
+fn grid_view(cells: Vec<Cell>) -> Node {
+    Node::grid("g", 4, 76., 20., cells)
+}
+fn tile(key: &str, at: (usize, usize), span: (usize, usize), child: Node) -> Cell {
+    Cell {
+        at,
+        span,
+        child: Node::pane(key, Corner::Pill, child),
+    }
+}
+
+#[test]
+fn a_grid_places_each_tile_on_its_cells_and_is_as_tall_as_the_rows_they_reach() {
+    let s = laid(
+        &grid_view(vec![
+            tile("a", (0, 0), (2, 1), Node::spacer("a/s")),
+            tile("b", (2, 0), (1, 1), Node::spacer("b/s")),
+            tile("c", (0, 1), (4, 1), Node::spacer("c/s")),
+            tile("d", (3, 2), (1, 1), Node::spacer("d/s")),
+        ]),
+        (400., 600.),
+        1.,
+    );
+    assert_eq!(rect(&s, "a"), [0., 0., 172., 76.]);
+    assert_eq!(rect(&s, "b"), [192., 0., 76., 76.]);
+    assert_eq!(rect(&s, "c"), [0., 96., 364., 76.]);
+    assert_eq!(rect(&s, "d"), [288., 192., 76., 76.]);
+    // What a tile holds fills its cells.
+    assert_eq!(rect(&s, "c/s"), [0., 96., 364., 76.]);
+    let mut column = laid(
+        &Node::column(
+            "col",
+            vec![
+                grid_view(vec![tile("a", (0, 0), (1, 2), Node::spacer("a/s"))]),
+                Node::spacer("after"),
+            ],
+        ),
+        (400., 600.),
+        1.,
+    );
+    assert_eq!(rect(&column, "g")[3], 172., "two rows and the gap between");
+    column.pointer_leave();
+}
+
+fn on_view(on: bool, surface: bool) -> Node {
+    let t = Node::control("t", "Focus", "focus", Node::icon("t/i", "nd-focus", 28.)).on(on);
+    let t = if surface { t.surface() } else { t };
+    grid_view(vec![tile("p", (0, 0), (1, 1), t)])
+}
+
+#[test]
+fn an_on_control_is_white_under_the_hover_and_the_press() {
+    let t = tokens();
+    let mut s = laid(&on_view(true, false), (400., 400.), 1.);
+    s.pointer_motion(38., 38.);
+    s.button(true, Instant::now());
+    let white = |s: &mut ViewState| {
+        s.frame(&t, Instant::now())
+            .states
+            .iter()
+            .find(|r| r.bounds.width == 76.)
+            .map(|r| r.wash)
+    };
+    assert_eq!(white(&mut s), Some([1., 1., 1., 1.]));
+    // Off, the same press shows the press wash.
+    let mut s = laid(&on_view(false, false), (400., 400.), 1.);
+    s.pointer_motion(38., 38.);
+    s.button(true, Instant::now());
+    assert_eq!(white(&mut s).map(|w| w[3]), Some(t.washes.press[3]));
+}
+
+#[test]
+fn a_well_rests_in_the_surface_wash_and_its_hover_lies_over_it() {
+    let t = tokens();
+    let mut s = laid(&on_view(false, true), (400., 400.), 1.);
+    let alpha = |s: &mut ViewState| {
+        s.frame(&t, Instant::now())
+            .states
+            .iter()
+            .find(|r| r.bounds.width == 76.)
+            .map(|r| r.wash[3])
+            .unwrap()
+    };
+    let well = f64::from(t.look.surface.components[3]);
+    assert!((well - 0.08).abs() < 0.005);
+    assert!((alpha(&mut s) - well).abs() < 1e-6, "at rest, the well");
+    s.pointer_motion(38., 38.);
+    let hover = t.washes.hover[3];
+    let expected = hover + well * (1. - hover);
+    assert!((alpha(&mut s) - expected).abs() < 1e-6, "the hover over it");
+    // On, it is white whatever lies under it.
+    let mut s = laid(&on_view(true, true), (400., 400.), 1.);
+    assert_eq!(alpha(&mut s), 1.);
+}
+
+#[test]
+fn a_keys_only_control_lets_the_pointer_through_and_keeps_its_tab_stop() {
+    let base = Node::control("t", "Bluetooth", "toggle", Node::spacer("t/s"));
+    let detail =
+        Node::control("d", "Bluetooth · Details", "detail", Node::spacer("d/s")).keys_only();
+    let view = grid_view(vec![tile(
+        "p",
+        (0, 0),
+        (1, 1),
+        Node::overlay("o", base).layer(Align::Stretch, Align::Stretch, Padding::default(), detail),
+    )]);
+    let mut s = laid(&view, (400., 400.), 1.);
+    s.pointer_motion(38., 38.);
+    assert_eq!(
+        s.hover(),
+        Some(&Key::from("t")),
+        "the pointer reaches the toggle"
+    );
+    s.key(KeyInput::Tab);
+    assert_eq!(s.focus(), Some(&Key::from("t")));
+    s.key(KeyInput::Tab);
+    assert_eq!(
+        s.focus(),
+        Some(&Key::from("d")),
+        "the keys reach the detail"
+    );
+    let a = s.key(KeyInput::Activate).unwrap();
+    assert_eq!(a.action, "detail");
+}
+
+#[test]
+fn a_tile_slider_takes_the_value_up_its_height_and_its_hover_is_the_tile() {
+    let t = tokens();
+    let view = grid_view(vec![tile(
+        "p",
+        (0, 0),
+        (1, 2),
+        Node::slider(
+            "v",
+            "Volume",
+            "volume",
+            Slider::new(0., 100., 5., 40.).fill(),
+        ),
+    )]);
+    let mut s = laid(&view, (400., 400.), 1.);
+    let r = rect(&s, "v");
+    assert_eq!(r, [0., 0., 76., 172.], "the whole tile");
+    s.pointer_motion(38., r[1] + r[3] * 0.25);
+    let a = s.button(true, Instant::now()).expect("the press sets it");
+    assert_eq!(a.action, "volume");
+    assert_eq!(
+        s.value(&Key::from("v")),
+        Some(75.),
+        "a quarter down is three quarters up"
+    );
+    let frame = s.frame(&t, Instant::now());
+    let lit: Vec<_> = frame.states.iter().filter(|st| st.wash[3] > 0.).collect();
+    assert_eq!(lit.len(), 1);
+    assert_eq!((lit[0].bounds.width, lit[0].bounds.height), (76., 172.));
+    s.pointer_motion(38., r[1] + r[3] + 50.);
+    assert_eq!(s.value(&Key::from("v")), Some(0.), "past the bottom");
+    // Up steps it on, as the row slider's keys do.
+    s.button(false, Instant::now());
+    let a = s.key(KeyInput::Up).unwrap();
+    assert_eq!(a.action, "volume");
+    assert_eq!(s.value(&Key::from("v")), Some(5.));
 }

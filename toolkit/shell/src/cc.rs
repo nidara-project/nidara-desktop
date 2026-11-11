@@ -44,18 +44,10 @@ const ICON: f64 = 28.;
 const TEXT: f32 = 14.;
 const SMALL: f32 = 12.;
 const BOLD: f32 = 700.;
-/// Ink tiers of the dark skin: text, secondary, dim.
-const SECONDARY: f32 = 0.8;
+/// The dim ink tier of the dark skin.
 const DIM: f32 = 0.55;
 /// `--nidara-surface`: a badge at rest.
 const SURFACE: f64 = 0.08;
-/// The one hover, 8 % ink (owner, 2026-10-06).
-const HOVER: f64 = 0.08;
-/// How long a wash eases to a new state.
-const FADE_MS: u32 = 150;
-/// The slider (kit `slider.ts`): track, thumb, the fill's opacity.
-const TRACK: f64 = 6.;
-const THUMB: f64 = 9.;
 
 /// What a click can land on.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
@@ -104,29 +96,34 @@ struct Placed {
     rect: [f64; 4],
 }
 
-/// A slider held by the pointer: its tile and the value shown until the service says.
-#[derive(Clone, Copy, Debug, PartialEq)]
-struct Drag {
-    id: &'static str,
-    value: f64,
-}
+/// Where the grid's state regions start: past the detail's and the editor's.
+const REGIONS: u32 = 200_000;
 
 pub struct Cc {
     pub editor: edit::Editor,
     tiles: Vec<Placed>,
     pub detail: Option<detail::Detail>,
     pub detail_height: f64,
-    /// The output's scale, which the detail lays out for.
+    /// The output's scale, which the grid and the detail lay out for.
     pub detail_scale: f64,
     detail_generation: u64,
     panel: [f64; 4],
-    hover: Option<Target>,
-    keyboard_focus: Option<Target>,
-    drag: Option<Drag>,
+    /// The grid as an nk-view view: layout, hover, press, focus, keys and washes (VIEW.md
+    /// §12.4). The editor still places the tiles and scrolls them (edit mode is step 4).
+    state: nk_view::ViewState,
+    tokens: Option<nk_view::Tokens>,
+    appearance: Option<nk_settings::portal::Appearance>,
+    /// The frame last painted: the washes Hyalo is given.
+    last: nk_view::Frame,
+    /// The tile to focus once the grid is laid out again (back from a detail), and whether
+    /// it shows the ring: only when the keyboard went back.
+    refocus: Option<(Target, bool)>,
     icons: Option<nk_icons::Icons>,
-    glyphs: HashMap<(&'static str, u32), Option<Arc<nk_icons::Icon>>>,
+    glyphs: HashMap<(String, u32), Option<Arc<nk_icons::Icon>>>,
     /// The cover being shown and its picture.
     art: Option<(String, Option<Arc<Raster>>)>,
+    /// Each edit layer's own view: a tile drawn alone, on its own surface.
+    layers: HashMap<&'static str, nk_view::ViewState>,
 }
 
 impl Default for Cc {
@@ -137,6 +134,9 @@ impl Default for Cc {
 
 impl Cc {
     pub fn new() -> Self {
+        let mut state = nk_view::ViewState::new(REGIONS);
+        // The editor places the tiles' glass and scrolls it; the content goes with it.
+        state.set_slides(false);
         Self {
             editor: Default::default(),
             tiles: vec![],
@@ -145,14 +145,17 @@ impl Cc {
             detail_scale: 1.,
             detail_generation: 0,
             panel: [0.; 4],
-            hover: None,
-            keyboard_focus: None,
-            drag: None,
+            state,
+            tokens: None,
+            appearance: None,
+            last: Default::default(),
+            refocus: None,
             icons: nk_icons::Icons::new("", &[], &crate::paths::icon_reference())
                 .map_err(|e| eprintln!("nidara-shell: no icons for the Control Center: {e}"))
                 .ok(),
             glyphs: HashMap::new(),
             art: None,
+            layers: HashMap::new(),
         }
     }
 
@@ -174,12 +177,61 @@ impl Cc {
             detail.scale = self.detail_scale;
             detail.refresh(status, self.panel, look);
             self.panel = detail.panel;
+        } else if let Some(look) = look {
+            self.lay(status, look);
         }
-        if self
-            .drag
-            .is_some_and(|d| !self.tiles.iter().any(|p| p.tile.id == d.id))
-        {
-            self.drag = None;
+    }
+
+    /// The grid laid out where the editor puts it: from the viewport's left, scrolled by the
+    /// editor's offset, as tall as the rows the tiles reach.
+    fn lay(&mut self, status: &Status, look: &mut Look) {
+        if self.appearance.as_ref() != Some(&look.appearance) {
+            self.appearance = Some(look.appearance.clone());
+            self.tokens = crate::nc_view::tokens(&look.exports, &look.appearance)
+                .map_err(|e| eprintln!("nidara-shell: the CC grid has no tokens: {e}"))
+                .ok();
+            self.state
+                .set_reduced_motion(look.appearance.reduced_motion);
+        }
+        let Some(tokens) = self.tokens.clone() else {
+            return;
+        };
+        let base = look.styles.text.clone();
+        let view = grid_view(&self.tiles, status, Some(look), &base);
+        self.lay_view(&view, &tokens, &mut look.text);
+    }
+    fn lay_view(
+        &mut self,
+        view: &nk_view::Node,
+        tokens: &nk_view::Tokens,
+        text: &mut dyn TextBackend,
+    ) {
+        let rows = self
+            .tiles
+            .iter()
+            .map(|p| (p.tile.y + p.tile.size.cells().1) as usize)
+            .max()
+            .unwrap_or(0);
+        let (x, y) = self.editor.origin;
+        let bounds = [
+            x,
+            y,
+            layout::GRID_WIDTH,
+            rows as f64 * (layout::UNIT + layout::GAP) - layout::GAP,
+        ];
+        self.state.layout_in(
+            view,
+            bounds,
+            self.detail_scale,
+            tokens,
+            text,
+            std::time::Instant::now(),
+        );
+        if let Some((t, ring)) = self.refocus.take() {
+            self.focus(t);
+            if !ring {
+                self.state.hide_ring();
+            }
         }
     }
 
@@ -194,14 +246,24 @@ impl Cc {
         detail.refresh(status, self.panel, look);
         self.panel = detail.panel;
         self.detail = Some(detail);
-        self.drag = None;
+        self.state.pointer_leave();
     }
     pub fn view_id(&self) -> u64 {
         self.detail_generation
     }
+    /// Back from a detail or edit mode, the ring on the tile it returns to as its page's own
+    /// focus had it: a Back row pressed with the keyboard shows it, with the pointer not.
     pub fn back(&mut self) -> bool {
+        let keyboard = self
+            .detail
+            .as_ref()
+            .is_some_and(|d| d.state.focus_visible());
+        self.back_by(keyboard)
+    }
+    /// Back, `keyboard` saying whether a key asked (Escape) or not (the panel closing).
+    pub fn back_by(&mut self, keyboard: bool) -> bool {
         if self.editor.active {
-            self.keyboard_focus = None;
+            self.state.blur();
             self.editor.toggle();
             return true;
         }
@@ -209,7 +271,7 @@ impl Cc {
         if let Some(detail) = detail {
             self.detail_generation += 1;
             self.editor.focus = None;
-            self.keyboard_focus = Some(Target::OpenDetail(detail.page));
+            self.refocus = Some((Target::OpenDetail(detail.page), keyboard));
             true
         } else {
             false
@@ -217,7 +279,7 @@ impl Cc {
     }
     pub fn focus(&mut self, target: Target) {
         if let Target::Edit(t) = target {
-            self.keyboard_focus = None;
+            self.state.blur();
             self.editor.focus = Some(t);
             self.editor.reveal(t);
             return;
@@ -234,7 +296,9 @@ impl Cc {
             }
         } else {
             self.editor.focus = None;
-            self.keyboard_focus = Some(target);
+            if let Some(key) = key_of(target) {
+                self.state.request(&key, false);
+            }
             if let Target::Tile(id)
             | Target::OpenDetail(id)
             | Target::Slider(id)
@@ -244,6 +308,10 @@ impl Cc {
             }
         }
     }
+    /// The grid's focus, as a target.
+    fn focused(&self) -> Option<Target> {
+        self.state.focus().and_then(target_of)
+    }
     pub fn key(&mut self, key: &nk_wayland::Key, status: &Status) -> Option<Act> {
         if self.editor.active {
             return self.editor.key(key, status);
@@ -251,18 +319,23 @@ impl Cc {
         if let Some(d) = &mut self.detail {
             return d.key(key).map(Act::Detail);
         }
-        let choices: Vec<_> = self
-            .nodes(0, status, None)
-            .into_iter()
-            .filter(|(n, _)| !n.actions.is_empty())
-            .map(|(_, t)| t)
-            .collect();
-        if choices.is_empty() {
-            return None;
-        }
+        use nk_view::KeyInput as K;
         if [0xff09, 0xfe20].contains(&key.sym) {
+            // The Tab order is the readers': the editor's button, then the tiles.
+            let choices: Vec<_> = self
+                .nodes(0, status, None)
+                .into_iter()
+                .filter(|(n, _)| !n.actions.is_empty())
+                .map(|(_, t)| t)
+                .collect();
+            if choices.is_empty() {
+                return None;
+            }
             let current = self
-                .keyboard_focus
+                .editor
+                .focus
+                .map(Target::Edit)
+                .or_else(|| self.focused())
                 .and_then(|f| choices.iter().position(|t| *t == f));
             let index = match current {
                 Some(i) if key.shift || key.sym == 0xfe20 => {
@@ -274,35 +347,36 @@ impl Cc {
             self.focus(choices[index]);
             return None;
         }
-        let target = self.keyboard_focus?;
-        if let Target::Slider(id) = target
-            && [0xff51, 0xff53, 0xff52, 0xff54].contains(&key.sym)
-        {
-            return set_value(
-                id,
-                (self.shown(id, status)
-                    + if [0xff51, 0xff54].contains(&key.sym) {
-                        -0.05
-                    } else {
-                        0.05
-                    })
-                .clamp(0., 1.),
-                status,
-            );
-        }
-        if [0xff0d, 0x20].contains(&key.sym) {
+        let input = match key.sym {
+            0xff51 => K::Left,
+            0xff53 => K::Right,
+            0xff52 => K::Up,
+            0xff54 => K::Down,
+            0xff0d | 0x20 => K::Activate,
+            _ => return None,
+        };
+        if input == K::Activate {
+            let target = self.focused()?;
             return self.action(target, status, None);
         }
-        None
+        let a = self.state.key(input)?;
+        self.activated(a, status)
     }
     pub fn action(&mut self, target: Target, status: &Status, value: Option<f64>) -> Option<Act> {
         match target {
             Target::Edit(t) => {
-                self.keyboard_focus = None;
+                self.state.blur();
                 self.editor.action(t, status)
             }
             Target::Detail(id) => self.detail.as_mut()?.action(id, value).map(Act::Detail),
             other => act_of(other, status),
+        }
+    }
+    /// What a control the view reports asks of the services.
+    fn activated(&mut self, a: nk_view::Activated, status: &Status) -> Option<Act> {
+        match target_of(&a.key)? {
+            Target::Slider(id) => set_value(id, self.state.value(&a.key)? / 100., status),
+            t => act_of(t, status),
         }
     }
     pub fn scroll_detail(&mut self, amount: nk_wayland::ScrollAmount, status: &Status) -> bool {
@@ -344,8 +418,17 @@ impl Cc {
         x >= p[0] && x < p[0] + p[2] && y >= p[1] && y < p[1] + p[3]
     }
 
+    /// A slider is held by the pointer, or a tile by the editor.
     pub fn dragging(&self) -> bool {
-        self.drag.is_some() || self.editor.dragging()
+        self.holding() || self.editor.dragging()
+    }
+    fn holding(&self) -> bool {
+        self.detail.is_none()
+            && self
+                .state
+                .press()
+                .and_then(target_of)
+                .is_some_and(|t| matches!(t, Target::Slider(_)))
     }
 
     /// What is under `p`, when it does something.
@@ -364,11 +447,17 @@ impl Cc {
         if !inside(self.editor.viewport, p) {
             return None;
         }
-        let placed = self.tiles.iter().find(|t| inside(t.rect, p))?;
-        targets(placed)
-            .into_iter()
-            .find(|(_, r)| inside(*r, p))
-            .map(|(t, _)| t)
+        // The innermost control the pointer reaches, as the view hit-tests.
+        self.state
+            .placed()
+            .iter()
+            .rfind(|n| match &n.what {
+                nk_view::What::Control(c) => {
+                    c.enabled && c.pointer && n.visible().is_some_and(|r| inside(r, p))
+                }
+                _ => false,
+            })
+            .and_then(|n| target_of(&n.key))
     }
 
     /// The pointer moved: the hover, and a held slider's value.
@@ -380,41 +469,39 @@ impl Cc {
             let (changed, act) = detail.motion(p);
             return (changed || act.is_some(), act.map(Act::Detail));
         }
-        if let Some(d) = self.drag {
-            let act = self.slide(d.id, p, status);
-            return (true, act);
+        // The grid is seen through the viewport; a held slider follows the pointer anywhere.
+        if !inside(self.editor.viewport, p) && !self.holding() {
+            return (self.state.pointer_leave(), None);
         }
-        let hover = self.target_at(p);
-        let changed = hover != self.hover;
-        self.hover = hover;
-        (changed, None)
+        let changed = self.state.pointer_motion(p.0, p.1);
+        let act = self.state.slid().and_then(|a| self.activated(a, status));
+        (changed || act.is_some(), act)
     }
 
     pub fn leave(&mut self) -> bool {
         if let Some(d) = &mut self.detail {
             return d.leave();
         }
-        self.hover.take().is_some()
+        self.state.pointer_leave()
     }
 
-    /// A press on `p`: what it asks for.
+    /// A press on `p`: what it asks for at once (a slider's value); a button acts on release.
     pub fn press(&mut self, p: (f64, f64), status: &Status) -> Option<Act> {
         if self.detail.is_none() && (self.editor.active || self.editor.target(p).is_some()) {
-            self.keyboard_focus = None;
+            self.state.blur();
             return self.editor.press(p, status);
         }
-        let target = self.target_at(p)?;
-        match target {
-            Target::Detail(_) => self.detail.as_mut()?.press().map(Act::Detail),
-            Target::Slider(id) => {
-                self.drag = Some(Drag {
-                    id,
-                    value: value_of(id, status),
-                });
-                self.slide(id, p, status)
-            }
-            other => act_of(other, status),
+        if let Some(d) = &mut self.detail {
+            d.motion(p);
+            return d.press().map(Act::Detail);
         }
+        if !inside(self.editor.viewport, p) {
+            return None;
+        }
+        self.editor.focus = None;
+        self.state.pointer_motion(p.0, p.1);
+        let a = self.state.button(true, std::time::Instant::now())?;
+        self.activated(a, status)
     }
 
     pub fn release_edit(&mut self, status: &Status) -> Option<Act> {
@@ -440,32 +527,32 @@ impl Cc {
             self.detail_at(p).map(Act::OpenDetail)
         }
     }
-    /// The primary button went up: whether a drag ended, and what a detail's release asks.
-    pub fn release(&mut self) -> (bool, Option<Act>) {
+    /// The primary button went up: whether anything changed, and what the release asks (a
+    /// button released over itself, a slider's last value, a detail's row).
+    pub fn release(&mut self, status: &Status) -> (bool, Option<Act>) {
+        if let Some(d) = &mut self.detail {
+            let act = d.release().map(Act::Detail);
+            return (act.is_some(), act);
+        }
+        let held = self.holding() || self.state.press().is_some();
         let act = self
-            .detail
-            .as_mut()
-            .and_then(|d| d.release())
-            .map(Act::Detail);
-        (self.drag.take().is_some() || act.is_some(), act)
+            .state
+            .button(false, std::time::Instant::now())
+            .and_then(|a| self.activated(a, status));
+        (held || act.is_some(), act)
     }
 
-    /// The slider's value under `p`, asked of its service.
-    fn slide(&mut self, id: &'static str, p: (f64, f64), status: &Status) -> Option<Act> {
-        let placed = *self.tiles.iter().find(|t| t.tile.id == id)?;
-        let value = slider_value(&placed, p);
-        if let Some(d) = self.drag.as_mut() {
-            d.value = value;
-        }
-        set_value(id, value, status)
+    /// The panel closed under a held pointer: nothing it held acts.
+    pub fn cancel(&mut self) {
+        self.state.pointer_leave();
+        let _ = self.state.button(false, std::time::Instant::now());
     }
 
     /// The value a slider shows: the held one while it is held.
-    fn shown(&self, id: &str, status: &Status) -> f64 {
-        match self.drag {
-            Some(d) if d.id == id => d.value,
-            _ => value_of(id, status),
-        }
+    fn shown(&self, id: &'static str, status: &Status) -> f64 {
+        key_of(Target::Slider(id))
+            .and_then(|k| self.state.value(&k))
+            .map_or_else(|| value_of(id, status), |v| v / 100.)
     }
 
     /// The tiles' glass, each a pane of the `controlCenter` piece stepped by its short
@@ -590,83 +677,16 @@ impl Cc {
         })
     }
 
-    /// The washes over the glass: badges at rest, what is on, the hover. Every id is
-    /// declared every time, so a change eases.
-    pub fn states(&self, status: &Status) -> Vec<StateRegion> {
+    /// The washes over the glass the last painted frame declared: badges at rest, what is
+    /// on, the hover and the press (nk-view's, VIEW.md §12.4).
+    pub fn states(&self, _status: &Status) -> Vec<StateRegion> {
         if let Some(d) = &self.detail {
             return d.states();
         }
         if self.editor.active {
             return self.editor.states();
         }
-        let mut out = vec![];
-        for (i, p) in self.tiles.iter().enumerate() {
-            let base = 1000 + i as u32 * 8;
-            let id = p.tile.id;
-            let on = active(id, status);
-            let r = p.rect;
-            let wash = |n: u32, b: [f64; 4], radius: f64, a: f64| StateRegion {
-                id: base + n,
-                bounds: MaterialRect {
-                    x: b[0],
-                    y: b[1],
-                    width: b[2],
-                    height: b[3],
-                },
-                radius,
-                wash: [1., 1., 1., a],
-                fade_ms: FADE_MS,
-            };
-            // The tile: white when a 1×1 toggle is on; else the hover of a whole-tile one.
-            let whole = p.tile.size == Size::Single && toggles(id);
-            let tile_hover = self.hover == Some(Target::Tile(id))
-                || self.keyboard_focus == Some(Target::Tile(id))
-                || self.keyboard_focus == Some(Target::OpenDetail(id));
-            let a = if whole && on {
-                1.
-            } else if tile_hover {
-                HOVER
-            } else {
-                0.
-            };
-            out.push(wash(0, r, radius_of(p), a));
-            // The badge: the surface at rest, white when on.
-            if let Some(b) = badge(p) {
-                let a = if on && has_state(id) { 1. } else { SURFACE };
-                out.push(wash(1, b, BADGE / 2., a));
-                let lit = self.hover == Some(Target::Badge(id))
-                    || self.keyboard_focus == Some(Target::Badge(id));
-                out.push(wash(2, b, BADGE / 2., if lit { HOVER } else { 0. }));
-            }
-            // The player's buttons.
-            for (n, (t, b)) in targets(p).into_iter().enumerate() {
-                if matches!(t, Target::Previous | Target::PlayPause | Target::Next) {
-                    let lit = self.hover == Some(t) || self.keyboard_focus == Some(t);
-                    out.push(wash(
-                        3 + n as u32,
-                        b,
-                        b[3] / 2.,
-                        if lit { HOVER } else { 0. },
-                    ));
-                }
-            }
-        }
-        out
-    }
-
-    fn icon(&mut self, name: &'static str, size: f64) -> Option<Arc<nk_icons::Icon>> {
-        let px = size.round() as u32;
-        let icons = &mut self.icons;
-        self.glyphs
-            .entry((name, px))
-            .or_insert_with(|| {
-                icons.as_mut().and_then(|i| {
-                    i.get(name, px)
-                        .map_err(|e| eprintln!("nidara-shell: no {name}: {e}"))
-                        .ok()
-                })
-            })
-            .clone()
+        self.last.states.clone()
     }
 
     /// The selected player's cover, decoded once per file.
@@ -697,80 +717,41 @@ impl Cc {
         }
         self.editor.paint_under(c, fallback);
         c.clip(rect(self.editor.viewport));
-        if let Some(base) = fallback.filter(|_| !self.editor.layered) {
-            for p in self.tiles.clone() {
-                c.rounded_rect(rect(p.rect), radius_of(&p), base);
-            }
-            for s in self.states(status) {
-                let b = s.bounds;
-                let w = s.wash;
-                if w[3] > 0. {
-                    c.rounded_rect(
-                        rect([b.x, b.y, b.width, b.height]),
-                        s.radius,
-                        Color::new([w[0] as f32, w[1] as f32, w[2] as f32, w[3] as f32]),
-                    );
+        if !self.editor.layered
+            && let Some(tokens) = self.tokens.clone()
+        {
+            if let Some(base) = fallback {
+                for p in &self.tiles {
+                    c.rounded_rect(rect(p.rect), radius_of(p), base);
                 }
             }
-        }
-        if !self.editor.layered {
-            for p in self.tiles.clone() {
-                self.paint_one(c, look, p, status)?;
+            self.last = self.state.frame(&tokens, std::time::Instant::now());
+            let cover = self.cover(status);
+            let (icons, glyphs) = (&mut self.icons, &mut self.glyphs);
+            let mut glyph = |name: &str, size: f64| glyph(icons, glyphs, name, size);
+            if let Err(e) = self.state.paint(
+                c,
+                &tokens,
+                &mut glyph,
+                fallback.is_some().then_some(&self.last),
+            ) {
+                eprintln!("nidara-shell: the CC grid cannot be drawn: {e}");
             }
+            paint_slots(c, look, &self.state, status, cover.as_deref(), &mut glyph)?;
         }
         c.pop_clip();
         self.editor.paint(c, look, fallback)?;
         Ok(())
     }
 
-    fn paint_one(
-        &mut self,
-        c: &mut Canvas,
-        look: &mut Look,
-        p: Placed,
-        status: &Status,
-    ) -> nk_wayland::Result<()> {
-        let accent = look.styles.palette.accent;
-        let id = p.tile.id;
-        let on = active(id, status);
-        // On white, the icon is the accent; elsewhere white.
-        let glyph = |whole_on: bool| if whole_on { accent } else { ink(1.) };
-        match (id, p.tile.size) {
-            ("cpu_memory", _) => {
-                self.paint_resources(c, look, &p, status)?;
-            }
-            ("battery", _) => {
-                self.paint_battery(c, look, &p, status)?;
-            }
-            ("media", size) => self.paint_media(c, look, &p, size, status)?,
-            ("volume" | "brightness", Size::FullWidth) => self.paint_slider(c, look, &p, status)?,
-            ("volume" | "brightness", Size::Tall) => self.paint_gauge(c, look, &p, status)?,
-            (_, Size::Single) => {
-                let whole_on = on && toggles(id);
-                if let Some(i) = self.icon(icon_of(id, status), ICON) {
-                    c.icon(&i, centred(p.rect, ICON), glyph(whole_on));
-                }
-            }
-            _ => {
-                let b = badge(&p).unwrap_or(p.rect);
-                if let Some(i) = self.icon(icon_of(id, status), ICON) {
-                    let lit = on && has_state(id);
-                    c.icon(&i, centred(b, ICON), glyph(lit));
-                }
-                let (title, sub) = texts(id, status, look);
-                let x = b[0] + BADGE + BADGE_GAP;
-                let column = p.rect[0] + p.rect[2] - TILE_PAD - x;
-                paint_titles(c, look, [x, p.rect[1], column, p.rect[3]], &title, &sub)?;
-            }
-        }
-        Ok(())
-    }
     pub fn edit_tiles(&self) -> Vec<(&'static str, [f64; 4], Size)> {
         self.tiles
             .iter()
             .map(|p| (p.tile.id, p.rect, p.tile.size))
             .collect()
     }
+    /// One tile drawn alone on its edit layer, 6 in from the layer's corner, as the grid
+    /// draws it, with its Remove mark when it can be removed.
     pub fn paint_edit_layer(
         &mut self,
         id: &'static str,
@@ -781,9 +762,38 @@ impl Cc {
         let Some(mut placed) = self.tiles.iter().find(|p| p.tile.id == id).copied() else {
             return Ok(());
         };
+        let Some(tokens) = self.tokens.clone() else {
+            return Ok(());
+        };
         placed.rect[0] = 6.;
         placed.rect[1] = 6.;
-        self.paint_one(c, look, placed, status)?;
+        let base = look.styles.text.clone();
+        let view = tile_view(&placed, status, Some(look), &base);
+        let state = self.layers.entry(id).or_insert_with(|| {
+            let mut s = nk_view::ViewState::new(REGIONS);
+            s.set_slides(false);
+            s
+        });
+        state.layout_in(
+            &view,
+            placed.rect,
+            self.detail_scale,
+            &tokens,
+            &mut look.text,
+            std::time::Instant::now(),
+        );
+        let cover = {
+            let path = status.media.as_ref().and_then(|m| m.art.clone());
+            self.art
+                .as_ref()
+                .filter(|(p, _)| Some(p) == path.as_ref())
+                .and_then(|(_, a)| a.clone())
+        };
+        let state = &self.layers[id];
+        let (icons, glyphs) = (&mut self.icons, &mut self.glyphs);
+        let mut glyph = |name: &str, size: f64| glyph(icons, glyphs, name, size);
+        state.paint(c, &tokens, &mut glyph, None)?;
+        paint_slots(c, look, state, status, cover.as_deref(), &mut glyph)?;
         if !layout::meta_of(id).unwrap().fixed {
             crate::notification_card::text(
                 c,
@@ -800,340 +810,9 @@ impl Cc {
         }
         Ok(())
     }
-    fn paint_media(
-        &mut self,
-        c: &mut Canvas,
-        look: &mut Look,
-        p: &Placed,
-        size: Size,
-        status: &Status,
-    ) -> nk_wayland::Result<()> {
-        let media = status.media.clone().unwrap_or_default();
-        let title = if media.title.is_empty() {
-            look.text_of(&crate::menu::Label::Key("cc.media.no-media"))
-        } else {
-            media.title.clone()
-        };
-        let cover = self.cover(status);
-        let play = if media.playing {
-            "nd-media-playback-pause"
-        } else {
-            "nd-media-playback-start"
-        };
-        let r = p.rect;
-        let buttons = targets(p);
-        let button = |t: Target| buttons.iter().find(|(x, _)| *x == t).map(|(_, b)| *b);
-        let enabled = |t: Target| match t {
-            Target::Previous => media.can_control && media.can_previous,
-            Target::Next => media.can_control && media.can_next,
-            _ => media.can_control,
-        };
-        let glyph = |c: &mut Canvas, me: &mut Self, t: Target, name: &'static str| {
-            if let (Some(b), Some(i)) = (button(t), me.icon(name, 18.)) {
-                let alpha = if enabled(t) { 1. } else { DIM };
-                c.icon(&i, centred(b, 18.), ink(alpha));
-            }
-        };
-        match size {
-            Size::Single => match cover {
-                Some(art) => {
-                    let b = [r[0], r[1], r[2], r[3]];
-                    c.clip_rounded_rect(rect(b), r[2] / 2.);
-                    c.image(&art, rect(b), ImageFit::Cover);
-                    c.pop_clip();
-                }
-                None => {
-                    if let Some(i) = self.icon("nd-media-playback-start", 22.) {
-                        c.icon(&i, centred(r, 22.), ink(1.));
-                    }
-                }
-            },
-            Size::Wide => {
-                let art = [r[0] + TILE_PAD + 4., r[1] + (r[3] - 44.) / 2., 44., 44.];
-                paint_cover(c, cover.as_deref(), art, 10.);
-                let x = art[0] + 44. + 12.;
-                let right = r[0] + r[2] - TILE_PAD - 4. - 32. - 12.;
-                paint_titles(c, look, [x, r[1], right - x, r[3]], &title, &media.artist)?;
-                glyph(c, self, Target::PlayPause, play);
-            }
-            _ => {
-                let [art, title_box, artist_row, _] = square_media(r);
-                let artist_y = artist_row[1];
-                paint_cover(c, cover.as_deref(), art, 15.);
-                let mut bold = style(look, TEXT, BOLD);
-                bold.alignment = nk_text::Alignment::Center;
-                let layout = lay_out(look, &title, &bold, title_box[2] as f32)?;
-                let lines = layout.lines().len();
-                let text = if lines > 2 {
-                    fit(look, &title, &bold, title_box[2])
-                } else {
-                    title.clone()
-                };
-                let layout = lay_out(look, &text, &bold, title_box[2] as f32)?;
-                let h = f64::from(layout.measured_size().height);
-                let y = title_box[1] + (title_box[3] - h) / 2.;
-                c.layout(&layout, (title_box[0] as f32, y as f32), ink(1.))?;
-                let regular = style(look, TEXT, 400.);
-                let artist = fit(look, &media.artist, &regular, title_box[2]);
-                if !artist.is_empty() {
-                    let l = lay_out(look, &artist, &regular, f32::MAX)?;
-                    let w = f64::from(l.measured_size().width);
-                    let x = r[0] + (r[2] - w) / 2.;
-                    c.layout(&l, (x as f32, artist_y as f32), ink(SECONDARY))?;
-                }
-                glyph(c, self, Target::Previous, "nd-media-skip-backward");
-                glyph(c, self, Target::PlayPause, play);
-                glyph(c, self, Target::Next, "nd-media-skip-forward");
-            }
-        }
-        Ok(())
-    }
 
-    /// A 4×1: low icon, the slider, high icon, the value.
-    fn paint_slider(
-        &mut self,
-        c: &mut Canvas,
-        look: &mut Look,
-        p: &Placed,
-        status: &Status,
-    ) -> nk_wayland::Result<()> {
-        let id = p.tile.id;
-        let value = self.shown(id, status);
-        let s = slider_parts(look, p);
-        let (low, low_size, low_alpha, high) = if id == "brightness" {
-            (
-                "nd-display-brightness-low",
-                14.,
-                0.5,
-                "nd-display-brightness",
-            )
-        } else {
-            ("nd-audio-volume-low", 16., 0.6, "nd-audio-volume-high")
-        };
-        if let Some(i) = self.icon(low, low_size) {
-            c.icon(&i, centred(s.low, low_size), ink(low_alpha));
-        }
-        if let Some(i) = self.icon(high, 16.) {
-            c.icon(&i, centred(s.high, 16.), ink(0.6));
-        }
-        let t = s.track;
-        let cy = t[1] + t[3] / 2.;
-        let x0 = t[0] + THUMB;
-        let x1 = t[0] + t[2] - THUMB;
-        let at = x0 + (x1 - x0) * value;
-        let bar = |a: f64, b: f64| rect([a - TRACK / 2., cy - TRACK / 2., b - a + TRACK, TRACK]);
-        c.rounded_rect(bar(x0, x1), TRACK / 2., ink(0.18));
-        c.rounded_rect(bar(x0, at), TRACK / 2., ink(0.9));
-        let thumb = THUMB - 1.;
-        let disc = |y: f64| rect([at - thumb, y - thumb, 2. * thumb, 2. * thumb]);
-        c.rounded_rect(disc(cy + 1.), thumb, Color::new([0., 0., 0., 0.25]));
-        let alpha = if self.drag.is_some_and(|d| d.id == id) {
-            0.55
-        } else {
-            0.95
-        };
-        c.rounded_rect(disc(cy), thumb, ink(alpha));
-        let label = format!("{}%", (value * 100.).round());
-        let small = style(look, SMALL, 400.);
-        let l = lay_out(look, &label, &small, f32::MAX)?;
-        let size = l.measured_size();
-        let x = s.value[0] + s.value[2] - f64::from(size.width);
-        let y = s.value[1] + (s.value[3] - f64::from(size.height)) / 2.;
-        c.layout(&l, (x as f32, y as f32), ink(DIM))?;
-        Ok(())
-    }
-
-    /// A 1×2: the fill rises from the bottom; the value on top, the icon below, each dark
-    /// where the white has reached it.
-    fn paint_gauge(
-        &mut self,
-        c: &mut Canvas,
-        look: &mut Look,
-        p: &Placed,
-        status: &Status,
-    ) -> nk_wayland::Result<()> {
-        let id = p.tile.id;
-        let value = self.shown(id, status);
-        let inner = inset(p.rect, TALL_PAD);
-        let top = inner[1] + inner[3] * (1. - value);
-        c.clip_rounded_rect(rect(inner), inner[2] / 2.);
-        c.rect(
-            rect([inner[0], top, inner[2], inner[1] + inner[3] - top]),
-            ink(0.9),
-        );
-        c.pop_clip();
-        let over = |y: f64| y >= top;
-        let dark = Color::new([0., 0., 0., 0.85]);
-        let label = format!("{}%", (value * 100.).round());
-        let bold = style(look, TEXT, BOLD);
-        let l = lay_out(look, &label, &bold, f32::MAX)?;
-        let size = l.measured_size();
-        let (lx, ly) = (
-            p.rect[0] + (p.rect[2] - f64::from(size.width)) / 2.,
-            inner[1] + 12.,
-        );
-        let ink_at = |y: f64| if over(y) { dark } else { ink(1.) };
-        c.layout(
-            &l,
-            (lx as f32, ly as f32),
-            ink_at(ly + f64::from(size.height) / 2.),
-        )?;
-        let name = if id == "brightness" {
-            "nd-display-brightness"
-        } else {
-            status
-                .volume
-                .map_or("nd-audio-volume-high", crate::status::volume_icon)
-        };
-        let iy = inner[1] + inner[3] - 24. - ICON;
-        if let Some(i) = self.icon(name, ICON) {
-            let b = [p.rect[0] + (p.rect[2] - ICON) / 2., iy, ICON, ICON];
-            c.icon(&i, rect(b), ink_at(iy + ICON / 2.));
-        }
-        Ok(())
-    }
-
-    /// What a reader is told: a panel holding a node per tile, ids from `first` on.
-    fn paint_resources(
-        &mut self,
-        c: &mut Canvas,
-        look: &mut Look,
-        p: &Placed,
-        s: &Status,
-    ) -> nk_wayland::Result<()> {
-        let (cpu, ram) = s.aux.resources.unwrap_or((0., 0.));
-        let large = p.tile.size == Size::Square;
-        let ring = if large { 56. } else { 34. };
-        let single = p.tile.size == Size::Single;
-        let cy = p.rect[1] + p.rect[3] / 2. - 10.;
-        let cx = p.rect[0] + p.rect[2] / 2.;
-        for (x, name, value) in if single {
-            vec![(cx, "CPU", cpu)]
-        } else {
-            vec![(cx - 48., "CPU", cpu), (cx + 48., "RAM", ram)]
-        } {
-            c.progress_arc(
-                (x, cy),
-                ring / 2. - 3.,
-                if large { 5. } else { 4. },
-                1.,
-                ink(0.18),
-            );
-            c.progress_arc(
-                (x, cy),
-                ring / 2. - 3.,
-                if large { 5. } else { 4. },
-                value,
-                ink(1.),
-            );
-            let number = if s.aux.resources.is_some() {
-                format!("{:.0}", value * 100.)
-            } else {
-                "—".into()
-            };
-            let number_style = TextStyle {
-                size: if large { 18. } else { 12. },
-                ..look.styles.text.clone()
-            };
-            let number_layout = lay_out(look, &number, &number_style, f32::MAX)?;
-            let measured = number_layout.measured_size();
-            c.layout(
-                &number_layout,
-                (
-                    (x - f64::from(measured.width) / 2.) as f32,
-                    (cy - f64::from(measured.height) / 2.) as f32,
-                ),
-                ink(1.),
-            )?;
-            crate::notification_card::text(
-                c,
-                look,
-                name,
-                &TextStyle {
-                    size: 12.,
-                    ..look.styles.text.clone()
-                },
-                [x - 18., cy + ring / 2. + 3., 40., 20.],
-                1,
-                0.8,
-            )?;
-        }
-        Ok(())
-    }
-    fn paint_battery(
-        &mut self,
-        c: &mut Canvas,
-        look: &mut Look,
-        p: &Placed,
-        s: &Status,
-    ) -> nk_wayland::Result<()> {
-        let Some(b) = s.battery else {
-            return Ok(());
-        };
-        let single = p.tile.size == Size::Single;
-        let glyph = if p.tile.size == Size::Square {
-            56.
-        } else {
-            28.
-        };
-        let x = if single || p.tile.size == Size::Square {
-            p.rect[0] + (p.rect[2] - glyph) / 2.
-        } else {
-            p.rect[0] + 18.
-        };
-        let y = p.rect[1] + (p.rect[3] - glyph) / 2.
-            - if single {
-                10.
-            } else if p.tile.size == Size::Square {
-                24.
-            } else {
-                0.
-            };
-        crate::bar::paint_battery(c, rect([x, y, glyph, glyph]), b);
-        let text = if single || p.tile.size == Size::Square {
-            [p.rect[0] + 14., y + glyph + 3., p.rect[2] - 28., 22.]
-        } else {
-            [
-                x + glyph + 16.,
-                p.rect[1] + 22.,
-                p.rect[2] - glyph - 48.,
-                24.,
-            ]
-        };
-        crate::notification_card::text(
-            c,
-            look,
-            &format!("{:.0}%", b.fraction * 100.),
-            &TextStyle {
-                size: 14.,
-                ..look.styles.text.clone()
-            },
-            text,
-            1,
-            1.,
-        )?;
-        if !single {
-            let b = if p.tile.size == Size::Square {
-                [p.rect[0] + 12., text[1] + 25., p.rect[2] - 24., 40.]
-            } else {
-                [text[0], text[1] + 23., text[2], 32.]
-            };
-            let state = battery_text(s, Some(look));
-            crate::notification_card::text(
-                c,
-                look,
-                &state,
-                &TextStyle {
-                    size: 12.,
-                    ..look.styles.text.clone()
-                },
-                b,
-                2,
-                0.65,
-            )?;
-        }
-        Ok(())
-    }
+    /// What a reader is told: a node per tile, ids from `first` on, bounds and focus from
+    /// the view.
     pub fn nodes(
         &self,
         first: nk_a11y::NodeId,
@@ -1151,6 +830,13 @@ impl Cc {
         if self.editor.active {
             return out;
         }
+        let focus = self.focused().filter(|_| self.editor.focus.is_none());
+        let bounds = |r: [f64; 4]| Bounds {
+            x: r[0],
+            y: r[1],
+            width: r[2],
+            height: r[3],
+        };
         for (i, p) in self.tiles.iter().enumerate() {
             let id = p.tile.id;
             let semantic = layout::REGISTRY
@@ -1160,11 +846,7 @@ impl Cc {
             let nid = first + semantic as nk_a11y::NodeId * 8;
             let (title, sub) =
                 look.map_or((id.to_string(), String::new()), |l| texts(id, status, l));
-            let target = if id == "media" {
-                Target::OpenDetail(id)
-            } else {
-                targets(p).first().map_or(Target::Tile(id), |(t, _)| *t)
-            };
+            let target = primary(id, p.tile.size);
             let mut node = match target {
                 Target::Slider(_) => {
                     let v = self.shown(id, status);
@@ -1186,15 +868,6 @@ impl Cc {
                     n.actions = vec![Action::Activate];
                     n
                 }
-                Target::PlayPause | Target::Previous | Target::Next => {
-                    let mut n = Node::new(nid, Role::Button, &title);
-                    n.description = status
-                        .media
-                        .as_ref()
-                        .map_or(String::new(), |m| m.artist.clone());
-                    n.actions = vec![Action::Activate];
-                    n
-                }
                 // Its action is its detail panel (B2.2).
                 _ => {
                     let mut n = Node::new(nid, Role::Button, &title);
@@ -1213,18 +886,13 @@ impl Cc {
                         format!("CPU {:.0}% · RAM {:.0}%", cpu * 100., ram * 100.)
                     });
             }
-            node.bounds = Bounds {
-                x: p.rect[0],
-                y: p.rect[1],
-                width: p.rect[2],
-                height: p.rect[3],
-            };
+            node.bounds = bounds(p.rect);
             node.id += match node.role {
                 Role::ToggleButton => 1,
                 Role::Slider => 2,
                 _ => 0,
             };
-            node.states.focused = self.keyboard_focus == Some(target);
+            node.states.focused = focus == Some(target);
             node.states.offscreen = !(p.rect[0]
                 < self.editor.viewport[0] + self.editor.viewport[2]
                 && p.rect[0] + p.rect[2] > self.editor.viewport[0]
@@ -1234,14 +902,13 @@ impl Cc {
                 node.actions.push(Action::Focus);
             }
             out.push((node, target));
-            if id == "media" {
-                for (j, (target, bounds)) in targets(p)
-                    .into_iter()
-                    .filter(|(t, _)| {
-                        matches!(t, Target::Previous | Target::PlayPause | Target::Next)
-                    })
-                    .enumerate()
-                {
+            if id == "media" && p.tile.size != Size::Single {
+                let controls: &[Target] = if p.tile.size == Size::Square {
+                    &[Target::Previous, Target::PlayPause, Target::Next]
+                } else {
+                    &[Target::PlayPause]
+                };
+                for (j, &target) in controls.iter().enumerate() {
                     let key = match target {
                         Target::Previous => "cc.detail.previous",
                         Target::Next => "cc.detail.next",
@@ -1252,20 +919,13 @@ impl Cc {
                         Role::Button,
                         text(key),
                     );
-                    let media = status.media.as_ref();
-                    let enabled = media.is_some_and(|m| match target {
-                        Target::Previous => m.can_previous,
-                        Target::Next => m.can_next,
-                        _ => m.can_control,
-                    });
-                    control.bounds = Bounds {
-                        x: bounds[0],
-                        y: bounds[1],
-                        width: bounds[2],
-                        height: bounds[3],
-                    };
+                    let enabled = enabled(target, status);
+                    let r = key_of(target)
+                        .and_then(|k| self.state.rect(&k))
+                        .unwrap_or(p.rect);
+                    control.bounds = bounds(r);
                     control.states.disabled = !enabled;
-                    control.states.focused = self.keyboard_focus == Some(target);
+                    control.states.focused = focus == Some(target);
                     if enabled {
                         control.actions = vec![Action::Activate, Action::Focus];
                     }
@@ -1278,14 +938,9 @@ impl Cc {
                     Role::Button,
                     format!("{} · {}", text(name_key(id)), text("cc.detail.open")),
                 );
-                detail.bounds = Bounds {
-                    x: p.rect[0],
-                    y: p.rect[1],
-                    width: p.rect[2],
-                    height: p.rect[3],
-                };
+                detail.bounds = bounds(p.rect);
                 detail.actions = vec![Action::Activate, Action::Focus];
-                detail.states.focused = self.keyboard_focus == Some(Target::OpenDetail(id));
+                detail.states.focused = focus == Some(Target::OpenDetail(id));
                 out.push((detail, Target::OpenDetail(id)));
             }
         }
@@ -1301,6 +956,626 @@ impl Cc {
     ) -> Option<Act> {
         set_value(id, (percent / 100.).clamp(0., 1.), status)
     }
+}
+
+/// A glyph by name, looked up once per size; the empty name of a slot is nothing.
+fn glyph(
+    icons: &mut Option<nk_icons::Icons>,
+    glyphs: &mut HashMap<(String, u32), Option<Arc<nk_icons::Icon>>>,
+    name: &str,
+    size: f64,
+) -> Option<Arc<nk_icons::Icon>> {
+    if name.is_empty() {
+        return None;
+    }
+    let px = size.round() as u32;
+    glyphs
+        .entry((name.to_string(), px))
+        .or_insert_with(|| {
+            icons.as_mut().and_then(|i| {
+                i.get(name, px)
+                    .map_err(|e| eprintln!("nidara-shell: no {name}: {e}"))
+                    .ok()
+            })
+        })
+        .clone()
+}
+
+/// A tile's controls by key: `t:` the whole tile, `d:` its detail, `b:` its badge, `s:` its
+/// slider, `m:` the player's buttons.
+fn key_of(t: Target) -> Option<nk_view::Key> {
+    Some(nk_view::Key(match t {
+        Target::Tile(id) => format!("t:{id}"),
+        Target::OpenDetail(id) => format!("d:{id}"),
+        Target::Badge(id) => format!("b:{id}"),
+        Target::Slider(id) => format!("s:{id}"),
+        Target::Previous => "m:previous".into(),
+        Target::PlayPause => "m:play".into(),
+        Target::Next => "m:next".into(),
+        Target::Edit(_) | Target::Detail(_) => return None,
+    }))
+}
+fn target_of(k: &nk_view::Key) -> Option<Target> {
+    let (kind, rest) = k.0.split_once(':')?;
+    let id = || layout::REGISTRY.iter().find(|m| m.id == rest).map(|m| m.id);
+    Some(match kind {
+        "t" => Target::Tile(id()?),
+        "d" => Target::OpenDetail(id()?),
+        "b" => Target::Badge(id()?),
+        "s" => Target::Slider(id()?),
+        "m" => match rest {
+            "previous" => Target::Previous,
+            "play" => Target::PlayPause,
+            "next" => Target::Next,
+            _ => return None,
+        },
+        _ => return None,
+    })
+}
+
+/// What a tile is first, for a reader: its slider, its toggle, its badge, else its detail.
+fn primary(id: &'static str, size: Size) -> Target {
+    match (id, size) {
+        ("volume" | "brightness", Size::FullWidth | Size::Tall) => Target::Slider(id),
+        ("media", _) => Target::OpenDetail(id),
+        (id, Size::Single) if toggles(id) => Target::Tile(id),
+        ("dark_mode" | "focus", _) => Target::Tile(id),
+        ("night_light" | "bt" | "ethernet", Size::Wide | Size::Square) => Target::Badge(id),
+        (id, _) if has_detail(id) => Target::OpenDetail(id),
+        _ => Target::Tile(id),
+    }
+}
+
+/// A tile's corner, as `radius_of` gives its glass: a 2×2 takes its 1×1's, the 4×1 the
+/// dock's, the rest are capsules and circles.
+fn corner_of(size: Size) -> nk_view::Corner {
+    match size {
+        Size::Square => nk_view::Corner::Fixed(SQUARE_RADIUS as u32),
+        Size::FullWidth => nk_view::Corner::Fixed(wide_radius().round() as u32),
+        _ => nk_view::Corner::Pill,
+    }
+}
+
+/// Whether a player's button can act now.
+fn enabled(t: Target, s: &Status) -> bool {
+    s.media.as_ref().is_some_and(|m| match t {
+        Target::Previous => m.can_control && m.can_previous,
+        Target::Next => m.can_control && m.can_next,
+        _ => m.can_control,
+    })
+}
+
+/// The grid: each tile on its cells, the editor's placement (VIEW.md §12.4).
+fn grid_view(
+    tiles: &[Placed],
+    status: &Status,
+    look: Option<&Look>,
+    base: &TextStyle,
+) -> nk_view::Node {
+    let cells = tiles
+        .iter()
+        .map(|p| nk_view::Cell {
+            at: (p.tile.x as usize, p.tile.y as usize),
+            span: (
+                p.tile.size.cells().0 as usize,
+                p.tile.size.cells().1 as usize,
+            ),
+            child: tile_view(p, status, look, base),
+        })
+        .collect();
+    nk_view::Node::grid(
+        "grid",
+        layout::COLS as usize,
+        layout::UNIT,
+        layout::GAP,
+        cells,
+    )
+}
+
+/// Room of `px`, for a measure of the tiles' own the spacing scale has no step for.
+fn strut(key: String, px: f64) -> nk_view::Node {
+    nk_view::Node::slot(key, px)
+}
+
+/// A glyph of `size` centred in a box of `room`.
+fn boxed(key: String, name: &str, size: f64, room: f64, ink: nk_view::Ink) -> nk_view::Node {
+    use nk_view::{Align, Node, Padding};
+    Node::overlay(format!("{key}/box"), strut(format!("{key}/room"), room)).layer(
+        Align::Center,
+        Align::Center,
+        Padding::default(),
+        Node::icon(key, name, size).ink(ink),
+    )
+}
+
+/// `child` laid in the middle of the tile, both ways.
+fn centred_in(key: String, child: nk_view::Node) -> nk_view::Node {
+    use nk_view::{Align, Justify, Node};
+    Node::column(key, vec![child])
+        .justify(Justify::Center)
+        .align(Align::Center)
+}
+
+/// One tile: a pane of the CC's glass in its size's corner, holding its controls and what
+/// they show, as the TS tiles laid them (`tile.ts`, `BaseIsland.tsx`).
+fn tile_view(p: &Placed, status: &Status, look: Option<&Look>, base: &TextStyle) -> nk_view::Node {
+    use nk_view::{Align, Ink, Justify, Node, Padding, Role, Slider};
+    let id = p.tile.id;
+    let size = p.tile.size;
+    let k = |part: &str| format!("{id}/{part}");
+    let on = active(id, status);
+    let corner = corner_of(size);
+    let (title, sub) = look.map_or((id.to_string(), String::new()), |l| texts(id, status, l));
+    let text = |part: &str, t: String, size: f32, weight: f32| {
+        Node::text(k(part), t, sized(base, size, weight))
+    };
+    let whole = |key: Option<nk_view::Key>, name: String, child: Node| {
+        Node::control(key.unwrap(), name, "", child).corner(corner)
+    };
+    // A detail under the tile's own control: keys and readers only.
+    let detail_layer = |base: Node| {
+        if has_detail(id) {
+            Node::overlay(k("layers"), base).layer(
+                Align::Stretch,
+                Align::Stretch,
+                Padding::default(),
+                Node::control(
+                    key_of(Target::OpenDetail(id)).unwrap(),
+                    "",
+                    "",
+                    Node::spacer(k("d")),
+                )
+                .corner(corner)
+                .keys_only(),
+            )
+        } else {
+            base
+        }
+    };
+    let titles = |title: String, sub: String| {
+        let lines = if sub.is_empty() { 2 } else { 1 };
+        let mut col = vec![text("title", title, TEXT, BOLD).lines(lines)];
+        if !sub.is_empty() {
+            col.push(text("sub", sub, TEXT, 400.).lines(1).ink(Ink::Secondary));
+        }
+        Node::column(k("titles"), col)
+            .justify(Justify::Center)
+            .grow()
+    };
+    let content = match (id, size) {
+        ("cpu_memory", _) => {
+            let large = size == Size::Square;
+            let ring = if large { 56. } else { 34. };
+            let names: &[&str] = if size == Size::Single {
+                &["CPU"]
+            } else {
+                &["CPU", "RAM"]
+            };
+            let mut row = vec![];
+            for (n, name) in names.iter().enumerate() {
+                if n > 0 {
+                    row.push(strut(k("between"), 96. - ring));
+                }
+                row.push(
+                    Node::column(
+                        k(&format!("gauge{n}")),
+                        vec![
+                            Node::slot(k(&format!("ring{n}")), ring),
+                            strut(k(&format!("under{n}")), 3.),
+                            text(&format!("name{n}"), (*name).into(), SMALL, 400.)
+                                .ink(Ink::Secondary),
+                        ],
+                    )
+                    .align(Align::Center),
+                );
+            }
+            centred_in(k("centre"), Node::row(k("gauges"), row).align(Align::Start))
+        }
+        ("battery", size) => {
+            let percent = status
+                .battery
+                .map_or(String::new(), |b| format!("{:.0}%", b.fraction * 100.));
+            let state = battery_text(status, look);
+            let body = match size {
+                Size::Single => centred_in(
+                    k("centre"),
+                    Node::column(
+                        k("stack"),
+                        vec![
+                            Node::slot(k("glyph"), 28.),
+                            strut(k("under"), 3.),
+                            text("percent", percent, TEXT, 400.),
+                        ],
+                    )
+                    .align(Align::Center),
+                ),
+                Size::Square => {
+                    let mut centre = sized(base, SMALL, 400.);
+                    centre.alignment = nk_text::Alignment::Center;
+                    Node::column(
+                        k("stack"),
+                        vec![
+                            Node::slot(k("glyph"), 56.),
+                            strut(k("under"), 3.),
+                            text("percent", percent, TEXT, 400.),
+                            Node::row(
+                                k("state-row"),
+                                vec![
+                                    strut(k("state-l"), 12.),
+                                    Node::text(k("state"), state, centre)
+                                        .lines(2)
+                                        .ink(Ink::Dim)
+                                        .grow(),
+                                    strut(k("state-r"), 12.),
+                                ],
+                            ),
+                        ],
+                    )
+                    .justify(Justify::Center)
+                    .align(Align::Center)
+                }
+                _ => Node::row(
+                    k("row"),
+                    vec![
+                        strut(k("lead"), 18.),
+                        Node::slot(k("glyph"), 28.),
+                        strut(k("gap"), 16.),
+                        Node::column(
+                            k("texts"),
+                            vec![
+                                text("percent", percent, TEXT, 400.),
+                                text("state", state, SMALL, 400.).lines(2).ink(Ink::Dim),
+                            ],
+                        )
+                        .justify(Justify::Center)
+                        .grow(),
+                        strut(k("end"), 14.),
+                    ],
+                )
+                .align(Align::Center),
+            };
+            whole(key_of(Target::OpenDetail(id)), title, body)
+        }
+        ("media", size) => {
+            let media = status.media.clone().unwrap_or_default();
+            let button = |t: Target, icon: &str, room: f64| {
+                let ink = if enabled(t, status) {
+                    Ink::Primary
+                } else {
+                    Ink::Dim
+                };
+                let key = key_of(t).unwrap();
+                Node::control(
+                    key.clone(),
+                    "",
+                    "",
+                    boxed(format!("{}/glyph", key.0), icon, 18., room, ink),
+                )
+                .enabled(enabled(t, status))
+            };
+            let play = if media.playing {
+                "nd-media-playback-pause"
+            } else {
+                "nd-media-playback-start"
+            };
+            let body = match size {
+                Size::Single => Node::slot(k("cover"), layout::UNIT),
+                Size::Wide => Node::row(
+                    k("row"),
+                    vec![
+                        strut(k("lead"), 14.),
+                        Node::slot(k("cover"), 44.),
+                        strut(k("gap"), 12.),
+                        titles(title.clone(), media.artist.clone()),
+                        strut(k("before"), 12.),
+                        button(Target::PlayPause, play, 32.),
+                        strut(k("end"), 14.),
+                    ],
+                )
+                .align(Align::Center),
+                _ => {
+                    let mut centre = sized(base, TEXT, BOLD);
+                    centre.alignment = nk_text::Alignment::Center;
+                    let mut artist = sized(base, TEXT, 400.);
+                    artist.alignment = nk_text::Alignment::Center;
+                    let line = |part: &str, child: Node| {
+                        Node::row(
+                            k(part),
+                            vec![
+                                strut(k(&format!("{part}-l")), 16.),
+                                child.grow(),
+                                strut(k(&format!("{part}-r")), 16.),
+                            ],
+                        )
+                    };
+                    Node::column(
+                        k("stack"),
+                        vec![
+                            Node::row(k("art"), vec![Node::slot(k("cover"), 62.)])
+                                .justify(Justify::Center),
+                            strut(k("under-art"), 4.),
+                            line(
+                                "title-line",
+                                Node::text(k("title"), title.clone(), centre).lines(2),
+                            ),
+                            line(
+                                "artist-line",
+                                Node::text(k("artist"), media.artist.clone(), artist)
+                                    .lines(1)
+                                    .ink(Ink::Secondary),
+                            ),
+                            strut(k("above-controls"), 4.),
+                            Node::row(
+                                k("controls"),
+                                vec![
+                                    button(Target::Previous, "nd-media-skip-backward", 24.),
+                                    button(Target::PlayPause, play, 24.),
+                                    button(Target::Next, "nd-media-skip-forward", 24.),
+                                ],
+                            )
+                            .gap(nk_view::Space::S4)
+                            .justify(Justify::Center),
+                        ],
+                    )
+                    .justify(Justify::Center)
+                }
+            };
+            whole(key_of(Target::OpenDetail(id)), title, body)
+        }
+        ("volume" | "brightness", Size::FullWidth) => {
+            let (low, low_size, high) = if id == "brightness" {
+                ("nd-display-brightness-low", 14., "nd-display-brightness")
+            } else {
+                ("nd-audio-volume-low", 16., "nd-audio-volume-high")
+            };
+            let slider = Node::slider(
+                key_of(Target::Slider(id)).unwrap(),
+                "",
+                "",
+                Slider::new(0., 100., 5., (value_of(id, status) * 100.).round()),
+            )
+            .grow();
+            let row = Node::row(
+                k("row"),
+                vec![
+                    strut(k("lead"), 14.),
+                    boxed(k("low"), low, low_size, 16., Ink::Dim),
+                    strut(k("before"), 12.),
+                    slider,
+                    strut(k("after"), 12.),
+                    boxed(k("high"), high, 16., 16., Ink::Dim),
+                    strut(k("gap"), 12.),
+                    Node::slot(k("value"), VALUE_W),
+                    strut(k("end"), 14.),
+                ],
+            )
+            .align(Align::Center);
+            Node::overlay(
+                k("layers"),
+                whole(
+                    key_of(Target::OpenDetail(id)),
+                    title,
+                    Node::spacer(k("body")),
+                ),
+            )
+            .layer(Align::Stretch, Align::Center, Padding::default(), row)
+        }
+        ("volume" | "brightness", Size::Tall) => {
+            let icon = if id == "brightness" {
+                "nd-display-brightness"
+            } else {
+                status
+                    .volume
+                    .map_or("nd-audio-volume-high", crate::status::volume_icon)
+            };
+            let fill = Node::column(
+                k("fill"),
+                vec![
+                    strut(k("top"), 12.),
+                    Node::slot(k("value"), 24.),
+                    Node::spacer(k("middle")),
+                    Node::icon(k("icon"), icon, ICON),
+                    strut(k("bottom"), 24.),
+                ],
+            )
+            .align(Align::Center);
+            let mut slider = Node::slider(
+                key_of(Target::Slider(id)).unwrap(),
+                "",
+                "",
+                Slider::new(0., 100., 5., (value_of(id, status) * 100.).round()).fill(),
+            )
+            .corner(nk_view::Corner::Pill);
+            if let nk_view::Kind::Control(c) = &mut slider.kind {
+                *c.child = fill;
+            }
+            // The fill reaches 2 from the glass.
+            let inset = Node::row(
+                k("inset-row"),
+                vec![
+                    strut(k("inset-l"), TALL_PAD),
+                    Node::column(
+                        k("inset"),
+                        vec![
+                            strut(k("inset-t"), TALL_PAD),
+                            slider.grow(),
+                            strut(k("inset-b"), TALL_PAD),
+                        ],
+                    )
+                    .grow(),
+                    strut(k("inset-r"), TALL_PAD),
+                ],
+            );
+            detail_layer(inset)
+        }
+        (_, Size::Single) => {
+            let glyph = centred_in(
+                k("centre"),
+                Node::icon(k("icon"), icon_of(id, status), ICON),
+            );
+            if toggles(id) {
+                detail_layer(
+                    whole(key_of(Target::Tile(id)), title, glyph)
+                        .role(Role::Toggle)
+                        .on(on),
+                )
+            } else {
+                whole(key_of(primary(id, size)), title, glyph)
+            }
+        }
+        _ => {
+            // A capsule: the badge, then the title over its subtitle.
+            let lit = on && has_state(id);
+            let face = boxed(k("icon"), icon_of(id, status), ICON, BADGE, Ink::Primary);
+            let badge = match primary(id, size) {
+                Target::Badge(_) => Node::control(key_of(Target::Badge(id)).unwrap(), "", "", face)
+                    .role(Role::Toggle),
+                // A badge that is only a picture of the state: no pointer, no Tab stop.
+                _ => Node::control(k("well"), "", "", face).enabled(false),
+            }
+            .surface()
+            .on(lit);
+            let row = Node::row(
+                k("row"),
+                vec![
+                    strut(k("lead"), TILE_PAD + BADGE_IN),
+                    badge,
+                    strut(k("gap"), BADGE_GAP),
+                    titles(title.clone(), sub),
+                    strut(k("end"), TILE_PAD),
+                ],
+            )
+            .align(Align::Center);
+            let key = match primary(id, size) {
+                Target::Tile(_) => key_of(Target::Tile(id)),
+                _ => key_of(Target::OpenDetail(id)),
+            };
+            let control = whole(key, title, row);
+            if toggles(id) && primary(id, size) == Target::Tile(id) {
+                control.role(Role::Toggle)
+            } else {
+                control
+            }
+        }
+    };
+    Node::pane(format!("p:{id}"), corner, content)
+}
+
+/// What the surface paints itself in the view's slots: covers, the battery's glyph, the
+/// resource rings and their numbers, a slider's value as it moves.
+fn paint_slots(
+    c: &mut Canvas,
+    look: &mut Look,
+    state: &nk_view::ViewState,
+    status: &Status,
+    cover: Option<&Raster>,
+    glyph: &mut dyn FnMut(&str, f64) -> Option<Arc<nk_icons::Icon>>,
+) -> nk_wayland::Result<()> {
+    for n in state.placed() {
+        let (Some((id, part)), Some(visible)) = (n.key.0.split_once('/'), n.visible()) else {
+            continue;
+        };
+        if n.alpha <= 0. || !matches!(n.what, nk_view::What::Icon(ref i) if i.name.is_empty()) {
+            continue;
+        }
+        let r = n.rect;
+        c.push_opacity(n.alpha);
+        c.clip(rect(visible));
+        match (id, part) {
+            ("media", "cover") => {
+                let radius = if r[2] >= layout::UNIT {
+                    r[2] / 2.
+                } else if r[2] > 50. {
+                    15.
+                } else {
+                    10.
+                };
+                match cover {
+                    Some(art) => {
+                        c.clip_rounded_rect(rect(r), radius);
+                        c.image(art, rect(r), ImageFit::Cover);
+                        c.pop_clip();
+                    }
+                    None if r[2] >= layout::UNIT => {
+                        if let Some(i) = glyph("nd-media-playback-start", 22.) {
+                            c.icon(&i, centred(r, 22.), ink(1.));
+                        }
+                    }
+                    None => c.rounded_rect(rect(r), radius, ink(SURFACE as f32)),
+                }
+            }
+            ("battery", "glyph") => {
+                if let Some(b) = status.battery {
+                    crate::bar::paint_battery(c, rect(r), b);
+                }
+            }
+            ("cpu_memory", ring) if ring.starts_with("ring") => {
+                let (cpu, ram) = status.aux.resources.unwrap_or((0., 0.));
+                let value = if ring == "ring0" { cpu } else { ram };
+                let large = r[2] > 40.;
+                let (cx, cy) = (r[0] + r[2] / 2., r[1] + r[3] / 2.);
+                let width = if large { 5. } else { 4. };
+                c.progress_arc((cx, cy), r[2] / 2. - 3., width, 1., ink(0.18));
+                c.progress_arc((cx, cy), r[2] / 2. - 3., width, value, ink(1.));
+                let number = if status.aux.resources.is_some() {
+                    format!("{:.0}", value * 100.)
+                } else {
+                    "—".into()
+                };
+                let style = TextStyle {
+                    size: if large { 18. } else { 12. },
+                    ..look.styles.text.clone()
+                };
+                let l = lay_out(look, &number, &style, f32::MAX)?;
+                let m = l.measured_size();
+                c.layout(
+                    &l,
+                    (
+                        (cx - f64::from(m.width) / 2.) as f32,
+                        (cy - f64::from(m.height) / 2.) as f32,
+                    ),
+                    ink(1.),
+                )?;
+            }
+            ("volume" | "brightness", "value") => {
+                let key = key_of(Target::Slider(if id == "volume" {
+                    "volume"
+                } else {
+                    "brightness"
+                }))
+                .unwrap();
+                let value = state.value(&key).unwrap_or(0.);
+                let label = format!("{value}%");
+                let tall = state.rect(&key).is_some_and(|s| s[3] > s[2]);
+                let style = if tall {
+                    style(look, TEXT, BOLD)
+                } else {
+                    style(look, SMALL, 400.)
+                };
+                let l = lay_out(look, &label, &style, f32::MAX)?;
+                let m = l.measured_size();
+                let (w, h) = (f64::from(m.width), f64::from(m.height));
+                let y = r[1] + (r[3] - h) / 2.;
+                if tall {
+                    // Over the fill it turns dark, as nk-view's own content does.
+                    let s = state.rect(&key).unwrap_or(r);
+                    let top = s[1] + s[3] * (1. - value / 100.);
+                    let colour = if y + h / 2. >= top {
+                        Color::new([0., 0., 0., 0.85])
+                    } else {
+                        ink(1.)
+                    };
+                    c.layout(&l, ((r[0] + (r[2] - w) / 2.) as f32, y as f32), colour)?;
+                } else {
+                    c.layout(&l, ((r[0] + r[2] - w) as f32, y as f32), ink(DIM))?;
+                }
+            }
+            _ => {}
+        }
+        c.pop_clip();
+        c.pop_opacity();
+    }
+    Ok(())
 }
 
 /// Whether a tile can be shown: its service there, its hardware present. A widget the
@@ -1435,120 +1710,8 @@ fn set_value(id: &str, value: f64, s: &Status) -> Option<Act> {
     }
 }
 
-/// The value under `p` on a placed slider: along its track (4×1) or up its fill (1×2).
-fn slider_value(p: &Placed, (x, y): (f64, f64)) -> f64 {
-    if p.tile.size == Size::Tall {
-        let inner = inset(p.rect, TALL_PAD);
-        return (1. - (y - inner[1]) / inner[3]).clamp(0., 1.);
-    }
-    let t = slider_track(p.rect, 0.);
-    let (x0, x1) = (t[0] + THUMB, t[0] + t[2] - THUMB);
-    ((x - x0) / (x1 - x0).max(1.)).clamp(0., 1.)
-}
-
-/// The pieces of a 4×1, left to right: low icon, track, high icon, the value's room.
-struct SliderParts {
-    low: [f64; 4],
-    track: [f64; 4],
-    high: [f64; 4],
-    value: [f64; 4],
-}
-
 /// The value's room: five digits at the small size (`width_chars: 5`).
 const VALUE_W: f64 = 36.;
-
-fn slider_track(r: [f64; 4], value_w: f64) -> [f64; 4] {
-    let x0 = r[0] + TILE_PAD + 4. + 16. + 12.;
-    let x1 = r[0] + r[2] - TILE_PAD - 4. - value_w.max(VALUE_W) - 12. - 16. - 12.;
-    [x0, r[1] + (r[3] - 2. * THUMB) / 2., x1 - x0, 2. * THUMB]
-}
-
-fn slider_parts(_look: &mut Look, p: &Placed) -> SliderParts {
-    let r = p.rect;
-    let cy = r[1] + r[3] / 2.;
-    let icon = |x: f64| [x, cy - 8., 16., 16.];
-    let track = slider_track(r, VALUE_W);
-    let right = r[0] + r[2] - TILE_PAD - 4.;
-    SliderParts {
-        low: icon(r[0] + TILE_PAD + 4.),
-        track,
-        high: icon(track[0] + track[2] + 12.),
-        value: [right - VALUE_W, r[1], VALUE_W, r[3]],
-    }
-}
-
-/// What a tile's clicks land on, and where.
-fn targets(p: &Placed) -> Vec<(Target, [f64; 4])> {
-    let (id, size, r) = (p.tile.id, p.tile.size, p.rect);
-    let mut out = match (id, size) {
-        ("volume" | "brightness", Size::FullWidth) => {
-            let t = slider_track(r, VALUE_W);
-            vec![(Target::Slider(id), [t[0], r[1], t[2], r[3]])]
-        }
-        ("volume" | "brightness", Size::Tall) => vec![(Target::Slider(id), r)],
-        ("media", Size::Wide) => {
-            let b = [
-                r[0] + r[2] - TILE_PAD - 4. - 32.,
-                r[1] + (r[3] - 32.) / 2.,
-                32.,
-                32.,
-            ];
-            vec![(Target::PlayPause, b)]
-        }
-        ("media", Size::Square) => {
-            let [_, _, _, controls] = square_media(r);
-            let cx = r[0] + r[2] / 2.;
-            let at = |dx: f64| [cx + dx - 12., controls[1], 24., 24.];
-            vec![
-                (Target::Previous, at(-40.)),
-                (Target::PlayPause, at(0.)),
-                (Target::Next, at(40.)),
-            ]
-        }
-        (id, Size::Single) if toggles(id) => vec![(Target::Tile(id), r)],
-        ("dark_mode" | "focus", _) => vec![(Target::Tile(id), r)],
-        ("night_light" | "bt" | "ethernet", _) => {
-            badge(p).map_or(vec![], |b| vec![(Target::Badge(id), b)])
-        }
-        _ => vec![],
-    };
-    if has_detail(id) {
-        out.push((Target::OpenDetail(id), r));
-    }
-    out
-}
-
-/// A 2×2 player's parts: the cover, the title's box, the artist's top, the controls'
-/// row — one group centred in the tile (`buildSquareContent`).
-fn square_media(r: [f64; 4]) -> [[f64; 4]; 4] {
-    const ART: f64 = 62.;
-    const TITLE_W: f64 = 140.;
-    const TITLE_H: f64 = 36.;
-    const LINE: f64 = 18.;
-    let h = ART + 2. + 2. + TITLE_H + 2. + LINE + 4. + 24.;
-    let top = r[1] + (r[3] - h) / 2.;
-    let cx = r[0] + r[2] / 2.;
-    let art = [cx - ART / 2., top, ART, ART];
-    let title = [cx - TITLE_W / 2., top + ART + 4., TITLE_W, TITLE_H];
-    let artist_y = title[1] + TITLE_H + 2.;
-    let controls = [r[0], artist_y + LINE + 4., r[2], 24.];
-    [art, title, [0., artist_y, 0., 0.], controls]
-}
-
-/// A capsule's badge, for the sizes that have one.
-fn badge(p: &Placed) -> Option<[f64; 4]> {
-    let (id, size, r) = (p.tile.id, p.tile.size, p.rect);
-    if matches!(id, "media" | "volume" | "brightness") || !matches!(size, Size::Wide | Size::Square)
-    {
-        return None;
-    }
-    Some([
-        r[0] + TILE_PAD + BADGE_IN,
-        r[1] + (r[3] - BADGE) / 2.,
-        BADGE,
-        BADGE,
-    ])
-}
 
 pub(super) fn wired(s: &Status) -> Option<&serde_json::Value> {
     s.details.network.as_ref()?["devices"]
@@ -1767,7 +1930,10 @@ fn texts(id: &str, s: &Status, look: &Look) -> (String, String) {
 }
 
 fn style(look: &Look, size: f32, weight: f32) -> TextStyle {
-    let mut s = look.styles.text.clone();
+    sized(&look.styles.text, size, weight)
+}
+fn sized(base: &TextStyle, size: f32, weight: f32) -> TextStyle {
+    let mut s = base.clone();
     s.size = size;
     s.weight = weight;
     s
@@ -1791,26 +1957,6 @@ pub(crate) fn lay_out(
     })
 }
 
-/// `text` cut to `room` on one line, an ellipsis where it is cut.
-fn fit(look: &mut Look, text: &str, style: &TextStyle, room: f64) -> String {
-    use unicode_segmentation::UnicodeSegmentation;
-    let width = |look: &mut Look, t: &str| {
-        lay_out(look, t, style, f32::MAX).map_or(0., |l| f64::from(l.measured_size().width))
-    };
-    if width(look, text) <= room {
-        return text.to_string();
-    }
-    let mut cut = text.to_string();
-    while let Some((at, _)) = cut.grapheme_indices(true).next_back() {
-        cut.truncate(at);
-        let candidate = format!("{}…", cut.trim_end());
-        if width(look, &candidate) <= room || cut.is_empty() {
-            return candidate;
-        }
-    }
-    String::new()
-}
-
 /// A capsule's text column in `b`: the title in bold over its subtitle, both centred on
 /// the tile's middle. Without a subtitle the title may take two lines, when its longest
 /// word fits the column (`makeCapsuleInner`); else one, cut.
@@ -1832,59 +1978,6 @@ pub(super) fn battery_text(s: &Status, look: Option<&Look>) -> String {
     }
 }
 
-fn paint_titles(
-    c: &mut Canvas,
-    look: &mut Look,
-    b: [f64; 4],
-    title: &str,
-    sub: &str,
-) -> nk_wayland::Result<()> {
-    let bold = style(look, TEXT, BOLD);
-    let regular = style(look, TEXT, 400.);
-    let room = b[2].max(0.);
-    let title_layout = if sub.is_empty() {
-        let wrapped = lay_out(look, title, &bold, room as f32)?;
-        let fits =
-            wrapped.lines().len() <= 2 && f64::from(wrapped.measured_size().width) <= room + 0.5;
-        if fits {
-            wrapped
-        } else {
-            let one = fit(look, title, &bold, room);
-            lay_out(look, &one, &bold, f32::MAX)?
-        }
-    } else {
-        let one = fit(look, title, &bold, room);
-        lay_out(look, &one, &bold, f32::MAX)?
-    };
-    let sub_layout = if sub.is_empty() {
-        None
-    } else {
-        let one = fit(look, sub, &regular, room);
-        Some(lay_out(look, &one, &regular, f32::MAX)?)
-    };
-    let th = f64::from(title_layout.measured_size().height);
-    let sh = sub_layout
-        .as_ref()
-        .map_or(0., |l| f64::from(l.measured_size().height));
-    let y = (b[1] + (b[3] - th - sh) / 2.).round();
-    c.layout(&title_layout, (b[0] as f32, y as f32), ink(1.))?;
-    if let Some(l) = sub_layout {
-        c.layout(&l, (b[0] as f32, (y + th) as f32), ink(SECONDARY))?;
-    }
-    Ok(())
-}
-
-fn paint_cover(c: &mut Canvas, cover: Option<&Raster>, b: [f64; 4], radius: f64) {
-    match cover {
-        Some(art) => {
-            c.clip_rounded_rect(rect(b), radius);
-            c.image(art, rect(b), ImageFit::Cover);
-            c.pop_clip();
-        }
-        None => c.rounded_rect(rect(b), radius, ink(SURFACE as f32)),
-    }
-}
-
 /// A cover file as a picture: its format read from its bytes (Media1 caches them as
 /// `.img`), at most 256 a side.
 fn decode(path: &str) -> Result<(u16, u16, Vec<u8>), String> {
@@ -1901,10 +1994,6 @@ fn decode(path: &str) -> Result<(u16, u16, Vec<u8>), String> {
 
 fn inside(r: [f64; 4], (x, y): (f64, f64)) -> bool {
     x >= r[0] && x < r[0] + r[2] && y >= r[1] && y < r[1] + r[3]
-}
-
-fn inset(r: [f64; 4], d: f64) -> [f64; 4] {
-    [r[0] + d, r[1] + d, r[2] - 2. * d, r[3] - 2. * d]
 }
 
 fn centred(r: [f64; 4], size: f64) -> Rect {
@@ -2282,40 +2371,88 @@ mod tests {
         assert_eq!(radius_of(&shot), 38.);
     }
 
+    /// The grid laid out as the bar lays it, with the exported tokens; None (skipped)
+    /// without them.
+    fn laid(s: &Status, stored: &layout::Stored) -> Option<(Cc, nk_view::Tokens)> {
+        let mut cc = Cc::new();
+        cc.place(1916., 36., s, stored, None);
+        relaid(&mut cc, s).map(|t| (cc, t))
+    }
+    fn relaid(cc: &mut Cc, s: &Status) -> Option<nk_view::Tokens> {
+        let tokens = crate::nc_view::exported_tokens()?;
+        cc.tokens = Some(tokens.clone());
+        let view = grid_view(&cc.tiles, s, None, &TextStyle::default());
+        let mut text =
+            nk_text::ParleyBackend::new(Arc::new(nk_text::FontSet::discover_required().unwrap()))
+                .unwrap();
+        cc.lay_view(&view, &tokens, &mut text);
+        Some(tokens)
+    }
+    fn centre(r: [f64; 4]) -> (f64, f64) {
+        (r[0] + r[2] / 2., r[1] + r[3] / 2.)
+    }
+    fn rect_of(cc: &Cc, t: Target) -> [f64; 4] {
+        cc.state.rect(&key_of(t).unwrap()).unwrap()
+    }
+    /// A press and its release where it went down: what either asked.
+    fn click(cc: &mut Cc, p: (f64, f64), s: &Status) -> Option<Act> {
+        let pressed = cc.press(p, s);
+        cc.release(s).1.or(pressed)
+    }
+
     #[test]
     fn clicks_land_on_what_acts() {
-        let mut cc = Cc::new();
         let mut s = status();
-        cc.place(1916., 36., &s, &Default::default(), None);
-        let centre = |r: [f64; 4]| (r[0] + r[2] / 2., r[1] + r[3] / 2.);
+        let Some((mut cc, _)) = laid(&s, &Default::default()) else {
+            return;
+        };
         // Appearance at 2×1: the whole capsule.
         let dark = placed(&cc, "dark_mode");
-        assert_eq!(cc.press(centre(dark.rect), &s), Some(Act::Dark(true)));
+        assert_eq!(click(&mut cc, centre(dark.rect), &s), Some(Act::Dark(true)));
         // Night Light at 2×1: only its badge; the body is its detail's (B2.2).
         let night = placed(&cc, "night_light");
+        let badge = rect_of(&cc, Target::Badge("night_light"));
         assert_eq!(
-            cc.press(centre(badge(&night).unwrap()), &s),
-            Some(Act::Night(true))
+            badge,
+            [
+                night.rect[0] + TILE_PAD + BADGE_IN,
+                night.rect[1] + (night.rect[3] - BADGE) / 2.,
+                BADGE,
+                BADGE
+            ]
         );
+        assert_eq!(click(&mut cc, centre(badge), &s), Some(Act::Night(true)));
         assert_eq!(
-            cc.press(centre(night.rect), &s),
+            click(&mut cc, centre(night.rect), &s),
             Some(Act::OpenDetail("night_light"))
         );
         // A screenshot at 1×1 is a real detail entry.
+        let shot = placed(&cc, "screenshot").rect;
         assert_eq!(
-            cc.press(centre(placed(&cc, "screenshot").rect), &s),
+            click(&mut cc, centre(shot), &s),
             Some(Act::OpenDetail("screenshot"))
         );
+        // A press that leaves its button before it is released does nothing.
+        assert_eq!(cc.press(centre(shot), &s), None);
+        cc.motion((shot[0] - 30., shot[1] - 30.), &s);
+        assert_eq!(cc.release(&s).1, None);
         // The volume's track: the value under the pointer, held while dragged.
-        let v = placed(&cc, "volume");
-        let t = slider_track(v.rect, VALUE_W);
-        let x = t[0] + THUMB + (t[2] - 2. * THUMB) * 0.75;
-        assert_eq!(cc.press((x, t[1] + 9.), &s), Some(Act::Volume(0.75)));
+        let t = rect_of(&cc, Target::Slider("volume"));
+        let v = placed(&cc, "volume").rect;
+        assert!(t[0] > v[0] + 40. && t[0] + t[2] < v[0] + v[2] - 80.);
+        assert_eq!(
+            cc.press((t[0] + t[2] - 1., t[1] + t[3] / 2.), &s),
+            Some(Act::Volume(1.))
+        );
         assert!(cc.dragging());
         let (_, act) = cc.motion((t[0] - 50., t[1]), &s);
         assert_eq!(act, Some(Act::Volume(0.)));
         assert_eq!(cc.shown("volume", &s), 0.);
-        assert!(cc.release().0);
+        assert!(cc.release(&s).0);
+        assert!(!cc.dragging());
+        // Released, it shows where it was let go until the service's value is laid out.
+        assert_eq!(cc.shown("volume", &s), 0.);
+        relaid(&mut cc, &s);
         assert_eq!(cc.shown("volume", &s), 0.4);
         // Brightness: the device's raw range.
         s.brightness = Some(Brightness {
@@ -2326,10 +2463,10 @@ mod tests {
             current: 100,
         });
         cc.place(1916., 36., &s, &Default::default(), None);
-        let b = placed(&cc, "brightness");
-        let t = slider_track(b.rect, VALUE_W);
+        relaid(&mut cc, &s);
+        let t = rect_of(&cc, Target::Slider("brightness"));
         assert_eq!(
-            cc.press((t[0] + t[2] - THUMB, t[1]), &s),
+            cc.press((t[0] + t[2] - 1., t[1] + t[3] / 2.), &s),
             Some(Act::Brightness {
                 device: "panel".into(),
                 epoch: 3,
@@ -2339,8 +2476,73 @@ mod tests {
     }
 
     #[test]
+    fn the_keyboard_walks_the_readers_order_and_moves_a_slider_by_its_step() {
+        let s = status();
+        let Some((mut cc, _)) = laid(&s, &Default::default()) else {
+            return;
+        };
+        let key = |sym: u32| nk_wayland::Key {
+            serial: None,
+            sym,
+            text: String::new(),
+            shift: false,
+            ctrl: false,
+            alt: false,
+        };
+        let order: Vec<_> = cc
+            .nodes(0, &s, None)
+            .into_iter()
+            .filter(|(n, _)| !n.actions.is_empty())
+            .map(|(_, t)| t)
+            .collect();
+        for t in &order {
+            cc.key(&key(0xff09), &s);
+            assert_eq!(
+                cc.editor.focus.map(Target::Edit).or_else(|| cc.focused()),
+                Some(*t)
+            );
+            let focused: Vec<_> = cc
+                .nodes(0, &s, None)
+                .into_iter()
+                .filter(|(n, _)| n.states.focused)
+                .map(|(_, t)| t)
+                .collect();
+            if !matches!(t, Target::Edit(_)) {
+                assert_eq!(focused, vec![*t]);
+            }
+        }
+        // Focus on the volume: the arrows move it by its step from what the service says.
+        cc.focus(Target::Slider("volume"));
+        assert_eq!(cc.key(&key(0xff53), &s), Some(Act::Volume(0.45)));
+        // Enter on a toggle toggles it.
+        cc.focus(Target::Tile("dark_mode"));
+        assert_eq!(cc.key(&key(0xff0d), &s), Some(Act::Dark(true)));
+    }
+
+    #[test]
+    fn back_from_a_detail_focuses_the_tile_that_opened_it() {
+        let s = status();
+        let Some((mut cc, _)) = laid(&s, &Default::default()) else {
+            return;
+        };
+        // The pointer pressed Back: the tile has the focus, without its ring.
+        cc.open_detail("screenshot", &s, None);
+        assert!(cc.back());
+        cc.place(1916., 36., &s, &Default::default(), None);
+        relaid(&mut cc, &s);
+        assert_eq!(cc.focused(), Some(Target::OpenDetail("screenshot")));
+        assert!(!cc.state.focus_visible());
+        // Escape: with it.
+        cc.open_detail("screenshot", &s, None);
+        assert!(cc.back_by(true));
+        cc.place(1916., 36., &s, &Default::default(), None);
+        relaid(&mut cc, &s);
+        assert_eq!(cc.focused(), Some(Target::OpenDetail("screenshot")));
+        assert!(cc.state.focus_visible());
+    }
+
+    #[test]
     fn what_is_on_is_white_and_the_hover_is_one_wash() {
-        let mut cc = Cc::new();
         let mut s = status();
         s.dnd = true;
         let mut stored = layout::Stored::default();
@@ -2348,32 +2550,70 @@ mod tests {
         stored.sizes.insert("focus".into(), "1x1".into());
         stored.positions.insert("dark_mode".into(), (1, 0));
         stored.sizes.insert("dark_mode".into(), "2x1".into());
-        cc.place(1916., 36., &s, &stored, None);
-        let washes = cc.states(&s);
-        let focus = cc.tiles.iter().position(|p| p.tile.id == "focus").unwrap();
-        let tile = |i: usize| washes.iter().find(|w| w.id == 1000 + i as u32 * 8).unwrap();
+        let Some((mut cc, tokens)) = laid(&s, &stored) else {
+            return;
+        };
+        let washes = |cc: &mut Cc| {
+            cc.last = cc.state.frame(&tokens, std::time::Instant::now());
+            cc.states(&s)
+        };
+        let at = |w: &[StateRegion], r: [f64; 4]| {
+            w.iter()
+                .filter(|x| [x.bounds.x, x.bounds.y, x.bounds.width, x.bounds.height] == r)
+                .map(|x| x.wash)
+                .collect::<Vec<_>>()
+        };
+        let w = washes(&mut cc);
         // A 1×1 that is on: its whole tile white.
-        assert_eq!(tile(focus).wash, [1., 1., 1., 1.]);
-        // Appearance (light) at 2×1: its badge at rest, its tile clear.
-        let dark = cc
+        let focus = placed(&cc, "focus");
+        assert_eq!(at(&w, focus.rect), vec![[1., 1., 1., 1.]]);
+        // Appearance (light) at 2×1: its badge at rest in the surface, its tile clear.
+        let dark = placed(&cc, "dark_mode");
+        assert!(at(&w, dark.rect).iter().all(|x| x[3] == 0.));
+        let badge = [
+            dark.rect[0] + TILE_PAD + BADGE_IN,
+            dark.rect[1] + (dark.rect[3] - BADGE) / 2.,
+            BADGE,
+            BADGE,
+        ];
+        let rest = at(&w, badge);
+        assert_eq!(rest.len(), 1);
+        assert!((rest[0][3] - SURFACE).abs() < 0.005);
+        // Hovered: the one hover wash over the tile, nothing else lit.
+        cc.motion((dark.rect[0] + 100., dark.rect[1] + 30.), &s);
+        let w = washes(&mut cc);
+        assert_eq!(at(&w, dark.rect), vec![tokens.washes.hover]);
+        assert_eq!(
+            w.iter().filter(|x| x.wash == tokens.washes.hover).count(),
+            1
+        );
+    }
+
+    #[test]
+    fn a_tile_past_the_viewport_takes_no_hover_and_no_press() {
+        let s = status();
+        let Some((mut cc, tokens)) = laid(&s, &Default::default()) else {
+            return;
+        };
+        // An output short enough that the last row lies past the viewport.
+        cc.detail_height = 300.;
+        cc.place(1916., 36., &s, &Default::default(), None);
+        relaid(&mut cc, &s);
+        let v = cc.editor.viewport;
+        let bottom = v[1] + v[3];
+        let hidden = cc
             .tiles
             .iter()
-            .position(|p| p.tile.id == "dark_mode")
-            .unwrap();
-        assert_eq!(tile(dark).wash[3], 0.);
-        let rest = washes
-            .iter()
-            .find(|w| w.id == 1000 + dark as u32 * 8 + 1)
-            .unwrap();
-        assert_eq!(rest.wash[3], SURFACE);
-        // Hovered: the 8 % over it.
-        let r = placed(&cc, "dark_mode").rect;
-        cc.motion((r[0] + 100., r[1] + 30.), &s);
-        let washes = cc.states(&s);
-        let tile = washes
-            .iter()
-            .find(|w| w.id == 1000 + dark as u32 * 8)
-            .unwrap();
-        assert_eq!(tile.wash[3], HOVER);
+            .find(|p| p.rect[1] + p.rect[3] > bottom + 10.)
+            .copied()
+            .expect("a row past the viewport");
+        let p = (
+            hidden.rect[0] + hidden.rect[2] / 2.,
+            bottom.max(hidden.rect[1]) + 5.,
+        );
+        cc.motion(p, &s);
+        cc.last = cc.state.frame(&tokens, std::time::Instant::now());
+        assert!(cc.states(&s).iter().all(|x| x.wash != tokens.washes.hover));
+        assert_eq!(click(&mut cc, p, &s), None);
     }
 }

@@ -344,7 +344,11 @@ several cards off in turn and reports once. The NC is the first consumer and the
 field (the owner edits it, and a secret reaches the view as bullets, never its text);
 `Node::slot` is room the surface paints itself (`VIEW.md` §12). The CC's detail pages are the
 second consumer: `ccdetail.rs` keeps the model and ccauth's secret editing, and its rows act on
-release, like every nk-view control (`toolkit/shell/CC.md`).
+release, like every nk-view control (`toolkit/shell/CC.md`). The CC's grid is the third:
+`Node::grid` places tiles on cells the editor computes; a control can be `on` (white, content
+in the accent), a `surface` well, or `keys_only` (Tab and readers, no pointer); `Slider::fill`
+is the 1×2 tile slider. The editor still places and scrolls the tiles' glass, so that view
+calls `set_slides(false)`: a moved pane must not slide away from glass it does not move.
 
 ### Applications1 catalogue and native dock pins
 

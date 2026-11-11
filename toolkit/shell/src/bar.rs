@@ -964,9 +964,9 @@ impl Bar {
             }
         }
         self.cc_open = open;
-        let _ = self.cc.release();
+        self.cc.cancel();
         if !open {
-            self.cc.back();
+            self.cc.back_by(false);
             self.cc.editor.close();
         }
         let _ = self.requests.send(crate::hub::Request::NotificationPanel {
@@ -2265,7 +2265,7 @@ impl Application for Bar {
                 if let Some(act) = self.cc.release_edit(&self.frame.status) {
                     self.act(act, w);
                 }
-                let (released, act) = self.cc.release();
+                let (released, act) = self.cc.release(&self.frame.status);
                 if let Some(act) = act {
                     self.act(act, w);
                 }
@@ -2385,7 +2385,7 @@ impl Application for Bar {
                 if self.cc.editor.active {
                     self.cc.key(&key, &self.frame.status);
                     self.refresh(w);
-                } else if self.cc.back() {
+                } else if self.cc.back_by(true) {
                     self.refresh(w);
                 } else {
                     self.toggle_cc(w);

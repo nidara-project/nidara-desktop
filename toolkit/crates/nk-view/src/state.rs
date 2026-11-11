@@ -174,6 +174,9 @@ pub struct ViewState {
     slid: Option<Activated>,
     /// A slider value a key or a reader set, until the surface rebuilds with its model.
     set: Option<(Key, f64)>,
+    /// Off: a rebuild lays panes where they are, for a surface whose glass is placed by
+    /// something else (the CC's grid, under its editor's glass and scroll).
+    slides: bool,
 }
 
 impl ViewState {
@@ -210,6 +213,7 @@ impl ViewState {
             held: None,
             slid: None,
             set: None,
+            slides: true,
         }
     }
 
@@ -252,7 +256,8 @@ impl ViewState {
         self.view = Some(view.clone());
         self.bounds = bounds;
         self.scale = scale;
-        self.relayout(tokens, text, now, Some(&before));
+        let before = self.slides.then_some(&before);
+        self.relayout(tokens, text, now, before);
         let live: HashSet<Key> = self
             .controls()
             .filter(|&i| self.enabled(i))
@@ -316,6 +321,11 @@ impl ViewState {
     /// Reduced motion: reveals and slides land at once.
     pub fn set_reduced_motion(&mut self, on: bool) {
         self.motion.reduced = on;
+    }
+    /// Whether a pane a rebuild moved slides from where it was drawn (VIEW.md §6); off for a
+    /// view whose glass moves without it.
+    pub fn set_slides(&mut self, on: bool) {
+        self.slides = on;
     }
 
     fn relayout(
@@ -526,18 +536,31 @@ impl ViewState {
                 .unwrap_or_else(|| s.shown(s.value)),
         )
     }
-    /// The value of a slider's track under `x`: the track's ends are where the thumb's centre
-    /// stops.
-    fn value_at(&self, i: usize, x: f64) -> Option<f64> {
+    /// The value of a slider under `pt`: along the track, whose ends are where the thumb's
+    /// centre stops; up a tile slider, from its bottom to its top.
+    fn value_at(&self, i: usize, (x, y): (f64, f64)) -> Option<f64> {
         let s = self.control(i).slider.as_ref()?;
-        let thumb = self.tokens.as_ref()?.slider.thumb_radius;
         let r = self.placed[i].rect;
+        if s.fill {
+            return Some(f64::from(
+                s.range().at((1. - (y - r[1]) / r[3].max(1.)) as f32),
+            ));
+        }
+        let thumb = self.tokens.as_ref()?.slider.thumb_radius;
         let span = (r[2] - 2. * thumb).max(1.);
         Some(f64::from(s.range().at(((x - r[0] - thumb) / span) as f32)))
     }
+    /// How far up a tile slider is filled: the fill's top edge.
+    fn fill_top(&self, i: usize) -> Option<f64> {
+        let s = self.control(i).slider.as_ref().filter(|s| s.fill)?;
+        let value = self.value(&self.placed[i].key)?;
+        let f = ((value - s.min) / (s.max - s.min).max(f64::EPSILON)).clamp(0., 1.);
+        let r = self.placed[i].rect;
+        Some(r[1] + r[3] * (1. - f))
+    }
     /// A slider's thumb, where its value puts it.
     fn thumb(&self, i: usize) -> Option<Rect> {
-        let s = self.control(i).slider.as_ref()?;
+        let s = self.control(i).slider.as_ref().filter(|s| !s.fill)?;
         let radius = self.tokens.as_ref()?.slider.thumb_radius;
         let value = self.value(&self.placed[i].key)?;
         let r = self.placed[i].rect;
@@ -632,6 +655,7 @@ impl ViewState {
         self.controls()
             .filter(|&i| {
                 self.enabled(i)
+                    && self.control(i).pointer
                     && self.shown(i)
                     && self.placed[i].visible().is_some_and(|r| inside(r, pt))
             })
@@ -659,7 +683,7 @@ impl ViewState {
         }
         if let Some((key, _)) = self.held.clone()
             && let Some(i) = self.index(&key)
-            && let Some(v) = self.value_at(i, x)
+            && let Some(v) = self.value_at(i, (x, y))
         {
             if let Some(a) = self.slide_to(i, v, true) {
                 self.slid = Some(a);
@@ -822,7 +846,7 @@ impl ViewState {
             self.focus = self.hover.clone();
             self.focus_visible = false;
             self.drag = None;
-            let v = self.value_at(i, self.pointer.map_or(0., |p| p.0))?;
+            let v = self.value_at(i, self.pointer.unwrap_or_default())?;
             let key = self.placed[i].key.clone();
             let changed = self.slide_to(i, v, true);
             self.held = Some((key, v));
@@ -1180,18 +1204,27 @@ impl ViewState {
                 (washes.hover, washes.press)
             };
             let rest = [hover[0], hover[1], hover[2], 0.];
-            let (priority, wash) =
-                if self.press.as_ref() == Some(key) && self.hover.as_ref() == Some(key) {
-                    (0, press)
-                } else if self.hover.as_ref() == Some(key) {
-                    (1, hover)
-                } else if self.fading.contains_key(key) {
-                    (2, rest)
-                } else if c.marked {
-                    (3, washes.hover)
-                } else {
-                    (4, rest)
-                };
+            let well = c.surface.then(|| wash_of(tokens.look.surface));
+            // A wash laid over the well, as one region: the two composited.
+            let on_well = |w: [f64; 4]| match well {
+                Some(s) => over(w, s),
+                None => w,
+            };
+            let (priority, wash) = if c.on {
+                (0, wash_of(tokens.look.on))
+            } else if self.press.as_ref() == Some(key) && self.hover.as_ref() == Some(key) {
+                (0, on_well(press))
+            } else if self.hover.as_ref() == Some(key) {
+                (1, on_well(hover))
+            } else if let Some(well) = well {
+                (3, well)
+            } else if self.fading.contains_key(key) {
+                (2, rest)
+            } else if c.marked {
+                (3, washes.hover)
+            } else {
+                (4, rest)
+            };
             regions.push((priority, self.placed[i].pane, i, wash));
         }
         regions.sort_by_key(|r| r.0);
@@ -1369,6 +1402,20 @@ impl ViewState {
             .collect()
     }
 
+    /// Focus leaves the view: the surface moved it to something of its own.
+    pub fn blur(&mut self) {
+        self.focus = None;
+        self.focus_visible = false;
+    }
+    /// Whether the focus shows its ring: it came from the keyboard.
+    pub fn focus_visible(&self) -> bool {
+        self.focus.is_some() && self.focus_visible
+    }
+    /// The focus stays where it is without its ring, as when the pointer put it there.
+    pub fn hide_ring(&mut self) {
+        self.focus_visible = false;
+    }
+
     /// A reader's request on a control: focus moves to it (scrolled into view, its ring
     /// shown), or it is activated. A disabled or absent control does nothing.
     pub fn request(&mut self, key: &Key, activate: bool) -> Option<Activated> {
@@ -1420,6 +1467,20 @@ impl ViewState {
                 continue;
             };
             let ink = |c: nk_render::Color| c.with_alpha(c.components[3] * p.alpha as f32);
+            // What a control holds takes the accent while it is on, and the fill's dark where a
+            // tile slider's fill has reached its middle (VIEW.md §12.1, §12.4).
+            let content = |c: nk_render::Color| {
+                let Some(owner) = p.control.filter(|&o| o != i) else {
+                    return ink(c);
+                };
+                if self.control(owner).on {
+                    return ink(tokens.look.focus);
+                }
+                match self.fill_top(owner) {
+                    Some(top) if p.rect[1] + p.rect[3] / 2. >= top => ink(FILL_INK),
+                    _ => ink(c),
+                }
+            };
             match &p.what {
                 What::Text { ink: tier, .. } => {
                     if let Some(f) = self.text.get(&p.key) {
@@ -1427,7 +1488,7 @@ impl ViewState {
                         let r = canvas.layout(
                             &f.layout,
                             (p.rect[0] as f32, p.rect[1] as f32),
-                            ink(tokens.look.ink(*tier)),
+                            content(tokens.look.ink(*tier)),
                         );
                         canvas.pop_clip();
                         r?;
@@ -1436,11 +1497,23 @@ impl ViewState {
                 What::Icon(icon) => {
                     if let Some(glyph) = icons(&icon.name, icon.size) {
                         canvas.clip(rect(&visible));
-                        canvas.icon(&glyph, rect(&p.rect), ink(tokens.look.ink(icon.ink)));
+                        canvas.icon(&glyph, rect(&p.rect), content(tokens.look.ink(icon.ink)));
                         canvas.pop_clip();
                     }
                 }
                 What::Control(c) => {
+                    if let Some(top) = self.fill_top(i) {
+                        // The tile slider: the control filled from its bottom to its value.
+                        let r = p.rect;
+                        let primary = tokens.look.ink(crate::view::Ink::Primary);
+                        let fill = primary
+                            .with_alpha(primary.components[3] * tokens.slider.fill_opacity as f32);
+                        canvas.clip(rect(&visible));
+                        canvas.clip_rounded_rect(rect(&r), c.corner.of(r[2], r[3], &tokens.radii));
+                        canvas.rect(rect(&[r[0], top, r[2], r[1] + r[3] - top]), ink(fill));
+                        canvas.pop_clip();
+                        canvas.pop_clip();
+                    }
                     if c.slider.is_some()
                         && let Some(thumb) = self.thumb(i)
                     {
@@ -1508,6 +1581,22 @@ impl ViewState {
     }
 }
 
+/// What a tile slider's fill holds is drawn in where the fill has reached it: the dark
+/// skin's text on white, as the TS gauge had it.
+const FILL_INK: nk_render::Color = nk_render::Color::new([0., 0., 0., 0.85]);
+/// A colour as a wash Hyalo lays.
+fn wash_of(c: nk_render::Color) -> [f64; 4] {
+    c.components.map(f64::from)
+}
+/// `top` laid over `under`, as one wash (source over).
+fn over(top: [f64; 4], under: [f64; 4]) -> [f64; 4] {
+    let a = top[3] + under[3] * (1. - top[3]);
+    if a <= 0. {
+        return [top[0], top[1], top[2], 0.];
+    }
+    let mix = |i: usize| (top[i] * top[3] + under[i] * under[3] * (1. - top[3])) / a;
+    [mix(0), mix(1), mix(2), a]
+}
 fn rect(r: &Rect) -> nk_text::Rect {
     nk_text::Rect {
         x: r[0] as f32,

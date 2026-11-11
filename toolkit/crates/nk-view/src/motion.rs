@@ -99,6 +99,7 @@ fn walk<'a>(n: &'a Node, out: &mut Vec<(&'a Key, bool)>) {
             walk(&o.base, out);
             o.layers.iter().for_each(|l| walk(&l.child, out));
         }
+        Kind::Grid(g) => g.cells.iter().for_each(|c| walk(&c.child, out)),
         _ => {}
     }
 }
