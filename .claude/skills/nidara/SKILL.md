@@ -123,7 +123,7 @@ already confirmed erasing. The size floor was that bug until 2026-09-17: the dis
 `entireDiskFits` (and `manualProblems` holds a manual `/` to the same `MIN_ROOT_MIB`), and the
 throw inside `entireDiskConfig` is the last word, not the first.
 
-## The twelve inviolable commandments
+## The thirteen inviolable commandments
 
 These are non-negotiable. Violating them produces bugs that are hard to debug because the symptoms don't point at the cause.
 
@@ -187,6 +187,18 @@ These are non-negotiable. Violating them produces bugs that are hard to debug be
     itself only as the fallback when the protocol is absent. Missing a capability → extend the
     protocol, never copy it in the client (owner, 2026-10-26). Full rule and the known
     departures: `references/design-system.md`, "Who draws what on glass".
+
+13. **Only kit components. Never a widget by hand.** (Owner's decision, 2026-11-12, #1079.) Every
+    interface (a shell surface, a Settings page, a dialog, an outside app) is built only from the
+    toolkit's components, in new work and in what already exists. A component the kit lacks is
+    added to the kit first, with its tokens, states, keyboard, readers and agent risk, and then
+    used. Never place, paint or hit-test a widget inside a surface "for now". The kit is one
+    kit for apps and shell, comparable to GTK or AppKit, with `nk-view` as its base; it covers the
+    whole of `toolkit/CATALOG.md`, checkboxes included. Truly custom content (a chart, a picture)
+    is drawn inside the kit's drawing node, never as a stand-in for a widget. Today's hand-made
+    shell surfaces and `nk-widgets` are debt that #1079 moves onto the kit. Exceptions are the
+    owner's alone; the dock, with its own measure rule, may be one. A PR that adds a hand-made
+    widget is not merged.
 
 ## Quick orientation: where to start
 
