@@ -1202,6 +1202,22 @@ dependencies = [
 ]
 
 [[package]]
+name = "nk-gallery"
+version = "0.1.0"
+dependencies = [
+ "nk-a11y",
+ "nk-icons",
+ "nk-platform",
+ "nk-render",
+ "nk-text",
+ "nk-view",
+ "nk-wayland",
+ "serde",
+ "serde_json",
+ "zbus",
+]
+
+[[package]]
 name = "nk-icons"
 version = "0.1.0"
 dependencies = [
@@ -1299,6 +1315,7 @@ version = "0.1.0"
 dependencies = [
  "nk-a11y",
  "nk-icons",
+ "nk-platform",
  "nk-render",
  "nk-text",
  "nk-wayland",

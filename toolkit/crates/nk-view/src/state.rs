@@ -5,7 +5,7 @@
 use crate::layout::{Layouter, Placed, Rect, TextCache, What};
 use crate::motion::{MotionState, SWIPE_CLAIM};
 use crate::tokens::Tokens;
-use crate::view::{Key, Node, Role, Wash};
+use crate::view::{Key, Node, Role, Shown, Wash};
 use nk_a11y::{Action, Bounds, NodeId, Tree};
 use nk_render::Canvas;
 use nk_wayland::{Group, MaterialRect, Pane, Shadow, StateRegion, Tone};
@@ -1238,9 +1238,11 @@ impl ViewState {
             };
             let (priority, wash) = if c.on {
                 (0, wash_of(tokens.look.on))
-            } else if self.press.as_ref() == Some(key) && self.hover.as_ref() == Some(key) {
+            } else if (self.press.as_ref() == Some(key) && self.hover.as_ref() == Some(key))
+                || c.shown == Some(Shown::Press)
+            {
                 (0, on_well(press))
-            } else if self.hover.as_ref() == Some(key) {
+            } else if self.hover.as_ref() == Some(key) || c.shown == Some(Shown::Hover) {
                 (1, on_well(hover))
             } else if let Some(well) = well {
                 (3, well)
@@ -1613,8 +1615,8 @@ impl ViewState {
                         }
                         canvas.pop_clip();
                     }
-                    if self.focus_visible
-                        && self.focus.as_ref() == Some(&p.key)
+                    if ((self.focus_visible && self.focus.as_ref() == Some(&p.key))
+                        || c.shown == Some(Shown::Focus))
                         && let Some(r) = self.silhouette(i)
                     {
                         canvas.rounded_ring(

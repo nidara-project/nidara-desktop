@@ -366,6 +366,20 @@ the row around it is the control (`Role::Toggle`, `marked(on)`). It slides over 
 both ways, faded at `disabledOpacity` while its row is disabled (`VIEW.md` §12.6). A setting
 that is on or off ends its row with one; a choice among several keeps its mark slot.
 
+**nk-view is the kit's one way to build, for apps too (#1079, `VIEW.md` §13).** An application
+window hosts a view as `toolkit/gallery` does (§13.2): `Tokens::load` and `TypeScale::load` from
+the portal's appearance, `Glyphs` for `nd-` names, `KeyInput::from_key`, the semantics through
+`nk_a11y::bridge::Bridge`, the glass from `nk_platform::material::panel::PanelMaterial` per
+pane, and Hyalo's window controls placed in room the view leaves for them. Glyph names in a view
+are `nd-…` WITHOUT `-symbolic` (nk-icons appends it; with it nothing is drawn and the log says
+"no drawing for icon"). **The gallery (`nk-gallery`) is where a component is proven**: a page per
+component with its states side by side (`Control::shown`, gallery only), and
+`toolkit/gallery/catalogue.json` says where each catalogue entry stands. A component is done when
+it is in nk-view with a page there. Check it with `toolkit/gallery/check-headless.sh` (the
+widgets demo's private harness: pages opened by a reader, screenshots at 1 and 1.25, the live
+samples driven, an inert control that must be caught); look at the screenshots, not only the
+PASS lines.
+
 ### Applications1 catalogue and native dock pins
 
 `nidara-sessiond --applications` opts into A1's catalogue, search, full-colour app

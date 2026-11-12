@@ -637,6 +637,64 @@ fn the_focus_ring_is_painted_only_after_keyboard_focus_and_the_fallback_paints_w
 }
 
 #[test]
+fn a_shown_state_holds_whatever_the_pointer_and_the_focus_do() {
+    let one = |k: &str, shown: Option<Shown>| {
+        let n =
+            Node::control(k, k, k, Node::icon(format!("{k}/i"), "nd-a", 16.)).corner(Corner::Pill);
+        match shown {
+            Some(state) => n.shown(state),
+            None => n,
+        }
+    };
+    let view = Node::row(
+        "row",
+        vec![
+            one("h", Some(Shown::Hover)),
+            one("p", Some(Shown::Press)),
+            one("f", Some(Shown::Focus)),
+            one("n", None),
+        ],
+    );
+    let mut s = laid(&view, (200., 40.), 1.);
+    let t = tokens();
+    let f = s.frame(&t, Instant::now());
+    let wash = |k: &str| {
+        let r = rect(&s, k);
+        f.states
+            .iter()
+            .find(|st| (st.bounds.x - r[0]).abs() < 0.5 && st.wash[3] > 0.)
+            .map(|st| st.wash)
+    };
+    assert_eq!(
+        wash("h"),
+        Some(t.washes.hover),
+        "shown hovered with no pointer"
+    );
+    assert_eq!(
+        wash("p"),
+        Some(t.washes.press),
+        "shown pressed with no button"
+    );
+    assert_eq!(wash("n"), None, "a live control at rest shows nothing");
+    // The ring of the one shown focused, with no keyboard focus anywhere.
+    let mut c = nk_render::Canvas::new(200, 40, 1.);
+    s.paint(&mut c, &t, &mut |_, _| None, None).unwrap();
+    let r = rect(&s, "f");
+    let px = c.finish();
+    let lit = (r[0] as usize..(r[0] + r[2]) as usize)
+        .flat_map(|x| (0..40).map(move |y| (x, y)))
+        .filter(|&(x, y)| px[(y * 200 + x) * 4 + 3] > 0)
+        .count();
+    assert!(lit > 0, "the focus ring of the one shown focused");
+    // A pointer over the plain one lights it as ever, and leaves the shown ones as they are.
+    let n = rect(&s, "n");
+    s.pointer_motion(n[0] + n[2] / 2., n[1] + n[3] / 2.);
+    let f = s.frame(&t, Instant::now());
+    let lit = f.states.iter().filter(|st| st.wash[3] > 0.).count();
+    assert_eq!(lit, 3, "hover, press and the real hover");
+}
+
+#[test]
 fn motion_and_radius_tokens_are_read_from_their_exports() {
     let m = Motion::from_static(&statics()).unwrap();
     assert_eq!(m.base, Duration::from_millis(180));

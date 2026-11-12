@@ -582,3 +582,60 @@ hand is the view's.
   where the grid is laid out after the step, without a pointer move or a write.
 - **Washes** are the view's hover, press and focus (§4). The preview cell of a held tile
   keeps its accent wash at 20 %, declared by the editor.
+
+## 13. One kit (owner, 2026-11-12, #1079)
+
+`nk-view` is the kit's one way to build an interface, for apps as well as the shell. Every
+interface uses only kit components (SKILL.md, commandment 13); a component the kit lacks is added
+here first, then used. `nk-widgets` keeps serving Settings until each of its components has
+moved here, and is then retired. Nothing in §1–§12 changes for the surfaces already built on
+this contract.
+
+### 13.1 What a component is
+
+- **A function in `nk-view` that returns a `Node`**, built from the node kinds of §2. It takes
+  its content and state as arguments and its measures from `Tokens`. It holds no number for a
+  position, size or gap: what it needs that the scale does not have is a token of its own,
+  exported with the others (`components.json`), never a literal in the function.
+- **It declares its role, name, state and named action** (CATALOG.md), so readers and agents
+  get it from the same value.
+- **Its keyboard is the view's** (§4): what it adds (a checkbox's Space, a radio group's arrows)
+  goes into `ViewState`, not into the app.
+- **It has one copy.** A component that exists in `nk-widgets` too moves here with its
+  behaviour (focus, IME, keys, readers, agent risk), and the `nk-widgets` copy goes when its
+  last user does.
+
+### 13.2 An application window
+
+An app is an `nk_wayland::Application` whose content is one view, as a shell surface is:
+
+- **`Tokens::load(exports, appearance)`** reads the kit's tokens in the user's appearance from
+  the exported settings data. The shell passes its always-dark skin; an app passes the portal's.
+- **Each change rebuilds the view** from the app's model; `ViewState::layout` places it in the
+  window's size. Paint, hit-testing, focus, the material (glass and state regions) and the
+  semantic tree all come from that one layout.
+- **Input goes to the view**: pointer motion, buttons, scroll, and keys through
+  `KeyInput::from_key`. An activated control comes back as its named action.
+- **Readers** get `ViewState::semantics` through `nk_a11y::bridge::Bridge`.
+- **Window controls are Hyalo's** (`nidara-window-controls-v1`, commandment 12).
+
+### 13.3 The gallery
+
+`toolkit/gallery` (`nk-gallery`) is the kit's own application, like GTK's
+`gtk4-widget-factory`: it shows every component, and it is built only from kit components.
+
+- **A page per component**, showing each of its states (normal, hover, pressed, focus,
+  disabled, on, checked, mixed) side by side. A page names the component's CATALOG.md entry and
+  its GTK4 and AppKit equivalents.
+- **A status page** lists the whole catalogue (`toolkit/gallery/catalogue.json`): which
+  components the kit has, which it lacks, and which surfaces use each one.
+- **It follows the user's appearance** (light, dark, reduced transparency, accent) and runs at
+  any scale.
+- **It is the reference for tests.** `toolkit/gallery/check-headless.sh` opens every page in a
+  private Hyalo and keeps its pixels and its AT-SPI walk as evidence.
+
+### 13.4 Done
+
+A component is in the kit when, in one change: its function is in `nk-view` with its tokens;
+its page is in the gallery with every state; the gallery's check covers that page; and its row
+on the status page says so. A surface may use only components that are in the kit.
