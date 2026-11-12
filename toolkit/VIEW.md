@@ -686,7 +686,96 @@ An app is an `nk_wayland::Application` whose content is one view, as a shell sur
 - **It is the reference for tests.** `toolkit/gallery/check-headless.sh` opens every page in a
   private Hyalo and keeps its pixels and its AT-SPI walk as evidence.
 
-### 13.4 Done
+### 13.4 Behaviour (owner, 2026-11-12)
+
+The kit is a toolkit: it gives mechanisms with properties and defaults, and an app or the theme
+decides the rest. Each component has three layers, kept apart:
+
+- **Mechanism**: fixed in the kit, no app changes it. It is what makes a component work.
+- **Property**: an app sets it per use; the kit gives a default.
+- **Look**: tokens (`components.json`), changed by the theme or the user, never by code.
+
+**The mechanism every component shares:**
+
+1. **The control responds, not the row that holds it.** Only a control's own shape takes hover,
+   press and focus; its row takes none. A row responds as a whole only where it IS the control:
+   it navigates (`›`), it is a choice in a list, it is a menu item or a sidebar entry. A
+   checkbox's and a radio's text belong to them, so a click on the text marks it.
+2. **Hover only on what can be pressed**: Hyalo's wash on glass, the view's off glass (§4).
+3. **Press shows while held; release inside activates; leaving first cancels.** The sidebar,
+   tabs and a segmented choice change on press; a slider moves from the press.
+4. **Tab and Shift+Tab reach every control**, in reading order. A group (radios, segments,
+   tabs, a list, a menu) is one stop, moved within by the arrows. The ring shows only after
+   keyboard use.
+5. **Disabled**: no hover, press or Tab stop; faded to the component's `disabledOpacity`, its
+   text in the disabled ink; readers still find it, as unavailable.
+6. **The accent marks only what is on or chosen**: a switch on, a box checked, a radio chosen,
+   a dialog's default button, the selected sidebar entry and list row, the ring; and the row
+   under the pointer in a menu (the exception already in force).
+7. **Cursor**: the arrow everywhere; the I-beam over editable text; resize arrows over dividers;
+   the hand only over a link.
+8. **Target**: at least 24 × 24 px takes a click, whatever is drawn (WCAG 2.2, 2.5.8).
+9. **Keys**: Space activates the focused control; Enter the default button; Escape closes what
+   lies on top (a menu, a popover, a dialog, a sidebar over the page) and gives focus back to
+   what opened it.
+10. **Readers**: every control has a role, a name and a state. In a row with a control, the row's
+    text names the control (the "Wi-Fi" switch is called "Wi-Fi") although the row does not
+    respond.
+11. **Motion** uses the `dur-*` tokens, at once with reduced motion; what the frame moves itself
+    has no ease of its own (§13.2).
+
+**The product's defaults (owner's choices):**
+
+| | Default | Layer |
+|---|---|---|
+| The selected sidebar entry | accent fill | property of the sidebar |
+| A dialog's default button (Enter) | accent fill, white text | property of the dialog |
+| Where a dropdown opens its menu | below the button | property of the dropdown |
+| Scroll bars | a user setting: automatic / while scrolling / always; while scrolling by default | setting (Appearance) |
+| A click in a scroll bar's track | one page; Shift+click goes to that point | mechanism |
+| Selectable labels | no; an app marks the ones with useful data (an address, a version) | property of the label |
+| File open and save | our own dialogs, served by our portal backend, the same for every app | to build |
+| Global menu bar | none: menus live in each window; only if it could reach every app without exception | product |
+| Buttons have hover | yes | mechanism |
+| A dialog opens | centred on its parent | mechanism |
+
+**Each component.** Mechanism, then properties (default first), then the tokens it reads.
+
+| Component | Mechanism | Properties | Tokens |
+|---|---|---|---|
+| Button | its shape; release activates | in content (`Node::button`) or over content (glass); destructive; default | `button` |
+| Toggle button | each click flips; on = white glass, accent ink | — | glass `states` |
+| Checkbox | the box and its text; Space | checked / unchecked / mixed | `choices` |
+| Radio | the circle and its text; the group is one Tab stop, arrows choose | chosen | `choices` |
+| Switch | only the switch: click flips, the thumb drags; Space | — | `switch` |
+| Slider | track and thumb: a press on the track moves the thumb there and drags; ←→ step, PgUp/PgDn 10 steps, Home/End | step, range | `range` |
+| Number field | the field and its − / + (held: repeats); ↑↓ step | step, range | `control` |
+| Dropdown | the whole button; a glass menu; type to jump; Escape keeps the value | opens below (default) | `dropdown` |
+| Editable combo | the field, and the arrow that opens the list | — | `dropdown` |
+| Date | each day is a button; arrows move the day, PgUp/PgDn the month | today marked | — |
+| Colour swatch | the swatch; opens the colour popover; chosen = 2 px ring | — | — |
+| Setting row | does not respond; its controls do | activatable: no (default) / navigates (`›`) / a choice (✓) / activates its control (as GNOME's switch row) | `rows` |
+| Settings group | does not respond; an opaque card with a footer | — | `common.groupRadius` |
+| Sidebar navigator | each entry, whole row, on press; ↑↓ Home End | selected: accent (default) | `list` |
+| Tabs, segmented choice | each segment, on press; ←→ | — | `choices` |
+| Disclosure | the whole header row; › turns 90°; → opens, ← closes | open | — |
+| Back and forward | each half of one glass capsule; Alt+← / Alt+→ | enabled by history | `header` |
+| Title bar | its buttons; the rest moves the window; two presses maximise | — | `header` |
+| Text field | the whole field; caret, word and line selection; focus = accent border | placeholder | `search` |
+| Password field | as a text field, plus a reveal button; Caps Lock warning; readers never read it | — | `search` |
+| Search field | as a text field; the ✕ clears; Escape clears, then leaves; Ctrl+F focuses | — | `search` |
+| Link | its text; underline on hover; Enter | — | — |
+| Label | does not respond | selectable: no (default) | — |
+| Large list, table, tree, tile grid | each row or tile, on press; Shift extends, Ctrl toggles; Enter or two presses open; arrows; type to jump | selection: one / many / none | `list` |
+| Popover | opens from its button; Escape, a press outside or its button close it; focus goes in and back | — | glass |
+| Menu | each item; press-drag-release chooses; submenus open on hover after a delay; ↑↓ → ← Enter Escape, type to jump | — | glass |
+| Tooltip | never responds; after 0.6 s still over a control, at once while another is up; gone on leave or press | text | glass |
+| Scroll bar | over the content; widens on its lane; a press on the track moves a page | the user's setting | `scrollbar` |
+| Split view | the divider, 8 px of target; arrows move it when focused | position | — |
+| Dialog, alert | modal on its parent, centred; Escape cancels; Enter the default; destructive is red and never the default | default button | glass |
+| Progress, spinner, level bar, badge | do not respond; readers get the value | indeterminate | — |
+
+### 13.5 Done
 
 A component is in the kit when, in one change: its function is in `nk-view` with its tokens;
 its page is in the gallery with every state; the gallery's check covers that page; and its row

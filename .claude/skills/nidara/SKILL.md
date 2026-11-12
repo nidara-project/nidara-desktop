@@ -392,7 +392,10 @@ toolbar over a page) is a control in a pane. A ROW of a group has no glass eithe
 paints its hover, press and marked wash itself (Hyalo draws washes
 only on glass; never extend the protocol for this — `VIEW.md` §4 "Off glass"). A disabled control
 with an action draws its content in `--nidara-text-disabled`; a marked row holding a switch is
-not lit. Glyph names in a view are
+not lit. **How every component behaves is `VIEW.md` §13.4** (owner, 2026-11-12): three layers —
+mechanism (fixed), property (the app's, with a default), look (tokens) — never mixed; the control
+responds, not its row; the owner's product defaults are the table there. Read it before building
+or changing a component. Glyph names in a view are
 `nd-…` WITHOUT `-symbolic` (nk-icons appends it; with it nothing is drawn and the log says "no
 drawing for icon"). **The gallery (`nk-gallery`, installed as `nidara-kit-gallery` with its own
 entry in Apps) is where a component is proven**: a page per component with its states side by side
