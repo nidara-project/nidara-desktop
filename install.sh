@@ -732,7 +732,8 @@ sudo ldconfig
 rm -rf "$AUTH_BUILD"
 
 # The session daemon is always compiled, including --dev: it is a separate
-# service and UI reloads do not rebuild or restart it.
+# service and UI reloads do not rebuild or restart it (restart_session_services, at
+# the end, does).
 echo "  Building nidara-sessiond..."
 (cd "$REPO_DIR/session" && run_user env CARGO_TARGET_DIR=target RUSTUP_TOOLCHAIN=stable cargo build --release --locked --workspace --features audio-native)
 sudo install -Dm755 "$REPO_DIR/session/target/release/nidara-sessiond" /usr/bin/nidara-sessiond
@@ -883,21 +884,42 @@ fi
 # state written by Settings → Power, never a symlink into the repo.)
 bash /usr/bin/nidara-setup
 
+# Restart what is running from the binaries just replaced, in both modes. A service left
+# running keeps executing the deleted file: Hyalo then cannot identify it and denies its
+# calls ("caller identity unavailable or changed"), and a sessiond fix does not apply
+# until a restart nobody remembers to do (seen live 2026-11-12). try-restart touches only
+# what is active, so another session's units stay as they are; the shell Requires=
+# sessiond and is restarted with it. Greeter and lock pick theirs up on next use.
+restart_session_services() {
+    local uid units=() active=()
+    uid="$(id -u "$REAL_USER")"
+    units=(nidara-sessiond.service nidara-sessiond-legacy.service
+           nidara-rust-shell.service nidara-dock.service nidara.service)
+    [ -d "/run/user/$uid" ] || return 0
+    for u in "${units[@]}"; do
+        if run_user env XDG_RUNTIME_DIR="/run/user/$uid" \
+            systemctl --user is-active --quiet "$u" 2>/dev/null; then
+            active+=("$u")
+        fi
+    done
+    [ "${#active[@]}" -gt 0 ] || return 0
+    if run_user env XDG_RUNTIME_DIR="/run/user/$uid" \
+        systemctl --user try-restart "${active[@]}"; then
+        echo "  Restarted: ${active[*]}"
+    else
+        echo "  [WARN] Could not restart ${active[*]}; run:"
+        echo "         systemctl --user restart ${active[*]}"
+    fi
+}
+
 echo ""
+restart_session_services
 if [ "$MODE" = "update-apply" ]; then
     NEW_VERSION="$(cat "$REPO_DIR/VERSION" 2>/dev/null || echo "?")"
     if [ "$OLD_VERSION" = "$NEW_VERSION" ]; then
         echo "  ✓ Update complete (version $NEW_VERSION)"
     else
         echo "  ✓ Update complete: $OLD_VERSION → $NEW_VERSION"
-    fi
-    # Reload the running shell so the new bundle takes effect now; greeter and
-    # lockscreen pick theirs up on next use. Harmless if the session isn't ours.
-    if run_user systemctl --user is-active --quiet nidara-rust-shell.service 2>/dev/null; then
-        run_user systemctl --user restart nidara-rust-shell.service || true
-    elif run_user systemctl --user is-active --quiet nidara.service 2>/dev/null; then
-        run_user systemctl --user restart nidara.service || true
-        echo "  Shell reloaded."
     fi
 else
     echo "  ✓ Dev install complete"

@@ -213,6 +213,8 @@ The references are short and load-on-demand. Don't try to hold the whole project
 
 ```bash
 ./install.sh --dev                       # one-time setup: system binaries + ~/.config/nidara/.dev
+# it ends by try-restarting the running sessiond, Rust shell, dock and TS shell: a service
+# left on a replaced binary runs the DELETED file, and Hyalo denies its calls (#1076)
 # ... edit TSX/SCSS in ui/shell/ ...
 # In a graphical session:
 Super+Shift+R                            # reload the UI (re-runs nidara-ui → scripts/run.sh)
