@@ -181,6 +181,8 @@ pub struct ViewState {
     /// Off: a rebuild lays panes where they are, for a surface whose glass is placed by
     /// something else (the CC's grid, under its editor's glass and scroll).
     slides: bool,
+    /// The view is its whole surface (`layout`): no glass is declared past its edges.
+    whole: bool,
 }
 
 impl ViewState {
@@ -219,6 +221,7 @@ impl ViewState {
             slid: None,
             set: None,
             slides: true,
+            whole: false,
         }
     }
 
@@ -236,6 +239,7 @@ impl ViewState {
         now: Instant,
     ) {
         self.layout_in(view, [0., 0., size.0, size.1], scale, tokens, text, now);
+        self.whole = true;
     }
 
     /// `layout` for a view that takes only `bounds` of its surface (a panel along one edge):
@@ -249,6 +253,7 @@ impl ViewState {
         text: &mut dyn nk_text::TextBackend,
         now: Instant,
     ) {
+        self.whole = false;
         let before: HashMap<Key, Rect> = self
             .laid
             .iter()
@@ -1214,7 +1219,16 @@ impl ViewState {
                             exponent: 2.,
                             pointer: None,
                         },
-                        clip: p.clip.filter(|_| v != r),
+                        // What shows of it. A view that is its whole surface also cuts it at
+                        // the surface's edge: a window's sidebar sliding out draws no glass
+                        // past the window. A panel's view does not, so a card swiped off it
+                        // leaves with its glass.
+                        clip: if self.whole {
+                            crate::layout::intersect(v, viewport)
+                        } else {
+                            Some(v)
+                        }
+                        .filter(|c| *c != r),
                         opacity: p.alpha,
                     })
                 }

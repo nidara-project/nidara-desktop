@@ -71,6 +71,8 @@ struct Gallery {
     /// Whether the last turn laid the sidebar out mid-slide: the turn after its end lays it
     /// out once more, at rest.
     sliding: bool,
+    /// The size the view was last laid out in: a resize moves the frame, it does not slide.
+    laid_size: (f64, f64),
     /// The pages visited, and where in them back and forward stand.
     history: Vec<usize>,
     at: usize,
@@ -132,6 +134,15 @@ impl Gallery {
         let narrow = self.sidebar.narrow();
         let room = f.room(shown, narrow);
         let main = f.view(self.size, shown, narrow, v.sidebar, v.content);
+        // The frame moves the sidebar's glass and the content's panes itself as the sidebar
+        // slides or the window resizes. An ease of nk-view's own over each step would trail
+        // behind the content's edge and start again every frame (VIEW.md §13.2). A change of
+        // the model, a reveal opening, still slides what it moved.
+        let framed = self.sliding
+            || self.sidebar.animating(now, &self.look.tokens.motion)
+            || self.size != self.laid_size;
+        self.state.set_slides(!framed);
+        self.laid_size = self.size;
         let band = f.band(
             self.size,
             room,
@@ -482,7 +493,7 @@ impl Application for Gallery {
         }
         self.sliding = sliding;
         if self.band.animating() {
-            // The band's buttons move with the page's edge as the sidebar slides.
+            // A hover or press fading on the band's glass.
             let ticked = self
                 .band
                 .tick(&self.look.tokens, &mut self.text, Instant::now());
@@ -694,10 +705,14 @@ fn run() -> Result<()> {
         band: {
             let mut band = ViewState::new(BAND_ROOT as u32 + 1);
             band.set_reduced_motion(appearance.reduced_motion);
+            // The band's buttons are placed by the frame, step by step as the sidebar
+            // slides: they never ease on their own (VIEW.md §13.2).
+            band.set_slides(false);
             band
         },
         sidebar: Sidebar::default(),
         sliding: false,
+        laid_size: (0., 0.),
         history: vec![page],
         at: 0,
         blur_layer: None,

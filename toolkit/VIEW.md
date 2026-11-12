@@ -642,6 +642,16 @@ An app is an `nk_wayland::Application` whose content is one view, as a shell sur
   placed by `controls_at` on the side the user chose. Its measures are the exported `header`
   component's (`toolkit/tokens/header.json`); an app passes its sidebar, its content and its
   title. A press on the band where nothing else is moves the window; two toggle maximised.
+- **The frame moves itself; nk-view does not ease it.** The sidebar slides by laying the frame
+  out again at each step (`Sidebar::shown`), and a resize lays it out at the new size. Both
+  views (the window's and the band's) lay out with `set_slides(false)` while that happens, as
+  the CC does: an ease of nk-view's own over each step would make the sidebar's glass and the
+  content's glass buttons trail behind the page's edge and start again every frame. A change of
+  the model still slides what it moved. The slide is rounded once (`FrameStyle::room`), so the
+  glass keeps its width and its gap to the page at every step, and a view that is its whole
+  surface (`ViewState::layout`) declares no glass past the surface's edge: the sidebar leaving
+  the window is cut at it. A panel's view (`layout_in`) is not cut at its bounds, so a card
+  swiped off the NC leaves with its glass.
   The band carries Settings' buttons on their own glass, in a layer over the blur (which
   takes no pointer): the sidebar's toggle, then back and forward, from the page's edge (after
   the window controls when they are on the left and the sidebar is closed) — the toggle is

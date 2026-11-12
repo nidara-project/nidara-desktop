@@ -2912,3 +2912,92 @@ fn a_row_with_a_switch_is_not_lit_as_selected() {
     assert!(lit_at("choice"), "a selected choice is lit");
     assert!(!lit_at("wifi"), "the switch shows it; the row is not lit");
 }
+
+#[test]
+fn a_frame_stepped_by_its_slide_puts_the_glass_where_it_says_only_with_slides_off() {
+    let f = frame_style();
+    let t = tokens();
+    let step = |s: &mut ViewState, shown: f64, at: Instant| {
+        let view = f.view(
+            (1100., 700.),
+            shown,
+            false,
+            Node::column("s", vec![]),
+            Node::pane(
+                "pill",
+                Corner::Pill,
+                Node::text("pill/t", "Button", style(14.)),
+            ),
+        );
+        s.layout(&view, (1100., 700.), 1., &t, &mut backend(), at);
+    };
+    let drift = |slides: bool| {
+        let mut s = ViewState::new(500);
+        s.set_slides(slides);
+        let at = Instant::now();
+        step(&mut s, 1., at);
+        let pill = rect(&s, "pill")[0] - rect(&s, "frame/content")[0];
+        let mut worst: f64 = 0.;
+        for (n, shown) in [0.9, 0.75, 0.5, 0.25].into_iter().enumerate() {
+            step(
+                &mut s,
+                shown,
+                at + Duration::from_millis(16 * (n as u64 + 1)),
+            );
+            let side = 8. - (250. - (250. * shown).round());
+            let edge = rect(&s, "frame/content")[0];
+            worst = worst
+                .max((rect(&s, "frame/side")[0] - side).abs())
+                .max((rect(&s, "frame/side")[2] - 234.).abs())
+                .max((rect(&s, "pill")[0] - (edge + pill)).abs());
+        }
+        worst
+    };
+    assert!(
+        drift(false) < 0.5,
+        "off: each step lands where the frame put it, the glass's width kept"
+    );
+    assert!(
+        drift(true) > 10.,
+        "on: the glass trails behind the page's edge"
+    );
+}
+
+#[test]
+fn a_sidebar_sliding_out_of_its_window_has_its_glass_cut_at_the_window_edge() {
+    let f = frame_style();
+    let view = f.view(
+        (1100., 700.),
+        0.5,
+        false,
+        Node::column("s", vec![]),
+        Node::text("c", "Content", style(14.)),
+    );
+    let mut s = laid(&view, (1100., 700.), 1.);
+    let frame = s.frame(&tokens(), Instant::now());
+    let side = frame
+        .panes
+        .iter()
+        .find(|p| p.key == Key::from("frame/side"))
+        .unwrap();
+    assert!(
+        side.pane.x < 0.,
+        "the pane itself is half out: {}",
+        side.pane.x
+    );
+    let clip = side.clip.expect("cut");
+    assert_eq!(clip[0], 0., "no glass left of the window");
+    assert_eq!(clip[0] + clip[2], side.pane.x + side.pane.width);
+    // A panel's view is not cut at its bounds: a card swiped off it leaves with its glass.
+    let mut p = ViewState::new(1000);
+    p.layout_in(
+        &view,
+        [0., 0., 1100., 700.],
+        1.,
+        &tokens(),
+        &mut backend(),
+        Instant::now(),
+    );
+    let frame = p.frame(&tokens(), Instant::now());
+    assert!(frame.panes.iter().all(|p| p.clip.is_none()));
+}
