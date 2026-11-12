@@ -33,7 +33,9 @@ fn tokens() -> Tokens {
         "--nidara-text-dim": "rgba(255, 255, 255, 0.6)", "--nidara-accent": "#0088FF",
         "--nidara-surface-raised": "rgba(255, 255, 255, 0.24)", "--nidara-on": "#ffffff",
         "--nidara-surface": "rgba(255, 255, 255, 0.08)", "--nidara-border": "rgba(255, 255, 255, 0.2)",
-        "--nidara-thumb": "#ffffff", "--nidara-text-disabled": "rgba(255, 255, 255, 0.3)"}});
+        "--nidara-thumb": "#ffffff", "--nidara-text-disabled": "rgba(255, 255, 255, 0.3)",
+        "--nidara-surface-hover": "rgba(255, 255, 255, 0.12)",
+        "--nidara-surface-active": "rgba(255, 255, 255, 0.18)"}});
     Tokens {
         spacing: Spacing::from_static(&statics()).unwrap(),
         radii: Radii::from_static(&statics()).unwrap(),
@@ -47,6 +49,7 @@ fn tokens() -> Tokens {
         )
         .unwrap(),
         switch: switch_from(&switch(), &set).unwrap(),
+        button: button_from(&button(), &set).unwrap(),
         group_radius: 16.,
     }
 }
@@ -55,6 +58,13 @@ fn switch() -> serde_json::Value {
     json!({"width": 44, "height": 24, "border": 1, "borderColor": "--nidara-border",
         "checkedBorderColor": "rgba(0, 0, 0, 0.1)", "trackColor": "--nidara-surface",
         "checkedColor": "--nidara-accent", "thumbColor": "--nidara-thumb", "thumbMargin": 3,
+        "disabledOpacity": 0.45})
+}
+/// `components.json` `button`, as `toolkit/tokens/button.json` exports it.
+fn button() -> serde_json::Value {
+    json!({"paddingX": 14, "paddingY": 5, "border": 1, "minContentHeight": 20, "radius": "sm",
+        "background": "--nidara-surface", "borderColor": "--nidara-border",
+        "hover": "--nidara-surface-hover", "pressed": "--nidara-surface-active",
         "disabledOpacity": 0.45})
 }
 /// `components.json` `scrollbar`, as `toolkit/tokens/scrollbar.json` exports it.
@@ -2911,4 +2921,78 @@ fn a_row_with_a_switch_is_not_lit_as_selected() {
     };
     assert!(lit_at("choice"), "a selected choice is lit");
     assert!(!lit_at("wifi"), "the switch shows it; the row is not lit");
+}
+
+#[test]
+fn a_content_button_is_padded_to_its_height_and_painted_by_the_view_in_the_surface_tones() {
+    let t = tokens();
+    let view = |shown: Option<Shown>, enabled: bool| {
+        let b = Node::button("b", "Browse", "browse", style(14.)).enabled(enabled);
+        let b = match shown {
+            Some(s) => b.shown(s),
+            None => b,
+        };
+        Node::row("r", vec![b]).align(Align::Start)
+    };
+    let s = laid(&view(None, true), (300., 60.), 1.);
+    let (b, label) = (rect(&s, "b"), rect(&s, "b/label"));
+    assert_eq!(b[3], 32., "the content's floor, the padding and the border");
+    let natural = rect(
+        &laid(
+            &Node::row("r", vec![Node::text("t", "Browse", style(14.))]).align(Align::Start),
+            (300., 60.),
+            1.,
+        ),
+        "t",
+    )[2];
+    assert_eq!(label[2], natural, "the label at its own width");
+    assert_eq!(
+        b[2],
+        natural + 30.,
+        "14 of padding and 1 of border on each side"
+    );
+    assert_eq!(label[0] - b[0], 15.);
+    assert!(
+        (label[1] + label[3] / 2. - (b[1] + b[3] / 2.)).abs() <= 0.5,
+        "centred"
+    );
+    // Its fill at a point clear of the label and the border, in each state.
+    let at = |shown: Option<Shown>, enabled: bool| {
+        let mut s = laid(&view(shown, enabled), (300., 60.), 1.);
+        let f = s.frame(&t, Instant::now());
+        assert!(
+            f.states.is_empty() && f.panes.is_empty(),
+            "nothing for Hyalo"
+        );
+        let mut c = nk_render::Canvas::new(300, 60, 1.);
+        s.paint(&mut c, &t, &mut |_: &str, _: f64| None, None)
+            .unwrap();
+        let px = c.finish();
+        let (x, y) = (b[0] as usize + 6, b[1] as usize + 4);
+        px[(y * 300 + x) * 4 + 3]
+    };
+    let (rest, hover, press) = (
+        at(None, true),
+        at(Some(Shown::Hover), true),
+        at(Some(Shown::Press), true),
+    );
+    assert!(
+        rest > 0,
+        "filled at rest: no glass under it to show through"
+    );
+    assert!(rest < hover && hover < press, "{rest} < {hover} < {press}");
+    assert!(at(None, false) < rest, "faded while disabled");
+    // Focus: the accent ring on its edge, where the border lies.
+    let edge = |shown: Option<Shown>| {
+        let mut s = laid(&view(shown, true), (300., 60.), 1.);
+        let mut c = nk_render::Canvas::new(300, 60, 1.);
+        s.frame(&t, Instant::now());
+        s.paint(&mut c, &t, &mut |_: &str, _: f64| None, None).unwrap();
+        let px = c.finish();
+        let (x, y) = ((b[0] + b[2] / 2.) as usize, b[1] as usize);
+        [px[(y * 300 + x) * 4], px[(y * 300 + x) * 4 + 2]]
+    };
+    let (plain, ringed) = (edge(None), edge(Some(Shown::Focus)));
+    // BGRA: the accent is blue.
+    assert!(ringed[0] > ringed[1] && ringed != plain, "{plain:?} then {ringed:?}");
 }

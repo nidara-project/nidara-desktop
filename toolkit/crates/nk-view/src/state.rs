@@ -358,6 +358,11 @@ impl ViewState {
             scale: self.scale,
             slider: 2. * tokens.slider.thumb_radius,
             switch: (tokens.switch.width, tokens.switch.height),
+            button: (
+                tokens.button.padding_x + tokens.button.border,
+                tokens.button.padding_y + tokens.button.border,
+                tokens.button.min_height(),
+            ),
         }
         .run(view, self.bounds);
         // A rebuild keeps what the reader was looking at in place: each scrolled region's
@@ -383,6 +388,11 @@ impl ViewState {
                 scale: self.scale,
                 slider: 2. * tokens.slider.thumb_radius,
                 switch: (tokens.switch.width, tokens.switch.height),
+                button: (
+                    tokens.button.padding_x + tokens.button.border,
+                    tokens.button.padding_y + tokens.button.border,
+                    tokens.button.min_height(),
+                ),
             }
             .run(view, self.bounds);
         }
@@ -1602,6 +1612,48 @@ impl ViewState {
                     let thumb = [x, r[1] + s.thumb_margin, d, d];
                     canvas.rounded_rect(rect(&thumb), d / 2., fade(s.thumb));
                     canvas.pop_clip();
+                }
+                What::Control(c) if c.face == crate::view::Face::Button => {
+                    // A content button (VIEW.md §13.2): the surface, its border, and the
+                    // surface's own hover and pressed tones; no glass, nothing for Hyalo.
+                    let b = &tokens.button;
+                    let key = Some(&p.key);
+                    let fill = if (self.press.as_ref() == key && self.hover.as_ref() == key)
+                        || c.shown == Some(Shown::Press)
+                    {
+                        b.pressed
+                    } else if self.hover.as_ref() == key || c.shown == Some(Shown::Hover) {
+                        b.hover
+                    } else {
+                        b.background
+                    };
+                    let faded = |colour: nk_render::Color| {
+                        let a = if c.enabled {
+                            1.
+                        } else {
+                            b.disabled_opacity as f32
+                        };
+                        ink(colour.with_alpha(colour.components[3] * a))
+                    };
+                    let r = p.rect;
+                    let radius = c.corner.of(r[2], r[3], &tokens.radii);
+                    canvas.clip(rect(&visible));
+                    // Each tone replaces the rest one, as the stylesheet's do.
+                    canvas.rounded_rect(rect(&r), radius, faded(fill));
+                    if b.border > 0. {
+                        canvas.rounded_ring(rect(&r), radius, b.border, faded(b.border_color));
+                    }
+                    canvas.pop_clip();
+                    if (self.focus_visible && self.focus.as_ref() == key)
+                        || c.shown == Some(Shown::Focus)
+                    {
+                        canvas.rounded_ring(
+                            rect(&r),
+                            radius,
+                            tokens.look.focus_width,
+                            ink(tokens.look.focus),
+                        );
+                    }
                 }
                 What::Control(c) => {
                     if let Some((r, radius, w)) = self.painted.get(&i) {

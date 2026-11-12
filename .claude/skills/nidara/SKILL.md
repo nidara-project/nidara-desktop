@@ -386,8 +386,10 @@ and the window's frame from `nk_view::FrameStyle` (Settings' format: floating gl
 content scrolling to the edges under a header band whose graded blur is a layer of its own,
 Hyalo's window controls at `controls_at`, on the user's side) — never a frame of the app's own.
 **Glass only for what lies over content** (sidebar, menu, popover, tooltip, button); a page's
-section is `Node::group`, not a pane. A button inside a group stands on its own glass; a ROW of a
-group has none, and nk-view paints its hover, press and marked wash itself (Hyalo draws washes
+section is `Node::group`, not a pane. A button IN a page's content is `Node::button` (no glass:
+Settings' row button from `button.json`, painted by nk-view); only one OVER content (the band, a
+toolbar over a page) is a control in a pane. A ROW of a group has no glass either, and nk-view
+paints its hover, press and marked wash itself (Hyalo draws washes
 only on glass; never extend the protocol for this — `VIEW.md` §4 "Off glass"). A disabled control
 with an action draws its content in `--nidara-text-disabled`; a marked row holding a switch is
 not lit. Glyph names in a view are

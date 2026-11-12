@@ -3,7 +3,7 @@
 //! the text layout paint will use; then it is placed. The placed rectangles feed paint,
 //! hit-testing, semantics and the material, so nothing computes a position twice.
 use crate::tokens::Spacing;
-use crate::view::{Align, Axis, Control, Corner, Icon, Ink, Justify, Key, Kind, Node, Stack};
+use crate::view::{Align, Axis, Control, Corner, Face, Icon, Ink, Justify, Key, Kind, Node, Stack};
 use nk_text::{Layout, TextBackend, TextStyle};
 use std::collections::HashMap as Map;
 use std::collections::HashMap;
@@ -280,6 +280,9 @@ pub struct Layouter<'a> {
     pub slider: f64,
     /// A switch's width and height.
     pub switch: (f64, f64),
+    /// A content button's inset on each side (padding and border) across and down, and its
+    /// least height (`Face::Button`).
+    pub button: (f64, f64, f64),
 }
 
 impl Layouter<'_> {
@@ -312,6 +315,9 @@ impl Layouter<'_> {
             Kind::Icon(i) => i.size,
             Kind::Spacer => 0.,
             Kind::Pane(p) => self.natural(&p.child),
+            Kind::Control(c) if c.face == Face::Button => {
+                self.natural(&c.child) + 2. * self.button.0
+            }
             Kind::Control(c) => self.natural(&c.child),
             Kind::Reveal(r) => self.natural(&r.child),
             Kind::Scroll(sc) => self.natural(&sc.child),
@@ -336,6 +342,7 @@ impl Layouter<'_> {
             Kind::Text(_) | Kind::Icon(_) | Kind::Switch(_) => self.natural(n),
             Kind::Spacer => 0.,
             Kind::Pane(p) => self.min(&p.child),
+            Kind::Control(c) if c.face == Face::Button => self.min(&c.child) + 2. * self.button.0,
             Kind::Control(c) => self.min(&c.child),
             Kind::Reveal(r) => self.min(&r.child),
             Kind::Scroll(sc) => self.min(&sc.child),
@@ -478,6 +485,19 @@ impl Layouter<'_> {
                     children: vec![c],
                     cross: vec![],
                     give: 0.,
+                }
+            }
+            Kind::Control(ctl) if ctl.face == Face::Button => {
+                let (x, y, least) = self.button;
+                let c = self.measure(&ctl.child, (width - 2. * x).max(0.));
+                let h = (c.h + 2. * y).max(least);
+                Measure {
+                    w: c.w + 2. * x,
+                    h,
+                    first_line: c.first_line.map(|f| f + (h - c.h) / 2.),
+                    give: 0.,
+                    children: vec![c],
+                    cross: vec![],
                 }
             }
             Kind::Control(ctl) => {
@@ -722,6 +742,20 @@ impl Layouter<'_> {
                 self.place(&p.child, &m.children[0], r, inner, out)
             }
             Kind::Group(g) => self.place(&g.child, &m.children[0], r, inner, out),
+            Kind::Control(c) if c.face == Face::Button => {
+                // The label centred in the button, inside its padding and border.
+                inner.control = Some(index);
+                let child = &m.children[0];
+                let x = self.button.0;
+                let w = (r[2] - 2. * x).max(0.).min(child.w);
+                let at = [
+                    self.round(r[0] + (r[2] - w) / 2.),
+                    self.round(r[1] + (r[3] - child.h) / 2.),
+                    w,
+                    child.h,
+                ];
+                self.place(&c.child, child, at, inner, out)
+            }
             Kind::Control(c) => {
                 inner.control = Some(index);
                 self.place(&c.child, &m.children[0], r, inner, out)
