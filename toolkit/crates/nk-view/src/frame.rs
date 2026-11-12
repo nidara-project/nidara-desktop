@@ -156,11 +156,14 @@ impl FrameStyle {
     /// What the open sidebar takes from the page: all of its room while the window is wide
     /// enough for both, nothing when it opens over the content.
     pub fn room(&self, shown: f64, narrow: bool) -> f64 {
-        if narrow {
-            0.
-        } else {
-            self.sidebar * shown.clamp(0., 1.)
-        }
+        if narrow { 0. } else { self.slid(shown) }
+    }
+
+    /// How much of the sidebar's width is in, in whole pixels: the page's edge and the
+    /// glass's both come from it, so the glass keeps its width and its gap to the page at
+    /// every step of the slide, rather than each edge rounding its own way.
+    fn slid(&self, shown: f64) -> f64 {
+        (self.sidebar * shown.clamp(0., 1.)).round()
     }
 
     /// The window's view at `size`: `sidebar` in the floating glass sidebar, under the room
@@ -214,7 +217,11 @@ impl FrameStyle {
         )
         .width(self.sidebar - 2. * self.inset)
         .height((size.1 - 2. * self.inset).max(0.));
-        frame.layer_at(self.inset - (1. - shown) * self.sidebar, self.inset, pane)
+        frame.layer_at(
+            self.inset - (self.sidebar - self.slid(shown)),
+            self.inset,
+            pane,
+        )
     }
 
     /// Where the band's blur lies in the window: over the content, from the sidebar's room
