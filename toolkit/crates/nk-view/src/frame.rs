@@ -229,9 +229,9 @@ impl FrameStyle {
     }
 
     /// The band's buttons and title, across the window's top: in a layer of its own over the
-    /// blur, or in the window when there are no layers (D5). The sidebar's toggle sits at
-    /// the inset (after the window controls when they are on the left), back and forward
-    /// at the page's edge, the title after them, clear of the controls on the right.
+    /// blur, or in the window when there are no layers (D5). The sidebar's toggle, back and
+    /// forward and the title follow one another from the page's edge (owner, 2026-11-12:
+    /// the toggle is the band's, never over the sidebar), clear of the window controls.
     pub fn band(
         &self,
         size: (f64, f64),
@@ -241,11 +241,14 @@ impl FrameStyle {
     ) -> Node {
         let empty = |key: &str| Node::column(key, vec![]);
         let at = controls.map(|c| (c, self.controls_at(size, c)));
-        let tx = match at {
+        // Always in the band over the page, never over the sidebar: from the page's edge, and
+        // after the window controls when they are on the left and the sidebar is closed.
+        let after_controls = match at {
             Some((c, (cx, _))) if c.side == ControlsSide::Left => cx + c.width + self.gap,
             _ => self.inset,
         };
-        let nx = (room + self.inset).max(tx + self.button + self.inset);
+        let tx = (room + self.inset).max(after_controls);
+        let nx = tx + self.button + self.inset;
         let nw = 2. * self.nav_edge + 2. * self.nav_button + self.nav_gap;
         let title_x = nx + nw + self.title_gap;
         let right = match at {

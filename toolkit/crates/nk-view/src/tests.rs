@@ -2725,21 +2725,24 @@ fn the_band_places_the_toggle_back_forward_and_title_around_the_users_controls()
     };
     assert_eq!(f.controls_at((1100., 700.), c(Right)), (1018., 12.));
     assert_eq!(f.controls_at((1100., 700.), c(Left)), (10., 12.));
-    // Controls on the right: the toggle at the inset, back and forward at the page's edge,
-    // the title after them and clear of the controls.
+    // Controls on the right: the toggle, back and forward and the title from the page's
+    // edge, in the band, never over the sidebar; the title clear of the controls.
     let s = band(&f, 250., Some(Right));
-    assert_eq!(rect(&s, "band/sidebar/glass"), [8., 8., 32., 32.]);
-    assert_eq!(rect(&s, "band/nav/glass"), [258., 8., 60., 32.]);
+    assert_eq!(rect(&s, "band/sidebar/glass"), [258., 8., 32., 32.]);
+    assert_eq!(rect(&s, "band/nav/glass"), [298., 8., 60., 32.]);
     let t = rect(&s, "band/title");
-    assert_eq!((t[0], t[0] + t[2]), (332., 1018. - 12.));
-    // On the left: the toggle after them.
+    assert_eq!((t[0], t[0] + t[2]), (372., 1018. - 12.));
+    // On the left, with the sidebar open, the controls sit over it and the band is as above.
     let s = band(&f, 250., Some(Left));
-    assert_eq!(rect(&s, "band/sidebar/glass")[0], 10. + 72. + 12.);
+    assert_eq!(rect(&s, "band/sidebar/glass")[0], 258.);
     let t = rect(&s, "band/title");
     assert_eq!(t[0] + t[2], 1100. - 8.);
-    // Sidebar closed: back and forward follow the toggle.
+    // Sidebar closed: from the window's edge, or after controls on the left.
     let s = band(&f, 0., Some(Right));
+    assert_eq!(rect(&s, "band/sidebar/glass")[0], 8.);
     assert_eq!(rect(&s, "band/nav/glass")[0], 8. + 32. + 8.);
+    let s = band(&f, 0., Some(Left));
+    assert_eq!(rect(&s, "band/sidebar/glass")[0], 10. + 72. + 12.);
     // Each is a button readers and the pointer reach; forward with nowhere to go is not.
     let mut s = band(&f, 250., Some(Right));
     let f2 = s.frame(&tokens(), Instant::now());
