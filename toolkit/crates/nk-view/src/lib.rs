@@ -13,7 +13,7 @@ mod tokens;
 mod view;
 
 mod frame;
-pub use frame::FrameStyle;
+pub use frame::{BACK, Band, FORWARD, FrameStyle, SIDEBAR, Sidebar};
 pub use host::{Glyphs, Type, TypeScale, Weight};
 pub use layout::{Fitted, Placed, Rect, TextCache, What, first_line_centre};
 pub use state::{Activated, BUDGET, Frame, FramePane, KeyInput, ScrollBy, Ticked, ViewState};

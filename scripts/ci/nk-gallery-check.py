@@ -157,17 +157,32 @@ def run(directory, fault=None, shots=True):
                 raise OracleFailure(f'{stage}: {detail}')
             print(f'  {stage}: PASS', flush=True)
 
+        def sidebar_open():
+            # A narrow window starts with it closed, and a choice there closes it again.
+            if find(root, 'Show sidebar', Atspi.Role.PUSH_BUTTON):
+                activate('Show sidebar', Atspi.Role.PUSH_BUTTON)
+                barrier(lambda: find(root, 'Hide sidebar', Atspi.Role.PUSH_BUTTON)
+                        and find(root, PAGES[0][1], Atspi.Role.TOGGLE_BUTTON), 'sidebar opened')
+
+        def marked_page():
+            return next((p for p, t in PAGES
+                         if (n := find(root, t, Atspi.Role.TOGGLE_BUTTON))
+                         and (has_state(n, Atspi.StateType.CHECKED) or has_state(n, Atspi.StateType.PRESSED))), None)
+
         try:
             barrier(lambda: 'CONTENT_READY' in text() and 'A11Y_READY' in text(), 'gallery readiness', 15)
             root = barrier(app_tree, 'AT-SPI window')
             hashes = {}
             for page, title in PAGES:
+                sidebar_open()
                 entry = barrier(lambda: find(root, title, Atspi.Role.TOGGLE_BUTTON), f'sidebar entry {title}')
                 if page != 'status':
                     before = text().count(f'PAGE {page} ')
                     published(lambda: entry.get_action_iface().do_action(0))
                     barrier(lambda: text().count(f'PAGE {page} ') > before, f'page {page} committed')
                     pump(.3)
+                sidebar_open()
+                entry = barrier(lambda: find(root, title, Atspi.Role.TOGGLE_BUTTON), f'sidebar entry {title}')
                 check(f'{page}/marked', has_state(entry, Atspi.StateType.CHECKED)
                       or has_state(entry, Atspi.StateType.PRESSED), 'its sidebar entry is not marked')
                 others = [t for p, t in PAGES if p != page]
@@ -198,6 +213,26 @@ def run(directory, fault=None, shots=True):
                 elif page == 'reveal':
                     activate('Open', Atspi.Role.PUSH_BUTTON)
                     check('reveal/open', find(root, 'Revealed') is not None, 'the reveal did not open')
+            # The band: back and forward walk the pages visited, the toggle hides the sidebar.
+            activate('Back', Atspi.Role.PUSH_BUTTON)
+            sidebar_open()
+            check('band/back', marked_page() == PAGES[-2][0], f'back went to {marked_page()}')
+            activate('Forward', Atspi.Role.PUSH_BUTTON)
+            sidebar_open()
+            check('band/forward', marked_page() == PAGES[-1][0], f'forward went to {marked_page()}')
+            activate('Hide sidebar', Atspi.Role.PUSH_BUTTON)
+            barrier(lambda: find(root, 'Show sidebar', Atspi.Role.PUSH_BUTTON), 'sidebar hidden')
+            # Once it has slid out, its entries leave the tree.
+            gone = time.monotonic() + 3
+            while find(root, PAGES[0][1], Atspi.Role.TOGGLE_BUTTON) and time.monotonic() < gone:
+                pump(.1)
+            check('band/hide', find(root, PAGES[0][1], Atspi.Role.TOGGLE_BUTTON) is None,
+                  'the sidebar\'s entries are still there')
+            if shots:
+                ipc('screenshot', directory / 'sidebar-hidden.png')
+            sidebar_open()
+            check('band/show', find(root, PAGES[0][1], Atspi.Role.TOGGLE_BUTTON) is not None,
+                  'the sidebar did not come back')
             if shots:
                 same = len(set(hashes.values())) != len(hashes)
                 check('pages/distinct', not same, 'two pages drew the same picture')

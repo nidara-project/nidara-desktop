@@ -2610,6 +2610,15 @@ fn frame_style() -> crate::FrameStyle {
         background_opacity: 0.85,
         opaque: false,
         double_click_ms: 400,
+        button: 32.,
+        icon: 16.,
+        nav_button: 24.,
+        nav_edge: 4.,
+        nav_gap: 4.,
+        nav_height: 32.,
+        nav_icon: 12.,
+        gap: 12.,
+        content: 800.,
     }
 }
 
@@ -2627,7 +2636,6 @@ fn a_group_is_painted_by_the_view_and_never_declared_as_glass() {
     let keys: Vec<&str> = f.panes.iter().map(|p| p.key.0.as_str()).collect();
     assert_eq!(keys, ["p"], "only the pane is glass");
     assert!(matches!(placed(&s, "g").what, What::Group));
-    // Its text still lies inside it.
     let (g, t) = (rect(&s, "g"), rect(&s, "g/t"));
     assert!(t[1] >= g[1] && t[1] + t[3] <= g[1] + g[3]);
 }
@@ -2635,12 +2643,17 @@ fn a_group_is_painted_by_the_view_and_never_declared_as_glass() {
 #[test]
 fn the_window_frame_floats_the_sidebar_and_lets_the_content_reach_the_edges() {
     let f = frame_style();
-    let view = f.view(
-        (1000., 700.),
-        Node::column("s", vec![]),
-        Node::text("c", "Content", style(14.)),
-    );
-    let s = laid(&view, (1000., 700.), 1.);
+    let open = |shown: f64, narrow: bool| {
+        let view = f.view(
+            (1100., 700.),
+            shown,
+            narrow,
+            Node::column("s", vec![]),
+            Node::text("c", "Content", style(14.)),
+        );
+        laid(&view, (1100., 700.), 1.)
+    };
+    let s = open(1., false);
     assert_eq!(
         rect(&s, "frame/side"),
         [8., 8., 234., 684.],
@@ -2648,7 +2661,7 @@ fn the_window_frame_floats_the_sidebar_and_lets_the_content_reach_the_edges() {
     );
     assert_eq!(
         rect(&s, "frame/content"),
-        [250., 0., 750., 700.],
+        [250., 0., 850., 700.],
         "to the window's top, right and bottom edges"
     );
     assert_eq!(
@@ -2661,41 +2674,110 @@ fn the_window_frame_floats_the_sidebar_and_lets_the_content_reach_the_edges() {
         40.,
         "the sidebar's top keeps the band"
     );
-    // The header's layer over the content, as tall as its graded blur.
-    assert_eq!(f.header_rect((1000., 700.)), [250., 0., 750., 68.]);
-    let graded = f.graded(750., 68., 1.);
+    // Half way out, the sidebar and the page's edge move together.
+    let s = open(0.5, false);
+    assert_eq!(rect(&s, "frame/side")[0], 8. - 125.);
+    assert_eq!(rect(&s, "frame/content")[0], 125.);
+    // Closed: no glass, the page from the window's edge.
+    let mut s = open(0., false);
+    assert!(s.frame(&tokens(), Instant::now()).panes.is_empty());
+    assert_eq!(rect(&s, "frame/content")[0], 0.);
+    // Narrow: open over the page, which keeps the whole width.
+    let s = open(1., true);
+    assert_eq!(rect(&s, "frame/side")[0], 8.);
+    assert_eq!(rect(&s, "frame/content")[0], 0.);
+    assert_eq!(f.header_rect((1100., 700.), 250.), [250., 0., 850., 68.]);
+    let graded = f.graded(850., 68., 1.);
     assert_eq!(graded.len(), 3);
     assert_eq!(graded[2].pane.y + graded[2].pane.height, 68.);
 }
 
+fn band(f: &crate::FrameStyle, room: f64, side: Option<nk_wayland::ControlsSide>) -> ViewState {
+    let controls = side.map(|side| nk_wayland::ControlsLayout {
+        side,
+        width: 72.,
+        height: 24.,
+    });
+    let v = f.band(
+        (1100., 48.),
+        room,
+        controls,
+        crate::Band {
+            title: Node::text("band/title/text", "Title", style(14.)).lines(1),
+            sidebar: "Sidebar",
+            back: "Back",
+            forward: "Forward",
+            can_back: true,
+            can_forward: false,
+        },
+    );
+    laid(&v, (1100., 48.), 1.)
+}
+
 #[test]
-fn the_window_controls_follow_the_side_the_user_chose() {
+fn the_band_places_the_toggle_back_forward_and_title_around_the_users_controls() {
+    use nk_wayland::ControlsSide::{Left, Right};
     let f = frame_style();
     let c = |side| nk_wayland::ControlsLayout {
         side,
         width: 72.,
         height: 24.,
     };
+    assert_eq!(f.controls_at((1100., 700.), c(Right)), (1018., 12.));
+    assert_eq!(f.controls_at((1100., 700.), c(Left)), (10., 12.));
+    // Controls on the right: the toggle, back and forward and the title from the page's
+    // edge, in the band, never over the sidebar; the title clear of the controls.
+    let s = band(&f, 250., Some(Right));
+    assert_eq!(rect(&s, "band/sidebar/glass"), [258., 8., 32., 32.]);
+    assert_eq!(rect(&s, "band/nav/glass"), [298., 8., 60., 32.]);
+    let t = rect(&s, "band/title");
+    assert_eq!((t[0], t[0] + t[2]), (372., 1018. - 12.));
+    // On the left, with the sidebar open, the controls sit over it and the band is as above.
+    let s = band(&f, 250., Some(Left));
+    assert_eq!(rect(&s, "band/sidebar/glass")[0], 258.);
+    let t = rect(&s, "band/title");
+    assert_eq!(t[0] + t[2], 1100. - 8.);
+    // Sidebar closed: from the window's edge, or after controls on the left.
+    let s = band(&f, 0., Some(Right));
+    assert_eq!(rect(&s, "band/sidebar/glass")[0], 8.);
+    assert_eq!(rect(&s, "band/nav/glass")[0], 8. + 32. + 8.);
+    let s = band(&f, 0., Some(Left));
+    assert_eq!(rect(&s, "band/sidebar/glass")[0], 10. + 72. + 12.);
+    // Each is a button readers and the pointer reach; forward with nowhere to go is not.
+    let mut s = band(&f, 250., Some(Right));
+    let f2 = s.frame(&tokens(), Instant::now());
+    let glass: Vec<&str> = f2.panes.iter().map(|p| p.key.0.as_str()).collect();
+    assert_eq!(glass, ["band/sidebar/glass", "band/nav/glass"]);
+    let r = rect(&s, "band/sidebar");
+    s.pointer_motion(r[0] + 4., r[1] + 4.);
+    assert_eq!(s.button(true, Instant::now()), None);
     assert_eq!(
-        f.controls_at((1000., 700.), c(nk_wayland::ControlsSide::Right)),
-        (918., 12.)
+        s.button(false, Instant::now()).map(|a| a.action),
+        Some(crate::SIDEBAR.to_string())
     );
-    assert_eq!(
-        f.controls_at((1000., 700.), c(nk_wayland::ControlsSide::Left)),
-        (10., 12.)
-    );
-    // On the right, the title keeps clear of them.
-    let header = |side| {
-        let v = f.header(
-            (750., 48.),
-            0.,
-            24.,
-            Some(c(side)),
-            Node::text("header/title", "Title", style(14.)).lines(1),
-        );
-        rect(&laid(&v, (750., 48.), 1.), "header/end")[2]
-    };
-    assert_eq!(header(nk_wayland::ControlsSide::Right), 10. + 72. + 14.);
-    assert_eq!(header(nk_wayland::ControlsSide::Left), 24.);
-    assert!(f.on_band(100., 20.) && !f.on_band(100., 60.) && !f.on_band(300., 20.));
+    let r = rect(&s, "band/forward");
+    s.pointer_motion(r[0] + 4., r[1] + 4.);
+    s.button(true, Instant::now());
+    assert_eq!(s.button(false, Instant::now()), None, "forward is disabled");
+}
+
+#[test]
+fn the_sidebar_closes_when_the_window_narrows_and_slides_when_toggled() {
+    let f = frame_style();
+    let motion = tokens().motion;
+    let t0 = Instant::now();
+    let mut sb = crate::Sidebar::default();
+    assert!(sb.adapt(1100., &f) && sb.open() && !sb.narrow());
+    assert!(!sb.adapt(1090., &f), "no change on the same side");
+    assert!(sb.adapt(1000., &f) && !sb.open() && sb.narrow());
+    assert_eq!(sb.shown(t0, &motion), 0., "at once, not slid");
+    sb.set(true, t0, &motion, false);
+    assert!(sb.over_content());
+    let mid = sb.shown(t0 + motion.base / 2, &motion);
+    assert!(mid > 0. && mid < 1., "half way: {mid}");
+    assert!(sb.animating(t0, &motion));
+    assert_eq!(sb.shown(t0 + motion.base, &motion), 1.);
+    assert!(!sb.animating(t0 + motion.base, &motion));
+    sb.set(false, t0, &motion, true);
+    assert_eq!(sb.shown(t0, &motion), 0., "reduced motion: at once");
 }

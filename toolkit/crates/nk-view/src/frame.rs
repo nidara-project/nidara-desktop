@@ -5,9 +5,21 @@
 //! band, and room for Hyalo's window controls on the side the user chose. Every measure is
 //! the exported `header` component's (`toolkit/tokens/header.json`) or the window layout's;
 //! an app passes only its sidebar, its content and its title.
-use crate::view::{Align, Corner, Node};
+//!
+//! The band has the sidebar's toggle and back and forward, as Settings' header: glass
+//! buttons in a layer of their own over the blur, so Hyalo draws their hover and press. The
+//! sidebar slides in and out with the kit's motion, and below the width the window layout
+//! gives a sidebar and a page it closes and opens over the content instead (`Sidebar`).
+use crate::tokens::Motion;
+use crate::view::{Align, Corner, Ink, Justify, Node, Role};
 use nk_platform::{exports::Exports, portal::Appearance};
 use nk_wayland::{ControlsLayout, ControlsSide};
+use std::time::Instant;
+
+/// The band's actions, as `Activated::action` names them.
+pub const SIDEBAR: &str = "frame:sidebar";
+pub const BACK: &str = "frame:back";
+pub const FORWARD: &str = "frame:forward";
 
 /// The frame's measures in one appearance.
 #[derive(Clone, Debug)]
@@ -33,6 +45,20 @@ pub struct FrameStyle {
     pub opaque: bool,
     /// Two presses on the band within this toggle maximised, as on any title bar.
     pub double_click_ms: u32,
+    /// The sidebar's toggle: its side and its glyph.
+    pub button: f64,
+    pub icon: f64,
+    /// Back and forward: one capsule, its buttons, edge, gap, height and glyph.
+    pub nav_button: f64,
+    pub nav_edge: f64,
+    pub nav_gap: f64,
+    pub nav_height: f64,
+    pub nav_icon: f64,
+    /// Between the window controls and what the band puts next to them.
+    pub gap: f64,
+    /// The page's room the window layout keeps beside an open sidebar; narrower, the
+    /// sidebar opens over the content (`WINDOW_LAYOUT.content`).
+    pub content: f64,
 }
 
 fn number(v: &serde_json::Value, what: &str) -> Result<f64, String> {
@@ -75,6 +101,18 @@ impl FrameStyle {
                 "capsule.windowInset",
             )?,
             title_gap: number(&h["titleGap"], "header.titleGap")?,
+            button: number(&h["button"], "header.button")?,
+            icon: number(&h["icon"], "header.icon")?,
+            nav_button: number(&h["navigation"]["button"], "header.navigation.button")?,
+            nav_edge: number(&h["navigation"]["edge"], "header.navigation.edge")?,
+            nav_gap: number(&h["navigation"]["gap"], "header.navigation.gap")?,
+            nav_height: number(&h["navigation"]["height"], "header.navigation.height")?,
+            nav_icon: number(&h["navigation"]["icon"], "header.navigation.icon")?,
+            gap: number(&h["search"]["gap"], "header.search.gap")?,
+            content: number(
+                &e.statics["ts"]["WINDOW_LAYOUT"]["content"],
+                "WINDOW_LAYOUT.content",
+            )?,
             blur: nk_wayland::Blur {
                 size: number(&blur["size"], "glass blur.panel.size")?,
                 passes: if reduce {
@@ -115,11 +153,54 @@ impl FrameStyle {
         Ok(style)
     }
 
+    /// What the open sidebar takes from the page: all of its room while the window is wide
+    /// enough for both, nothing when it opens over the content.
+    pub fn room(&self, shown: f64, narrow: bool) -> f64 {
+        if narrow {
+            0.
+        } else {
+            self.sidebar * shown.clamp(0., 1.)
+        }
+    }
+
     /// The window's view at `size`: `sidebar` in the floating glass sidebar, under the room
-    /// its top keeps for the band; `content` in the scroll region `frame/content`, which
-    /// reaches the window's edges and starts its rows below the band.
-    pub fn view(&self, size: (f64, f64), sidebar: Node, content: Node) -> Node {
+    /// its top keeps for the band, `shown` of the way in (`Sidebar::shown`); `content` in
+    /// the scroll region `frame/content`, which reaches the window's edges and starts its
+    /// rows below the band.
+    pub fn view(
+        &self,
+        size: (f64, f64),
+        shown: f64,
+        narrow: bool,
+        sidebar: Node,
+        content: Node,
+    ) -> Node {
         let empty = |key: &str| Node::column(key, vec![]);
+        let scroll = Node::scroll(
+            "frame/content",
+            Node::column(
+                "frame/content/col",
+                vec![
+                    empty("frame/content/top").height(self.band + self.content_gap),
+                    content,
+                ],
+            ),
+        )
+        .grow();
+        let frame = Node::overlay(
+            "frame",
+            Node::row(
+                "frame/row",
+                vec![
+                    empty("frame/side/room").width(self.room(shown, narrow)),
+                    scroll,
+                ],
+            ),
+        );
+        if shown <= 0. {
+            // Closed: no glass left outside the window.
+            return frame;
+        }
         let pane = Node::pane(
             "frame/side",
             Corner::Fixed(self.sidebar_radius.round() as u32),
@@ -133,68 +214,119 @@ impl FrameStyle {
         )
         .width(self.sidebar - 2. * self.inset)
         .height((size.1 - 2. * self.inset).max(0.));
-        let scroll = Node::scroll(
-            "frame/content",
-            Node::column(
-                "frame/content/col",
-                vec![
-                    empty("frame/content/top").height(self.band + self.content_gap),
-                    content,
-                ],
-            ),
-        )
-        .grow();
-        Node::overlay(
-            "frame",
-            Node::row(
-                "frame/row",
-                vec![empty("frame/side/room").width(self.sidebar), scroll],
-            ),
-        )
-        .layer_at(self.inset, self.inset, pane)
+        frame.layer_at(self.inset - (1. - shown) * self.sidebar, self.inset, pane)
     }
 
-    /// Where the header band's layer lies in the window: over the content, from the
-    /// sidebar's room to the window's right edge, as tall as its graded blur.
-    pub fn header_rect(&self, size: (f64, f64)) -> [f64; 4] {
+    /// Where the band's blur lies in the window: over the content, from the sidebar's room
+    /// to the window's right edge, as tall as its graded blur. It takes no pointer.
+    pub fn header_rect(&self, size: (f64, f64), room: f64) -> [f64; 4] {
         [
-            self.sidebar,
+            room,
             0.,
-            (size.0 - self.sidebar).max(1.),
+            (size.0 - room).max(1.),
             self.titlebar.min(size.1).max(1.),
         ]
     }
 
-    /// The band's view, in the header layer's coordinates (`origin` = 0), or in the
-    /// window's when it is drawn without layers (`origin` = the sidebar's room): `title`
-    /// after `lead`, centred in the band, and the window controls' room kept on the right
-    /// when they are there.
-    pub fn header(
+    /// The band's buttons and title, across the window's top: in a layer of its own over the
+    /// blur, or in the window when there are no layers (D5). The sidebar's toggle, back and
+    /// forward and the title follow one another from the page's edge (owner, 2026-11-12:
+    /// the toggle is the band's, never over the sidebar), clear of the window controls.
+    pub fn band(
         &self,
         size: (f64, f64),
-        origin: f64,
-        lead: f64,
+        room: f64,
         controls: Option<ControlsLayout>,
-        title: Node,
+        band: Band<'_>,
     ) -> Node {
         let empty = |key: &str| Node::column(key, vec![]);
-        let right = match controls {
-            Some(c) if c.side == ControlsSide::Right => {
-                self.controls_inset + c.width + self.title_gap
-            }
-            _ => lead,
+        let at = controls.map(|c| (c, self.controls_at(size, c)));
+        // Always in the band over the page, never over the sidebar: from the page's edge, and
+        // after the window controls when they are on the left and the sidebar is closed.
+        let after_controls = match at {
+            Some((c, (cx, _))) if c.side == ControlsSide::Left => cx + c.width + self.gap,
+            _ => self.inset,
         };
-        Node::row(
-            "header",
-            vec![
-                empty("header/lead").width(origin + lead),
-                title.grow(),
-                empty("header/end").width(right),
-            ],
-        )
-        .align(Align::Center)
-        .width(size.0)
-        .height(self.band)
+        let tx = (room + self.inset).max(after_controls);
+        let nx = tx + self.button + self.inset;
+        let nw = 2. * self.nav_edge + 2. * self.nav_button + self.nav_gap;
+        let title_x = nx + nw + self.title_gap;
+        let right = match at {
+            Some((c, (cx, _))) if c.side == ControlsSide::Right => cx - self.gap,
+            _ => size.0 - self.inset,
+        };
+        let glyph = |key: String, name: &str, px: f64, side: f64, enabled: bool| {
+            Node::row(
+                format!("{key}/row"),
+                vec![Node::icon(format!("{key}/icon"), name, px).ink(if enabled {
+                    Ink::Primary
+                } else {
+                    Ink::Dim
+                })],
+            )
+            .justify(Justify::Center)
+            .align(Align::Center)
+            .width(side)
+            .height(side)
+        };
+        let toggle = Node::pane(
+            "band/sidebar/glass",
+            Corner::Pill,
+            Node::control(
+                "band/sidebar",
+                band.sidebar,
+                SIDEBAR,
+                glyph(
+                    "band/sidebar".into(),
+                    "nd-sidebar-show",
+                    self.icon,
+                    self.button,
+                    true,
+                ),
+            )
+            .role(Role::Button)
+            .corner(Corner::Pill),
+        );
+        let nav_button = |key: &str, label: &str, action: &str, name: &str, enabled: bool| {
+            Node::control(
+                key,
+                label,
+                action,
+                glyph(key.into(), name, self.nav_icon, self.nav_button, enabled),
+            )
+            .corner(Corner::Pill)
+            .enabled(enabled)
+        };
+        let nav = Node::pane(
+            "band/nav/glass",
+            Corner::Pill,
+            Node::row(
+                "band/nav",
+                vec![
+                    empty("band/nav/start").width(self.nav_edge),
+                    nav_button("band/back", band.back, BACK, "nd-pan-start", band.can_back),
+                    empty("band/nav/gap").width(self.nav_gap),
+                    nav_button(
+                        "band/forward",
+                        band.forward,
+                        FORWARD,
+                        "nd-pan-end",
+                        band.can_forward,
+                    ),
+                    empty("band/nav/end").width(self.nav_edge),
+                ],
+            )
+            .align(Align::Center)
+            .height(self.nav_height),
+        );
+        let title = Node::row("band/title", vec![band.title.grow()])
+            .align(Align::Center)
+            .width((right - title_x).max(0.))
+            .height(self.band);
+        Node::overlay("band", empty("band/base").width(size.0).height(self.band))
+            .layer_at(tx, self.inset, toggle)
+            .layer_at(nx, self.inset, nav)
+            .layer_at(title_x, 0., title)
     }
 
     /// Where Hyalo's window controls go, in window coordinates: centred in the band, at the
@@ -207,12 +339,6 @@ impl FrameStyle {
             ControlsSide::Right => (size.0 - self.controls_inset - c.width).max(0.),
         };
         (x, y)
-    }
-
-    /// Whether a press at `(x, y)` in the window lands on the band where nothing else is:
-    /// the sidebar's top, which moves the window as the rest of the band does.
-    pub fn on_band(&self, x: f64, y: f64) -> bool {
-        x < self.sidebar && y < self.band
     }
 
     /// The header layer's graded blur: one pane per step of the curve, their shared edges
@@ -272,5 +398,77 @@ impl FrameStyle {
                 ]),
             );
         }
+    }
+}
+
+/// What the band says and can do: the page's title, the buttons' names for readers, and
+/// whether back and forward lead anywhere.
+pub struct Band<'a> {
+    pub title: Node,
+    pub sidebar: &'a str,
+    pub back: &'a str,
+    pub forward: &'a str,
+    pub can_back: bool,
+    pub can_forward: bool,
+}
+
+/// The sidebar's state: open or closed, whether the window is too narrow to keep it beside
+/// the page, and its slide between the two.
+#[derive(Clone, Debug, Default)]
+pub struct Sidebar {
+    open: bool,
+    narrow: Option<bool>,
+    from: f64,
+    start: Option<Instant>,
+}
+
+impl Sidebar {
+    /// Follows the window's width: crossing the layout's width for a sidebar and a page,
+    /// it closes (narrower) or opens (wider), at once. True when that changed anything.
+    pub fn adapt(&mut self, width: f64, style: &FrameStyle) -> bool {
+        let narrow = width < style.sidebar + style.content;
+        if self.narrow == Some(narrow) {
+            return false;
+        }
+        self.narrow = Some(narrow);
+        self.open = !narrow;
+        self.start = None;
+        true
+    }
+    /// Opens or closes it, sliding with the kit's motion unless motion is reduced.
+    pub fn set(&mut self, open: bool, now: Instant, motion: &Motion, reduced: bool) {
+        if open == self.open {
+            return;
+        }
+        self.from = self.shown(now, motion);
+        self.open = open;
+        self.start = (!reduced).then_some(now);
+    }
+    pub fn open(&self) -> bool {
+        self.open
+    }
+    pub fn narrow(&self) -> bool {
+        self.narrow.unwrap_or(false)
+    }
+    /// Open over the content, as it is in a narrow window: Escape or a choice closes it.
+    pub fn over_content(&self) -> bool {
+        self.narrow() && self.open
+    }
+    /// How far in it is, 0 closed to 1 open, eased.
+    pub fn shown(&self, now: Instant, motion: &Motion) -> f64 {
+        let target = if self.open { 1. } else { 0. };
+        let Some(start) = self.start else {
+            return target;
+        };
+        let t = now.duration_since(start).as_secs_f64() / motion.base.as_secs_f64().max(1e-3);
+        if t >= 1. {
+            target
+        } else {
+            self.from + (target - self.from) * motion.ease.at(t)
+        }
+    }
+    pub fn animating(&self, now: Instant, motion: &Motion) -> bool {
+        self.start
+            .is_some_and(|s| now.duration_since(s) < motion.base)
     }
 }
