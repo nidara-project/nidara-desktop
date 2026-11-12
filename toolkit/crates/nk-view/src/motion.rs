@@ -85,10 +85,13 @@ pub(crate) struct MotionState {
     pub reduced: bool,
 }
 
-fn walk<'a>(n: &'a Node, out: &mut Vec<(&'a Key, bool)>) {
+/// Each reveal's and switch's key and state; `true` last for a switch, which eases the same
+/// both ways (VIEW.md §12.6).
+fn walk<'a>(n: &'a Node, out: &mut Vec<(&'a Key, bool, bool)>) {
     match &n.kind {
+        Kind::Switch(sw) => out.push((&n.key, sw.on, true)),
         Kind::Reveal(r) => {
-            out.push((&n.key, r.open));
+            out.push((&n.key, r.open, false));
             walk(&r.child, out);
         }
         Kind::Stack(s) => s.children.iter().for_each(|c| walk(c, out)),
@@ -105,20 +108,20 @@ fn walk<'a>(n: &'a Node, out: &mut Vec<(&'a Key, bool)>) {
 }
 
 impl MotionState {
-    /// A rebuilt view: a reveal seen for the first time takes its state at once; one whose
-    /// `open` changed eases from where it is. Reveals gone are forgotten.
+    /// A rebuilt view: a reveal or switch seen for the first time takes its state at once; one
+    /// whose state changed eases from where it is. Those gone are forgotten.
     pub fn view(&mut self, view: &Node, now: Instant, m: &Motion) {
         let mut seen = vec![];
         walk(view, &mut seen);
         let mut next = HashMap::new();
-        for (key, open) in seen {
+        for (key, open, switch) in seen {
             let state = match self.reveals.remove(key) {
                 Some(s) if s.open != open => {
                     let from = s.ease.map_or(if s.open { 1. } else { 0. }, |e| e.at(now).0);
-                    let (duration, curve) = if open {
-                        (m.slow, m.emphasized)
-                    } else {
+                    let (duration, curve) = if switch || !open {
                         (m.base, m.ease)
+                    } else {
+                        (m.slow, m.emphasized)
                     };
                     RevealState {
                         open,

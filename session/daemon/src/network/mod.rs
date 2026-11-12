@@ -579,9 +579,9 @@ pub async fn serve(
             } else {
                 registered.clear();
             }
-            if network.refresh().await.is_err() {
+            if let Err(e) = network.refresh().await {
                 wait = RETRY;
-                eprintln!("[network] snapshot unavailable; retrying");
+                eprintln!("[network] snapshot unavailable ({e}); retrying");
             }
         }
     });

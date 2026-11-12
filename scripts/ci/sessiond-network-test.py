@@ -82,7 +82,7 @@ def fake():
     calls, items, retained = [], {}, []
     versions={path:1 for path in profiles}
     system_secrets={path:{} for path in profiles}
-    state = {'agent': '', 'result': None, 'radio': True, 'strength': 70, 'enterprise': False, 'reapplyFail': False, 'active': ACTIVE, 'activeProfile': PROF, 'activeState': 2, 'registrations': 0, 'carrier': True, 'autoconnect': True, 'locked': False, 'saveflags': 1, 'sequence': 0, 'noCollection': False, 'created': 4, 'lastCreated': '', 'wifiPresent': True}
+    state = {'agent': '', 'result': None, 'radio': True, 'strength': 70, 'enterprise': False, 'reapplyFail': False, 'active': ACTIVE, 'activeProfile': PROF, 'activeState': 2, 'registrations': 0, 'carrier': True, 'autoconnect': True, 'locked': False, 'saveflags': 1, 'sequence': 0, 'noCollection': False, 'created': 4, 'lastCreated': '', 'wifiPresent': True, 'vanished': False}
     objects = {}
     modified = {}
     held_stores = []
@@ -125,9 +125,9 @@ def fake():
         if iface == NM+'.Settings.Connection':
             return {'VersionId':v('t',versions[path])}
         if iface == NM:
-            return {'WirelessEnabled': v('b', state['radio']), 'WirelessHardwareEnabled': v('b', True), 'State': v('u', 70), 'Connectivity': v('u', 4), 'ActiveConnections': v('ao', [ACTIVE] if state['active'] != '/' else [])}
+            return {'WirelessEnabled': v('b', state['radio']), 'WirelessHardwareEnabled': v('b', True), 'State': v('u', 70), 'Connectivity': v('u', 4), 'ActiveConnections': v('ao', ([ACTIVE] if state['active'] != '/' else []) + ([ROOT+'/ActiveConnection/9'] if state['vanished'] else []))}
         if iface == DEVICE:
-            return {'DeviceType': v('u', 2 if path == DEV else 1), 'Interface': v('s', 'wlan-test' if path == DEV else 'eth-test'), 'State': v('u', 100 if state['active'] != '/' else 30), 'StateReason': v('(uu)', (100, 0)), 'Autoconnect': v('b', state['autoconnect']), 'ActiveConnection': v('o', state['active']), 'Ip4Config': v('o', ROOT+'/IP4Config/1'), 'Ip6Config': v('o', '/'), 'AvailableConnections': v('ao', ([] if not state['carrier'] else [PROF_WIRED]) if path == WIRED else [PROF, PROF_HIDDEN])}
+            return {'DeviceType': v('u', 2 if path == DEV else 1), 'Interface': v('s', 'wlan-test' if path == DEV else 'eth-test'), 'State': v('u', 100 if state['active'] != '/' else 30), 'StateReason': v('(uu)', (100, 0)), 'Autoconnect': v('b', state['autoconnect']), 'ActiveConnection': v('o', state['active']), 'Ip4Config': v('o', ROOT+('/IP4Config/9' if state['vanished'] else '/IP4Config/1')), 'Ip6Config': v('o', '/'), 'AvailableConnections': v('ao', ([] if not state['carrier'] else [PROF_WIRED]) if path == WIRED else [PROF, PROF_HIDDEN])}
         if iface == WIFI:
             return {'ActiveAccessPoint': v('o', AP), 'Bitrate': v('u', 54000), 'LastScan': v('x', 9)}
         if iface == NM + '.Device.Wired':
@@ -501,6 +501,13 @@ def exercise(binary, directory, managed=False):
         state('wifiPresent',True)
         wait(lambda: len(snapshot()[2]['devices'])==2,'Wi-Fi hot addition')
         check(True,'device roster survives hotplug')
+        # A disconnect removes IP configs and active connections while NM still names them:
+        # the snapshot skips what is gone instead of failing whole (Ethernet left stale).
+        state('vanished',True)
+        state('strength',66)
+        wait(lambda: any(d.get('accessPoints') and d['accessPoints'][0]['strength']==66 for d in snapshot()[2]['devices']),'snapshot survives objects that vanish mid-read')
+        state('vanished',False)
+        state('strength',70)
         signals = []
         bus.signal_subscribe(None,IFACE,'Updated',NETPATH,None,Gio.DBusSignalFlags.NONE,lambda *a: signals.append(a[5].unpack()))
         state('strength',88)

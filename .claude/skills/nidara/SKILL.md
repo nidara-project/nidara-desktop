@@ -357,6 +357,10 @@ release, like every nk-view control (`toolkit/shell/CC.md`). The CC's grid is th
 in the accent), a `surface` well, or `keys_only` (Tab and readers, no pointer); `Slider::fill`
 is the 1×2 tile slider. The editor still places and scrolls the tiles' glass, so that view
 calls `set_slides(false)`: a moved pane must not slide away from glass it does not move.
+`Node::switch(key, on)` is the native switch (`components.json` `switch`, 44×24), drawn only:
+the row around it is the control (`Role::Toggle`, `marked(on)`). It slides over `base`/`ease`
+both ways, faded at `disabledOpacity` while its row is disabled (`VIEW.md` §12.6). A setting
+that is on or off ends its row with one; a choice among several keeps its mark slot.
 
 ### Applications1 catalogue and native dock pins
 

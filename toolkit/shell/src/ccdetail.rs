@@ -83,6 +83,19 @@ impl Action {
             _ => return None,
         })
     }
+    /// The same switch action, asking for `on`: what a click on a switch the user has just
+    /// moved sends next, whatever the service last said.
+    fn toward(self, on: bool) -> Self {
+        match self {
+            Self::WiredPower(device, _) => Self::WiredPower(device, on),
+            Self::WifiPower(_) => Self::WifiPower(on),
+            Self::BluetoothPower(adapter, _) => Self::BluetoothPower(adapter, on),
+            Self::Pref(key, crate::menu::PrefValue::Bool(_)) => {
+                Self::Pref(key, crate::menu::PrefValue::Bool(on))
+            }
+            other => other,
+        }
+    }
     pub fn connects(&self) -> bool {
         match self {
             Self::Connect { .. } | Self::Activate(_) => true,
@@ -100,6 +113,9 @@ pub struct Row {
     pub action: Option<Action>,
     pub value: Option<(f64, f64, f64)>,
     checked: Option<bool>,
+    /// Whether `checked` is shown as a switch at the row's end (VIEW.md §12.6) rather than as
+    /// a choice's mark at its start.
+    switch: bool,
     prefix: Option<&'static str>,
     max_write: Option<f64>,
     owner: String,
@@ -115,6 +131,7 @@ impl Row {
             action,
             value: None,
             checked: None,
+            switch: false,
             prefix: None,
             max_write: None,
             owner: String::new(),
@@ -155,8 +172,15 @@ impl Row {
             format!("{} · {}", text(&Label::Key(key)), label)
         })
     }
+    /// A choice among several: a mark at the row's start.
     fn toggle(mut self, checked: bool) -> Self {
         self.checked = Some(checked);
+        self
+    }
+    /// A setting that is on or off: a switch at the row's end, where TS had a `Gtk.Switch`.
+    fn switch(mut self, on: bool) -> Self {
+        self.checked = Some(on);
+        self.switch = true;
         self
     }
     fn slider(mut self, min: f64, max: f64, current: f64) -> Self {
@@ -186,7 +210,13 @@ pub struct Detail {
     appearance: Option<nk_platform::portal::Appearance>,
     /// What the last painted frame declared: `states` reads it after `paint`.
     last: nk_view::Frame,
+    /// Switches the user moved, by row key: the state asked for and when. A switch shows it,
+    /// and its next click asks for the other, until the service reports it or `PENDING`
+    /// passes (VIEW.md §12.6); a stale snapshot never turns a click into a repeat.
+    pending: HashMap<String, (bool, std::time::Instant)>,
 }
+/// How long a switch shows what was asked for without the service confirming it.
+const PENDING: std::time::Duration = std::time::Duration::from_secs(6);
 /// The view's scroll region: the rows past the output's height scroll.
 const LIST: &str = "list";
 /// Ids for the view's few regions, under the CC's other washes.
@@ -236,6 +266,7 @@ impl Detail {
             tokens: None,
             appearance: None,
             last: nk_view::Frame::default(),
+            pending: HashMap::new(),
         }
     }
     /// The rows for `status`, laid out in `panel` when the look is there (without it, as in
@@ -337,7 +368,31 @@ impl Detail {
                 self.next_id
             });
         }
+        let now = std::time::Instant::now();
+        for row in rows.iter_mut().filter(|r| r.switch) {
+            let (Some(truth), Some(&(want, at))) = (row.checked, self.pending.get(&row.key)) else {
+                continue;
+            };
+            if truth == want || now.saturating_duration_since(at) >= PENDING {
+                self.pending.remove(&row.key);
+            } else if row.action.is_some() {
+                row.checked = Some(want);
+                row.action = row.action.take().map(|a| a.toward(!want));
+            }
+        }
         self.rows = rows;
+    }
+    /// A switch waits past `PENDING` for its service: the page must be built again to show
+    /// what the service says.
+    pub fn pending_due(&self) -> bool {
+        let now = std::time::Instant::now();
+        self.pending
+            .values()
+            .any(|&(_, at)| now.saturating_duration_since(at) >= PENDING)
+    }
+    /// A write failed: no switch keeps showing what it asked for.
+    pub fn write_failed(&mut self) {
+        self.pending.clear();
     }
 
     /// The view: one control per row, in a region that scrolls when the output is short.
@@ -419,7 +474,7 @@ impl Detail {
                         .padding(Padding::symmetric(Space::S2, Space::S3));
                 }
                 let mut line = vec![];
-                if row.checked.is_some() {
+                if row.checked.is_some() && !row.switch {
                     line.push(Node::slot(k("check"), 10.));
                 }
                 if row.thumbnail.is_some() {
@@ -442,6 +497,9 @@ impl Detail {
                         ..
                     })
                 );
+                if let (true, Some(on)) = (row.switch, row.checked) {
+                    line.push(Node::switch(k("switch"), on));
+                }
                 if clip_row {
                     line.push(
                         Node::control(
@@ -608,6 +666,25 @@ impl Detail {
             rect: [r[0] as i32, r[1] as i32, 1, r[3].ceil() as i32],
         }
     }
+    /// Whether something in the page still moves (a switch sliding, the scroll bar fading):
+    /// the bar keeps calling `tick` while it does.
+    pub fn animating(&self) -> bool {
+        self.state.animating()
+    }
+    /// A frame of motion; true when anything changed and the page must be drawn again.
+    pub fn tick(&mut self, text: &mut dyn nk_text::TextBackend) -> bool {
+        self.tick_at(text, std::time::Instant::now())
+    }
+    fn tick_at(&mut self, text: &mut dyn nk_text::TextBackend, now: std::time::Instant) -> bool {
+        let Some(tokens) = self.tokens.as_ref() else {
+            return false;
+        };
+        if !self.state.animating() {
+            return false;
+        }
+        self.state.tick(tokens, text, now);
+        true
+    }
     pub fn scroll(&mut self, by: nk_view::ScrollBy) -> bool {
         self.state.scroll(by)
     }
@@ -641,6 +718,10 @@ impl Detail {
         a.and_then(|a| self.activated(&a))
     }
     /// A release: a row activates when released over itself; a slider reports its last value.
+    /// Whether the pointer holds a row down.
+    pub fn held(&self) -> bool {
+        self.state.press().is_some()
+    }
     pub fn release(&mut self) -> Option<Action> {
         let a = self.state.button(false, std::time::Instant::now());
         a.and_then(|a| self.activated(&a))
@@ -664,6 +745,12 @@ impl Detail {
         let row = self.rows.iter().find(|r| r.id == id)?;
         let mut a = row.action.clone()?;
         let owner = row.owner.clone();
+        if row.switch
+            && let Some(on) = row.checked
+        {
+            self.pending
+                .insert(row.key.clone(), (!on, std::time::Instant::now()));
+        }
         if let Some((min, max, current)) = row.value {
             let v = value.unwrap_or(current).clamp(min, max);
             a = match a {
@@ -952,7 +1039,7 @@ fn rows(page: &str, s: &Status, mode: &'static str, audio: bool) -> Vec<Row> {
                         "cc.ethernet.name",
                         Action::WiredPower(text(d, "path"), d["wiredEnabled"] != true),
                     )
-                    .toggle(d["wiredEnabled"] == true),
+                    .switch(d["wiredEnabled"] == true),
                 );
                 for (key, value) in [
                     (
@@ -1001,7 +1088,7 @@ fn rows(page: &str, s: &Status, mode: &'static str, audio: bool) -> Vec<Row> {
                         "cc.wifi.name",
                         Action::WifiPower(!n["wirelessEnabled"].as_bool().unwrap_or(false)),
                     )
-                    .toggle(n["wirelessEnabled"] == true),
+                    .switch(n["wirelessEnabled"] == true),
                 );
                 let profiles: Vec<_> = array(n, "profiles").collect();
                 let mut networks: std::collections::BTreeMap<String, (&Value, &Value)> =
@@ -1097,7 +1184,7 @@ fn rows(page: &str, s: &Status, mode: &'static str, audio: bool) -> Vec<Row> {
                         "widget.bluetooth.name",
                         Action::BluetoothPower(b.adapter.clone(), !b.powered),
                     )
-                    .toggle(b.powered),
+                    .switch(b.powered),
                 );
                 if let Some(snapshot) = &s.details.bluetooth {
                     for d in array(snapshot, "devices")
@@ -1268,13 +1355,10 @@ fn rows(page: &str, s: &Status, mode: &'static str, audio: bool) -> Vec<Row> {
                             crate::menu::PrefValue::Bool(!n.enabled),
                         ),
                     )
-                    .toggle(n.enabled),
+                    .switch(n.enabled),
                 );
-                if s.night_schedule.0
-                    && let Some(row) = out.last_mut()
-                {
-                    row.action = None;
-                }
+                // The schedule acts only when it crosses a boundary, so the switch stays
+                // usable while it is on: a change by hand lasts until the next one (#957).
                 out.push(
                     Row::key(
                         "settings.appearance.night-light-temp",
@@ -1290,7 +1374,7 @@ fn rows(page: &str, s: &Status, mode: &'static str, audio: bool) -> Vec<Row> {
                             crate::menu::PrefValue::Bool(!s.night_schedule.0),
                         ),
                     )
-                    .toggle(s.night_schedule.0),
+                    .switch(s.night_schedule.0),
                 );
                 if s.night_schedule.0 {
                     for (value, key, pref) in [
@@ -1390,7 +1474,7 @@ fn rows(page: &str, s: &Status, mode: &'static str, audio: bool) -> Vec<Row> {
             ] {
                 out.push(Row::key(key, Action::SetMode(m)).toggle(mode == m));
             }
-            out.push(Row::key("widget.screenrecord.audio", Action::ToggleAudio).toggle(audio));
+            out.push(Row::key("widget.screenrecord.audio", Action::ToggleAudio).switch(audio));
             out.push(Row::key(
                 "widget.screenrecord.start",
                 Action::Record { mode, audio },
@@ -1849,6 +1933,149 @@ mod tests {
         }
     }
     #[test]
+    fn a_switch_the_service_turned_on_slides_there_as_the_page_is_ticked() {
+        let mut d = Detail::new("night_light", 1);
+        let mut s = status();
+        s.night = Some(crate::status::Night {
+            enabled: false,
+            temperature: 4000,
+        });
+        if !laid(&mut d, &s, [0., 50., 396., 400.]) {
+            return;
+        }
+        let id = d.rows[1].id;
+        let progress = |d: &Detail| {
+            let key = format!("r{id}/switch").into();
+            match d
+                .state
+                .placed()
+                .iter()
+                .find(|p| p.key == key)
+                .map(|p| &p.what)
+            {
+                Some(nk_view::What::Switch { progress, .. }) => *progress,
+                w => panic!("no switch: {w:?}"),
+            }
+        };
+        assert_eq!(progress(&d), 0.);
+        assert!(!d.animating());
+        s.night = Some(crate::status::Night {
+            enabled: true,
+            temperature: 4000,
+        });
+        laid(&mut d, &s, [0., 50., 396., 400.]);
+        assert!(d.animating(), "the bar must keep ticking the page");
+        let mut text =
+            nk_text::ParleyBackend::new(Arc::new(nk_text::FontSet::discover_required().unwrap()))
+                .unwrap();
+        let later = std::time::Instant::now() + std::time::Duration::from_secs(1);
+        assert!(d.tick_at(&mut text, later), "a frame to draw");
+        assert_eq!(progress(&d), 1., "on, once ticked");
+        assert!(!d.animating());
+        assert!(!d.tick_at(&mut text, later), "nothing left to draw");
+    }
+    #[test]
+    fn a_click_the_page_acts_on_itself_asks_the_bar_to_build_it_again() {
+        let s = status();
+        let mut d = Detail::new("screenrecord", 1);
+        if !laid(&mut d, &s, [0., 50., 396., 400.]) {
+            return;
+        }
+        let audio = d
+            .rows
+            .iter()
+            .find(|r| r.action == Some(Action::ToggleAudio))
+            .unwrap()
+            .id;
+        let r = d.state.rect(&row_key(audio)).unwrap();
+        let at = (r[0] + 20., r[1] + r[3] / 2.);
+        let mut cc = super::super::Cc::new();
+        cc.detail = Some(d);
+        let d = cc.detail.as_mut().unwrap();
+        d.motion(at);
+        d.press();
+        let before = d.audio;
+        // Audio is the page's own: no action for the bar, and yet the page changed.
+        assert_eq!(
+            cc.release(&s),
+            (true, None),
+            "the bar must rebuild the page"
+        );
+        assert_ne!(cc.detail.as_ref().unwrap().audio, before);
+        // A release that held nothing changes nothing.
+        assert_eq!(cc.release(&s), (false, None));
+    }
+    #[test]
+    fn a_switch_shows_what_was_asked_and_never_repeats_it_on_a_stale_snapshot() {
+        let s = status(); // Wi-Fi on, and the service has not answered yet.
+        let mut d = Detail::new("wifi", 1);
+        d.refresh(&s, [0., 50., 396., 400.], None);
+        let power = |d: &Detail| {
+            d.rows
+                .iter()
+                .find(|r| matches!(r.label, Label::Key("cc.wifi.name")))
+                .unwrap()
+                .clone()
+        };
+        let id = power(&d).id;
+        assert_eq!(d.action(id, None), Some(Action::WifiPower(false)));
+        d.refresh(&s, d.panel, None);
+        assert_eq!(power(&d).checked, Some(false), "shows off at once");
+        // Clicked again before the service answered: on, not off a second time.
+        assert_eq!(d.action(id, None), Some(Action::WifiPower(true)));
+        d.refresh(&s, d.panel, None);
+        assert_eq!(power(&d).checked, Some(true));
+        assert!(d.pending.is_empty(), "the service already says on");
+        // Off again; the service confirms it: nothing is pending any more.
+        assert_eq!(d.action(id, None), Some(Action::WifiPower(false)));
+        let mut off = s.clone();
+        let mut n = (**off.details.network.as_ref().unwrap()).clone();
+        n["wirelessEnabled"] = json!(false);
+        off.apply(crate::status::Update::Network(Arc::new(n)));
+        d.refresh(&off, d.panel, None);
+        assert!(d.pending.is_empty());
+        assert_eq!(power(&d).checked, Some(false));
+        // Never confirmed: after PENDING the switch shows what the service says.
+        assert_eq!(d.action(id, None), Some(Action::WifiPower(true)));
+        assert!(!d.pending_due());
+        for v in d.pending.values_mut() {
+            v.1 -= PENDING;
+        }
+        assert!(d.pending_due());
+        d.refresh(&off, d.panel, None);
+        assert_eq!(power(&d).checked, Some(false));
+        assert_eq!(power(&d).action, Some(Action::WifiPower(true)));
+        assert!(!d.pending_due());
+        // A failed write drops it at once.
+        d.action(id, None);
+        d.write_failed();
+        d.refresh(&off, d.panel, None);
+        assert_eq!(power(&d).checked, Some(false));
+    }
+    #[test]
+    fn the_night_light_switch_stays_usable_while_the_schedule_is_on() {
+        let mut s = status();
+        s.night = Some(crate::status::Night {
+            enabled: true,
+            temperature: 4000,
+        });
+        s.night_schedule = (true, "22:00".into(), "07:00".into());
+        let rows = rows("night_light", &s, "screen", false);
+        let master = rows
+            .iter()
+            .find(|r| matches!(r.label, Label::Key("settings.appearance.night-light")))
+            .unwrap();
+        assert!(master.switch && master.checked == Some(true));
+        assert_eq!(
+            master.action,
+            Some(Action::Pref(
+                "nightlight.enabled",
+                crate::menu::PrefValue::Bool(false)
+            )),
+            "turned off by hand until the next boundary"
+        );
+    }
+    #[test]
     fn a_slider_action_is_explicit_and_clamped_and_mode_changes_have_no_effect() {
         let mut d = Detail::new("night_light", 1);
         let mut s = status();
@@ -1896,6 +2123,42 @@ mod tests {
             .rect(&d.focus_key(d.focused().unwrap()).unwrap())
             .unwrap();
         assert!(f64::from(caret[0]) > field[0] + 20., "{caret:?} {field:?}");
+    }
+    #[test]
+    fn a_setting_that_is_on_or_off_ends_with_a_switch_and_a_choice_keeps_its_mark() {
+        let mut d = Detail::new("screenrecord", 1);
+        if !laid(&mut d, &status(), [0., 50., 396., 400.]) {
+            return;
+        }
+        let id = |a: Action| {
+            d.rows
+                .iter()
+                .find(|r| r.action == Some(a.clone()))
+                .unwrap()
+                .id
+        };
+        let (audio, region) = (id(Action::ToggleAudio), id(Action::SetMode("region")));
+        let at = |key: String| d.state.rect(&key.into());
+        let row = d.state.rect(&row_key(audio)).unwrap();
+        let switch = at(format!("r{audio}/switch")).expect("the audio row's switch");
+        assert!(at(format!("r{audio}/check")).is_none(), "no mark beside it");
+        assert!(
+            (row[0] + row[2]) - (switch[0] + switch[2]) < 20.,
+            "at the row's end: {row:?} {switch:?}"
+        );
+        assert!(
+            at(format!("r{region}/check")).is_some(),
+            "a mode keeps its mark"
+        );
+        assert!(at(format!("r{region}/switch")).is_none());
+        // Said as GTK says a switch: one toggle button, the whole row, with its state.
+        let nodes = d.nodes(1, None);
+        let said: Vec<_> = nodes
+            .iter()
+            .filter(|(n, _)| n.bounds.y == row[1] && n.bounds.height == row[3])
+            .collect();
+        assert_eq!(said.len(), 1, "one node for the row and its switch");
+        assert_eq!(said[0].0.role, nk_a11y::Role::ToggleButton);
     }
     #[test]
     fn a_row_acts_when_released_over_itself_and_not_elsewhere() {

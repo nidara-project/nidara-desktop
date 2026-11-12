@@ -241,6 +241,11 @@ pub enum What {
     Reveal {
         progress: f64,
     },
+    /// A switch: whether it is on, and how far its thumb is from off (0) to on (1).
+    Switch {
+        on: bool,
+        progress: f64,
+    },
     /// A scroll region: how far it is scrolled, and its content's height.
     Scroll {
         offset: f64,
@@ -271,6 +276,8 @@ pub struct Layouter<'a> {
     pub scale: f64,
     /// A slider's height: its thumb's diameter.
     pub slider: f64,
+    /// A switch's width and height.
+    pub switch: (f64, f64),
 }
 
 impl Layouter<'_> {
@@ -304,6 +311,7 @@ impl Layouter<'_> {
             Kind::Scroll(sc) => self.natural(&sc.child),
             Kind::Overlay(o) => self.natural(&o.base),
             Kind::Grid(g) => g.span(g.columns),
+            Kind::Switch(_) => self.switch.0,
             Kind::Placeholder(_) => 0.,
             Kind::Stack(s) => {
                 let pad = self.spacing.of(s.padding.left) + self.spacing.of(s.padding.right);
@@ -315,7 +323,7 @@ impl Layouter<'_> {
     fn min(&mut self, n: &Node) -> f64 {
         match &n.kind {
             Kind::Text(t) if t.lines.is_some() => 0.,
-            Kind::Text(_) | Kind::Icon(_) => self.natural(n),
+            Kind::Text(_) | Kind::Icon(_) | Kind::Switch(_) => self.natural(n),
             Kind::Spacer => 0.,
             Kind::Pane(p) => self.min(&p.child),
             Kind::Control(c) => self.min(&c.child),
@@ -353,6 +361,7 @@ impl Layouter<'_> {
         match &n.kind {
             Kind::Spacer => leaf(0., 0., None),
             Kind::Icon(i) => leaf(self.up(i.size), self.up(i.size), None),
+            Kind::Switch(_) => leaf(self.up(self.switch.0), self.up(self.switch.1), None),
             Kind::Text(t) => {
                 let (w, h, first) = match self.cache.fit(
                     self.text,
@@ -637,6 +646,10 @@ impl Layouter<'_> {
             })),
             Kind::Reveal(rv) => What::Reveal {
                 progress: self.progress(&n.key, rv.open),
+            },
+            Kind::Switch(sw) => What::Switch {
+                on: sw.on,
+                progress: self.progress(&n.key, sw.on),
             },
             Kind::Placeholder(_) => What::Spacer,
             Kind::Overlay(_) | Kind::Grid(_) => What::Stack,

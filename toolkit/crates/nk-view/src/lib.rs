@@ -13,12 +13,12 @@ mod view;
 pub use layout::{Fitted, Placed, Rect, TextCache, What, first_line_centre};
 pub use state::{Activated, BUDGET, Frame, FramePane, KeyInput, ScrollBy, Ticked, ViewState};
 pub use tokens::{
-    Bezier, Look, Motion, Radii, Radius, SliderStyle, Space, Spacing, Tokens, Washes, parse_color,
-    scrollbar_from, slider_from,
+    Bezier, Look, Motion, Radii, Radius, SliderStyle, Space, Spacing, SwitchStyle, Tokens, Washes,
+    parse_color, scrollbar_from, slider_from, switch_from,
 };
 pub use view::{
     Align, Axis, Cell, Control, Corner, Field, Grid, Icon, Ink, Justify, Key, Kind, Layer, Node,
-    Overlay, Padding, Pane, Reveal, Role, Scroll, Slider, Stack, Text, Wash,
+    Overlay, Padding, Pane, Reveal, Role, Scroll, Slider, Stack, Switch, Text, Wash,
 };
 
 #[cfg(test)]

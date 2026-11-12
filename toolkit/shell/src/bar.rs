@@ -1018,6 +1018,10 @@ impl Bar {
             }
         }
     }
+    /// Whether the CC's open detail page still moves: a switch sliding (VIEW.md §12.6).
+    fn cc_detail_animating(&self) -> bool {
+        self.cc_open && self.cc.detail.as_ref().is_some_and(|d| d.animating())
+    }
     /// Advances the centre's motion; what a finished swipe or cascade asks for is acted on.
     fn nc_view_tick(&mut self, w: &mut Window) {
         let Some(look) = self.look.as_mut() else {
@@ -2061,7 +2065,7 @@ fn rect(r: [f64; 4]) -> Rect {
 
 impl Application for Bar {
     fn poll_interval_ms(&self) -> u32 {
-        if self.nc_open && self.nc_view.animating() {
+        if (self.nc_open && self.nc_view.animating()) || self.cc_detail_animating() {
             8
         } else {
             1000
@@ -2521,6 +2525,9 @@ impl Application for Bar {
             }
             if let Some(d) = &mut self.cc.detail {
                 d.error = result.clone().err().unwrap_or_default();
+                if result.is_err() {
+                    d.write_failed();
+                }
             }
             self.refresh(w);
         }
@@ -2541,6 +2548,16 @@ impl Application for Bar {
         self.auth_events(w);
         if self.nc_open {
             self.nc_view_tick(w);
+        }
+        if self.cc_detail_animating()
+            && let (Some(d), Some(look)) = (self.cc.detail.as_mut(), self.look.as_mut())
+            && d.tick(&mut look.text)
+        {
+            w.redraw();
+        }
+        if self.cc_open && self.cc.detail.as_ref().is_some_and(|d| d.pending_due()) {
+            // A switch the service never confirmed goes back to what the service says.
+            self.refresh(w);
         }
         let minute = std::time::SystemTime::now()
             .duration_since(std::time::UNIX_EPOCH)

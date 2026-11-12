@@ -38,8 +38,17 @@ pub enum Kind {
     Scroll(Scroll),
     Overlay(Overlay),
     Grid(Grid),
+    /// An on/off switch, drawn only: the control around it is what is pressed (VIEW.md §12.6).
+    Switch(Switch),
     /// A row the surface did not build, at the height it had when it was (VIEW.md §8).
     Placeholder(f64),
+}
+
+/// An on/off switch (VIEW.md §12.6): its size and colours are the tokens'; a change of `on`
+/// slides it as a reveal opens (§6).
+#[derive(Clone, Copy, Debug, PartialEq, Serialize, Deserialize)]
+pub struct Switch {
+    pub on: bool,
 }
 
 /// Something that opens and closes in place, unrolling downward (VIEW.md §6).
@@ -483,6 +492,11 @@ impl Node {
     /// (VIEW.md §12.3). Placed, clipped and faded as any node; never a control.
     pub fn slot(key: impl Into<Key>, size: f64) -> Self {
         Self::icon(key, "", size)
+    }
+    /// An on/off switch (VIEW.md §12.6), at the tokens' size. It is drawn only: put it in a
+    /// control with `Role::Toggle` and `marked(on)`, which is what is pressed and said.
+    pub fn switch(key: impl Into<Key>, on: bool) -> Self {
+        Self::new(key, Kind::Switch(Switch { on }))
     }
     /// Stands in for a row the surface leaves unbuilt, outside a scroll region's window:
     /// `height` is what `ViewState::rect` gave for the row when it was built.
