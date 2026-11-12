@@ -2893,37 +2893,6 @@ fn a_disabled_control_draws_its_content_in_the_disabled_ink_and_a_marker_does_no
 }
 
 #[test]
-fn a_row_with_a_switch_is_not_lit_as_selected() {
-    let t = tokens();
-    let row = |key: &str, child: Node| {
-        Node::control(key, key, key, child)
-            .role(Role::Toggle)
-            .marked(true)
-    };
-    let view = Node::pane(
-        "glass",
-        Corner::Token(Radius::Lg),
-        Node::column(
-            "c",
-            vec![
-                row("choice", Node::text("choice/t", "Choice", style(14.))),
-                row("wifi", Node::switch("wifi/sw", true)),
-            ],
-        ),
-    );
-    let mut s = laid(&view, (200., 80.), 1.);
-    let f = s.frame(&t, Instant::now());
-    let lit_at = |k: &str| {
-        let r = rect(&s, k);
-        f.states
-            .iter()
-            .any(|st| (st.bounds.y - r[1]).abs() < 0.5 && st.wash[3] > 0.)
-    };
-    assert!(lit_at("choice"), "a selected choice is lit");
-    assert!(!lit_at("wifi"), "the switch shows it; the row is not lit");
-}
-
-#[test]
 fn a_content_button_is_padded_to_its_height_and_painted_by_the_view_in_the_surface_tones() {
     let t = tokens();
     let view = |shown: Option<Shown>, enabled: bool| {
@@ -2995,4 +2964,35 @@ fn a_content_button_is_padded_to_its_height_and_painted_by_the_view_in_the_surfa
     let (plain, ringed) = (edge(None), edge(Some(Shown::Focus)));
     // BGRA: the accent is blue.
     assert!(ringed[0] > ringed[1] && ringed != plain, "{plain:?} then {ringed:?}");
+}
+
+#[test]
+fn a_row_with_a_switch_is_not_lit_as_selected() {
+    let t = tokens();
+    let row = |key: &str, child: Node| {
+        Node::control(key, key, key, child)
+            .role(Role::Toggle)
+            .marked(true)
+    };
+    let view = Node::pane(
+        "glass",
+        Corner::Token(Radius::Lg),
+        Node::column(
+            "c",
+            vec![
+                row("choice", Node::text("choice/t", "Choice", style(14.))),
+                row("wifi", Node::switch("wifi/sw", true)),
+            ],
+        ),
+    );
+    let mut s = laid(&view, (200., 80.), 1.);
+    let f = s.frame(&t, Instant::now());
+    let lit_at = |k: &str| {
+        let r = rect(&s, k);
+        f.states
+            .iter()
+            .any(|st| (st.bounds.y - r[1]).abs() < 0.5 && st.wash[3] > 0.)
+    };
+    assert!(lit_at("choice"), "a selected choice is lit");
+    assert!(!lit_at("wifi"), "the switch shows it; the row is not lit");
 }
