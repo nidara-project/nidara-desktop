@@ -131,6 +131,12 @@ service's value arrives. A secret row is a field that receives only its bullets
 setting that is on or off (Ethernet, Wi-Fi, Bluetooth power, Night Light and its schedule,
 recording audio) ends its row with a switch (§12.6).
 
+A switch and a toggle tile (Ethernet, Bluetooth, Night Light, Appearance, Focus) show
+what they were last asked for, and their next click asks for the opposite of it, until
+the service reports that state, a write fails or six seconds pass; then they show what
+the service says. A click is never decided from a snapshot alone: one that had not
+caught up asked for the same thing again (#1074).
+
 Wi-Fi retains the current AP, otherwise the strongest AP for each raw SSID,
 including saved hidden profiles. It joins supported existing profiles and ordinary
 networks, and disconnects the current one. New enterprise/hidden profile editing is
