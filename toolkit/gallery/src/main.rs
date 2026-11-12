@@ -13,23 +13,28 @@ use nk_platform::{
     portal::{Appearance, Portal},
 };
 use nk_text::{FontSet, ParleyBackend};
-use nk_view::{Activated, Glyphs, Key, KeyInput, Node, ScrollBy, Tokens, TypeScale, ViewState};
+use nk_view::{
+    Activated, FrameStyle, Glyphs, KeyInput, Node, ScrollBy, Space, Tokens, Type, TypeScale,
+    ViewState, Weight,
+};
 use nk_wayland::{
-    Application, ControlsSide, Event, Frame, Material, Options, Result, Window, WindowBackground,
+    Application, Event, Frame, LayerEvent, LayerId, Material, Options, Result, Window,
+    WindowAction, WindowBackground,
 };
 use pages::{Catalogue, Model, PAGES};
 use std::{path::PathBuf, sync::Arc, time::Instant};
 
 /// Where the window's own semantic ids start; 1 is the window.
 const ROOT: u64 = 1;
-/// The key whose place the window controls take, at the sidebar's top.
-const CONTROLS: &str = "side/controls";
+/// The content's scroll region, the window frame's.
+const CONTENT: &str = "frame/content";
 
 /// What the window paints with in one appearance.
 struct Look {
     tokens: Tokens,
     types: TypeScale,
     panel: PanelMaterial,
+    frame: FrameStyle,
     background: [f64; 3],
     dark: bool,
 }
@@ -41,6 +46,7 @@ impl Look {
             tokens: Tokens::load(e, a)?,
             types: TypeScale::load(e, a)?,
             panel: PanelMaterial::load(e.glass.clone(), a.dark, a.reduce_transparency)?,
+            frame: FrameStyle::load(e, a)?,
             background: [bg[0] as f64, bg[1] as f64, bg[2] as f64],
             dark: a.dark,
         })
@@ -56,6 +62,15 @@ struct Gallery {
     catalogue: Catalogue,
     model: Model,
     state: ViewState,
+    /// The header band's title, laid out on its own: it is painted into the band's layer,
+    /// over the content and under Hyalo's graded blur.
+    header: ViewState,
+    header_layer: Option<LayerId>,
+    header_dirty: bool,
+    /// The pointer over the band, in the window, and the last press there (a second one
+    /// within the double-click time toggles maximised).
+    header_pointer: Option<(f64, f64)>,
+    last_press: Option<u32>,
     last: nk_view::Frame,
     size: (f64, f64),
     scale: f64,
@@ -70,32 +85,95 @@ struct Gallery {
 }
 
 impl Gallery {
-    fn view(&self) -> Node {
-        let mut v = pages::view(&self.model, &self.catalogue, &self.look.types);
-        // The window controls' room: as tall as Hyalo says they are, at the sidebar's top.
-        if let (Some(c), nk_view::Kind::Stack(root)) = (self.controls, &mut v.kind)
-            && let Some(side) = root.children.first_mut()
-            && let nk_view::Kind::Pane(p) = &mut side.kind
-            && let nk_view::Kind::Stack(list) = &mut p.child.kind
-        {
-            list.children.insert(
-                0,
-                Node::row(CONTROLS, vec![Node::slot("side/controls/room", c.height)]),
-            );
-        }
-        v
+    fn view(&self) -> (Node, Node) {
+        let v = pages::view(&self.model, &self.catalogue, &self.look.types);
+        let f = &self.look.frame;
+        let lead = self.look.tokens.spacing.px(Space::S6);
+        // Laid out in the band's layer, or in the window when there is no layer (D5).
+        let (width, origin) = if self.header_layer.is_some() {
+            (f.header_rect(self.size)[2], 0.)
+        } else {
+            (self.size.0, f.sidebar)
+        };
+        let title = Node::text(
+            "header/title",
+            v.title,
+            self.look.types.style(Type::Subtitle, Weight::Semibold),
+        )
+        .lines(1);
+        (
+            f.view(self.size, v.sidebar, v.content),
+            f.header((width, f.band), origin, lead, self.controls, title),
+        )
     }
 
     fn rebuild(&mut self) {
-        let view = self.view();
+        let (view, header) = self.view();
+        let now = Instant::now();
         self.state.layout(
             &view,
             self.size,
             self.scale,
             &self.look.tokens,
             &mut self.text,
-            Instant::now(),
+            now,
         );
+        // The band's height: the layer below it is the blur's fade, with nothing in it.
+        let f = &self.look.frame;
+        let size = if self.header_layer.is_some() {
+            (f.header_rect(self.size)[2], f.band)
+        } else {
+            (self.size.0, f.band)
+        };
+        self.header.layout(
+            &header,
+            size,
+            self.scale,
+            &self.look.tokens,
+            &mut self.text,
+            now,
+        );
+        self.header_dirty = true;
+    }
+
+    /// The band's layer: where it lies, its graded blur, and the faded background with the
+    /// title over it. Painted again only after a rebuild.
+    fn sync_header(&mut self, window: &mut Window) -> Result<()> {
+        let Some(id) = self.header_layer else {
+            return Ok(());
+        };
+        if !self.header_dirty {
+            return Ok(());
+        }
+        let f = &self.look.frame;
+        let r = f.header_rect(self.size);
+        let size = (r[2].ceil() as u32, r[3].ceil() as u32);
+        window.set_position(id, r[0], r[1])?;
+        window.set_layer_size(id, size)?;
+        window.set_layer_blur(
+            id,
+            f.blur,
+            &f.graded(size.0 as f64, size.1 as f64, window.scale()),
+        )?;
+        let (header, tokens, glyphs, background) = (
+            &self.header,
+            &self.look.tokens,
+            &mut self.glyphs,
+            self.look.background,
+        );
+        let painted = window.paint_layer(id, |frame| {
+            let mut c = nk_render::Canvas::new(frame.pixel_width, frame.pixel_height, frame.scale);
+            f.paint_fade(
+                &mut c,
+                [0., 0., frame.width as f64, frame.height as f64],
+                background,
+            );
+            header.paint(&mut c, tokens, &mut |n, s| glyphs.get(n, s), None)?;
+            Ok(c.finish())
+        })?;
+        // Both buffers busy: tried again on the next turn.
+        self.header_dirty = !painted;
+        Ok(())
     }
 
     fn publish(&mut self) -> Result<()> {
@@ -157,20 +235,33 @@ impl Gallery {
         self.rebuild();
         // A new page opens at its top.
         self.state
-            .scroll_region(&Key::from("content"), ScrollBy::Pixels(-1e9));
+            .scroll_region(&CONTENT.into(), ScrollBy::Pixels(-1e9));
         self.announce = Some(PAGES[page].0);
     }
 
     fn place_controls(&self, window: &mut Window) -> Result<()> {
-        let (Some(c), Some(r)) = (self.controls, self.state.rect(&Key::from(CONTROLS))) else {
+        let Some(c) = self.controls else {
             return Ok(());
         };
-        let pad = self.look.tokens.spacing.px(nk_view::Space::S2);
-        let x = match c.side {
-            ControlsSide::Left => r[0] + pad,
-            ControlsSide::Right => r[0] + r[2] - c.width - pad,
-        };
-        window.place_window_controls(x, r[1], !self.look.dark)
+        let (x, y) = self.look.frame.controls_at(self.size, c);
+        window.place_window_controls(x, y, !self.look.dark)
+    }
+
+    /// A press on the band where nothing else is: the window moves, or a second press
+    /// within the double-click time toggles it maximised.
+    fn band_press(&mut self, serial: u32, time: u32, window: &mut Window) -> Result<()> {
+        let double = self.look.frame.double_click_ms;
+        if self
+            .last_press
+            .is_some_and(|t| time.wrapping_sub(t) <= double)
+        {
+            self.last_press = None;
+            window.window_action(WindowAction::ToggleMaximize);
+            Ok(())
+        } else {
+            self.last_press = Some(time);
+            window.move_from_pointer_press(serial)
+        }
     }
 
     fn after(&mut self, changed: bool, window: &mut Window) -> Result<()> {
@@ -178,6 +269,9 @@ impl Gallery {
             self.place_controls(window)?;
             self.publish()?;
             window.redraw();
+        }
+        if self.header_dirty {
+            self.sync_header(window)?;
         }
         Ok(())
     }
@@ -235,6 +329,11 @@ impl Application for Gallery {
                 let (w, h) = window.size();
                 self.size = (w as f64, h as f64);
                 self.scale = window.scale();
+                if self.header_layer.is_none() && window.supports_layers() {
+                    let r = self.look.frame.header_rect(self.size);
+                    self.header_layer =
+                        Some(window.create_layer((r[2].ceil() as u32, r[3].ceil() as u32))?);
+                }
                 self.rebuild();
                 true
             }
@@ -251,18 +350,52 @@ impl Application for Gallery {
                 self.pointer = None;
                 self.state.pointer_leave()
             }
+            Event::Layer { id, event } if Some(id) == self.header_layer => {
+                let r = self.look.frame.header_rect(self.size);
+                match event {
+                    LayerEvent::Motion(x, y) => {
+                        self.header_pointer = Some((x + r[0], y + r[1]));
+                        self.state.pointer_leave()
+                    }
+                    LayerEvent::Leave => {
+                        self.header_pointer = None;
+                        false
+                    }
+                    LayerEvent::Button {
+                        pressed: true,
+                        serial,
+                        time,
+                        ..
+                    } => {
+                        self.band_press(serial, time, window)?;
+                        false
+                    }
+                    // The content scrolls under the band, so the wheel over it scrolls it.
+                    LayerEvent::Scroll(amount) => match self.header_pointer {
+                        Some((x, y)) => {
+                            self.state.pointer_motion(x, y);
+                            let moved = self.state.scroll(amount.into());
+                            self.state.pointer_leave();
+                            moved
+                        }
+                        None => false,
+                    },
+                    _ => false,
+                }
+            }
             Event::Button {
-                pressed, serial, ..
+                pressed,
+                serial,
+                time,
+                ..
             } => {
-                // A press on the controls' row, off any control, moves the window.
-                let on_bar = self.state.hover().is_none()
-                    && self.state.rect(&Key::from(CONTROLS)).is_some_and(|r| {
-                        self.pointer.is_some_and(|(x, y)| {
-                            x >= r[0] && x < r[0] + r[2] && y >= r[1] && y < r[1] + r[3]
-                        })
-                    });
-                if pressed && on_bar {
-                    window.move_from_pointer_press(serial)?;
+                // A press on the band over the sidebar, off any control, is the band's.
+                let on_band = self.state.hover().is_none()
+                    && self
+                        .pointer
+                        .is_some_and(|(x, y)| self.look.frame.on_band(x, y));
+                if pressed && on_band {
+                    self.band_press(serial, time, window)?;
                     false
                 } else {
                     if let Some(a) = self.state.button(pressed, Instant::now()) {
@@ -319,6 +452,22 @@ impl Application for Gallery {
             &mut |name, size| glyphs.get(name, size),
             (!frame.material).then_some(&self.last),
         )?;
+        if self.header_layer.is_none() {
+            // No layers (D5): the band in the window itself, over the content.
+            let f = &self.look.frame;
+            let r = f.header_rect(self.size);
+            let opaque = FrameStyle {
+                opaque: true,
+                ..f.clone()
+            };
+            opaque.paint_fade(&mut c, [r[0], 0., r[2], f.band], self.look.background);
+            self.header.paint(
+                &mut c,
+                &self.look.tokens,
+                &mut |name, size| glyphs.get(name, size),
+                None,
+            )?;
+        }
         Ok(c.finish())
     }
     fn material(&self) -> Option<Material> {
@@ -410,6 +559,11 @@ fn run() -> Result<()> {
             ..Default::default()
         },
         state,
+        header: ViewState::new(1_000_000),
+        header_layer: None,
+        header_dirty: false,
+        header_pointer: None,
+        last_press: None,
         last: Default::default(),
         size: (0., 0.),
         scale: 1.,

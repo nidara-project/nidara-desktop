@@ -618,6 +618,19 @@ An app is an `nk_wayland::Application` whose content is one view, as a shell sur
   `KeyInput::from_key`. An activated control comes back as its named action.
 - **Readers** get `ViewState::semantics` through `nk_a11y::bridge::Bridge`.
 - **Window controls are Hyalo's** (`nidara-window-controls-v1`, commandment 12).
+- **The window's frame is the kit's** (`nk_view::FrameStyle`), the format Settings defined, so
+  every app has the same window: the glass sidebar floating at the header's inset, the content
+  in the scroll region `frame/content`, reaching the window's edges and starting below the
+  header band, the band over it in a layer of its own with Hyalo's graded blur and the
+  window's background faded on it, the page's title in the band, and Hyalo's window controls
+  placed by `controls_at` on the side the user chose. Its measures are the exported `header`
+  component's (`toolkit/tokens/header.json`); an app passes its sidebar, its content and its
+  title. A press on the band where nothing else is moves the window; two toggle maximised.
+- **Glass is for what lies over content** (owner, 2026-11-12): a sidebar, a menu, a popover, a
+  tooltip, a button. A section of a page is a **group** (`Node::group`), Settings' card on the
+  window's background (`--nidara-surface`, `common.groupRadius`), with its caption above it.
+  Hyalo draws a control's hover and press on glass, so a button inside a group stands on its
+  own glass.
 
 ### 13.3 The gallery
 

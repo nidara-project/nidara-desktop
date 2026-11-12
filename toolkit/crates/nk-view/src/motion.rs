@@ -96,6 +96,7 @@ fn walk<'a>(n: &'a Node, out: &mut Vec<(&'a Key, bool, bool)>) {
         }
         Kind::Stack(s) => s.children.iter().for_each(|c| walk(c, out)),
         Kind::Pane(p) => walk(&p.child, out),
+        Kind::Group(g) => walk(&g.child, out),
         Kind::Control(c) => walk(&c.child, out),
         Kind::Scroll(sc) => walk(&sc.child, out),
         Kind::Overlay(o) => {

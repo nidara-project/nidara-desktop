@@ -47,6 +47,7 @@ fn tokens() -> Tokens {
         )
         .unwrap(),
         switch: switch_from(&switch(), &set).unwrap(),
+        group_radius: 16.,
     }
 }
 /// `components.json` `switch`, as `toolkit/tokens/switch.json` exports it.
@@ -2589,4 +2590,112 @@ fn the_switch_tokens_are_read_from_their_export_with_nothing_defaulted() {
     let mut c = switch();
     c["thumbMargin"] = json!(12);
     assert!(switch_from(&c, &set).is_err(), "no room for the thumb");
+}
+
+fn frame_style() -> crate::FrameStyle {
+    crate::FrameStyle {
+        band: 48.,
+        inset: 8.,
+        sidebar: 250.,
+        sidebar_radius: 16.,
+        content_gap: 16.,
+        controls_inset: 10.,
+        title_gap: 14.,
+        blur: nk_wayland::Blur {
+            size: 20.,
+            passes: 2,
+        },
+        titlebar: 68.,
+        curve: vec![1., 1., 0.5, 0.],
+        background_opacity: 0.85,
+        opaque: false,
+        double_click_ms: 400,
+    }
+}
+
+#[test]
+fn a_group_is_painted_by_the_view_and_never_declared_as_glass() {
+    let view = Node::column(
+        "col",
+        vec![
+            Node::group("g", Node::text("g/t", "In a group", style(14.))),
+            Node::pane("p", Corner::Pill, Node::text("p/t", "On glass", style(14.))),
+        ],
+    );
+    let mut s = laid(&view, (300., 200.), 1.);
+    let f = s.frame(&tokens(), Instant::now());
+    let keys: Vec<&str> = f.panes.iter().map(|p| p.key.0.as_str()).collect();
+    assert_eq!(keys, ["p"], "only the pane is glass");
+    assert!(matches!(placed(&s, "g").what, What::Group));
+    // Its text still lies inside it.
+    let (g, t) = (rect(&s, "g"), rect(&s, "g/t"));
+    assert!(t[1] >= g[1] && t[1] + t[3] <= g[1] + g[3]);
+}
+
+#[test]
+fn the_window_frame_floats_the_sidebar_and_lets_the_content_reach_the_edges() {
+    let f = frame_style();
+    let view = f.view(
+        (1000., 700.),
+        Node::column("s", vec![]),
+        Node::text("c", "Content", style(14.)),
+    );
+    let s = laid(&view, (1000., 700.), 1.);
+    assert_eq!(
+        rect(&s, "frame/side"),
+        [8., 8., 234., 684.],
+        "inset on every side"
+    );
+    assert_eq!(
+        rect(&s, "frame/content"),
+        [250., 0., 750., 700.],
+        "to the window's top, right and bottom edges"
+    );
+    assert_eq!(
+        rect(&s, "frame/content/top")[3],
+        64.,
+        "rows start below the band"
+    );
+    assert_eq!(
+        rect(&s, "frame/side/top")[3],
+        40.,
+        "the sidebar's top keeps the band"
+    );
+    // The header's layer over the content, as tall as its graded blur.
+    assert_eq!(f.header_rect((1000., 700.)), [250., 0., 750., 68.]);
+    let graded = f.graded(750., 68., 1.);
+    assert_eq!(graded.len(), 3);
+    assert_eq!(graded[2].pane.y + graded[2].pane.height, 68.);
+}
+
+#[test]
+fn the_window_controls_follow_the_side_the_user_chose() {
+    let f = frame_style();
+    let c = |side| nk_wayland::ControlsLayout {
+        side,
+        width: 72.,
+        height: 24.,
+    };
+    assert_eq!(
+        f.controls_at((1000., 700.), c(nk_wayland::ControlsSide::Right)),
+        (918., 12.)
+    );
+    assert_eq!(
+        f.controls_at((1000., 700.), c(nk_wayland::ControlsSide::Left)),
+        (10., 12.)
+    );
+    // On the right, the title keeps clear of them.
+    let header = |side| {
+        let v = f.header(
+            (750., 48.),
+            0.,
+            24.,
+            Some(c(side)),
+            Node::text("header/title", "Title", style(14.)).lines(1),
+        );
+        rect(&laid(&v, (750., 48.), 1.), "header/end")[2]
+    };
+    assert_eq!(header(nk_wayland::ControlsSide::Right), 10. + 72. + 14.);
+    assert_eq!(header(nk_wayland::ControlsSide::Left), 24.);
+    assert!(f.on_band(100., 20.) && !f.on_band(100., 60.) && !f.on_band(300., 20.));
 }

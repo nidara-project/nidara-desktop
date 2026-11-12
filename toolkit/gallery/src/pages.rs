@@ -94,7 +94,7 @@ impl Default for Model {
     }
 }
 
-pub fn view(m: &Model, cat: &Catalogue, t: &TypeScale) -> Node {
+pub fn view(m: &Model, cat: &Catalogue, t: &TypeScale) -> View {
     let nav = PAGES
         .iter()
         .enumerate()
@@ -123,46 +123,42 @@ pub fn view(m: &Model, cat: &Catalogue, t: &TypeScale) -> Node {
             .corner(Corner::Token(Radius::Sm))
         })
         .collect();
-    // The window's controls go first in `side/list` (main.rs); the pages scroll under them.
-    let sidebar = Node::pane(
-        "side",
-        Corner::Token(Radius::Lg),
-        Node::column(
-            "side/list",
-            vec![
-                Node::scroll(
-                    "side/scroll",
-                    Node::column("side/pages", nav).gap(Space::S1),
-                )
-                .grow(),
-            ],
-        )
-        .gap(Space::S1)
-        .padding(Padding::all(Space::S2)),
+    // The sidebar's list; the window's frame (nk-view FrameStyle) puts it in its glass.
+    let sidebar = Node::scroll(
+        "side/scroll",
+        Node::column("side/pages", nav)
+            .gap(Space::S1)
+            .padding(Padding::all(Space::S2)),
     );
     let (id, title, _) = PAGES[m.page.min(PAGES.len() - 1)];
-    let mut body = vec![header(id, title, cat, t)];
+    let mut body = vec![header(id, cat, t)];
     body.extend(page(id, m, cat, t));
-    let content = Node::scroll(
-        "content",
-        Node::column(format!("page/{id}"), body)
-            .gap(Space::S5)
-            .padding(Padding::symmetric(Space::S2, Space::S2)),
-    )
-    .grow();
-    Node::row("root", vec![sidebar, content])
-        .gap(Space::S4)
-        .padding(Padding::all(Space::S4))
+    let content = Node::column(format!("page/{id}"), body)
+        .gap(Space::S5)
+        .padding(Padding {
+            top: None,
+            right: Some(Space::S6),
+            bottom: Some(Space::S6),
+            left: Some(Space::S6),
+        });
+    View {
+        sidebar,
+        content,
+        title,
+    }
 }
 
-/// A page's title and what it answers in the catalogue.
-fn header(id: &str, title: &str, cat: &Catalogue, t: &TypeScale) -> Node {
+/// What the window's frame is given: its sidebar, its content and the band's title.
+pub struct View {
+    pub sidebar: Node,
+    pub content: Node,
+    pub title: &'static str,
+}
+
+/// What a page answers in the catalogue; its title is the band's.
+fn header(id: &str, cat: &Catalogue, t: &TypeScale) -> Node {
     let items = cat.on_page(id);
-    let mut lines = vec![Node::text(
-        "head/title",
-        title,
-        t.style(Type::Title1, Weight::Bold),
-    )];
+    let mut lines = vec![];
     if !items.is_empty() {
         let names = items.iter().map(|i| i.name.as_str()).collect::<Vec<_>>();
         let gtk = items.iter().map(|i| i.gtk.as_str()).collect::<Vec<_>>();
@@ -191,26 +187,25 @@ fn header(id: &str, title: &str, cat: &Catalogue, t: &TypeScale) -> Node {
     Node::column("head", lines).gap(Space::S1)
 }
 
-/// One labelled section: a glass card with a caption over what it shows.
+/// One labelled section, as Settings' groups: the caption over a card on the window's
+/// background (not glass: glass is for what lies over content), holding what it shows.
 fn section(key: &str, caption: &str, t: &TypeScale, child: Node) -> Node {
-    Node::pane(
+    Node::column(
         format!("s/{key}"),
-        Corner::Token(Radius::Lg),
-        Node::column(
-            format!("s/{key}/col"),
-            vec![
-                Node::text(
-                    format!("s/{key}/cap"),
-                    caption,
-                    t.style(Type::Caption, Weight::Semibold),
-                )
-                .ink(Ink::Secondary),
-                child,
-            ],
-        )
-        .gap(Space::S3)
-        .padding(Padding::all(Space::S4)),
+        vec![
+            Node::text(
+                format!("s/{key}/cap"),
+                caption,
+                t.style(Type::Caption, Weight::Semibold),
+            )
+            .ink(Ink::Secondary),
+            Node::group(
+                format!("s/{key}/card"),
+                Node::column(format!("s/{key}/col"), vec![child]).padding(Padding::all(Space::S4)),
+            ),
+        ],
     )
+    .gap(Space::S2)
 }
 
 /// A sample with its state named under it.
@@ -233,6 +228,13 @@ fn sample(key: &str, label: &str, t: &TypeScale, child: Node) -> Node {
 
 fn row(key: &str, children: Vec<Node>) -> Node {
     Node::row(key, children).gap(Space::S5).align(Align::Center)
+}
+
+/// A button over content is glass (VIEW.md §13.2): a pill of it around the control, so
+/// Hyalo draws its hover, press and on.
+fn on_glass(control: Node) -> Node {
+    let control = control.corner(Corner::Pill);
+    Node::pane(format!("{}/glass", control.key.0), Corner::Pill, control)
 }
 
 /// A text button as the NC builds one today (VIEW.md §13: the kit's own button function is
@@ -350,7 +352,7 @@ fn buttons(m: &Model, t: &TypeScale) -> Vec<Node> {
             &format!("b/{k}"),
             label,
             t,
-            f(button(&format!("b/{k}"), "Button", "noop", t)),
+            on_glass(f(button(&format!("b/{k}"), "Button", "noop", t))),
         )
     };
     let states = row(
@@ -375,7 +377,7 @@ fn buttons(m: &Model, t: &TypeScale) -> Vec<Node> {
                 "b/icon",
                 "Icon only",
                 t,
-                Node::control(
+                on_glass(Node::control(
                     "b/icon",
                     "Search",
                     "noop",
@@ -384,7 +386,7 @@ fn buttons(m: &Model, t: &TypeScale) -> Vec<Node> {
                         vec![Node::icon("b/icon/glyph", "nd-system-search", 16.)],
                     )
                     .padding(Padding::all(Space::S2)),
-                ),
+                )),
             ),
         ],
     );
@@ -395,7 +397,7 @@ fn buttons(m: &Model, t: &TypeScale) -> Vec<Node> {
                 "b/count",
                 &format!("Pressed {} times", m.presses),
                 t,
-                button("b/count", "Press me", "press", t),
+                on_glass(button("b/count", "Press me", "press", t)),
             ),
             sample(
                 "b/toggle",
@@ -405,9 +407,11 @@ fn buttons(m: &Model, t: &TypeScale) -> Vec<Node> {
                     "Toggle: off"
                 },
                 t,
-                button("b/toggle", "Toggle", "toggle", t)
-                    .role(Role::Toggle)
-                    .marked(m.toggle),
+                on_glass(
+                    button("b/toggle", "Toggle", "toggle", t)
+                        .role(Role::Toggle)
+                        .marked(m.toggle),
+                ),
             ),
         ],
     );
@@ -795,11 +799,10 @@ fn icons(t: &TypeScale) -> Vec<Node> {
     ]
 }
 
-/// A small card for the layout samples.
+/// A small card for the layout samples: a group, not glass.
 fn block(key: &str, label: &str, t: &TypeScale) -> Node {
-    Node::pane(
+    Node::group(
         key,
-        Corner::Token(Radius::Sm),
         Node::column(
             format!("{key}/col"),
             vec![Node::text(
@@ -878,9 +881,8 @@ fn scroll(t: &TypeScale) -> Vec<Node> {
 }
 
 fn overlay(t: &TypeScale) -> Vec<Node> {
-    let base = Node::pane(
+    let base = Node::group(
         "o/base",
-        Corner::Token(Radius::Lg),
         Node::column(
             "o/base/col",
             vec![
@@ -900,18 +902,23 @@ fn overlay(t: &TypeScale) -> Vec<Node> {
         )
         .padding(Padding::all(Space::S5)),
     );
+    // What lies over the base is glass, as anything over content is.
     let tag = |k: &str, glyph: &str| {
-        Node::control(
-            format!("o/{k}"),
-            k,
-            "noop",
-            Node::row(
-                format!("o/{k}/row"),
-                vec![Node::icon(format!("o/{k}/icon"), glyph, 16.)],
+        Node::pane(
+            format!("o/{k}/glass"),
+            Corner::Pill,
+            Node::control(
+                format!("o/{k}"),
+                k,
+                "noop",
+                Node::row(
+                    format!("o/{k}/row"),
+                    vec![Node::icon(format!("o/{k}/icon"), glyph, 16.)],
+                )
+                .padding(Padding::all(Space::S1)),
             )
-            .padding(Padding::all(Space::S1)),
+            .corner(Corner::Pill),
         )
-        .surface()
     };
     let layered = Node::overlay("o/overlay", base)
         .layer(
@@ -976,18 +983,20 @@ fn grid(t: &TypeScale) -> Vec<Node> {
 
 fn reveal(m: &Model, t: &TypeScale) -> Vec<Node> {
     vec![
-        button(
-            "r/toggle",
-            if m.open { "Close" } else { "Open" },
-            "reveal",
-            t,
+        Node::row(
+            "r/toggle/line",
+            vec![on_glass(button(
+                "r/toggle",
+                if m.open { "Close" } else { "Open" },
+                "reveal",
+                t,
+            ))],
         ),
         Node::reveal(
             "r/reveal",
             m.open,
-            Node::pane(
+            Node::group(
                 "r/pane",
-                Corner::Token(Radius::Lg),
                 Node::column(
                     "r/col",
                     vec![
@@ -1055,7 +1064,8 @@ mod tests {
             };
             let v = view(&m, &cat, &t);
             let mut all = vec![];
-            keys(&v, &mut all);
+            keys(&v.sidebar, &mut all);
+            keys(&v.content, &mut all);
             let mut seen = std::collections::HashSet::new();
             for k in &all {
                 assert!(seen.insert(k), "page {id}: key {k} twice");

@@ -22,6 +22,12 @@ pub struct Node {
     /// `Spacer` does.
     #[serde(default)]
     pub grow: bool,
+    /// A width or height the surface's tokens fix (a window frame's sidebar, its header's
+    /// band), never a literal: what it holds is laid out in it.
+    #[serde(default)]
+    pub width: Option<f64>,
+    #[serde(default)]
+    pub height: Option<f64>,
     pub kind: Kind,
 }
 
@@ -30,6 +36,10 @@ pub struct Node {
 pub enum Kind {
     Stack(Stack),
     Pane(Pane),
+    /// A group of rows on the window's own background, not glass: Settings' card, filled
+    /// with `--nidara-surface` at the group radius. Glass is for what lies over content
+    /// (a sidebar, a menu, a button); a section of a page is a group (VIEW.md §13.2).
+    Group(Group),
     Text(Text),
     Icon(Icon),
     Spacer,
@@ -211,6 +221,11 @@ pub struct Pane {
     /// Its glass and content are formed at this, times a reveal's or a swipe's (§12.7).
     #[serde(default = "one")]
     pub opacity: f64,
+    pub child: Box<Node>,
+}
+/// A group's card around what it holds.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+pub struct Group {
     pub child: Box<Node>,
 }
 fn one() -> f64 {
@@ -411,6 +426,8 @@ impl Node {
         Node {
             key: key.into(),
             grow: false,
+            width: None,
+            height: None,
             kind,
         }
     }
@@ -439,6 +456,15 @@ impl Node {
             Kind::Pane(Pane {
                 corner,
                 opacity: 1.,
+                child: Box::new(child),
+            }),
+        )
+    }
+    /// A group: a card on the window's background, not glass (see `Kind::Group`).
+    pub fn group(key: impl Into<Key>, child: Node) -> Self {
+        Self::new(
+            key,
+            Kind::Group(Group {
                 child: Box::new(child),
             }),
         )
@@ -650,6 +676,16 @@ impl Node {
         if let Kind::Pane(p) = &mut self.kind {
             p.opacity = o.clamp(0., 1.);
         }
+        self
+    }
+    /// Laid out at this width, from a token, whatever its content measures.
+    pub fn width(mut self, px: f64) -> Self {
+        self.width = Some(px);
+        self
+    }
+    /// Laid out at this height, from a token, whatever its content measures.
+    pub fn height(mut self, px: f64) -> Self {
+        self.height = Some(px);
         self
     }
     pub fn grow(mut self) -> Self {
