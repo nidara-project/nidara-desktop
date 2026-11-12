@@ -7,7 +7,7 @@
         {"name": "App window", "gtk": "Gtk.Window", "appkit": "NSWindow", "status": "both", "users": "Settings (nk-widgets), this gallery (nk-view FrameStyle)"},
         {"name": "Dialog window", "gtk": "Gtk.Window (modal)", "appkit": "NSPanel (sheet)", "status": "widgets", "users": "Settings"},
         {"name": "Auxiliary window", "gtk": "Gtk.Window", "appkit": "NSPanel", "status": "missing", "users": ""},
-        {"name": "Title bar", "gtk": "Gtk.HeaderBar", "appkit": "NSTitlebarAccessoryViewController", "status": "both", "users": "Settings (with sidebar toggle, back and forward, search), this gallery (title only)"},
+        {"name": "Title bar", "gtk": "Gtk.HeaderBar", "appkit": "NSTitlebarAccessoryViewController", "status": "both", "users": "Settings (with search), this gallery (sidebar toggle, back and forward, title; no search yet)"},
         {"name": "Command strip", "gtk": "Gtk.ActionBar", "appkit": "NSToolbar", "status": "missing", "users": ""},
         {"name": "Split view", "gtk": "Gtk.Paned", "appkit": "NSSplitView", "status": "widgets", "users": "Settings"},
         {"name": "Scroll region", "gtk": "Gtk.ScrolledWindow", "appkit": "NSScrollView", "status": "both", "users": "NC, CC edit mode, Settings", "page": "scroll"},

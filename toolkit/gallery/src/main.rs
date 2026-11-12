@@ -14,8 +14,8 @@ use nk_platform::{
 };
 use nk_text::{FontSet, ParleyBackend};
 use nk_view::{
-    Activated, FrameStyle, Glyphs, KeyInput, Node, ScrollBy, Space, Tokens, Type, TypeScale,
-    ViewState, Weight,
+    Activated, BACK, Band, FORWARD, FrameStyle, Glyphs, KeyInput, Node, SIDEBAR, ScrollBy, Sidebar,
+    Tokens, Type, TypeScale, ViewState, Weight,
 };
 use nk_wayland::{
     Application, Event, Frame, LayerEvent, LayerId, Material, Options, Result, Window,
@@ -28,6 +28,8 @@ use std::{path::PathBuf, sync::Arc, time::Instant};
 const ROOT: u64 = 1;
 /// The content's scroll region, the window frame's.
 const CONTENT: &str = "frame/content";
+/// Where the band's semantic ids start, clear of the window's.
+const BAND_ROOT: u64 = 1_000_000;
 
 /// What the window paints with in one appearance.
 struct Look {
@@ -62,18 +64,29 @@ struct Gallery {
     catalogue: Catalogue,
     model: Model,
     state: ViewState,
-    /// The header band's title, laid out on its own: it is painted into the band's layer,
-    /// over the content and under Hyalo's graded blur.
-    header: ViewState,
-    header_layer: Option<LayerId>,
-    header_dirty: bool,
-    /// The pointer over the band, in the window, and the last press there (a second one
-    /// within the double-click time toggles maximised).
-    header_pointer: Option<(f64, f64)>,
+    /// The header band (the sidebar's toggle, back and forward, the title), laid out on its
+    /// own: it is drawn in a layer over the content and the band's blur.
+    band: ViewState,
+    sidebar: Sidebar,
+    /// Whether the last turn laid the sidebar out mid-slide: the turn after its end lays it
+    /// out once more, at rest.
+    sliding: bool,
+    /// The pages visited, and where in them back and forward stand.
+    history: Vec<usize>,
+    at: usize,
+    /// The band's blur (no pointer) and the band's buttons over it.
+    blur_layer: Option<LayerId>,
+    band_layer: Option<LayerId>,
+    band_dirty: bool,
+    /// The pointer over the band, and the last press on it where nothing else is (a second
+    /// one within the double-click time toggles maximised).
+    band_pointer: Option<(f64, f64)>,
     last_press: Option<u32>,
     last: nk_view::Frame,
+    band_last: nk_view::Frame,
     size: (f64, f64),
     scale: f64,
+    reduced: bool,
     controls: Option<nk_wayland::ControlsLayout>,
     a11y: Option<nk_a11y::bridge::Bridge>,
     revision: u64,
@@ -84,95 +97,130 @@ struct Gallery {
     inert: bool,
 }
 
+/// What a frame declares to Hyalo: each pane's glass in its own step of the panel
+/// material, by its short side, and the frame's washes.
+fn glass(look: &Look, frame: &nk_view::Frame) -> Option<Material> {
+    let base = look.panel.at(0.).ok()?;
+    let groups = frame
+        .groups(base.tone, base.shadow)
+        .into_iter()
+        .map(|mut g| {
+            let side = g
+                .shapes
+                .iter()
+                .map(|s| s.width.min(s.height))
+                .fold(f64::INFINITY, f64::min);
+            if let Ok(m) = look.panel.at(side) {
+                g.tone = m.tone;
+                g.shadow = m.shadow;
+            }
+            g
+        })
+        .collect();
+    Some(Material {
+        groups,
+        states: frame.states.clone(),
+        ..base
+    })
+}
+
 impl Gallery {
-    fn view(&self) -> (Node, Node) {
+    fn rebuild(&mut self, now: Instant) {
         let v = pages::view(&self.model, &self.catalogue, &self.look.types);
         let f = &self.look.frame;
-        let lead = self.look.tokens.spacing.px(Space::S6);
-        // Laid out in the band's layer, or in the window when there is no layer (D5).
-        let (width, origin) = if self.header_layer.is_some() {
-            (f.header_rect(self.size)[2], 0.)
-        } else {
-            (self.size.0, f.sidebar)
-        };
-        let title = Node::text(
-            "header/title",
-            v.title,
-            self.look.types.style(Type::Subtitle, Weight::Semibold),
-        )
-        .lines(1);
-        (
-            f.view(self.size, v.sidebar, v.content),
-            f.header((width, f.band), origin, lead, self.controls, title),
-        )
-    }
-
-    fn rebuild(&mut self) {
-        let (view, header) = self.view();
-        let now = Instant::now();
+        let shown = self.sidebar.shown(now, &self.look.tokens.motion);
+        let narrow = self.sidebar.narrow();
+        let room = f.room(shown, narrow);
+        let main = f.view(self.size, shown, narrow, v.sidebar, v.content);
+        let band = f.band(
+            self.size,
+            room,
+            self.controls,
+            Band {
+                title: Node::text(
+                    "band/title/text",
+                    v.title,
+                    self.look.types.style(Type::Subtitle, Weight::Semibold),
+                )
+                .lines(1),
+                sidebar: if self.sidebar.open() {
+                    "Hide sidebar"
+                } else {
+                    "Show sidebar"
+                },
+                back: "Back",
+                forward: "Forward",
+                can_back: self.at > 0,
+                can_forward: self.at + 1 < self.history.len(),
+            },
+        );
         self.state.layout(
-            &view,
+            &main,
             self.size,
             self.scale,
             &self.look.tokens,
             &mut self.text,
             now,
         );
-        // The band's height: the layer below it is the blur's fade, with nothing in it.
-        let f = &self.look.frame;
-        let size = if self.header_layer.is_some() {
-            (f.header_rect(self.size)[2], f.band)
-        } else {
-            (self.size.0, f.band)
-        };
-        self.header.layout(
-            &header,
-            size,
+        self.band.layout(
+            &band,
+            (self.size.0, f.band),
             self.scale,
             &self.look.tokens,
             &mut self.text,
             now,
         );
-        self.header_dirty = true;
+        self.band_dirty = true;
     }
 
-    /// The band's layer: where it lies, its graded blur, and the faded background with the
-    /// title over it. Painted again only after a rebuild.
-    fn sync_header(&mut self, window: &mut Window) -> Result<()> {
-        let Some(id) = self.header_layer else {
+    /// The two layers over the content: the blur with the window's background faded on it,
+    /// and the band's buttons on their glass with the title. Painted again after a rebuild
+    /// or a change of the band's hover and press.
+    fn sync_layers(&mut self, window: &mut Window) -> Result<()> {
+        let (Some(blur), Some(band)) = (self.blur_layer, self.band_layer) else {
             return Ok(());
         };
-        if !self.header_dirty {
+        if !self.band_dirty {
             return Ok(());
         }
+        let now = Instant::now();
         let f = &self.look.frame;
-        let r = f.header_rect(self.size);
+        let room = f.room(
+            self.sidebar.shown(now, &self.look.tokens.motion),
+            self.sidebar.narrow(),
+        );
+        let r = f.header_rect(self.size, room);
         let size = (r[2].ceil() as u32, r[3].ceil() as u32);
-        window.set_position(id, r[0], r[1])?;
-        window.set_layer_size(id, size)?;
+        window.set_position(blur, r[0], r[1])?;
+        window.set_layer_size(blur, size)?;
         window.set_layer_blur(
-            id,
+            blur,
             f.blur,
             &f.graded(size.0 as f64, size.1 as f64, window.scale()),
         )?;
-        let (header, tokens, glyphs, background) = (
-            &self.header,
-            &self.look.tokens,
-            &mut self.glyphs,
-            self.look.background,
-        );
-        let painted = window.paint_layer(id, |frame| {
+        let background = self.look.background;
+        let a = window.paint_layer(blur, |frame| {
             let mut c = nk_render::Canvas::new(frame.pixel_width, frame.pixel_height, frame.scale);
             f.paint_fade(
                 &mut c,
                 [0., 0., frame.width as f64, frame.height as f64],
                 background,
             );
-            header.paint(&mut c, tokens, &mut |n, s| glyphs.get(n, s), None)?;
             Ok(c.finish())
         })?;
-        // Both buffers busy: tried again on the next turn.
-        self.header_dirty = !painted;
+        self.band_last = self.band.frame(&self.look.tokens, now);
+        let band_size = (self.size.0.ceil().max(1.) as u32, f.band.ceil() as u32);
+        window.set_position(band, 0., 0.)?;
+        window.set_layer_size(band, band_size)?;
+        window.set_layer_material(band, glass(&self.look, &self.band_last).as_ref())?;
+        let (state, tokens, glyphs) = (&self.band, &self.look.tokens, &mut self.glyphs);
+        let b = window.paint_layer(band, |frame| {
+            let mut c = nk_render::Canvas::new(frame.pixel_width, frame.pixel_height, frame.scale);
+            state.paint(&mut c, tokens, &mut |n, s| glyphs.get(n, s), None)?;
+            Ok(c.finish())
+        })?;
+        // A layer with both buffers busy: tried again on the next turn.
+        self.band_dirty = !(a && b);
         Ok(())
     }
 
@@ -184,7 +232,21 @@ impl Gallery {
             width: self.size.0,
             height: self.size.1,
         };
-        let tree = self.state.semantics(root, ROOT + 1);
+        let mut tree = self.state.semantics(root, ROOT + 1);
+        // The band's buttons, children of the window as the rest is.
+        let band = self.band.semantics(
+            nk_a11y::Node::new(BAND_ROOT, nk_a11y::Role::Panel, ""),
+            BAND_ROOT + 1,
+        );
+        let children = band.nodes[&band.root].children.clone();
+        for (id, node) in band.nodes {
+            if id != band.root {
+                tree.nodes.insert(id, node);
+            }
+        }
+        if let Some(r) = tree.nodes.get_mut(&tree.root) {
+            r.children.extend(children);
+        }
         self.revision += 1;
         match &self.a11y {
             Some(a) => a.update(self.revision, tree)?,
@@ -193,14 +255,32 @@ impl Gallery {
         Ok(())
     }
 
-    /// What an activation asks of the model.
+    /// What an activation asks of the window or the model.
     fn activated(&mut self, a: Activated) {
+        let now = Instant::now();
         let action = a.action.as_str();
         if let Some(id) = action.strip_prefix("page:") {
             if let Some(i) = PAGES.iter().position(|(p, _, _)| *p == id) {
                 self.go(i);
+                // Over the page, a choice closes it.
+                if self.sidebar.over_content() {
+                    self.toggle_sidebar(false);
+                }
             }
             return;
+        }
+        match action {
+            SIDEBAR => return self.toggle_sidebar(!self.sidebar.open()),
+            BACK if self.at > 0 => {
+                self.at -= 1;
+                return self.show(self.history[self.at]);
+            }
+            FORWARD if self.at + 1 < self.history.len() => {
+                self.at += 1;
+                return self.show(self.history[self.at]);
+            }
+            BACK | FORWARD => return,
+            _ => {}
         }
         // The check's control (scripts/ci/nk-gallery-check.py): the samples stop answering.
         if self.inert {
@@ -224,15 +304,31 @@ impl Gallery {
             }
             _ => return,
         }
-        self.rebuild();
+        self.rebuild(now);
     }
 
+    fn toggle_sidebar(&mut self, open: bool) {
+        let now = Instant::now();
+        self.sidebar
+            .set(open, now, &self.look.tokens.motion, self.reduced);
+        self.sliding = true;
+        self.rebuild(now);
+    }
+
+    /// A page chosen from the sidebar: a step in the history.
     fn go(&mut self, page: usize) {
         if page == self.model.page {
             return;
         }
+        self.history.truncate(self.at + 1);
+        self.history.push(page);
+        self.at = self.history.len() - 1;
+        self.show(page);
+    }
+
+    fn show(&mut self, page: usize) {
         self.model.page = page;
-        self.rebuild();
+        self.rebuild(Instant::now());
         // A new page opens at its top.
         self.state
             .scroll_region(&CONTENT.into(), ScrollBy::Pixels(-1e9));
@@ -270,10 +366,60 @@ impl Gallery {
             self.publish()?;
             window.redraw();
         }
-        if self.header_dirty {
-            self.sync_header(window)?;
+        if self.band_dirty {
+            if self.band_layer.is_some() {
+                self.sync_layers(window)?;
+            } else {
+                window.redraw();
+                self.band_dirty = false;
+            }
         }
         Ok(())
+    }
+
+    fn band_event(&mut self, event: LayerEvent, window: &mut Window) -> Result<bool> {
+        let now = Instant::now();
+        Ok(match event {
+            LayerEvent::Motion(x, y) => {
+                self.band_pointer = Some((x, y));
+                self.state.pointer_leave();
+                self.band_dirty |= self.band.pointer_motion(x, y);
+                false
+            }
+            LayerEvent::Leave => {
+                self.band_pointer = None;
+                self.band_dirty |= self.band.pointer_leave();
+                false
+            }
+            LayerEvent::Button {
+                pressed: true,
+                serial,
+                time,
+                ..
+            } if self.band.hover().is_none() => {
+                self.band_press(serial, time, window)?;
+                false
+            }
+            LayerEvent::Button { pressed, .. } => {
+                if let Some(a) = self.band.button(pressed, now) {
+                    self.activated(a);
+                    return Ok(true);
+                }
+                self.band_dirty = true;
+                false
+            }
+            // The content scrolls under the band, so the wheel over it scrolls it.
+            LayerEvent::Scroll(amount) => match self.band_pointer {
+                Some((x, y)) => {
+                    self.state.pointer_motion(x, y);
+                    let moved = self.state.scroll(amount.into());
+                    self.state.pointer_leave();
+                    moved
+                }
+                None => false,
+            },
+            _ => false,
+        })
     }
 }
 
@@ -282,34 +428,68 @@ impl Application for Gallery {
         true
     }
     fn poll_interval_ms(&self) -> u32 {
-        if self.state.animating() { 16 } else { 100 }
+        let sliding = self
+            .sidebar
+            .animating(Instant::now(), &self.look.tokens.motion);
+        if self.state.animating() || self.band.animating() || sliding {
+            16
+        } else {
+            100
+        }
     }
     fn idle(&mut self, window: &mut Window) -> Result<()> {
         let mut changed = false;
+        let now = Instant::now();
         if self.portal.changed() {
             let a = self.portal.read()?;
             self.look = Look::load(&self.exports, &a)?;
+            self.reduced = a.reduced_motion;
             self.state.set_reduced_motion(a.reduced_motion);
-            self.rebuild();
+            self.band.set_reduced_motion(a.reduced_motion);
+            self.rebuild(now);
             changed = true;
         }
         if let Some(a) = &self.a11y {
             a.check()?;
         }
         while let Some((_, request)) = self.a11y.as_ref().and_then(|a| a.requests.try_recv().ok()) {
-            let keys = self.state.semantic_keys();
-            let activated = match request {
-                Request::Focus(id) => keys.get(&id).and_then(|k| self.state.request(k, false)),
-                Request::Activate(id) => keys.get(&id).and_then(|k| self.state.request(k, true)),
-                Request::SetValue(id, v) => {
-                    keys.get(&id).and_then(|k| self.state.request_value(k, v))
-                }
-                _ => None,
+            let (id, activate, value) = match request {
+                Request::Focus(id) => (id, false, None),
+                Request::Activate(id) => (id, true, None),
+                Request::SetValue(id, v) => (id, false, Some(v)),
+                _ => continue,
+            };
+            let band = self.band.semantic_keys();
+            let activated = if let Some(k) = band.get(&id) {
+                self.band.request(k, activate)
+            } else {
+                let keys = self.state.semantic_keys();
+                keys.get(&id).and_then(|k| match value {
+                    Some(v) => self.state.request_value(k, v),
+                    None => self.state.request(k, activate),
+                })
             };
             if let Some(a) = activated {
                 self.activated(a);
             }
             changed = true;
+        }
+        let sliding = self.sidebar.animating(now, &self.look.tokens.motion);
+        if sliding || self.sliding {
+            // The slide: the frame laid out again at each step, and once more at its end.
+            self.rebuild(now);
+            changed = true;
+        }
+        self.sliding = sliding;
+        if self.band.animating() {
+            // The band's buttons move with the page's edge as the sidebar slides.
+            let ticked = self
+                .band
+                .tick(&self.look.tokens, &mut self.text, Instant::now());
+            for a in ticked.activated {
+                self.activated(a);
+            }
+            self.band_dirty = true;
         }
         if self.state.animating() {
             let ticked = self
@@ -323,24 +503,32 @@ impl Application for Gallery {
         self.after(changed, window)
     }
     fn event(&mut self, event: Event, window: &mut Window) -> Result<()> {
+        let now = Instant::now();
         let changed = match event {
             Event::Error(e) => return Err(e),
             Event::Configure | Event::PreferredScale(_) => {
                 let (w, h) = window.size();
                 self.size = (w as f64, h as f64);
                 self.scale = window.scale();
-                if self.header_layer.is_none() && window.supports_layers() {
-                    let r = self.look.frame.header_rect(self.size);
-                    self.header_layer =
-                        Some(window.create_layer((r[2].ceil() as u32, r[3].ceil() as u32))?);
+                if self.band_layer.is_none() && window.supports_layers() {
+                    // The blur first, so the band's buttons lie over it; the blur takes no
+                    // pointer, the band takes all of its own.
+                    let blur = window.create_layer((1, 1))?;
+                    window.set_layer_input_region(blur, Some(&[]))?;
+                    self.blur_layer = Some(blur);
+                    self.band_layer = Some(window.create_layer((1, 1))?);
                 }
-                self.rebuild();
+                self.sidebar.adapt(self.size.0, &self.look.frame);
+                self.rebuild(now);
                 true
             }
             Event::ControlsLayout(layout) => {
                 self.controls = Some(layout);
-                self.rebuild();
+                self.rebuild(now);
                 true
+            }
+            Event::Layer { id, event } if Some(id) == self.band_layer => {
+                self.band_event(event, window)?
             }
             Event::Motion(x, y) => {
                 self.pointer = Some((x, y));
@@ -350,66 +538,32 @@ impl Application for Gallery {
                 self.pointer = None;
                 self.state.pointer_leave()
             }
-            Event::Layer { id, event } if Some(id) == self.header_layer => {
-                let r = self.look.frame.header_rect(self.size);
-                match event {
-                    LayerEvent::Motion(x, y) => {
-                        self.header_pointer = Some((x + r[0], y + r[1]));
-                        self.state.pointer_leave()
-                    }
-                    LayerEvent::Leave => {
-                        self.header_pointer = None;
-                        false
-                    }
-                    LayerEvent::Button {
-                        pressed: true,
-                        serial,
-                        time,
-                        ..
-                    } => {
-                        self.band_press(serial, time, window)?;
-                        false
-                    }
-                    // The content scrolls under the band, so the wheel over it scrolls it.
-                    LayerEvent::Scroll(amount) => match self.header_pointer {
-                        Some((x, y)) => {
-                            self.state.pointer_motion(x, y);
-                            let moved = self.state.scroll(amount.into());
-                            self.state.pointer_leave();
-                            moved
-                        }
-                        None => false,
-                    },
-                    _ => false,
+            Event::Button { pressed, .. } => {
+                if let Some(a) = self.state.button(pressed, now) {
+                    self.activated(a);
                 }
-            }
-            Event::Button {
-                pressed,
-                serial,
-                time,
-                ..
-            } => {
-                // A press on the band over the sidebar, off any control, is the band's.
-                let on_band = self.state.hover().is_none()
-                    && self
-                        .pointer
-                        .is_some_and(|(x, y)| self.look.frame.on_band(x, y));
-                if pressed && on_band {
-                    self.band_press(serial, time, window)?;
-                    false
-                } else {
-                    if let Some(a) = self.state.button(pressed, Instant::now()) {
-                        self.activated(a);
-                    }
-                    true
-                }
+                true
             }
             Event::Scroll(amount) => self.state.scroll(amount.into()),
+            // Escape closes a sidebar open over the page.
+            Event::Key(key) if key.sym == 0xff1b && self.sidebar.over_content() => {
+                self.toggle_sidebar(false);
+                true
+            }
             // Ctrl+Page Down and Up: the pages in turn, as a notebook's tabs go.
             Event::Key(key) if key.ctrl && matches!(key.sym, 0xff55 | 0xff56) => {
                 let n = PAGES.len();
                 let step = if key.sym == 0xff56 { 1 } else { n - 1 };
                 self.go((self.model.page + step) % n);
+                true
+            }
+            // Alt+Left and Right: back and forward.
+            Event::Key(key) if key.alt && matches!(key.sym, 0xff51 | 0xff53) => {
+                let action = if key.sym == 0xff51 { BACK } else { FORWARD };
+                self.activated(Activated {
+                    key: "band".into(),
+                    action: action.into(),
+                });
                 true
             }
             Event::Key(key) => match KeyInput::from_key(&key) {
@@ -444,7 +598,8 @@ impl Application for Gallery {
                 nk_render::Color::new([r as f32, g as f32, b as f32, 1.]),
             );
         }
-        self.last = self.state.frame(&self.look.tokens, Instant::now());
+        let now = Instant::now();
+        self.last = self.state.frame(&self.look.tokens, now);
         let glyphs = &mut self.glyphs;
         self.state.paint(
             &mut c,
@@ -452,49 +607,26 @@ impl Application for Gallery {
             &mut |name, size| glyphs.get(name, size),
             (!frame.material).then_some(&self.last),
         )?;
-        if self.header_layer.is_none() {
-            // No layers (D5): the band in the window itself, over the content.
+        if self.band_layer.is_none() {
+            // No layers (D5): the band in the window itself, opaque, over the content.
             let f = &self.look.frame;
-            let r = f.header_rect(self.size);
             let opaque = FrameStyle {
                 opaque: true,
                 ..f.clone()
             };
-            opaque.paint_fade(&mut c, [r[0], 0., r[2], f.band], self.look.background);
-            self.header.paint(
+            opaque.paint_fade(&mut c, [0., 0., self.size.0, f.band], self.look.background);
+            self.band_last = self.band.frame(&self.look.tokens, now);
+            self.band.paint(
                 &mut c,
                 &self.look.tokens,
                 &mut |name, size| glyphs.get(name, size),
-                None,
+                Some(&self.band_last),
             )?;
         }
         Ok(c.finish())
     }
     fn material(&self) -> Option<Material> {
-        let base = self.look.panel.at(0.).ok()?;
-        // Each card's glass in its own step of the panel material, by its short side.
-        let groups = self
-            .last
-            .groups(base.tone, base.shadow)
-            .into_iter()
-            .map(|mut g| {
-                let side = g
-                    .shapes
-                    .iter()
-                    .map(|s| s.width.min(s.height))
-                    .fold(f64::INFINITY, f64::min);
-                if let Ok(m) = self.look.panel.at(side) {
-                    g.tone = m.tone;
-                    g.shadow = m.shadow;
-                }
-                g
-            })
-            .collect();
-        Some(Material {
-            groups,
-            states: self.last.states.clone(),
-            ..base
-        })
+        glass(&self.look, &self.last)
     }
     fn window_background(&self) -> Option<WindowBackground> {
         Some(WindowBackground {
@@ -559,14 +691,25 @@ fn run() -> Result<()> {
             ..Default::default()
         },
         state,
-        header: ViewState::new(1_000_000),
-        header_layer: None,
-        header_dirty: false,
-        header_pointer: None,
+        band: {
+            let mut band = ViewState::new(BAND_ROOT as u32 + 1);
+            band.set_reduced_motion(appearance.reduced_motion);
+            band
+        },
+        sidebar: Sidebar::default(),
+        sliding: false,
+        history: vec![page],
+        at: 0,
+        blur_layer: None,
+        band_layer: None,
+        band_dirty: false,
+        band_pointer: None,
         last_press: None,
         last: Default::default(),
+        band_last: Default::default(),
         size: (0., 0.),
         scale: 1.,
+        reduced: appearance.reduced_motion,
         controls: None,
         a11y: None,
         revision: 0,

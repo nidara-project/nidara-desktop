@@ -626,6 +626,12 @@ An app is an `nk_wayland::Application` whose content is one view, as a shell sur
   placed by `controls_at` on the side the user chose. Its measures are the exported `header`
   component's (`toolkit/tokens/header.json`); an app passes its sidebar, its content and its
   title. A press on the band where nothing else is moves the window; two toggle maximised.
+  The band carries Settings' buttons on their own glass, in a layer over the blur (which
+  takes no pointer): the sidebar's toggle at the inset (after the window controls when they
+  are on the left), back and forward at the page's edge (`BACK`, `FORWARD`, `SIDEBAR` are
+  their actions). `Sidebar` slides it with the kit's motion and, below `WINDOW_LAYOUT`'s
+  sidebar plus content, closes it and opens it over the page instead, where Escape or a
+  choice closes it again.
 - **Glass is for what lies over content** (owner, 2026-11-12): a sidebar, a menu, a popover, a
   tooltip, a button. A section of a page is a **group** (`Node::group`), Settings' card on the
   window's background (`--nidara-surface`, `common.groupRadius`), with its caption above it.
