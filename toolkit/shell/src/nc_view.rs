@@ -58,18 +58,7 @@ pub fn tokens(
         dark: true,
         ..appearance.clone()
     };
-    let set = e.tokens(&skin)?;
-    let colors = serde_json::json!({ "tokens": set.colors });
-    Ok(Tokens {
-        spacing: nk_view::Spacing::from_static(&e.statics)?,
-        radii: nk_view::Radii::from_static(&e.statics)?,
-        motion: nk_view::Motion::from_static(&e.statics)?,
-        look: nk_view::Look::from_colors(&colors)?,
-        washes: nk_view::Washes::from_glass(&e.glass, true, skin.reduce_transparency)?,
-        scrollbar: nk_view::scrollbar_from(&set.components["scrollbar"], &colors)?,
-        slider: nk_view::slider_from(&set.components["range"])?,
-        switch: nk_view::switch_from(&set.components["switch"], &colors)?,
-    })
+    Tokens::load(e, &skin)
 }
 
 /// What an activation in the centre asks the bar for.

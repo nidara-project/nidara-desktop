@@ -308,7 +308,19 @@ pub struct Control {
     /// it (a tile's second way in, its detail, under the tile's own control).
     #[serde(default = "yes")]
     pub pointer: bool,
+    /// A state it shows whatever the pointer and the focus do (VIEW.md §13.3). Only the
+    /// gallery sets it, to show a component's states side by side; a live control has none.
+    #[serde(default)]
+    pub shown: Option<Shown>,
     pub child: Box<Node>,
+}
+
+/// A state a control can be shown in for good (`Control::shown`).
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub enum Shown {
+    Hover,
+    Press,
+    Focus,
 }
 fn yes() -> bool {
     true
@@ -541,6 +553,7 @@ impl Node {
                 on: false,
                 surface: false,
                 pointer: true,
+                shown: None,
                 child: Box::new(child),
             }),
         )
@@ -700,6 +713,13 @@ impl Node {
     pub fn marked(mut self, on: bool) -> Self {
         if let Kind::Control(c) = &mut self.kind {
             c.marked = on;
+        }
+        self
+    }
+    /// Shows a control in `state` for good: the gallery's states side by side (§13.3).
+    pub fn shown(mut self, state: Shown) -> Self {
+        if let Kind::Control(c) = &mut self.kind {
+            c.shown = Some(state);
         }
         self
     }
