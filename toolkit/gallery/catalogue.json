@@ -24,7 +24,7 @@
         {"name": "Tabs", "gtk": "Gtk.Notebook / Gtk.StackSwitcher", "appkit": "NSTabView", "status": "missing", "users": ""},
         {"name": "Segmented choice", "gtk": "Gtk.ToggleButton (grouped)", "appkit": "NSSegmentedControl", "status": "widgets", "users": "Settings"},
         {"name": "Disclosure", "gtk": "Gtk.Expander", "appkit": "NSDisclosureButton", "status": "missing", "users": ""},
-        {"name": "Back and forward", "gtk": "no equivalent", "appkit": "NSPageController", "status": "widgets", "users": "Settings"}
+        {"name": "Back and forward", "gtk": "no equivalent", "appkit": "NSPageController", "status": "both", "users": "Settings (nk-widgets), this gallery (the frame's band)"}
       ]
     },
     {
