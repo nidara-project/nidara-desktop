@@ -357,8 +357,10 @@ second consumer: `ccdetail.rs` keeps the model and ccauth's secret editing, and 
 release, like every nk-view control (`toolkit/shell/CC.md`). The CC's grid is the third:
 `Node::grid` places tiles on cells the editor computes; a control can be `on` (white, content
 in the accent), a `surface` well, or `keys_only` (Tab and readers, no pointer); `Slider::fill`
-is the 1×2 tile slider. The editor still places and scrolls the tiles' glass, so that view
-calls `set_slides(false)`: a moved pane must not slide away from glass it does not move.
+is the 1×2 tile slider. Edit mode is the fourth: `ccedit.rs` builds the panel and the size menu as two
+views (`Node::layer_at` places a badge or the menu at a point, `Node::opacity` dims a free cell)
+and keeps the model; the panel's scroll region places the grid, so the grid view calls
+`set_slides(false)`: a moved pane must not slide away from glass it does not move.
 `Node::switch(key, on)` is the native switch (`components.json` `switch`, 44×24), drawn only:
 the row around it is the control (`Role::Toggle`, `marked(on)`). It slides over `base`/`ease`
 both ways, faded at `disabledOpacity` while its row is disabled (`VIEW.md` §12.6). A setting

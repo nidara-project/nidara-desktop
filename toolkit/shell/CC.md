@@ -69,9 +69,9 @@ pointer toggles and Tab and readers still reach the detail.
 - **Buttons act on release** over themselves; a press that leaves does nothing. A slider
   acts on its press and on every move, and shows where it was let go until the service's
   value is laid out.
-- **The editor still places and scrolls the tiles** (edit mode moves in step 4), so the
-  view lays panes where they are (`set_slides(false)`) and the pointer outside the viewport
-  leaves the grid, unless it holds a slider.
+- **The editor's panel places the grid**: its scroll region (step 4, below) says where
+  the grid's top is, so the grid view lays panes where they are (`set_slides(false)`) and
+  the pointer outside the viewport leaves the grid, unless it holds a slider.
 - **Tab** follows the readers' order: the Edit button, then each tile's primary control,
   its player buttons, then its Details entry.
 - **Back** from a detail focuses the tile that opened it; its ring shows only when a key
@@ -211,6 +211,17 @@ Product comparison and explicit gaps are recorded in [B2.2.md](B2.2.md): quick
 connection plus password (GNOME), per-device/application audio (KDE), and visible
 Stop/capture choices. A unified visual capture chooser, enterprise/hidden profile
 editor and new-device Bluetooth pairing are not silently approximated by TS.
+
+## Edit mode on nk-view (#1048, step 4)
+
+Edit mode is two nk-view views built by `ccedit.rs` (`VIEW.md` §12.7): the panel, a scroll
+region with the grid and the rows to add, the error and Edit/Done; and the size menu, on its
+own layer in Hyalo. Their keys: `e:done`, `e:t:` a tile, `e:x:` its remove badge, `e:a:` a
+row to add, `e:f:x:y` a free cell, `e:z:` a size in the menu and `e:zx` its Remove. The
+editor keeps the model (hold, preview, write barrier, named actions); the views place,
+hit-test, focus, wash and paint. Edit/Done and the menu's rows act on release over
+themselves, as every nk-view control does. Outside edit mode the panel view holds only the
+scroll region the grid is laid in and the Edit button.
 
 ## B2.3 editing and widgets (#1016)
 
