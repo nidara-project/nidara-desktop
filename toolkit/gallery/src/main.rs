@@ -99,7 +99,7 @@ impl Gallery {
     }
 
     fn publish(&mut self) -> Result<()> {
-        let mut root = nk_a11y::Node::new(ROOT, nk_a11y::Role::Window, "Nidara kit gallery");
+        let mut root = nk_a11y::Node::new(ROOT, nk_a11y::Role::Window, "Nidara Kit Gallery");
         root.bounds = nk_a11y::Bounds {
             x: 0.,
             y: 0.,
@@ -426,8 +426,8 @@ fn run() -> Result<()> {
         Options {
             material: true,
             map: true,
-            app_id: "nidara-gallery",
-            title: "Nidara kit gallery",
+            app_id: "nidara-kit-gallery",
+            title: "Nidara Kit Gallery",
             size: (1100, 760),
             require_material: None,
         },
@@ -437,7 +437,7 @@ fn run() -> Result<()> {
 
 fn main() {
     if let Err(e) = run() {
-        eprintln!("nidara-gallery: {e}");
+        eprintln!("nidara-kit-gallery: {e}");
         std::process::exit(1);
     }
 }
