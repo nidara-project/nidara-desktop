@@ -189,6 +189,9 @@ impl Composition {
             }
         }
         let old_focus = tree.focused;
+        let composing = old_focus
+            .and_then(|id| tree.searches.get(&id))
+            .is_some_and(|search| search.editor.preedit().is_some());
         let press = match event {
             Event::Button {
                 button: 272,
@@ -255,7 +258,14 @@ impl Composition {
                 search.editor.cancel_preedit()?;
             }
             window.reset_ime();
-        } else if matches!(event, Event::Key(_) | Event::Button { pressed: true, .. }) {
+        } else if matches!(event, Event::Button { pressed: true, .. })
+            || (composing && matches!(event, Event::Key(_)))
+        {
+            // A key reaches us only when the IME let it through. Resetting then
+            // re-creates fcitx5's keyboard grab, and a key Hyalo already sent to
+            // the old grab is lost: Ctrl+A typed fast lost its A. With nothing
+            // composed there is nothing to cancel, so the key's edit goes out as
+            // surrounding text (cause Other) below, without a reset.
             window.reset_ime();
         }
         self.sync_search_input(tree, window)?;
