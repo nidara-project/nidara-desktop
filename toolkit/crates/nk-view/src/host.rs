@@ -23,6 +23,10 @@ impl Tokens {
             scrollbar: scrollbar_from(&set.components["scrollbar"], &colors)?,
             slider: slider_from(&set.components["range"])?,
             switch: switch_from(&set.components["switch"], &colors)?,
+            group_radius: set.components["common"]["groupRadius"]
+                .as_f64()
+                .filter(|v| v.is_finite() && *v >= 0.)
+                .ok_or("components.json: no common.groupRadius")?,
         })
     }
 }

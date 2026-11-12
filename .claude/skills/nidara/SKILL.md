@@ -370,7 +370,12 @@ that is on or off ends its row with one; a choice among several keeps its mark s
 window hosts a view as `toolkit/gallery` does (§13.2): `Tokens::load` and `TypeScale::load` from
 the portal's appearance, `Glyphs` for `nd-` names, `KeyInput::from_key`, the semantics through
 `nk_a11y::bridge::Bridge`, the glass from `nk_platform::material::panel::PanelMaterial` per pane,
-and Hyalo's window controls placed in room the view leaves for them. Glyph names in a view are
+and the window's frame from `nk_view::FrameStyle` (Settings' format: floating glass sidebar,
+content scrolling to the edges under a header band whose graded blur is a layer of its own,
+Hyalo's window controls at `controls_at`, on the user's side) — never a frame of the app's own.
+**Glass only for what lies over content** (sidebar, menu, popover, tooltip, button); a page's
+section is `Node::group`, not a pane, and a button inside a group stands on its own glass or its
+hover and press do not show (Hyalo draws them on glass). Glyph names in a view are
 `nd-…` WITHOUT `-symbolic` (nk-icons appends it; with it nothing is drawn and the log says "no
 drawing for icon"). **The gallery (`nk-gallery`, installed as `nidara-kit-gallery` with its own
 entry in Apps) is where a component is proven**: a page per component with its states side by side

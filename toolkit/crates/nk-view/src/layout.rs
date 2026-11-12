@@ -230,6 +230,8 @@ pub fn intersect(a: Rect, b: Rect) -> Option<Rect> {
 pub enum What {
     Stack,
     Pane(Corner),
+    /// A group's card: painted by the view, never glass.
+    Group,
     Text {
         full: String,
         ink: Ink,
@@ -301,7 +303,11 @@ impl Layouter<'_> {
     }
 
     fn natural(&mut self, n: &Node) -> f64 {
+        if let Some(w) = n.width {
+            return w;
+        }
         match &n.kind {
+            Kind::Group(g) => self.natural(&g.child),
             Kind::Text(t) => self.cache.natural(self.text, &n.key, &t.text, &t.style),
             Kind::Icon(i) => i.size,
             Kind::Spacer => 0.,
@@ -321,7 +327,11 @@ impl Layouter<'_> {
         }
     }
     fn min(&mut self, n: &Node) -> f64 {
+        if let Some(w) = n.width {
+            return w;
+        }
         match &n.kind {
+            Kind::Group(g) => self.min(&g.child),
             Kind::Text(t) if t.lines.is_some() => 0.,
             Kind::Text(_) | Kind::Icon(_) | Kind::Switch(_) => self.natural(n),
             Kind::Spacer => 0.,
@@ -350,6 +360,18 @@ impl Layouter<'_> {
     }
 
     fn measure(&mut self, n: &Node, width: f64) -> Measure {
+        let mut m = self.measure_kind(n, n.width.unwrap_or(width));
+        if let Some(w) = n.width {
+            m.w = self.up(w);
+        }
+        if let Some(h) = n.height {
+            m.h = self.up(h);
+            m.give = 0.;
+        }
+        m
+    }
+
+    fn measure_kind(&mut self, n: &Node, width: f64) -> Measure {
         let leaf = |w, h, first_line| Measure {
             w,
             h,
@@ -383,6 +405,17 @@ impl Layouter<'_> {
                 };
                 let w = self.up(if t.lines.is_some() { w.min(width) } else { w });
                 leaf(w, self.up(h), first)
+            }
+            Kind::Group(g) => {
+                let c = self.measure(&g.child, width);
+                Measure {
+                    w: c.w,
+                    h: c.h,
+                    first_line: c.first_line,
+                    give: c.give,
+                    children: vec![c],
+                    cross: vec![],
+                }
             }
             Kind::Pane(p) => {
                 let c = self.measure(&p.child, width);
@@ -635,6 +668,7 @@ impl Layouter<'_> {
         let what = match &n.kind {
             Kind::Stack(_) => What::Stack,
             Kind::Pane(p) => What::Pane(p.corner),
+            Kind::Group(_) => What::Group,
             Kind::Text(t) => What::Text {
                 full: t.text.clone(),
                 ink: t.ink,
@@ -687,6 +721,7 @@ impl Layouter<'_> {
                 inner.alpha *= p.opacity;
                 self.place(&p.child, &m.children[0], r, inner, out)
             }
+            Kind::Group(g) => self.place(&g.child, &m.children[0], r, inner, out),
             Kind::Control(c) => {
                 inner.control = Some(index);
                 self.place(&c.child, &m.children[0], r, inner, out)

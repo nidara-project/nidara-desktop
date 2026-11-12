@@ -1510,6 +1510,16 @@ impl ViewState {
                 }
             };
             match &p.what {
+                What::Group => {
+                    // Not glass: the view paints the card itself, under what it holds.
+                    canvas.clip(rect(&visible));
+                    canvas.rounded_rect(
+                        rect(&p.rect),
+                        tokens.group_radius.min(p.rect[2].min(p.rect[3]) / 2.),
+                        ink(tokens.look.surface),
+                    );
+                    canvas.pop_clip();
+                }
                 What::Text { ink: tier, .. } => {
                     if let Some(f) = self.text.get(&p.key) {
                         canvas.clip(rect(&visible));

@@ -467,4 +467,6 @@ pub struct Tokens {
     pub scrollbar: ScrollbarStyle,
     pub slider: SliderStyle,
     pub switch: SwitchStyle,
+    /// A group's corner (`components.json` `common.groupRadius`), as Settings' cards.
+    pub group_radius: f64,
 }

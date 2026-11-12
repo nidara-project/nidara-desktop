@@ -4,10 +4,10 @@
     {
       "name": "Windows and structure",
       "items": [
-        {"name": "App window", "gtk": "Gtk.Window", "appkit": "NSWindow", "status": "widgets", "users": "Settings"},
+        {"name": "App window", "gtk": "Gtk.Window", "appkit": "NSWindow", "status": "both", "users": "Settings (nk-widgets), this gallery (nk-view FrameStyle)"},
         {"name": "Dialog window", "gtk": "Gtk.Window (modal)", "appkit": "NSPanel (sheet)", "status": "widgets", "users": "Settings"},
         {"name": "Auxiliary window", "gtk": "Gtk.Window", "appkit": "NSPanel", "status": "missing", "users": ""},
-        {"name": "Title bar", "gtk": "Gtk.HeaderBar", "appkit": "NSTitlebarAccessoryViewController", "status": "widgets", "users": "Settings"},
+        {"name": "Title bar", "gtk": "Gtk.HeaderBar", "appkit": "NSTitlebarAccessoryViewController", "status": "both", "users": "Settings (with sidebar toggle, back and forward, search), this gallery (title only)"},
         {"name": "Command strip", "gtk": "Gtk.ActionBar", "appkit": "NSToolbar", "status": "missing", "users": ""},
         {"name": "Split view", "gtk": "Gtk.Paned", "appkit": "NSSplitView", "status": "widgets", "users": "Settings"},
         {"name": "Scroll region", "gtk": "Gtk.ScrolledWindow", "appkit": "NSScrollView", "status": "both", "users": "NC, CC edit mode, Settings", "page": "scroll"},
@@ -61,7 +61,7 @@
     {
       "name": "Lists and collections",
       "items": [
-        {"name": "Settings group", "gtk": "Gtk.ListBox", "appkit": "NSStackView (grouped)", "status": "widgets", "users": "Settings"},
+        {"name": "Settings group", "gtk": "Gtk.ListBox", "appkit": "NSStackView (grouped)", "status": "both", "users": "Settings (nk-widgets), this gallery's sections (Node::group)"},
         {"name": "Setting row", "gtk": "Gtk.ListBoxRow", "appkit": "NSTableCellView", "status": "widgets", "users": "Settings, CC details by hand"},
         {"name": "Large list", "gtk": "Gtk.ListView", "appkit": "NSTableView", "status": "missing", "users": ""},
         {"name": "Tile grid", "gtk": "Gtk.GridView", "appkit": "NSCollectionView", "status": "view", "users": "CC; Apps by hand", "page": "grid"},
