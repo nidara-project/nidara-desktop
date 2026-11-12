@@ -216,7 +216,7 @@ pub struct Detail {
     pending: HashMap<String, (bool, std::time::Instant)>,
 }
 /// How long a switch shows what was asked for without the service confirming it.
-const PENDING: std::time::Duration = std::time::Duration::from_secs(6);
+pub(super) const PENDING: std::time::Duration = std::time::Duration::from_secs(6);
 /// The view's scroll region: the rows past the output's height scroll.
 const LIST: &str = "list";
 /// Ids for the view's few regions, under the CC's other washes.

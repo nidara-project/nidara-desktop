@@ -124,6 +124,10 @@ pub struct Cc {
     art: Option<(String, Option<Arc<Raster>>)>,
     /// Each edit layer's own view: a tile drawn alone, on its own surface.
     layers: HashMap<&'static str, nk_view::ViewState>,
+    /// What a toggle tile was last asked for, and when: shown, and acted on, until its
+    /// service says so, a write fails or `detail::PENDING` passes. A click decided from a
+    /// snapshot that has not caught up would only ask for the same thing again.
+    wanted: HashMap<&'static str, (bool, std::time::Instant)>,
 }
 
 impl Default for Cc {
@@ -156,6 +160,7 @@ impl Cc {
             glyphs: HashMap::new(),
             art: None,
             layers: HashMap::new(),
+            wanted: HashMap::new(),
         }
     }
 
@@ -168,6 +173,9 @@ impl Cc {
         stored: &layout::Stored,
         look: Option<&mut Look>,
     ) {
+        self.settle(status, std::time::Instant::now());
+        let seen = self.seen(status);
+        let status = &*seen;
         self.tiles = self
             .editor
             .sync(stored, status, right, top, self.detail_height);
@@ -369,15 +377,51 @@ impl Cc {
                 self.editor.action(t, status)
             }
             Target::Detail(id) => self.detail.as_mut()?.action(id, value).map(Act::Detail),
-            other => act_of(other, status),
+            other => self.toggle(other, status),
         }
     }
     /// What a control the view reports asks of the services.
     fn activated(&mut self, a: nk_view::Activated, status: &Status) -> Option<Act> {
         match target_of(&a.key)? {
             Target::Slider(id) => set_value(id, self.state.value(&a.key)? / 100., status),
-            t => act_of(t, status),
+            t => self.toggle(t, status),
         }
+    }
+    /// A tile's act, decided from what it shows; a toggle remembers what it asked for.
+    fn toggle(&mut self, t: Target, status: &Status) -> Option<Act> {
+        let act = act_of(t, &self.seen(status))?;
+        if let Some((id, on)) = asks(&act) {
+            self.wanted.insert(id, (on, std::time::Instant::now()));
+        }
+        Some(act)
+    }
+    /// The status as the tiles show it: each toggle at what it was last asked for.
+    fn seen<'a>(&self, s: &'a Status) -> std::borrow::Cow<'a, Status> {
+        let now = std::time::Instant::now();
+        let mut seen = std::borrow::Cow::Borrowed(s);
+        for (&id, &(on, at)) in &self.wanted {
+            if active(id, s) != on && now.saturating_duration_since(at) < detail::PENDING {
+                wear(seen.to_mut(), id, on);
+            }
+        }
+        seen
+    }
+    /// The services caught up, or gave no answer in time: the tiles show what they say.
+    fn settle(&mut self, s: &Status, now: std::time::Instant) {
+        self.wanted.retain(|&id, &mut (on, at)| {
+            active(id, s) != on && now.saturating_duration_since(at) < detail::PENDING
+        });
+    }
+    /// A toggle waits past `PENDING` for its service: the grid must be laid again.
+    pub fn pending_due(&self) -> bool {
+        let now = std::time::Instant::now();
+        self.wanted
+            .values()
+            .any(|&(_, at)| now.saturating_duration_since(at) >= detail::PENDING)
+    }
+    /// A write failed: no tile keeps showing what it asked for.
+    pub fn write_failed(&mut self) {
+        self.wanted.clear();
     }
     pub fn scroll_detail(&mut self, amount: nk_wayland::ScrollAmount, status: &Status) -> bool {
         let delta = amount.pixels;
@@ -825,6 +869,8 @@ impl Cc {
         if let Some(d) = &self.detail {
             return d.nodes(first, look);
         }
+        let seen = self.seen(status);
+        let status = &*seen;
         use nk_a11y::{Action, Bounds, Node, Role, ValueInfo};
         let text = |k: &'static str| {
             look.map_or(k.to_string(), |l| l.text_of(&crate::menu::Label::Key(k)))
@@ -1672,6 +1718,51 @@ pub fn act_of(t: Target, s: &Status) -> Option<Act> {
     })
 }
 
+/// The tile a toggle act is for, and what it asks: the inverse of `act_of`.
+fn asks(act: &Act) -> Option<(&'static str, bool)> {
+    Some(match act {
+        Act::Dark(on) => ("dark_mode", *on),
+        Act::Dnd(on) => ("focus", *on),
+        Act::Night(on) => ("night_light", *on),
+        Act::Bluetooth { powered, .. } => ("bt", *powered),
+        Act::Detail(detail::Action::Call { action, .. }) => match **action {
+            detail::Action::WiredPower(_, on) => ("ethernet", on),
+            _ => return None,
+        },
+        _ => return None,
+    })
+}
+
+/// `s` with tile `id` at `on`, where `active` reads it.
+fn wear(s: &mut Status, id: &str, on: bool) {
+    match id {
+        "dark_mode" => s.dark = on,
+        "focus" => s.dnd = on,
+        "night_light" => {
+            if let Some(n) = &mut s.night {
+                n.enabled = on;
+            }
+        }
+        "bt" => {
+            if let Some(b) = &mut s.bluetooth {
+                b.powered = on;
+            }
+        }
+        "ethernet" => {
+            let Some(path) = wired(s).and_then(|d| d["path"].as_str()).map(str::to_owned) else {
+                return;
+            };
+            if let Some(network) = &mut s.details.network
+                && let Some(devices) = Arc::make_mut(network)["devices"].as_array_mut()
+                && let Some(d) = devices.iter_mut().find(|d| d["path"] == path.as_str())
+            {
+                d["wiredEnabled"] = serde_json::Value::Bool(on);
+            }
+        }
+        _ => {}
+    }
+}
+
 fn has_detail(id: &str) -> bool {
     matches!(
         id,
@@ -2401,6 +2492,69 @@ mod tests {
     fn click(cc: &mut Cc, p: (f64, f64), s: &Status) -> Option<Act> {
         let pressed = cc.press(p, s);
         cc.release(s).1.or(pressed)
+    }
+
+    #[test]
+    fn a_toggle_tile_shows_what_was_asked_and_never_repeats_it_on_a_stale_snapshot() {
+        let s = status();
+        let Some((mut cc, _)) = laid(&s, &Default::default()) else {
+            return;
+        };
+        let badge = rect_of(&cc, Target::Badge("night_light"));
+        let checked = |cc: &Cc, s: &Status| {
+            cc.nodes(1, s, None)
+                .into_iter()
+                .find(|(_, t)| *t == Target::Badge("night_light"))
+                .map(|(n, _)| n.states.checked)
+        };
+        assert_eq!(click(&mut cc, centre(badge), &s), Some(Act::Night(true)));
+        // The service has not answered: the tile shows on, and the next click turns it off
+        // rather than asking for on a second time.
+        assert_eq!(checked(&cc, &s), Some(true));
+        assert_eq!(click(&mut cc, centre(badge), &s), Some(Act::Night(false)));
+        assert_eq!(checked(&cc, &s), Some(false));
+        assert_eq!(click(&mut cc, centre(badge), &s), Some(Act::Night(true)));
+        // The service says on: what it says is shown from then on, also when it changes.
+        let mut on = s.clone();
+        on.night.as_mut().unwrap().enabled = true;
+        cc.settle(&on, std::time::Instant::now());
+        assert!(cc.wanted.is_empty());
+        assert_eq!(checked(&cc, &s), Some(false));
+        // No answer in time: the tile goes back to what the service says.
+        assert_eq!(click(&mut cc, centre(badge), &s), Some(Act::Night(true)));
+        assert!(!cc.pending_due());
+        cc.settle(&s, std::time::Instant::now() + detail::PENDING);
+        assert_eq!(checked(&cc, &s), Some(false));
+        // A failed write forgets what was asked.
+        assert_eq!(click(&mut cc, centre(badge), &s), Some(Act::Night(true)));
+        cc.write_failed();
+        assert_eq!(checked(&cc, &s), Some(false));
+    }
+
+    #[test]
+    fn every_toggle_tile_wears_what_it_asked_for() {
+        let mut s = status();
+        s.bluetooth = Some(crate::status::Bluetooth {
+            adapter: "/org/bluez/hci0".into(),
+            powered: true,
+        });
+        s.details.network = Some(Arc::new(serde_json::json!({
+            "_serviceOwner": ":1.5",
+            "devices": [{"kind": 1, "state": 100, "path": "/d/2", "wiredEnabled": true}],
+        })));
+        for id in ["dark_mode", "focus", "night_light", "bt", "ethernet"] {
+            let act = act_of(Target::Tile(id), &s).unwrap();
+            let (asked, on) = asks(&act).unwrap();
+            assert_eq!((asked, on), (id, !active(id, &s)), "{act:?}");
+            let mut worn = s.clone();
+            wear(&mut worn, id, on);
+            assert_eq!(active(id, &worn), on, "{id}");
+            // Turned back, from what it now shows.
+            assert_eq!(
+                asks(&act_of(Target::Tile(id), &worn).unwrap()),
+                Some((id, !on))
+            );
+        }
     }
 
     #[test]
