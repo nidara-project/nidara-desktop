@@ -1003,6 +1003,30 @@ impl ViewState {
         self.scroll_by(s, delta)
     }
 
+    /// The surface scrolled the region `key` itself, the pointer anywhere: a panel whose
+    /// wheel the surface routes, or one that brings something of its own into view. False
+    /// when it could not move. Laid out at the next `tick` or layout, as a wheel's.
+    pub fn scroll_region(&mut self, key: &Key, by: ScrollBy) -> bool {
+        let Some(s) = self
+            .index(key)
+            .filter(|&s| matches!(self.placed[s].what, What::Scroll { .. }))
+        else {
+            return false;
+        };
+        let delta = match by {
+            ScrollBy::Pixels(d) => d,
+            ScrollBy::Steps(n) => n * self.placed[s].rect[3].powf(STEP_POWER),
+        };
+        self.scroll_by(s, delta)
+    }
+    /// A region's offset: what was asked since the last layout, else what was laid out.
+    pub fn scroll_offset(&self, key: &Key) -> Option<f64> {
+        let s = self
+            .index(key)
+            .filter(|&s| matches!(self.placed[s].what, What::Scroll { .. }))?;
+        Some(self.offset(s))
+    }
+
     /// What of a scroll region's content shows: its offset and its viewport's height. The
     /// surface builds the rows inside it and leaves placeholders for the rest (VIEW.md §8).
     pub fn window(&self, key: &Key) -> Option<(f64, f64)> {

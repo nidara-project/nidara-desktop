@@ -72,6 +72,10 @@ pub struct Layer {
     pub across: Align,
     pub down: Align,
     pub inset: Padding,
+    /// Placed at its natural size with its top-left here, from the base's (§9); `across`,
+    /// `down` and `inset` then do not apply.
+    #[serde(default)]
+    pub at: Option<(f64, f64)>,
     pub child: Node,
 }
 
@@ -204,7 +208,13 @@ impl Corner {
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub struct Pane {
     pub corner: Corner,
+    /// Its glass and content are formed at this, times a reveal's or a swipe's (§12.7).
+    #[serde(default = "one")]
+    pub opacity: f64,
     pub child: Box<Node>,
+}
+fn one() -> f64 {
+    1.
 }
 
 /// Which text token a text is drawn in.
@@ -416,6 +426,7 @@ impl Node {
             key,
             Kind::Pane(Pane {
                 corner,
+                opacity: 1.,
                 child: Box::new(child),
             }),
         )
@@ -602,8 +613,29 @@ impl Node {
                 across,
                 down,
                 inset,
+                at: None,
                 child,
             });
+        }
+        self
+    }
+    /// A layer at its natural size, its top-left `(x, y)` from the base's (§9).
+    pub fn layer_at(mut self, x: f64, y: f64, child: Node) -> Self {
+        if let Kind::Overlay(o) = &mut self.kind {
+            o.layers.push(Layer {
+                across: Align::Start,
+                down: Align::Start,
+                inset: Padding::default(),
+                at: Some((x, y)),
+                child,
+            });
+        }
+        self
+    }
+    /// A pane's glass and content formed at `o` (§12.7).
+    pub fn opacity(mut self, o: f64) -> Self {
+        if let Kind::Pane(p) = &mut self.kind {
+            p.opacity = o.clamp(0., 1.);
         }
         self
     }

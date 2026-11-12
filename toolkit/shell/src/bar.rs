@@ -1379,7 +1379,7 @@ impl Bar {
                     pointer: None,
                 });
             }
-            if self.cc.editor.focus == Some(crate::cc::edit::Target::Tile(id)) {
+            if self.cc.editor.focus() == Some(crate::cc::edit::Target::Tile(id)) {
                 material.states.push(nk_wayland::StateRegion {
                     id: 1,
                     bounds: nk_wayland::MaterialRect {
@@ -1404,100 +1404,46 @@ impl Bar {
             self.cc_layers.insert(id, (layer, pixels, r));
         }
         self.cc.editor.layered = true;
-        if self.cc.editor.menu.is_some() {
-            let controls: Vec<_> = self
-                .cc
-                .editor
-                .controls
-                .iter()
-                .filter(|c| c.target != crate::cc::edit::Target::Toggle)
-                .cloned()
-                .collect();
-            if let Some(first) = controls.first() {
-                let r = [
-                    first.rect[0],
-                    first.rect[1],
-                    180.,
-                    controls.len() as f64 * 34.,
-                ];
-                if self.cc_menu_layer.is_some_and(|(_, old)| old != r) {
-                    let (id, _) = self.cc_menu_layer.take().unwrap();
-                    w.destroy_layer(id)?;
-                }
-                let layer = if let Some((id, _)) = self.cc_menu_layer {
-                    id
-                } else {
-                    let id = w.create_layer((r[2] as u32, r[3] as u32))?;
-                    w.set_layer_input_region(id, Some(&[]))?;
-                    w.set_position(id, r[0], r[1])?;
-                    self.cc_menu_layer = Some((id, r));
-                    id
-                };
-                let pane = Pane {
-                    x: 0.,
-                    y: 0.,
-                    width: r[2],
-                    height: r[3],
-                    radius: 16.,
-                    exponent: 2.,
-                    pointer: None,
-                };
-                let material = crate::material::piece(
-                    self.frame.tokens.as_ref().unwrap(),
-                    "controlCenter",
-                    true,
-                    self.frame.reduce_transparency,
-                    pane,
-                )
-                .ok_or("missing menu material")?;
-                w.set_layer_material(layer, Some(&material))?;
-                let look = self.look.as_mut().unwrap();
-                w.paint_layer(layer, |frame| {
-                    let mut c = Canvas::new(frame.pixel_width, frame.pixel_height, frame.scale);
-                    for item in controls {
-                        let label = self.cc.editor.label(&item, Some(look));
-                        let label = if item.checked {
-                            format!("✓ {label}")
-                        } else {
-                            label
-                        };
-                        crate::notification_card::text(
-                            &mut c,
-                            look,
-                            &label,
-                            &nk_text::TextStyle {
-                                size: 13.,
-                                ..look.styles.text.clone()
-                            },
-                            [
-                                8.,
-                                item.rect[1] - r[1] + if item.disabled { 2. } else { 6. },
-                                164.,
-                                if item.disabled { 18. } else { 24. },
-                            ],
-                            1,
-                            if item.disabled { 0.4 } else { 1. },
-                        )?;
-                        if item.disabled {
-                            let reason = crate::cc::edit::Editor::full_text(Some(look));
-                            crate::notification_card::text(
-                                &mut c,
-                                look,
-                                &reason,
-                                &nk_text::TextStyle {
-                                    size: 10.,
-                                    ..look.styles.text.clone()
-                                },
-                                [8., item.rect[1] - r[1] + 19., 164., 14.],
-                                1,
-                                0.65,
-                            )?;
-                        }
-                    }
-                    Ok(c.finish())
-                })?;
-                self.cc.editor.menu_layered = true;
+        if let Some(r) = self.cc.editor.menu_rect() {
+            if self.cc_menu_layer.is_some_and(|(_, old)| old != r) {
+                let (id, _) = self.cc_menu_layer.take().unwrap();
+                w.destroy_layer(id)?;
             }
+            let layer = if let Some((id, _)) = self.cc_menu_layer {
+                id
+            } else {
+                let id = w.create_layer((r[2].ceil() as u32, r[3].ceil() as u32))?;
+                w.set_layer_input_region(id, Some(&[]))?;
+                w.set_position(id, r[0], r[1])?;
+                self.cc_menu_layer = Some((id, r));
+                id
+            };
+            let pane = Pane {
+                x: 0.,
+                y: 0.,
+                width: r[2],
+                height: r[3],
+                radius: 16.,
+                exponent: 2.,
+                pointer: None,
+            };
+            let mut material = crate::material::piece(
+                self.frame.tokens.as_ref().unwrap(),
+                "controlCenter",
+                true,
+                self.frame.reduce_transparency,
+                pane,
+            )
+            .ok_or("missing menu material")?;
+            // The menu's view is laid out in its layer's space while the tiles are layers.
+            self.cc.editor.menu_layered = true;
+            w.paint_layer(layer, |frame| {
+                let mut c = Canvas::new(frame.pixel_width, frame.pixel_height, frame.scale);
+                self.cc.editor.paint_menu(&mut c, None);
+                Ok(c.finish())
+            })?;
+            material.states = self.cc.editor.menu_states();
+            w.set_layer_material(layer, Some(&material))?;
         } else {
             if let Some((id, _)) = self.cc_menu_layer.take() {
                 w.destroy_layer(id)?;
@@ -2273,7 +2219,7 @@ impl Application for Bar {
                 if let Some(act) = act {
                     self.act(act, w);
                 }
-                if released || editing {
+                if released || editing || self.cc.editor.active {
                     // A rejected/outside drop has no Act but must still restore its layers.
                     self.refresh(w);
                 }

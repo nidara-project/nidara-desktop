@@ -1471,6 +1471,68 @@ fn an_overlay_is_the_size_of_its_base_and_places_each_layer_by_its_alignment_and
 }
 
 #[test]
+fn a_layer_at_a_point_is_placed_there_at_its_natural_size_outside_its_base_too() {
+    let base = Node::spacer("base");
+    let badge = Node::control(
+        "badge",
+        "Remove",
+        "remove",
+        Node::icon("x", "nd-window-close", 16.),
+    );
+    let view = Node::column(
+        "col",
+        vec![
+            Node::spacer("top"),
+            Node::overlay("over", Node::pane("tile", Corner::Pill, base))
+                .layer_at(300., -3., badge),
+        ],
+    );
+    let s = laid(&view, (360., 400.), 1.);
+    let tile = rect(&s, "tile");
+    let b = rect(&s, "badge");
+    assert_eq!(
+        [b[0], b[1]],
+        [tile[0] + 300., tile[1] - 3.],
+        "at the point, from the base"
+    );
+    assert_eq!([b[2], b[3]], [16., 16.], "its natural size, not stretched");
+    assert_eq!(rect(&s, "over"), tile, "and adds nothing to the overlay");
+}
+
+#[test]
+fn a_pane_at_an_opacity_forms_its_glass_and_content_at_it_times_a_reveal() {
+    let cell = |k: &str, o: f64| {
+        Node::pane(
+            format!("{k}/pane"),
+            Corner::Pill,
+            Node::text(format!("{k}/t"), "Free", style(13.)),
+        )
+        .opacity(o)
+    };
+    let view = Node::column(
+        "col",
+        vec![
+            cell("a", 0.16),
+            Node::reveal("r", true, cell("b", 0.5)),
+            cell("c", 1.),
+        ],
+    );
+    let mut s = laid(&view, (360., 400.), 1.);
+    let frame = s.frame(&tokens(), Instant::now());
+    let opacity = |k: &str| {
+        frame
+            .panes
+            .iter()
+            .find(|p| p.key == Key::from(k))
+            .map(|p| p.opacity)
+    };
+    assert_eq!(opacity("a/pane"), Some(0.16));
+    assert_eq!(opacity("b/pane"), Some(0.5));
+    assert_eq!(opacity("c/pane"), Some(1.));
+    assert_eq!(placed(&s, "a/t").alpha, 0.16, "its content with it");
+}
+
+#[test]
 fn a_layer_is_over_its_base_for_the_pointer_and_after_it_in_the_tab_order() {
     let mut s = laid(&floating("n", true), (360., 400.), 1.);
     let (close, app) = (rect(&s, "n/close"), rect(&s, "n/app"));
