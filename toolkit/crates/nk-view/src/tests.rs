@@ -2956,14 +2956,18 @@ fn a_content_button_is_padded_to_its_height_and_painted_by_the_view_in_the_surfa
         let mut s = laid(&view(shown, true), (300., 60.), 1.);
         let mut c = nk_render::Canvas::new(300, 60, 1.);
         s.frame(&t, Instant::now());
-        s.paint(&mut c, &t, &mut |_: &str, _: f64| None, None).unwrap();
+        s.paint(&mut c, &t, &mut |_: &str, _: f64| None, None)
+            .unwrap();
         let px = c.finish();
         let (x, y) = ((b[0] + b[2] / 2.) as usize, b[1] as usize);
         [px[(y * 300 + x) * 4], px[(y * 300 + x) * 4 + 2]]
     };
     let (plain, ringed) = (edge(None), edge(Some(Shown::Focus)));
     // BGRA: the accent is blue.
-    assert!(ringed[0] > ringed[1] && ringed != plain, "{plain:?} then {ringed:?}");
+    assert!(
+        ringed[0] > ringed[1] && ringed != plain,
+        "{plain:?} then {ringed:?}"
+    );
 }
 
 #[test]
