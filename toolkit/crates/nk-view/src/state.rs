@@ -183,6 +183,9 @@ pub struct ViewState {
     slides: bool,
     /// The view is its whole surface (`layout`): no glass is declared past its edges.
     whole: bool,
+    /// A pane drawn on a layer of its own over the surface (`lift`): a window's sidebar,
+    /// whose glass must show the page under it.
+    lifted: Option<Key>,
 }
 
 impl ViewState {
@@ -222,7 +225,85 @@ impl ViewState {
             set: None,
             slides: true,
             whole: false,
+            lifted: None,
         }
+    }
+
+    /// Draws the pane `key` on a layer of its own, over the surface (VIEW.md §13.2). A pane's
+    /// glass is drawn under its whole surface, so it shows what is behind the window; on a
+    /// layer over the surface it shows what is under it, as a window's sidebar over the page
+    /// must. The view stays one: hit-testing, focus, Tab and the reader are unchanged. The
+    /// surface paints it with `paint_lifted` into a layer at `lifted_rect`, gives the
+    /// layer the glass and washes `lift_out` takes out of the frame, and passes the
+    /// layer's pointer on in window coordinates.
+    pub fn lift(&mut self, key: Option<Key>) {
+        self.lifted = key;
+    }
+    fn lifted_root(&self) -> Option<usize> {
+        let key = self.lifted.as_ref()?;
+        self.placed
+            .iter()
+            .position(|p| &p.key == key && matches!(p.what, What::Pane(_)))
+    }
+    /// Whether node `i` lies in node `root`.
+    fn under(&self, i: usize, root: usize) -> bool {
+        let mut at = Some(i);
+        while let Some(j) = at {
+            if j == root {
+                return true;
+            }
+            at = self.placed[j].parent;
+        }
+        false
+    }
+    /// The lifted pane's rectangle in the surface, whole pixels: its layer's place and size.
+    /// None when it is not laid out (a closed sidebar).
+    pub fn lifted_rect(&self) -> Option<Rect> {
+        let r = self.placed[self.lifted_root()?].rect;
+        Some([r[0].round(), r[1].round(), r[2].round(), r[3].round()])
+    }
+    /// Takes the lifted pane's glass and washes out of `frame`, the surface's, and gives them
+    /// back in the layer's coordinates.
+    pub fn lift_out(&self, frame: &mut Frame) -> Option<Frame> {
+        let root = self.lifted_root()?;
+        let o = self.lifted_rect()?;
+        let keys: HashSet<&Key> = (0..self.placed.len())
+            .filter(|&i| self.under(i, root))
+            .map(|i| &self.placed[i].key)
+            .collect();
+        let ids: HashSet<u32> = keys
+            .iter()
+            .filter_map(|k| self.ids.get(*k))
+            .copied()
+            .collect();
+        let shift = |r: Rect| [r[0] - o[0], r[1] - o[1], r[2], r[3]];
+        let (panes, kept): (Vec<_>, Vec<_>) = std::mem::take(&mut frame.panes)
+            .into_iter()
+            .partition(|p| keys.contains(&p.key));
+        frame.panes = kept;
+        let (states, kept): (Vec<_>, Vec<_>) = std::mem::take(&mut frame.states)
+            .into_iter()
+            .partition(|s| ids.contains(&s.id));
+        frame.states = kept;
+        Some(Frame {
+            panes: panes
+                .into_iter()
+                .map(|mut p| {
+                    p.pane.x -= o[0];
+                    p.pane.y -= o[1];
+                    p.clip = p.clip.map(shift);
+                    p
+                })
+                .collect(),
+            states: states
+                .into_iter()
+                .map(|mut s| {
+                    s.bounds.x -= o[0];
+                    s.bounds.y -= o[1];
+                    s
+                })
+                .collect(),
+        })
     }
 
     /// Lays a rebuilt view out at `now`. A reveal whose `open` changed starts to ease, and a
@@ -1518,6 +1599,31 @@ impl ViewState {
         icons: &mut dyn FnMut(&str, f64) -> Option<std::sync::Arc<nk_icons::Icon>>,
         fallback: Option<&Frame>,
     ) -> Result<(), String> {
+        self.paint_part(canvas, tokens, icons, fallback, false)
+    }
+    /// What `paint` leaves out: the lifted pane and what it holds, in window coordinates, for
+    /// a canvas whose origin is the layer's (`Canvas::at` with `lifted_rect`).
+    pub fn paint_lifted(
+        &self,
+        canvas: &mut Canvas,
+        tokens: &Tokens,
+        icons: &mut dyn FnMut(&str, f64) -> Option<std::sync::Arc<nk_icons::Icon>>,
+    ) -> Result<(), String> {
+        self.paint_part(canvas, tokens, icons, None, true)
+    }
+    fn paint_part(
+        &self,
+        canvas: &mut Canvas,
+        tokens: &Tokens,
+        icons: &mut dyn FnMut(&str, f64) -> Option<std::sync::Arc<nk_icons::Icon>>,
+        fallback: Option<&Frame>,
+        lifted: bool,
+    ) -> Result<(), String> {
+        let root = self.lifted_root();
+        let part = |i: usize| match root {
+            Some(r) => self.under(i, r) == lifted,
+            None => !lifted,
+        };
         if let Some(frame) = fallback {
             for s in frame.states.iter().filter(|s| s.wash[3] > 0.) {
                 let c = nk_render::Color::new([
@@ -1534,7 +1640,7 @@ impl ViewState {
             }
         }
         for (i, p) in self.placed.iter().enumerate() {
-            if p.control.is_some_and(|c| !self.shown(c)) || !self.shown(i) {
+            if !part(i) || p.control.is_some_and(|c| !self.shown(c)) || !self.shown(i) {
                 continue;
             }
             let Some(visible) = p.visible().filter(|_| p.alpha > 0.) else {
@@ -1743,7 +1849,7 @@ impl ViewState {
                 _ => {}
             }
         }
-        for s in self.regions() {
+        for s in self.regions().filter(|&s| part(s)) {
             if let (Some(bar), Some(g)) = (self.bars.get(&self.placed[s].key), self.bar_geometry(s))
             {
                 bar.paint(

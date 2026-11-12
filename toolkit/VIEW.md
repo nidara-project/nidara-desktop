@@ -642,6 +642,16 @@ An app is an `nk_wayland::Application` whose content is one view, as a shell sur
   placed by `controls_at` on the side the user chose. Its measures are the exported `header`
   component's (`toolkit/tokens/header.json`); an app passes its sidebar, its content and its
   title. A press on the band where nothing else is moves the window; two toggle maximised.
+- **The sidebar is a layer of its own, over the page** (`ViewState::lift`), as Settings'
+  sidebar is, with the same glass (`PanelMaterial::at`, by its short side). A pane's glass is
+  drawn under its whole surface, so a sidebar laid out as a pane of the window showed what is
+  behind the window, never the page under it, and looked opaque (owner, 2026-11-13). Lifted,
+  it is still part of the one view: hit-testing, focus, Tab, the reader and its actions are
+  the view's, unchanged. The window paints the rest (`paint`), the layer the sidebar
+  (`paint_lifted` on a `Canvas::at` its origin), `lift_out` moves its pane and state regions
+  out of the window's frame into the layer's coordinates, and the layer's pointer is passed
+  on in window coordinates. It is created after the band's layers, so it stacks over them.
+  Without layers (D5) nothing is lifted and the window paints it.
 - **The frame moves itself; nk-view does not ease it.** The sidebar slides by laying the frame
   out again at each step (`Sidebar::shown`), and a resize lays it out at the new size. Both
   views (the window's and the band's) lay out with `set_slides(false)` while that happens, as
@@ -653,9 +663,11 @@ An app is an `nk_wayland::Application` whose content is one view, as a shell sur
   the window is cut at it. A panel's view (`layout_in`) is not cut at its bounds, so a card
   swiped off the NC leaves with its glass.
   The band carries Settings' buttons on their own glass, in a layer over the blur (which
-  takes no pointer): the sidebar's toggle, then back and forward, from the page's edge (after
-  the window controls when they are on the left and the sidebar is closed) — the toggle is
-  the band's, never over the sidebar (owner, 2026-11-12) (`BACK`, `FORWARD`, `SIDEBAR` are
+  takes no pointer): the sidebar's toggle, then back and forward, from the sidebar's edge
+  (`FrameStyle::slid`; after the window controls when they are on the left and the sidebar
+  is closed) — the toggle is the band's, never over the sidebar (owner, 2026-11-12), also
+  when the sidebar opens over the page in a narrow window, where it takes no room from the
+  page but the band still starts past it (`BACK`, `FORWARD`, `SIDEBAR` are
   their actions). `Sidebar` slides it with the kit's motion and, below `WINDOW_LAYOUT`'s
   sidebar plus content, closes it and opens it over the page instead, where Escape or a
   choice closes it again.

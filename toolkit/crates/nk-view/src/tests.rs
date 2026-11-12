@@ -2717,6 +2717,11 @@ fn the_window_frame_floats_the_sidebar_and_lets_the_content_reach_the_edges() {
     let s = open(1., true);
     assert_eq!(rect(&s, "frame/side")[0], 8.);
     assert_eq!(rect(&s, "frame/content")[0], 0.);
+    // Over the page the band's buttons still start past the sidebar's glass, never over it:
+    // the band follows the sidebar's edge (`slid`), not the page's room, which is none.
+    let side = rect(&s, "frame/side");
+    let b = band(&f, f.slid(1.), Some(nk_wayland::ControlsSide::Right));
+    assert!(rect(&b, "band/sidebar/glass")[0] >= side[0] + side[2]);
     assert_eq!(f.header_rect((1100., 700.), 250.), [250., 0., 850., 68.]);
     let graded = f.graded(850., 68., 1.);
     assert_eq!(graded.len(), 3);
@@ -3088,4 +3093,88 @@ fn a_sidebar_sliding_out_of_its_window_has_its_glass_cut_at_the_window_edge() {
     );
     let frame = p.frame(&tokens(), Instant::now());
     assert!(frame.panes.iter().all(|p| p.clip.is_none()));
+}
+
+#[test]
+fn a_lifted_pane_leaves_the_windows_glass_and_paint_for_its_own_layer() {
+    let t = tokens();
+    // A sidebar's pane over a page, as the window frame lays them.
+    let entry = Node::control(
+        "side/entry",
+        "Entry",
+        "go",
+        Node::text("side/entry/text", "Entry", style(14.)),
+    )
+    .shown(Shown::Hover);
+    let page = Node::control(
+        "page/button",
+        "Button",
+        "press",
+        Node::text("page/button/text", "Button", style(14.)),
+    )
+    .shown(Shown::Hover);
+    let view = Node::overlay(
+        "w",
+        Node::row(
+            "page",
+            vec![
+                Node::column("room", vec![]).width(120.),
+                Node::pane("page/glass", Corner::Pill, page),
+            ],
+        ),
+    )
+    .layer_at(
+        8.,
+        8.,
+        Node::pane(
+            "side",
+            Corner::Fixed(12),
+            Node::column("side/col", vec![entry]),
+        )
+        .width(100.)
+        .height(80.),
+    );
+    let mut s = laid(&view, (300., 100.), 1.);
+    s.lift(Some("side".into()));
+    let mut f = s.frame(&t, Instant::now());
+    let before = (f.panes.len(), f.states.len());
+    let lifted = s.lift_out(&mut f).expect("the sidebar is laid out");
+    assert_eq!(s.lifted_rect(), Some([8., 8., 100., 80.]));
+    // The window keeps the page's glass and wash; the layer has the sidebar's, at its origin.
+    assert!(f.panes.iter().all(|p| p.key != Key::from("side")));
+    assert_eq!(lifted.panes.len(), 1);
+    assert_eq!((lifted.panes[0].pane.x, lifted.panes[0].pane.y), (0., 0.));
+    assert_eq!(
+        lifted.states.len(),
+        1,
+        "the entry's hover rides on the layer"
+    );
+    let entry_at = rect(&s, "side/entry");
+    assert_eq!(lifted.states[0].bounds.x, entry_at[0] - 8.);
+    assert_eq!(
+        (f.panes.len() + 1, f.states.len() + 1),
+        before,
+        "nothing lost, nothing doubled"
+    );
+    // The window's paint leaves the sidebar's text out; the layer's has it, at its origin.
+    let text = rect(&s, "side/entry/text");
+    let ink = |px: &[u8], w: usize, (dx, dy): (f64, f64)| {
+        let mut lit = 0;
+        for y in (text[1] - dy) as usize..(text[1] + text[3] - dy) as usize {
+            for x in (text[0] - dx) as usize..(text[0] + text[2] - dx) as usize {
+                lit += usize::from(px[(y * w + x) * 4 + 3] > 0);
+            }
+        }
+        lit
+    };
+    let mut c = nk_render::Canvas::new(300, 100, 1.);
+    s.paint(&mut c, &t, &mut |_: &str, _: f64| None, None)
+        .unwrap();
+    let window = ink(&c.finish(), 300, (0., 0.));
+    let mut c = nk_render::Canvas::at(100, 80, 1., (8., 8.));
+    s.paint_lifted(&mut c, &t, &mut |_: &str, _: f64| None)
+        .unwrap();
+    let layer = ink(&c.finish(), 100, (8., 8.));
+    assert_eq!(window, 0, "the window draws none of the sidebar");
+    assert!(layer > 20, "the layer draws its text: {layer}");
 }
