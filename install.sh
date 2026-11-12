@@ -747,10 +747,13 @@ if [ "$MODE" = "dev" ] || [ "$MODE" = "update-apply" ]; then
 fi
 # The factory Super+P action launches this Rust toplevel. Build/install only the
 # selector; this does not install or take over the native Settings application.
-echo "  Building nidara-display-selector and the Rust shell..."
-(cd "$REPO_DIR/toolkit" && run_user env CARGO_TARGET_DIR=target RUSTUP_TOOLCHAIN=stable cargo build --release --locked -p nk-settings --bin nidara-display-selector -p nidara-shell --bin nidara-shell)
+echo "  Building nidara-display-selector, the Rust shell and the kit gallery..."
+(cd "$REPO_DIR/toolkit" && run_user env CARGO_TARGET_DIR=target RUSTUP_TOOLCHAIN=stable cargo build --release --locked -p nk-settings --bin nidara-display-selector -p nidara-shell --bin nidara-shell -p nk-gallery --bin nidara-kit-gallery)
 sudo install -Dm755 "$REPO_DIR/toolkit/target/release/nidara-display-selector" /usr/bin/nidara-display-selector
 sudo install -Dm755 "$REPO_DIR/toolkit/target/release/nidara-shell" /usr/bin/nidara-shell
+# The kit's gallery (#1079), an application Apps lists like any other.
+sudo install -Dm755 "$REPO_DIR/toolkit/target/release/nidara-kit-gallery" /usr/bin/nidara-kit-gallery
+sudo install -Dm644 "$REPO_DIR/toolkit/gallery/nidara-kit-gallery.desktop" /usr/share/applications/nidara-kit-gallery.desktop
 sudo install -Dm644 "$REPO_DIR/config/wireplumber/nidara-audio.lua" /usr/share/wireplumber/scripts/nidara/audio.lua
 sudo install -Dm644 "$REPO_DIR/config/wireplumber/60-nidara-audio.conf" /usr/share/wireplumber/wireplumber.conf.d/60-nidara-audio.conf
 

@@ -21,9 +21,9 @@ from gi.repository import Atspi, Gio, GLib
 
 ROOT = Path(__file__).resolve().parents[2]
 LOG = Path(os.environ.get('NK_WIDGETS_LOG', ROOT / 'toolkit/target/gallery-evidence')).resolve()
-BIN = os.environ.get('NK_WIDGETS_BIN', str(ROOT / 'toolkit/target/debug/nk-gallery'))
+BIN = os.environ.get('NK_WIDGETS_BIN', str(ROOT / 'toolkit/target/debug/nidara-kit-gallery'))
 MSG = [os.environ.get('HYALO_BIN', 'nidara-hyalo'), 'msg']
-TITLE = 'Nidara kit gallery'
+TITLE = 'Nidara Kit Gallery'
 PAGES = [('status', 'Status'), ('button', 'Button'), ('switch', 'Switch'), ('slider', 'Slider'),
          ('field', 'Text field'), ('glass', 'Glass card'), ('text', 'Text'), ('icons', 'Icons'),
          ('layout', 'Layout'), ('scroll', 'Scroll'), ('overlay', 'Overlay'), ('grid', 'Grid'),

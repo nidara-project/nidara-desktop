@@ -7,6 +7,11 @@ rust-version.workspace = true
 license.workspace = true
 publish.workspace = true
 
+# Installed as an application (nidara-kit-gallery.desktop): Apps lists it as any other.
+[[bin]]
+name = "nidara-kit-gallery"
+path = "src/main.rs"
+
 [dependencies]
 nk-view = { path = "../crates/nk-view" }
 nk-text = { path = "../crates/nk-text", features = ["system-fonts"] }

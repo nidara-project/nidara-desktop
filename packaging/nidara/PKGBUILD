@@ -324,6 +324,8 @@ build() {
 
   # The Hyalo session owns the Rust bar/dock/panels (#1017).
   cargo build --release --locked --offline -p nidara-shell --bin nidara-shell
+  # The kit's gallery (#1079), an application like any other.
+  cargo build --release --locked --offline -p nk-gallery --bin nidara-kit-gallery
 
   # Hyalo (package nidara-hyalo). Offline: prepare() fetched everything.
   cd "$srcdir/nidara-desktop-$pkgver/hyalo"
@@ -639,6 +641,8 @@ package_nidara-hyalo() {
   install -Dm755 bin/nidara-hyalo-session "$pkgdir/usr/bin/nidara-hyalo-session"
   install -Dm755 hyalo/session/restore-wallpaper "$pkgdir/usr/lib/nidara-hyalo/restore-wallpaper"
   install -Dm755 toolkit/target/release/nidara-shell "$pkgdir/usr/bin/nidara-shell"
+  install -Dm755 toolkit/target/release/nidara-kit-gallery "$pkgdir/usr/bin/nidara-kit-gallery"
+  install -Dm644 toolkit/gallery/nidara-kit-gallery.desktop "$pkgdir/usr/share/applications/nidara-kit-gallery.desktop"
   install -Dm644 bin/nidara-rust-shell.service "$pkgdir/usr/lib/systemd/user/nidara-rust-shell.service"
   # Starts the Rust shell; the TS unit belongs to the frozen Hyprland session.
   install -Dm755 hyalo/session/start-shell "$pkgdir/usr/lib/nidara-hyalo/start-shell"
