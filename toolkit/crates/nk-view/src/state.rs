@@ -256,6 +256,17 @@ impl ViewState {
         }
         false
     }
+    /// Whether the node `key` lies in the lifted pane: a choice in a sidebar open over the
+    /// page closes it.
+    pub fn lifts(&self, key: &Key) -> bool {
+        let Some(root) = self.lifted_root() else {
+            return false;
+        };
+        self.placed
+            .iter()
+            .position(|p| &p.key == key)
+            .is_some_and(|i| self.under(i, root))
+    }
     /// The lifted pane's rectangle in the surface, whole pixels: its layer's place and size.
     /// None when it is not laid out (a closed sidebar).
     pub fn lifted_rect(&self) -> Option<Rect> {

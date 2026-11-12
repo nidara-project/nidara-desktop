@@ -379,12 +379,15 @@ both ways, faded at `disabledOpacity` while its row is disabled (`VIEW.md` §12.
 that is on or off ends its row with one; a choice among several keeps its mark slot.
 
 **nk-view is the kit's one way to build, for apps too (#1079, `VIEW.md` §13).** An application
-window hosts a view as `toolkit/gallery` does (§13.2): `Tokens::load` and `TypeScale::load` from
-the portal's appearance, `Glyphs` for `nd-` names, `KeyInput::from_key`, the semantics through
-`nk_a11y::bridge::Bridge`, the glass from `nk_platform::material::panel::PanelMaterial` per pane,
-and the window's frame from `nk_view::FrameStyle` (Settings' format: floating glass sidebar,
-content scrolling to the edges under a header band whose graded blur is a layer of its own,
-Hyalo's window controls at `controls_at`, on the user's side) — never a frame of the app's own.
+window IS the kit's: `nk_view::AppWindow` (§13.2), as `toolkit/gallery` uses it. The app keeps
+its model, gives the window a `Page` (sidebar, content, title, back/forward) on each change,
+acts on the activations `event`/`idle` give back, and calls `commit` at the end of the turn.
+The window owns the rest — the frame (`FrameStyle`: the sidebar on a layer of its own over the
+page with Settings' panel glass, the content scrolling under a header band whose graded blur
+and glass buttons are layers, Hyalo's window controls on the user's side), the slide and the
+narrow mode, the band moving the window, Escape, the reader (`nk_a11y::bridge::Bridge`), the
+paint. Never wire layers, a frame or a sidebar by hand in an app: that is what made the
+gallery's sidebar opaque while Settings' was glass (2026-11-13).
 **Glass only for what lies over content** (sidebar, menu, popover, tooltip, button); a page's
 section is `Node::group`, not a pane. A button IN a page's content is `Node::button` (no glass:
 Settings' row button from `button.json`, painted by nk-view); only one OVER content (the band, a

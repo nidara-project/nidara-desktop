@@ -623,7 +623,15 @@ this contract.
 
 ### 13.2 An application window
 
-An app is an `nk_wayland::Application` whose content is one view, as a shell surface is:
+An app is an `nk_wayland::Application` whose content is one view, as a shell surface is. **The
+window is the kit's, `nk_view::AppWindow`** (owner, 2026-11-13: never built again per app): the
+app keeps its model and gives the window a `Page` (its sidebar, its content, its title, whether
+back and forward lead anywhere) each time the model changes; the window lays it out in the frame,
+holds the layers, the sidebar's slide, the band, the pointer on every layer, Escape and Alt+Left
+and Right, the reader and the paint, and gives back the activations that are not its own (its
+own: the sidebar's toggle; a choice in a sidebar open over the page also closes it). The app
+calls `commit` at the end of each turn, after acting on them. `toolkit/gallery` is the
+reference. What it does:
 
 - **`Tokens::load(exports, appearance)`** reads the kit's tokens in the user's appearance from
   the exported settings data. The shell passes its always-dark skin; an app passes the portal's.
