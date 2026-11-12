@@ -73,6 +73,11 @@ def run(p, field, engine, scale, target=None):
             native.wait(lambda: all(re.search(
                 rf'<- wl_keyboard@\d+\.key, \(\d+, \d+, {released}, 0\)', client_log.read_text()[start:])
                 for released in [code, *modifiers]), 'chord and modifier releases delivered')
+            # Nothing is composed here, so a key must not reset the IME: the reset
+            # re-creates fcitx5's grab and drops a key Hyalo already sent to the old
+            # one (nightly, 2026-11-09/10: Ctrl+A's A never arrived, now and then).
+            assert not re.search(r'-> zwp_text_input_v3@\d+\.disable\(\)', client_log.read_text()[start:]), \
+                'a key reset the IME with nothing composed'
             drain()
 
         def active(on=True):
