@@ -1732,10 +1732,15 @@ impl ViewState {
                         || c.shown == Some(Shown::Focus))
                         && let Some(r) = self.silhouette(i)
                     {
+                        let w = tokens.look.focus_width;
+                        // A switch's track is its edge and paints over anything inside it:
+                        // its ring stands outside, a ring's width away.
+                        let out = if self.holds_switch(i) { 2. * w } else { 0. };
+                        let r = [r[0] - out, r[1] - out, r[2] + 2. * out, r[3] + 2. * out];
                         canvas.rounded_ring(
                             rect(&r),
                             c.corner.of(r[2], r[3], &tokens.radii),
-                            tokens.look.focus_width,
+                            w,
                             ink(tokens.look.focus),
                         );
                     }

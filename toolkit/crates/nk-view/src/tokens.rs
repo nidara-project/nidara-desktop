@@ -240,6 +240,7 @@ impl Look {
             crate::Ink::Primary => self.primary,
             crate::Ink::Secondary => self.secondary,
             crate::Ink::Dim => self.dim,
+            crate::Ink::Disabled => self.disabled,
         }
     }
 }
