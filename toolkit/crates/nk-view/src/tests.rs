@@ -1490,7 +1490,11 @@ fn a_layer_at_a_point_is_placed_there_at_its_natural_size_outside_its_base_too()
     let s = laid(&view, (360., 400.), 1.);
     let tile = rect(&s, "tile");
     let b = rect(&s, "badge");
-    assert_eq!([b[0], b[1]], [tile[0] + 300., tile[1] - 3.], "at the point, from the base");
+    assert_eq!(
+        [b[0], b[1]],
+        [tile[0] + 300., tile[1] - 3.],
+        "at the point, from the base"
+    );
     assert_eq!([b[2], b[3]], [16., 16.], "its natural size, not stretched");
     assert_eq!(rect(&s, "over"), tile, "and adds nothing to the overlay");
 }

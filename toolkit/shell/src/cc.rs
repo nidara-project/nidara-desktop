@@ -205,6 +205,11 @@ impl Cc {
             return;
         };
         let base = look.styles.text.clone();
+        // The editor's panel first: its scroll region places the grid (VIEW.md §12.7).
+        let views = self.editor.build(status, Some(look), &base);
+        self.editor
+            .lay_out(views, &tokens, &mut look.text, self.detail_scale);
+        self.tiles = self.editor.tiles.clone();
         let view = grid_view(&self.tiles, status, Some(look), &base);
         self.lay_view(&view, &tokens, &mut look.text);
     }
@@ -278,7 +283,7 @@ impl Cc {
         let detail = self.detail.take();
         if let Some(detail) = detail {
             self.detail_generation += 1;
-            self.editor.focus = None;
+            self.editor.set_focus(None, false);
             self.refocus = Some((Target::OpenDetail(detail.page), keyboard));
             true
         } else {
@@ -288,8 +293,8 @@ impl Cc {
     pub fn focus(&mut self, target: Target) {
         if let Target::Edit(t) = target {
             self.state.blur();
-            self.editor.focus = Some(t);
             self.editor.reveal(t);
+            self.editor.set_focus(Some(t), true);
             return;
         }
         if let Target::Detail(id) = target {
@@ -303,7 +308,7 @@ impl Cc {
                 }
             }
         } else {
-            self.editor.focus = None;
+            self.editor.set_focus(None, false);
             if let Some(key) = key_of(target) {
                 self.state.request(&key, false);
             }
@@ -341,7 +346,7 @@ impl Cc {
             }
             let current = self
                 .editor
-                .focus
+                .focus()
                 .map(Target::Edit)
                 .or_else(|| self.focused())
                 .and_then(|f| choices.iter().position(|t| *t == f));
@@ -526,7 +531,7 @@ impl Cc {
         if let Some(d) = &mut self.detail {
             return d.leave();
         }
-        self.state.pointer_leave()
+        self.editor.leave() | self.state.pointer_leave()
     }
 
     /// A press on `p`: what it asks for at once (a slider's value); a button acts on release.
@@ -542,7 +547,7 @@ impl Cc {
         if !inside(self.editor.viewport, p) {
             return None;
         }
-        self.editor.focus = None;
+        self.editor.set_focus(None, false);
         self.state.pointer_motion(p.0, p.1);
         let a = self.state.button(true, std::time::Instant::now())?;
         self.activated(a, status)
@@ -564,7 +569,7 @@ impl Cc {
         if self.editor.active {
             if let Some(edit::Target::Tile(id)) = self.editor.target(p) {
                 self.editor.menu = Some(id);
-                self.editor.focus = Some(edit::Target::Tile(id));
+                self.editor.set_focus(Some(edit::Target::Tile(id)), false);
             }
             None
         } else {
@@ -733,7 +738,9 @@ impl Cc {
         if self.editor.active {
             return self.editor.states();
         }
-        self.last.states.clone()
+        let mut out = self.last.states.clone();
+        out.extend(self.editor.states());
+        out
     }
 
     /// The selected player's cover, decoded once per file.
@@ -879,7 +886,7 @@ impl Cc {
         if self.editor.active {
             return out;
         }
-        let focus = self.focused().filter(|_| self.editor.focus.is_none());
+        let focus = self.focused().filter(|_| self.editor.focus().is_none());
         let bounds = |r: [f64; 4]| Bounds {
             x: r[0],
             y: r[1],
@@ -2655,7 +2662,7 @@ mod tests {
         for t in &order {
             cc.key(&key(0xff09), &s);
             assert_eq!(
-                cc.editor.focus.map(Target::Edit).or_else(|| cc.focused()),
+                cc.editor.focus().map(Target::Edit).or_else(|| cc.focused()),
                 Some(*t)
             );
             let focused: Vec<_> = cc
