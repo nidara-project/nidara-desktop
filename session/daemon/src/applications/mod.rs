@@ -1272,6 +1272,11 @@ pub async fn serve(conn: &Connection) -> Result<bool, Box<dyn std::error::Error>
 #[cfg(test)]
 mod page_tests {
     use super::*;
+    /// How long a read may take while the catalogue actor is held. The actor is never
+    /// serviced, so a read that regresses to its queue never finishes and fails at any
+    /// limit; the limit only has to cover a cold decode on a loaded CI runner, which once
+    /// took more than a second (12-11-2026).
+    const HELD_READ: Duration = Duration::from_secs(10);
     #[test]
     fn identity_narrowing_is_typed_on_the_wire_even_when_empty() {
         for rows in [
@@ -1385,7 +1390,7 @@ mod page_tests {
         }
         let message = icon_message();
         let app = tokio::time::timeout(
-            Duration::from_secs(1),
+            HELD_READ,
             service.get_icon(
                 9,
                 "IconReadTest.desktop".into(),
@@ -1400,7 +1405,7 @@ mod page_tests {
         .unwrap();
         assert_eq!(app.3, [11, 22, 33, 255]);
         let trash = tokio::time::timeout(
-            Duration::from_secs(1),
+            HELD_READ,
             service.get_trash_icon(9, false, 64, 1., message.header()),
         )
         .await
@@ -1408,7 +1413,7 @@ mod page_tests {
         .unwrap();
         assert_eq!(trash.3, app.3);
         let place = tokio::time::timeout(
-            Duration::from_secs(1),
+            HELD_READ,
             service.get_layout_icon(
                 9,
                 "folder:file:///tmp/held".into(),
@@ -1428,7 +1433,7 @@ mod page_tests {
         let (service, _actor_barrier, _published, path) = held_icon_service();
         let message = icon_message();
         let image = tokio::time::timeout(
-            Duration::from_secs(1),
+            HELD_READ,
             service.get_icon(
                 9,
                 "IconReadTest.desktop".into(),
