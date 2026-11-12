@@ -215,7 +215,7 @@ fn sample(key: &str, label: &str, t: &TypeScale, child: Node) -> Node {
         vec![
             child,
             Node::text(
-                format!("{key}/label"),
+                format!("{key}/caption"),
                 label,
                 t.style(Type::Caption, Weight::Regular),
             )
@@ -228,6 +228,11 @@ fn sample(key: &str, label: &str, t: &TypeScale, child: Node) -> Node {
 
 fn row(key: &str, children: Vec<Node>) -> Node {
     Node::row(key, children).gap(Space::S5).align(Align::Center)
+}
+
+/// A button in a page's content: the kit's own, no glass under it (VIEW.md §13.2).
+fn content_button(key: &str, text: &str, action: &str, t: &TypeScale) -> Node {
+    Node::button(key, text, action, t.style(Type::Small, Weight::Medium))
 }
 
 /// A button over content is glass (VIEW.md §13.2): a pill of it around the control, so
@@ -347,6 +352,24 @@ fn status(cat: &Catalogue, t: &TypeScale) -> Vec<Node> {
 }
 
 fn buttons(m: &Model, t: &TypeScale) -> Vec<Node> {
+    let in_page = |k: &str, label: &str, f: &dyn Fn(Node) -> Node| {
+        sample(
+            &format!("b/p/{k}"),
+            label,
+            t,
+            f(content_button(&format!("b/p/{k}"), "Browse", "noop", t)),
+        )
+    };
+    let page = row(
+        "b/page",
+        vec![
+            in_page("rest", "Rest", &|n| n),
+            in_page("hover", "Hover", &|n| n.shown(Shown::Hover)),
+            in_page("press", "Pressed", &|n| n.shown(Shown::Press)),
+            in_page("focus", "Focus", &|n| n.shown(Shown::Focus)),
+            in_page("off", "Disabled", &|n| n.enabled(false)),
+        ],
+    );
     let state = |k: &str, label: &str, f: &dyn Fn(Node) -> Node| {
         sample(
             &format!("b/{k}"),
@@ -397,7 +420,7 @@ fn buttons(m: &Model, t: &TypeScale) -> Vec<Node> {
                 "b/count",
                 &format!("Pressed {} times", m.presses),
                 t,
-                on_glass(button("b/count", "Press me", "press", t)),
+                content_button("b/count", "Press me", "press", t),
             ),
             sample(
                 "b/toggle",
@@ -434,9 +457,15 @@ fn buttons(m: &Model, t: &TypeScale) -> Vec<Node> {
     )
     .gap(Space::S1);
     vec![
-        section("b-states", "States", t, states),
-        section("b-kinds", "Kinds", t, kinds),
+        section("b-page", "In a page (no glass)", t, page),
         section("b-grouped", "Rows in a group (no glass)", t, grouped),
+        section(
+            "b-states",
+            "Over content (glass: a window's band, a toolbar over a page)",
+            t,
+            states,
+        ),
+        section("b-kinds", "Over content: kinds", t, kinds),
         section("b-live", "Try it", t, live),
     ]
 }
@@ -1004,12 +1033,12 @@ fn reveal(m: &Model, t: &TypeScale) -> Vec<Node> {
     vec![
         Node::row(
             "r/toggle/line",
-            vec![on_glass(button(
+            vec![content_button(
                 "r/toggle",
                 if m.open { "Close" } else { "Open" },
                 "reveal",
                 t,
-            ))],
+            )],
         ),
         Node::reveal(
             "r/reveal",

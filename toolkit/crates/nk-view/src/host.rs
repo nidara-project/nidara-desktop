@@ -3,7 +3,8 @@
 //! tokens in an appearance, the keys the view understands, and the interface glyphs.
 use crate::state::KeyInput;
 use crate::tokens::{
-    Look, Motion, Radii, Spacing, Tokens, Washes, scrollbar_from, slider_from, switch_from,
+    Look, Motion, Radii, Spacing, Tokens, Washes, button_from, scrollbar_from, slider_from,
+    switch_from,
 };
 use nk_platform::{exports::Exports, portal::Appearance};
 use std::{collections::HashMap, sync::Arc};
@@ -23,6 +24,7 @@ impl Tokens {
             scrollbar: scrollbar_from(&set.components["scrollbar"], &colors)?,
             slider: slider_from(&set.components["range"])?,
             switch: switch_from(&set.components["switch"], &colors)?,
+            button: button_from(&set.components["button"], &colors)?,
             group_radius: set.components["common"]["groupRadius"]
                 .as_f64()
                 .filter(|v| v.is_finite() && *v >= 0.)

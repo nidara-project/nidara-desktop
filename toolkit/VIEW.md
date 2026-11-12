@@ -662,8 +662,14 @@ An app is an `nk_wayland::Application` whose content is one view, as a shell sur
 - **Glass is for what lies over content** (owner, 2026-11-12): a sidebar, a menu, a popover, a
   tooltip, a button. A section of a page is a **group** (`Node::group`), Settings' card on the
   window's background (`--nidara-surface`, `common.groupRadius`), with its caption above it.
-  A button inside a group stands on its own glass; a row of a group has none, and the view
-  paints its states (§4, "Off glass").
+  A row of a group has no glass, and the view paints its states (§4, "Off glass").
+- **Two kinds of button, by where they lie.** Over content (a window's band, a toolbar over a
+  page) a button is glass: a control in a pane, whose hover and press Hyalo draws. In a page's
+  content it is `Node::button` (`Face::Button`), Settings' row button from `components.json`
+  `button` (`toolkit/tokens/button.json`): the surface fill, a 1 px border, the `sm` corner, the
+  label in 14 × 5 of padding and at least 32 tall, hover and pressed in the surface's own tones
+  (each replaces the rest one), faded to `disabledOpacity` while disabled, and the accent ring
+  when focused. The view paints all of it and declares nothing to Hyalo.
 
 ### 13.3 The gallery
 

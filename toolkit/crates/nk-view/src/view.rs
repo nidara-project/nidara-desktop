@@ -327,7 +327,23 @@ pub struct Control {
     /// gallery sets it, to show a component's states side by side; a live control has none.
     #[serde(default)]
     pub shown: Option<Shown>,
+    /// How it is drawn: on glass, by Hyalo's washes, or as a button in a page's content.
+    #[serde(default)]
+    pub face: Face,
     pub child: Box<Node>,
+}
+
+/// How a control is drawn (VIEW.md §13.2).
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub enum Face {
+    /// What it holds, with the washes of its state: Hyalo's on glass, the view's off it.
+    #[default]
+    Plain,
+    /// A button in a page's content, where no glass lies under it (`components.json`
+    /// `button`): the view fills it with the surface, its border and the surface's hover and
+    /// pressed tones, padded to the button's height. Over content (a window's band, a
+    /// toolbar over a page) a button is glass instead: a `Plain` control in a pane.
+    Button,
 }
 
 /// A state a control can be shown in for good (`Control::shown`).
@@ -580,9 +596,28 @@ impl Node {
                 surface: false,
                 pointer: true,
                 shown: None,
+                face: Face::Plain,
                 child: Box::new(child),
             }),
         )
+    }
+    /// A button in a page's content (`Face::Button`): `label` centred in `style`, in the
+    /// button's padding and corner. Not glass: for one over content, put a control in a pane.
+    pub fn button(
+        key: impl Into<Key>,
+        label: impl Into<String>,
+        action: impl Into<String>,
+        style: TextStyle,
+    ) -> Self {
+        let key = key.into();
+        let label = label.into();
+        let text = Self::text(format!("{}/label", key.0), label.clone(), style).lines(1);
+        let mut n = Self::control(key, label, action, text).corner(Corner::Token(Radius::Sm));
+        if let Kind::Control(c) = &mut n.kind {
+            c.wash = Wash::None;
+            c.face = Face::Button;
+        }
+        n
     }
     /// A slider (VIEW.md §12.1): as tall as its thumb and as wide as it is given (a column
     /// stretches it; in a row, `.grow()` it). `action` is reported on every change, its value

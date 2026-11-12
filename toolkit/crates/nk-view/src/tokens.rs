@@ -417,6 +417,59 @@ pub struct SwitchStyle {
     pub disabled_opacity: f64,
 }
 
+/// A button in a page's content, which no glass lies under (`components.json` `button`,
+/// `toolkit/tokens/button.json`: Settings' row button). The view paints all of it.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct ButtonStyle {
+    pub padding_x: f64,
+    pub padding_y: f64,
+    pub border: f64,
+    pub min_content_height: f64,
+    pub background: Color,
+    pub border_color: Color,
+    pub hover: Color,
+    pub pressed: Color,
+    pub disabled_opacity: f64,
+}
+impl ButtonStyle {
+    /// Its height at the least: the content's floor, the padding and the border.
+    pub fn min_height(&self) -> f64 {
+        self.min_content_height + 2. * (self.padding_y + self.border)
+    }
+}
+
+pub fn button_from(component: &Value, set: &Value) -> Result<ButtonStyle, String> {
+    let n = |k: &str| {
+        component[k]
+            .as_f64()
+            .filter(|v| v.is_finite() && *v >= 0.)
+            .ok_or_else(|| format!("button: no {k}"))
+    };
+    let colour = |k: &str| -> Result<Color, String> {
+        let name = component[k]
+            .as_str()
+            .ok_or_else(|| format!("button: no {k}"))?;
+        if !name.starts_with("--") {
+            return parse_color(name);
+        }
+        set["tokens"][name]
+            .as_str()
+            .ok_or_else(|| format!("colors.json: no {name}"))
+            .and_then(parse_color)
+    };
+    Ok(ButtonStyle {
+        padding_x: n("paddingX")?,
+        padding_y: n("paddingY")?,
+        border: n("border")?,
+        min_content_height: n("minContentHeight")?,
+        background: colour("background")?,
+        border_color: colour("borderColor")?,
+        hover: colour("hover")?,
+        pressed: colour("pressed")?,
+        disabled_opacity: n("disabledOpacity")?,
+    })
+}
+
 /// The switch from its component, its colours named by token and resolved in one set of
 /// `tokens/colors.json`, or written out (`checkedBorderColor` is an `rgba()`).
 pub fn switch_from(component: &Value, set: &Value) -> Result<SwitchStyle, String> {
@@ -470,6 +523,7 @@ pub struct Tokens {
     pub scrollbar: ScrollbarStyle,
     pub slider: SliderStyle,
     pub switch: SwitchStyle,
+    pub button: ButtonStyle,
     /// A group's corner (`components.json` `common.groupRadius`), as Settings' cards.
     pub group_radius: f64,
 }
