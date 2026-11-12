@@ -2528,6 +2528,8 @@ impl Application for Bar {
                 if result.is_err() {
                     d.write_failed();
                 }
+            } else if result.is_err() {
+                self.cc.write_failed();
             }
             self.refresh(w);
         }
@@ -2555,8 +2557,10 @@ impl Application for Bar {
         {
             w.redraw();
         }
-        if self.cc_open && self.cc.detail.as_ref().is_some_and(|d| d.pending_due()) {
-            // A switch the service never confirmed goes back to what the service says.
+        if self.cc_open
+            && (self.cc.detail.as_ref().is_some_and(|d| d.pending_due()) || self.cc.pending_due())
+        {
+            // A switch or tile the service never confirmed goes back to what it says.
             self.refresh(w);
         }
         let minute = std::time::SystemTime::now()
