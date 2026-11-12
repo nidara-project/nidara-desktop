@@ -17,6 +17,11 @@ The rest are not in it (§10).
 
 ## Why
 
+> **Superseded in part by #1079 (owner, 2026-11-12).** There is one kit, for apps and shell, with
+> `nk-view` as its base: `nk-widgets` does not "stay as it is", and the shell gets no vocabulary of
+> its own. Every interface uses only kit components (SKILL.md, commandment 13). The rest of this
+> contract stands until #1079's first step amends it.
+
 The Rust shell is about 17,000 lines across bar, dock, Apps, CC and NC, and it hardly uses the
 kit: only `popup.rs` takes the action menu from `nk-widgets`. Each surface places, hit-tests and
 paints with its own numbers. The NC writes a card as 112 or 152 high, its close button at
