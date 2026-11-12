@@ -416,7 +416,9 @@ impl Layouter<'_> {
                     let sp = self.spacing;
                     let room =
                         (base.w.max(width) - sp.of(l.inset.left) - sp.of(l.inset.right)).max(0.);
-                    let w = if l.across == Align::Stretch {
+                    let w = if l.at.is_some() {
+                        self.natural(&l.child)
+                    } else if l.across == Align::Stretch {
                         room
                     } else {
                         self.natural(&l.child).min(room)
@@ -681,6 +683,8 @@ impl Layouter<'_> {
         match &n.kind {
             Kind::Pane(p) => {
                 inner.pane = Some(index);
+                out[index].alpha *= p.opacity;
+                inner.alpha *= p.opacity;
                 self.place(&p.child, &m.children[0], r, inner, out)
             }
             Kind::Control(c) => {
@@ -743,8 +747,14 @@ impl Layouter<'_> {
                         Align::End => (hi - size, size),
                         Align::Start | Align::FirstLine => (lo, size),
                     };
-                    let (x, w) = at(l.across, x0, x1, lm.w);
-                    let (y, h) = at(l.down, y0, y1, lm.h);
+                    let (x, w, y, h) = match l.at {
+                        Some((x, y)) => (r[0] + x, lm.w, r[1] + y, lm.h),
+                        None => {
+                            let (x, w) = at(l.across, x0, x1, lm.w);
+                            let (y, h) = at(l.down, y0, y1, lm.h);
+                            (x, w, y, h)
+                        }
+                    };
                     self.place(&l.child, lm, [x, y, w, h], inner, out);
                 }
             }

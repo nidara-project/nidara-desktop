@@ -335,6 +335,12 @@ A view written as `Node::overlay(key, base).layer(across, down, inset, child)`. 
 this file used to keep room for is this node: a stack lays its children out along an axis,
 and an overlay does not.
 
+**A layer at a point.** `.layer_at(x, y, child)` places a layer at its natural size with its
+top-left corner `(x, y)` from the base's, for what the surface puts beside something else
+whose place it already knows: the CC's remove badge at a tile's corner, a size menu under
+the tile that opened it, kept inside the viewport (§12.7). The point is the surface's, as a
+grid's cells are; size, order and everything else are as for any layer.
+
 ## 10. Not in this contract
 
 The tooltip (piece 9) and the calendar (piece 10). The NC keeps today's calendar. The tile grid
@@ -543,3 +549,36 @@ on or off.
 
 Not carried, as in the native switch: the kit's inset shadow, the checked glow and the thumb's
 drop shadow (`nk-render` draws no shadows yet).
+
+### 12.7 Edit mode (step 4)
+
+Edit mode is one view, built by `ccedit.rs` from its model, laid out in the panel: a scroll
+region (§8) holding the grid and the list of widgets to add, the error, and Edit/Done. The
+grid's rules (`cclayout.rs`), the hold and its preview, the write barrier and the reader's
+named actions stay the editor's; what it placed, hit-tested, focused, washed and painted by
+hand is the view's.
+
+- **Tiles** are controls on the grid's cells, keyed `e:t:<id>`, with no wash of their own:
+  in Hyalo each tile is its own layer surface, which moves it and draws its focus, so a wash
+  on the panel under it would never show. Without layers the grid view (§12.4) draws them,
+  as before. A tile held by the pointer follows it from its press offset; the others are
+  laid on the preview's cells.
+- **Free cells** are panes on the grid at **opacity 0.16**: `Node::pane(...).opacity(o)`
+  forms a pane's glass and content at `o`, multiplied with a reveal's or a swipe's.
+- **The remove badge** (`e:x:<id>`, a 28 circle) is a layer at a point (§9) over the tile's
+  top-right corner, 25 in and 3 above, on removable tiles only.
+- **Widgets to add** are rows under the grid (`e:a:<id>`), disabled with the refusal as their
+  description when the grid has no room.
+- **The size menu** is a view of its own, at a point under its tile kept inside the viewport:
+  a row per size the tile supports (`e:z:<size>`), marked when current, disabled with the
+  refusal as a second line, and Remove for a removable tile. In Hyalo it is drawn on its own
+  layer surface over the tiles' layers; without layers, on the panel. While it is open it and
+  Edit/Done are the only controls.
+- **Focus** is the view's: one key at a time across both views, Tab in the readers' order
+  (Edit/Done, the tiles, the rows to add, the menu's rows), a focused row scrolled into the
+  viewport. Ctrl+arrows, Menu or Shift+F10, Delete, Enter and Escape stay the editor's keys,
+  acting on the focused tile.
+- **Scroll** is the view's. A wheel step during a drag retargets the held tile's cell from
+  where the grid is laid out after the step, without a pointer move or a write.
+- **Washes** are the view's hover, press and focus (§4). The preview cell of a held tile
+  keeps its accent wash at 20 %, declared by the editor.
