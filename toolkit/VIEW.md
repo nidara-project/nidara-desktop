@@ -142,6 +142,17 @@ The surface receives only the effect: `Activated(key, action)`.
   control's shape and spends no wash.
 - **Without the material protocol (D5)**, `nk-view` paints the same washes in the client, from
   the same tokens: one fallback path, not one per surface.
+- **Off glass, the view paints them** (owner, 2026-11-12). Hyalo draws a wash only where there
+  is glass (`add_state_region` in `nidara-material-v1`), so a control with no `Pane` above it, a
+  row of a group, gets its hover, press and marked wash painted by `nk-view` under its content,
+  from the same tokens and with the same fade. It declares nothing to Hyalo and spends no
+  budget. This is not imitating the compositor: there is no glass there for it to draw on, and
+  the protocol is not to be extended for it.
+- **Disabled is content.** An enabled-`false` control that has an action draws its text and
+  glyphs in `--nidara-text-disabled`. One with no action is a marker (the NC's today), drawn as
+  it is.
+- **A row that holds a switch is not lit when marked.** The switch shows the state; the marked
+  wash would read as a selection. The reader still gets it checked.
 
 **The budget.** Hyalo lays at most **eight washes** over one shape
 (`hyalo/compositor/src/render/glass_gl.rs`, `STATE_MAX`), and drops the rest. Today the whole
@@ -636,8 +647,8 @@ An app is an `nk_wayland::Application` whose content is one view, as a shell sur
 - **Glass is for what lies over content** (owner, 2026-11-12): a sidebar, a menu, a popover, a
   tooltip, a button. A section of a page is a **group** (`Node::group`), Settings' card on the
   window's background (`--nidara-surface`, `common.groupRadius`), with its caption above it.
-  Hyalo draws a control's hover and press on glass, so a button inside a group stands on its
-  own glass.
+  A button inside a group stands on its own glass; a row of a group has none, and the view
+  paints its states (§4, "Off glass").
 
 ### 13.3 The gallery
 
