@@ -1,0 +1,14 @@
+[Desktop Entry]
+# The kit's gallery (toolkit/gallery, #1079): every component of the kit, in each of its
+# states, built with the kit alone. Like GTK's widget factory, it ships with the desktop.
+Name=Kit Gallery
+Name[es]=Galería del kit
+Comment=Every component of the Nidara kit, in each of its states
+Comment[es]=Todos los componentes del kit de Nidara, en cada uno de sus estados
+Exec=nidara-gallery
+Icon=preferences-desktop-theme
+Type=Application
+Categories=Development;GUIDesigner;
+Keywords=kit;toolkit;widgets;components;gallery;design;
+Keywords[es]=kit;componentes;widgets;galería;diseño;
+StartupNotify=false

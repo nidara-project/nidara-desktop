@@ -426,7 +426,7 @@ fn run() -> Result<()> {
         Options {
             material: true,
             map: true,
-            app_id: "nk-gallery",
+            app_id: "nidara-gallery",
             title: "Nidara kit gallery",
             size: (1100, 760),
             require_material: None,
@@ -437,7 +437,7 @@ fn run() -> Result<()> {
 
 fn main() {
     if let Err(e) = run() {
-        eprintln!("nk-gallery: {e}");
+        eprintln!("nidara-gallery: {e}");
         std::process::exit(1);
     }
 }

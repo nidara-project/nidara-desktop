@@ -372,7 +372,8 @@ the portal's appearance, `Glyphs` for `nd-` names, `KeyInput::from_key`, the sem
 `nk_a11y::bridge::Bridge`, the glass from `nk_platform::material::panel::PanelMaterial` per
 pane, and Hyalo's window controls placed in room the view leaves for them. Glyph names in a view
 are `nd-…` WITHOUT `-symbolic` (nk-icons appends it; with it nothing is drawn and the log says
-"no drawing for icon"). **The gallery (`nk-gallery`) is where a component is proven**: a page per
+"no drawing for icon"). **The gallery (`nk-gallery`, installed as `nidara-gallery` with its own entry in Apps) is where a
+component is proven**: a page per
 component with its states side by side (`Control::shown`, gallery only), and
 `toolkit/gallery/catalogue.json` says where each catalogue entry stands. A component is done when
 it is in nk-view with a page there. Check it with `toolkit/gallery/check-headless.sh` (the
