@@ -209,6 +209,8 @@ pub struct Look {
     /// (`--nidara-surface`) (VIEW.md §12.4).
     pub on: Color,
     pub surface: Color,
+    /// A disabled control's text and glyphs (`--nidara-text-disabled`).
+    pub disabled: Color,
     /// The ring's width, as `nk-widgets` draws it (D8).
     pub focus_width: f64,
 }
@@ -229,6 +231,7 @@ impl Look {
             focus: token("--nidara-accent")?,
             on: token("--nidara-on")?,
             surface: token("--nidara-surface")?,
+            disabled: token("--nidara-text-disabled")?,
             focus_width: 2.,
         })
     }

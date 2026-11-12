@@ -164,6 +164,10 @@ pub struct ViewState {
     next_semantic: NodeId,
     /// The regions that showed a wash in the last frame.
     lit: HashSet<Key>,
+    /// The washes of controls that are not on glass, by placed index: Hyalo draws a wash
+    /// only where there is glass (`add_state_region`), so the view paints these itself,
+    /// under the control's content (VIEW.md §13.2).
+    painted: HashMap<usize, (Rect, f64, [f64; 4])>,
     /// Regions fading out, until when (they still take a place in Hyalo's eight).
     fading: HashMap<Key, Instant>,
     overflow_logged: bool,
@@ -208,6 +212,7 @@ impl ViewState {
             semantic_ids: HashMap::new(),
             next_semantic: 0,
             lit: HashSet::new(),
+            painted: HashMap::new(),
             fading: HashMap::new(),
             overflow_logged: false,
             held: None,
@@ -573,6 +578,12 @@ impl ViewState {
     }
     /// What a control's hover, press and focus ring outline: its thumb for a slider, else
     /// what of it shows.
+    /// Whether control `i` holds a switch, which shows its state itself.
+    fn holds_switch(&self, i: usize) -> bool {
+        self.placed
+            .iter()
+            .any(|p| p.control == Some(i) && matches!(p.what, What::Switch { .. }))
+    }
     fn silhouette(&self, i: usize) -> Option<Rect> {
         let visible = self.placed[i].visible()?;
         match self.thumb(i) {
@@ -1248,7 +1259,9 @@ impl ViewState {
                 (3, well)
             } else if self.fading.contains_key(key) {
                 (2, rest)
-            } else if c.marked {
+            } else if c.marked && !self.holds_switch(i) {
+                // Selected (a sidebar's page, a list's choice). A row with a switch shows
+                // its on and off in the switch, so it is never also lit as selected.
                 (3, washes.hover)
             } else {
                 (4, rest)
@@ -1258,7 +1271,8 @@ impl ViewState {
         regions.sort_by_key(|r| r.0);
         let mut spent: HashMap<Option<usize>, usize> = HashMap::new();
         let mut dropped = 0;
-        for r in regions.iter_mut().filter(|r| r.0 < 4) {
+        // Hyalo's budget is per pane of glass; what is off glass the view paints, unbudgeted.
+        for r in regions.iter_mut().filter(|r| r.0 < 4 && r.1.is_some()) {
             let n = spent.entry(r.1).or_default();
             if *n >= BUDGET {
                 r.3[3] = 0.;
@@ -1275,7 +1289,8 @@ impl ViewState {
         }
         let mut states = vec![];
         let mut lit = HashSet::new();
-        for (_, _, i, wash) in regions {
+        self.painted.clear();
+        for (_, pane, i, wash) in regions {
             let key = self.placed[i].key.clone();
             if wash[3] > 0. {
                 lit.insert(key.clone());
@@ -1286,6 +1301,13 @@ impl ViewState {
                 continue;
             };
             let corner = self.control(i).corner;
+            if pane.is_none() {
+                if wash[3] > 0. {
+                    self.painted
+                        .insert(i, (r, corner.of(r[2], r[3], &tokens.radii), wash));
+                }
+                continue;
+            }
             states.push(StateRegion {
                 id: self.id(&key),
                 bounds: MaterialRect {
@@ -1501,6 +1523,12 @@ impl ViewState {
                 let Some(owner) = p.control.filter(|&o| o != i) else {
                     return ink(c);
                 };
+                // A disabled control's text and glyphs, in the disabled ink. One without an
+                // action is a marker, not a control turned off (the NC's today).
+                let o = self.control(owner);
+                if !o.enabled && !o.action.is_empty() {
+                    return ink(tokens.look.disabled);
+                }
                 if self.control(owner).on {
                     return ink(tokens.look.focus);
                 }
@@ -1576,6 +1604,15 @@ impl ViewState {
                     canvas.pop_clip();
                 }
                 What::Control(c) => {
+                    if let Some((r, radius, w)) = self.painted.get(&i) {
+                        canvas.clip(rect(&visible));
+                        canvas.rounded_rect(
+                            rect(r),
+                            *radius,
+                            ink(nk_render::Color::new(w.map(|v| v as f32))),
+                        );
+                        canvas.pop_clip();
+                    }
                     if let Some(top) = self.fill_top(i) {
                         // The tile slider: the control filled from its bottom to its value.
                         let r = p.rect;

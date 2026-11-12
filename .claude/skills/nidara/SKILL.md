@@ -374,8 +374,11 @@ and the window's frame from `nk_view::FrameStyle` (Settings' format: floating gl
 content scrolling to the edges under a header band whose graded blur is a layer of its own,
 Hyalo's window controls at `controls_at`, on the user's side) — never a frame of the app's own.
 **Glass only for what lies over content** (sidebar, menu, popover, tooltip, button); a page's
-section is `Node::group`, not a pane, and a button inside a group stands on its own glass or its
-hover and press do not show (Hyalo draws them on glass). Glyph names in a view are
+section is `Node::group`, not a pane. A button inside a group stands on its own glass; a ROW of a
+group has none, and nk-view paints its hover, press and marked wash itself (Hyalo draws washes
+only on glass; never extend the protocol for this — `VIEW.md` §4 "Off glass"). A disabled control
+with an action draws its content in `--nidara-text-disabled`; a marked row holding a switch is
+not lit. Glyph names in a view are
 `nd-…` WITHOUT `-symbolic` (nk-icons appends it; with it nothing is drawn and the log says "no
 drawing for icon"). **The gallery (`nk-gallery`, installed as `nidara-kit-gallery` with its own
 entry in Apps) is where a component is proven**: a page per component with its states side by side

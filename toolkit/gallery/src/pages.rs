@@ -415,9 +415,28 @@ fn buttons(m: &Model, t: &TypeScale) -> Vec<Node> {
             ),
         ],
     );
+    // A row of a group has no glass under it: its states are the view's to paint (VIEW.md
+    // §13.2), from the same tokens Hyalo uses on glass.
+    let in_group = |k: &str, label: &str, f: &dyn Fn(Node) -> Node| {
+        f(button(&format!("b/g/{k}"), label, "noop", t).corner(Corner::Token(Radius::Md)))
+    };
+    let grouped = Node::column(
+        "b/grouped",
+        vec![
+            in_group("rest", "Rest", &|n| n),
+            in_group("hover", "Hover", &|n| n.shown(Shown::Hover)),
+            in_group("press", "Pressed", &|n| n.shown(Shown::Press)),
+            in_group("selected", "Selected", &|n| {
+                n.role(Role::Toggle).marked(true)
+            }),
+            in_group("off", "Disabled", &|n| n.enabled(false)),
+        ],
+    )
+    .gap(Space::S1);
     vec![
         section("b-states", "States", t, states),
         section("b-kinds", "Kinds", t, kinds),
+        section("b-grouped", "Rows in a group (no glass)", t, grouped),
         section("b-live", "Try it", t, live),
     ]
 }

@@ -33,7 +33,7 @@ fn tokens() -> Tokens {
         "--nidara-text-dim": "rgba(255, 255, 255, 0.6)", "--nidara-accent": "#0088FF",
         "--nidara-surface-raised": "rgba(255, 255, 255, 0.24)", "--nidara-on": "#ffffff",
         "--nidara-surface": "rgba(255, 255, 255, 0.08)", "--nidara-border": "rgba(255, 255, 255, 0.2)",
-        "--nidara-thumb": "#ffffff"}});
+        "--nidara-thumb": "#ffffff", "--nidara-text-disabled": "rgba(255, 255, 255, 0.3)"}});
     Tokens {
         spacing: Spacing::from_static(&statics()).unwrap(),
         radii: Radii::from_static(&statics()).unwrap(),
@@ -540,12 +540,17 @@ fn region_ids_follow_keys_across_rebuilds_and_states_clear_when_the_control_goes
     let mut s = ViewState::new(500);
     let mut text = backend();
     let t = tokens();
-    let two = Node::row(
-        "r",
-        vec![
-            Node::control("a", "A", "a", Node::icon("ai", "nd-a", 16.)),
-            Node::control("b", "B", "b", Node::icon("bi", "nd-b", 16.)),
-        ],
+    // On glass, where Hyalo draws the washes.
+    let two = Node::pane(
+        "glass",
+        Corner::Pill,
+        Node::row(
+            "r",
+            vec![
+                Node::control("a", "A", "a", Node::icon("ai", "nd-a", 16.)),
+                Node::control("b", "B", "b", Node::icon("bi", "nd-b", 16.)),
+            ],
+        ),
     );
     s.layout(&two, (100., 20.), 1., &t, &mut text, Instant::now());
     let ids = |s: &mut ViewState| {
@@ -560,21 +565,29 @@ fn region_ids_follow_keys_across_rebuilds_and_states_clear_when_the_control_goes
     s.key(KeyInput::Tab);
     s.key(KeyInput::Tab);
     assert_eq!(s.focus(), Some(&Key::from("b")));
-    let swapped = Node::row(
-        "r",
-        vec![
-            Node::control("b", "B", "b", Node::icon("bi", "nd-b", 16.)),
-            Node::control("a", "A", "a", Node::icon("ai", "nd-a", 16.)),
-        ],
+    let swapped = Node::pane(
+        "glass",
+        Corner::Pill,
+        Node::row(
+            "r",
+            vec![
+                Node::control("b", "B", "b", Node::icon("bi", "nd-b", 16.)),
+                Node::control("a", "A", "a", Node::icon("ai", "nd-a", 16.)),
+            ],
+        ),
     );
     s.layout(&swapped, (100., 20.), 1., &t, &mut text, Instant::now());
     let after = ids(&mut s);
     assert_eq!(before, [after[1], after[0]], "each key kept its id");
     assert_eq!(s.focus(), Some(&Key::from("b")), "focus followed the key");
     s.layout(
-        &Node::row(
-            "r",
-            vec![Node::control("a", "A", "a", Node::icon("ai", "nd-a", 16.))],
+        &Node::pane(
+            "glass",
+            Corner::Pill,
+            Node::row(
+                "r",
+                vec![Node::control("a", "A", "a", Node::icon("ai", "nd-a", 16.))],
+            ),
         ),
         (100., 20.),
         1.,
@@ -613,7 +626,11 @@ fn a_view_is_serializable() {
 
 #[test]
 fn the_focus_ring_is_painted_only_after_keyboard_focus_and_the_fallback_paints_washes() {
-    let view = Node::control("a", "A", "a", Node::icon("ai", "nd-a", 16.)).corner(Corner::Pill);
+    let view = Node::pane(
+        "glass",
+        Corner::Pill,
+        Node::control("a", "A", "a", Node::icon("ai", "nd-a", 16.)).corner(Corner::Pill),
+    );
     let mut s = laid(&view, (40., 40.), 1.);
     let t = tokens();
     let mut none = |_: &str, _: f64| None;
@@ -647,14 +664,18 @@ fn a_shown_state_holds_whatever_the_pointer_and_the_focus_do() {
             None => n,
         }
     };
-    let view = Node::row(
-        "row",
-        vec![
-            one("h", Some(Shown::Hover)),
-            one("p", Some(Shown::Press)),
-            one("f", Some(Shown::Focus)),
-            one("n", None),
-        ],
+    let view = Node::pane(
+        "glass",
+        Corner::Pill,
+        Node::row(
+            "row",
+            vec![
+                one("h", Some(Shown::Hover)),
+                one("p", Some(Shown::Press)),
+                one("f", Some(Shown::Focus)),
+                one("n", None),
+            ],
+        ),
     );
     let mut s = laid(&view, (200., 40.), 1.);
     let t = tokens();
@@ -2698,4 +2719,114 @@ fn the_window_controls_follow_the_side_the_user_chose() {
     assert_eq!(header(nk_wayland::ControlsSide::Right), 10. + 72. + 14.);
     assert_eq!(header(nk_wayland::ControlsSide::Left), 24.);
     assert!(f.on_band(100., 20.) && !f.on_band(100., 60.) && !f.on_band(300., 20.));
+}
+
+/// Painted pixels and their summed colour over a box of the canvas.
+fn lit(c: &[u8], width: usize, r: [usize; 4]) -> (usize, u64) {
+    let mut n = 0;
+    let mut sum = 0u64;
+    for y in r[1]..r[1] + r[3] {
+        for x in r[0]..r[0] + r[2] {
+            let p = &c[(y * width + x) * 4..(y * width + x) * 4 + 4];
+            if p[3] > 0 {
+                n += 1;
+                sum += p[..3].iter().map(|&v| v as u64).sum::<u64>();
+            }
+        }
+    }
+    (n, sum)
+}
+
+#[test]
+fn a_control_off_glass_has_its_hover_painted_by_the_view_not_declared_to_hyalo() {
+    // A row in a group: no glass under it, so Hyalo would draw nothing there.
+    let view = Node::group(
+        "g",
+        Node::control("row", "Row", "row", Node::text("row/t", "Row", style(14.)))
+            .corner(Corner::Token(Radius::Sm)),
+    );
+    let t = tokens();
+    let mut none = |_: &str, _: f64| None;
+    let paint = |s: &ViewState, none: &mut dyn FnMut(&str, f64) -> Option<Arc<nk_icons::Icon>>| {
+        let mut c = nk_render::Canvas::new(200, 60, 1.);
+        s.paint(&mut c, &t, none, None).unwrap();
+        c.finish()
+    };
+    let mut s = laid(&view, (200., 60.), 1.);
+    let at_rest = s.frame(&t, Instant::now());
+    let rest = paint(&s, &mut none);
+    let r = rect(&s, "row");
+    s.pointer_motion(r[0] + 2., r[1] + 2.);
+    let hovered = s.frame(&t, Instant::now());
+    assert!(
+        at_rest.states.is_empty() && hovered.states.iter().all(|r| r.wash[3] == 0.),
+        "nothing off glass is declared to Hyalo"
+    );
+    let lit_now = paint(&s, &mut none);
+    // A corner of the row, clear of its text: the wash brightens it.
+    let corner = [r[0] as usize + 1, r[1] as usize + 1, 3, 3];
+    assert!(
+        lit(&lit_now, 200, corner).1 > lit(&rest, 200, corner).1,
+        "the view paints the hover"
+    );
+}
+
+#[test]
+fn a_disabled_control_draws_its_content_in_the_disabled_ink_and_a_marker_does_not() {
+    let t = tokens();
+    let row = |key: &str, action: &str, enabled: bool| {
+        Node::control(
+            key,
+            key,
+            action,
+            Node::text(format!("{key}/t"), "Wi-Fi", style(14.)),
+        )
+        .enabled(enabled)
+    };
+    let mut none = |_: &str, _: f64| None;
+    let ink_of = |view: Node, none: &mut dyn FnMut(&str, f64) -> Option<Arc<nk_icons::Icon>>| {
+        let s = laid(&view, (120., 30.), 1.);
+        let mut c = nk_render::Canvas::new(120, 30, 1.);
+        s.paint(&mut c, &t, none, None).unwrap();
+        lit(&c.finish(), 120, [0, 0, 120, 30])
+    };
+    let on = ink_of(row("a", "go", true), &mut none);
+    let off = ink_of(row("a", "go", false), &mut none);
+    let marker = ink_of(row("a", "", false), &mut none);
+    assert!(
+        on.0 > 0 && off.1 < on.1 / 2,
+        "dimmed: {off:?} against {on:?}"
+    );
+    assert_eq!(marker, on, "no action: a marker, drawn as it is");
+}
+
+#[test]
+fn a_row_with_a_switch_is_not_lit_as_selected() {
+    let t = tokens();
+    let row = |key: &str, child: Node| {
+        Node::control(key, key, key, child)
+            .role(Role::Toggle)
+            .marked(true)
+    };
+    let view = Node::pane(
+        "glass",
+        Corner::Token(Radius::Lg),
+        Node::column(
+            "c",
+            vec![
+                row("choice", Node::text("choice/t", "Choice", style(14.))),
+                row("wifi", Node::switch("wifi/sw", true)),
+            ],
+        ),
+    );
+    let mut s = laid(&view, (200., 80.), 1.);
+    let f = s.frame(&t, Instant::now());
+    let lit_at = |k: &str| {
+        let r = rect(&s, k);
+        f.states
+            .iter()
+            .any(|st| (st.bounds.y - r[1]).abs() < 0.5 && st.wash[3] > 0.)
+    };
+    assert!(lit_at("choice"), "a selected choice is lit");
+    assert!(!lit_at("wifi"), "the switch shows it; the row is not lit");
 }
