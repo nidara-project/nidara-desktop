@@ -3,8 +3,9 @@
 //! of it a kit node. A page shows one component in each of its states side by side, with
 //! the catalogue entries it answers and their GTK and AppKit equivalents.
 use nk_view::{
-    Align, Cell, Corner, Field, Ink, Justify, Node, Padding, Radius, Role, SettingRow, Shown,
-    SidebarEntry, Slider, SliderEnd, SliderStyle, Space, Type, TypeScale, Wash, Weight,
+    Align, Cell, Corner, Dropdown, DropdownStyle, Field, Ink, Justify, Node, Padding, Radius, Role,
+    SettingRow, Shown, SidebarEntry, Slider, SliderEnd, SliderStyle, Space, Type, TypeScale, Wash,
+    Weight,
 };
 use serde::Deserialize;
 
@@ -54,11 +55,12 @@ fn status_text(s: &str) -> &'static str {
 }
 
 /// Each page: its id (what the check and `--page` name), its title and its glyph.
-pub const PAGES: [(&str, &str, &str); 15] = [
+pub const PAGES: [(&str, &str, &str); 16] = [
     ("status", "Status", "nd-emblem-default"),
     ("button", "Button", "nd-hand"),
     ("switch", "Switch", "nd-light-mode"),
     ("check", "Checkbox and radio", "nd-preferences-desktop"),
+    ("dropdown", "Dropdown", "nd-pan-down"),
     ("row", "Setting row", "nd-preferences-system"),
     ("slider", "Slider", "nd-display-brightness"),
     ("field", "Text field", "nd-input-keyboard"),
@@ -84,6 +86,8 @@ pub struct Model {
     pub row_on: bool,
     /// The radio group's choice.
     pub choice: usize,
+    /// The live dropdown's choice.
+    pub speed: usize,
     pub toggle: bool,
     pub presses: u32,
     pub slider: f64,
@@ -100,6 +104,7 @@ impl Default for Model {
             opened: 0,
             row_on: false,
             choice: 1,
+            speed: 1,
             toggle: false,
             presses: 0,
             slider: 40.,
@@ -112,6 +117,7 @@ impl Default for Model {
 /// The kit's measures a page needs besides its type: the slider's, and the frame's glyph size.
 pub struct Measures<'a> {
     pub slider: &'a SliderStyle,
+    pub dropdown: &'a DropdownStyle,
     pub glyph: f64,
 }
 
@@ -143,7 +149,7 @@ pub fn view(m: &Model, cat: &Catalogue, t: &TypeScale, k: &Measures) -> View {
     );
     let (id, title, _) = PAGES[m.page.min(PAGES.len() - 1)];
     let mut body = vec![header(id, cat, t)];
-    body.extend(page(id, m, cat, t, sl));
+    body.extend(page(id, m, cat, t, sl, k.dropdown));
     let content = Node::column(format!("page/{id}"), body)
         .gap(Space::S5)
         .padding(Padding {
@@ -272,12 +278,20 @@ fn button(key: &str, text: &str, action: &str, t: &TypeScale) -> Node {
     )
 }
 
-fn page(id: &str, m: &Model, cat: &Catalogue, t: &TypeScale, sl: &SliderStyle) -> Vec<Node> {
+fn page(
+    id: &str,
+    m: &Model,
+    cat: &Catalogue,
+    t: &TypeScale,
+    sl: &SliderStyle,
+    dd: &DropdownStyle,
+) -> Vec<Node> {
     match id {
         "status" => status(cat, t),
         "button" => buttons(m, t),
         "switch" => switches(m, t),
         "check" => checks(m, t),
+        "dropdown" => dropdowns(m, t, dd),
         "row" => rows(m, t),
         "slider" => sliders(m, t, sl),
         "field" => fields(t),
@@ -764,6 +778,125 @@ fn checks(m: &Model, t: &TypeScale) -> Vec<Node> {
             states("ck/r", &radio),
         ),
         section("ck-live", "Try it", t, live),
+    ]
+}
+
+/// The live dropdown's options.
+pub const SPEEDS: [&str; 3] = ["Slow", "Normal", "Fast"];
+
+fn dropdowns(m: &Model, t: &TypeScale, dd: &DropdownStyle) -> Vec<Node> {
+    let speeds = || SPEEDS.map(String::from).to_vec();
+    let one = |k: &str, label: &str, f: &dyn Fn(Node) -> Node, disabled: bool| {
+        let key = format!("dd/s/{k}");
+        Node::setting_row(
+            key.clone(),
+            SettingRow {
+                trailing: Some(f(Node::dropdown(
+                    format!("{key}/d"),
+                    Dropdown {
+                        name: label.into(),
+                        options: speeds(),
+                        chosen: 1,
+                        action: "noop".into(),
+                        disabled,
+                    },
+                    dd,
+                    t,
+                ))),
+                disabled,
+                ..setting(label, None, t)
+            },
+        )
+    };
+    let states = Node::column(
+        "dd/states",
+        vec![
+            one("rest", "Rest", &|n| n, false),
+            one("hover", "Hover", &|n| n.shown(Shown::Hover), false),
+            one("press", "Pressed", &|n| n.shown(Shown::Press), false),
+            one("focus", "Focus", &|n| n.shown(Shown::Focus), false),
+            one("disabled", "Disabled", &|n| n, true),
+        ],
+    );
+    // The open list's rows as its popup shows them, on the same panel glass.
+    let row = |k: &str, label: &str, chosen: bool, f: &dyn Fn(Node) -> Node| {
+        f(Node::menu_row(
+            format!("dd/m/{k}"),
+            label,
+            "noop",
+            chosen,
+            &dd.menu,
+            t,
+        ))
+    };
+    let list = Node::pane(
+        "dd/menu",
+        Corner::Fixed(dd.menu.radius.round() as u32),
+        Node::column(
+            "dd/menu/rows",
+            vec![
+                row("rest", "Rest", false, &|n| n),
+                row("chosen", "Chosen", true, &|n| n),
+                row("lit", "Under the pointer", false, &|n| {
+                    n.shown(Shown::Hover)
+                }),
+                row("press", "Pressed", false, &|n| n.shown(Shown::Press)),
+                row("lit-chosen", "Chosen, under the keyboard", true, &|n| {
+                    n.shown(Shown::Focus)
+                }),
+            ],
+        )
+        .padding(Padding::all(Space::S2)),
+    )
+    .width(280.);
+    let live = Node::column(
+        "dd/live",
+        vec![
+            Node::setting_row(
+                "dd/live/row",
+                SettingRow {
+                    trailing: Some(Node::dropdown(
+                        "dd/live/d",
+                        Dropdown {
+                            name: "Animation speed".into(),
+                            options: speeds(),
+                            chosen: m.speed,
+                            action: "speed".into(),
+                            disabled: false,
+                        },
+                        dd,
+                        t,
+                    )),
+                    ..setting(
+                        "Animation speed",
+                        Some("Click, or Enter, Space or an arrow, to open its list"),
+                        t,
+                    )
+                },
+            ),
+            Node::text(
+                "dd/live/said",
+                format!("Try it: speed {}", SPEEDS[m.speed.min(SPEEDS.len() - 1)]),
+                t.style(Type::Small, Weight::Regular),
+            )
+            .ink(Ink::Secondary),
+        ],
+    )
+    .gap(Space::S2);
+    vec![
+        section(
+            "dd-states",
+            "Dropdown (the list opens over the window; the app hears only the choice)",
+            t,
+            states,
+        ),
+        section(
+            "dd-list",
+            "Its list (the pointer or the keyboard in the accent; the chosen one ticked)",
+            t,
+            Node::row("dd/list/row", vec![list]),
+        ),
+        section("dd-live", "Try it", t, live),
     ]
 }
 
@@ -1391,6 +1524,39 @@ mod tests {
         walk(&json, out);
     }
 
+    /// The dropdown as `toolkit/tokens/dropdown.json` gives it, its colours any.
+    fn dropdown() -> nk_view::DropdownStyle {
+        let file: serde_json::Value =
+            serde_json::from_str(include_str!("../../tokens/dropdown.json")).unwrap();
+        let grey = "#808080";
+        let names = [
+            "--nidara-surface-back",
+            "--nidara-surface-hover",
+            "--nidara-surface-active",
+            "--nidara-text",
+            "--nidara-text-dim",
+            "--nidara-accent",
+            "--nidara-accent-fg",
+            "--nidara-popover-bg",
+            "--nidara-popover-border",
+        ];
+        let set = serde_json::json!({ "tokens": names
+            .iter()
+            .map(|n| (n.to_string(), serde_json::json!(grey)))
+            .collect::<serde_json::Map<_, _>>() });
+        let statics = serde_json::json!({
+            "scss": {"space-1": "4px", "space-2": "8px", "space-3": "12px", "space-4": "16px",
+                "space-5": "20px", "space-6": "24px", "space-8": "32px", "space-10": "40px"},
+            "ts": {"RADIUS": {"xs": 6, "sm": 10, "md": 16, "lg": 24, "xl": 32}}});
+        nk_view::dropdown_from(
+            &file["default"],
+            &set,
+            &nk_view::Radii::from_static(&statics).unwrap(),
+            &nk_view::Spacing::from_static(&statics).unwrap(),
+        )
+        .unwrap()
+    }
+
     #[test]
     fn every_page_builds_with_unique_keys() {
         let cat = Catalogue::load().unwrap();
@@ -1411,6 +1577,7 @@ mod tests {
                 &t,
                 &Measures {
                     slider: &sl,
+                    dropdown: &dropdown(),
                     glyph: 16.,
                 },
             );

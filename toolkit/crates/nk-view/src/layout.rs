@@ -291,9 +291,40 @@ pub struct Layouter<'a> {
     pub check: f64,
     /// The kit's row height (`row_floor`).
     pub row: f64,
-    /// A content button's inset on each side (padding and border) across and down, and its
-    /// least height (`Face::Button`).
+    /// The inset on each side (padding and border) across and down, and the least height, of
+    /// each face that pads what it holds: a content button, a dropdown, a menu row.
+    pub faces: Faces,
+}
+
+/// What `Layouter::faces` holds: `(across, down, least height)` per padded face.
+#[derive(Clone, Copy, Debug)]
+pub struct Faces {
     pub button: (f64, f64, f64),
+    pub dropdown: (f64, f64, f64),
+    pub menu_row: (f64, f64, f64),
+}
+impl Faces {
+    pub fn of(tokens: &crate::tokens::Tokens) -> Self {
+        let b = &tokens.button;
+        Self {
+            button: (
+                b.padding_x + b.border,
+                b.padding_y + b.border,
+                b.min_height(),
+            ),
+            dropdown: tokens.dropdown.trigger.inset(),
+            menu_row: tokens.dropdown.menu.row_inset(),
+        }
+    }
+    /// A face's inset, None for a face that pads nothing.
+    fn inset(&self, face: Face) -> Option<(f64, f64, f64)> {
+        match face {
+            Face::Plain => None,
+            Face::Button => Some(self.button),
+            Face::Dropdown => Some(self.dropdown),
+            Face::MenuRow => Some(self.menu_row),
+        }
+    }
 }
 
 impl Layouter<'_> {
@@ -329,8 +360,8 @@ impl Layouter<'_> {
             Kind::Icon(i) => i.size,
             Kind::Spacer => 0.,
             Kind::Pane(p) => self.natural(&p.child),
-            Kind::Control(c) if c.face == Face::Button => {
-                self.natural(&c.child) + 2. * self.button.0
+            Kind::Control(c) if c.face != Face::Plain => {
+                self.natural(&c.child) + 2. * self.faces.inset(c.face).map_or(0., |i| i.0)
             }
             Kind::Control(c) => self.natural(&c.child),
             Kind::Reveal(r) => self.natural(&r.child),
@@ -365,7 +396,9 @@ impl Layouter<'_> {
             Kind::Text(_) | Kind::Icon(_) | Kind::Switch(_) | Kind::Check(_) => self.natural(n),
             Kind::Spacer => 0.,
             Kind::Pane(p) => self.min(&p.child),
-            Kind::Control(c) if c.face == Face::Button => self.min(&c.child) + 2. * self.button.0,
+            Kind::Control(c) if c.face != Face::Plain => {
+                self.min(&c.child) + 2. * self.faces.inset(c.face).map_or(0., |i| i.0)
+            }
             Kind::Control(c) => self.min(&c.child),
             Kind::Reveal(r) => self.min(&r.child),
             Kind::Scroll(sc) => self.min(&sc.child),
@@ -517,8 +550,8 @@ impl Layouter<'_> {
                     give: 0.,
                 }
             }
-            Kind::Control(ctl) if ctl.face == Face::Button => {
-                let (x, y, least) = self.button;
+            Kind::Control(ctl) if ctl.face != Face::Plain => {
+                let (x, y, least) = self.faces.inset(ctl.face).unwrap_or_default();
                 let c = self.measure(&ctl.child, (width - 2. * x).max(0.));
                 let h = (c.h + 2. * y).max(least);
                 Measure {
@@ -777,12 +810,18 @@ impl Layouter<'_> {
                 self.place(&p.child, &m.children[0], r, inner, out)
             }
             Kind::Group(g) => self.place(&g.child, &m.children[0], r, inner, out),
-            Kind::Control(c) if c.face == Face::Button => {
-                // The label centred in the button, inside its padding and border.
+            Kind::Control(c) if c.face != Face::Plain => {
+                // A button's label centred in it, inside its padding and border; what a
+                // dropdown or a menu row holds fills it across, inside theirs.
                 inner.control = Some(index);
                 let child = &m.children[0];
-                let x = self.button.0;
-                let w = (r[2] - 2. * x).max(0.).min(child.w);
+                let x = self.faces.inset(c.face).map_or(0., |i| i.0);
+                let room = (r[2] - 2. * x).max(0.);
+                let w = if c.face == Face::Button {
+                    room.min(child.w)
+                } else {
+                    room
+                };
                 let at = [
                     self.round(r[0] + (r[2] - w) / 2.),
                     self.round(r[1] + (r[3] - child.h) / 2.),

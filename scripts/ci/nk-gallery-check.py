@@ -25,7 +25,7 @@ BIN = os.environ.get('NK_WIDGETS_BIN', str(ROOT / 'toolkit/target/debug/nidara-k
 MSG = [os.environ.get('HYALO_BIN', 'nidara-hyalo'), 'msg']
 TITLE = 'Nidara Kit Gallery'
 PAGES = [('status', 'Status'), ('button', 'Button'), ('switch', 'Switch'),
-         ('check', 'Checkbox and radio'), ('row', 'Setting row'), ('slider', 'Slider'),
+         ('check', 'Checkbox and radio'), ('dropdown', 'Dropdown'), ('row', 'Setting row'), ('slider', 'Slider'),
          ('field', 'Text field'), ('glass', 'Glass card'), ('text', 'Text'), ('icons', 'Icons'),
          ('layout', 'Layout'), ('scroll', 'Scroll'), ('overlay', 'Overlay'), ('grid', 'Grid'),
          ('reveal', 'Reveal')]
@@ -218,6 +218,31 @@ def run(directory, fault=None, shots=True):
                     chosen = [n for n in ('Small', 'Medium', 'Large') if ticked(n, Atspi.Role.RADIO_BUTTON)]
                     check('check/choose', chosen == ['Large'] and find(root, 'Try it: hidden files shown, size Large')
                           is not None, f'chosen {chosen}')
+                elif page == 'dropdown':
+                    def live():
+                        return find(root, 'Animation speed', Atspi.Role.COMBO_BOX)
+                    combo = barrier(live, 'the live dropdown')
+                    check('dropdown/closed', not has_state(combo, Atspi.StateType.EXPANDED)
+                          and has_state(combo, Atspi.StateType.EXPANDABLE)
+                          and [n.get_name() for n in children(combo)] == ['Slow', 'Normal', 'Fast'],
+                          'the dropdown is not a closed combo box holding its options')
+                    published(lambda: combo.get_action_iface().do_action(0))
+                    barrier(lambda: (n := live()) and has_state(n, Atspi.StateType.EXPANDED),
+                            'the list opened')
+                    pump(.3)
+                    if shots:
+                        ipc('screenshot', directory / 'dropdown-open.png')
+                    fast = find(live(), 'Fast', Atspi.Role.LIST_ITEM)
+                    check('dropdown/open', fast is not None and fast.get_extents(Atspi.CoordType.WINDOW).height > 0,
+                          'its options have no place in the open list')
+                    published(lambda: fast.get_action_iface().do_action(0))
+                    barrier(lambda: (n := live()) and not has_state(n, Atspi.StateType.EXPANDED),
+                            'the list closed')
+                    chosen = [n.get_name() for n in children(live())
+                              if has_state(n, Atspi.StateType.SELECTED)]
+                    check('dropdown/choose', chosen == ['Fast']
+                          and find(root, 'Try it: speed Fast') is not None,
+                          f'chosen {chosen}, or the choice did not reach the model')
                 elif page == 'row':
                     check('row/inert', find(root, 'Title only', Atspi.Role.PUSH_BUTTON) is None
                           and find(root, 'Ending in a switch', Atspi.Role.TOGGLE_BUTTON) is not None,

@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: LGPL-3.0-or-later
 //! The view: a value a surface builds from its model on each change (VIEW.md §2).
-use crate::tokens::{Radii, Radius, SliderStyle, Space};
+use crate::host::TypeScale;
+use crate::tokens::{DropdownStyle, MenuStyle, Radii, Radius, SliderStyle, Space};
 use nk_text::TextStyle;
 use serde::{Deserialize, Serialize};
 
@@ -386,6 +387,9 @@ pub struct Control {
     /// A text field's text, caret and selection (VIEW.md §12.2); its role is `Field`.
     #[serde(default)]
     pub field: Option<Field>,
+    /// A dropdown's options and the one chosen (VIEW.md §13.9); its role is `Dropdown`.
+    #[serde(default)]
+    pub choice: Option<Choice>,
     /// On (VIEW.md §12.4): the glass under it is white, the primary ink at full, and what it
     /// holds is drawn in the accent. Hover and press do not show over it.
     #[serde(default)]
@@ -424,6 +428,32 @@ pub enum Face {
     /// pressed tones, padded to the button's height. Over content (a window's band, a
     /// toolbar over a page) a button is glass instead: a `Plain` control in a pane.
     Button,
+    /// A dropdown's closed trigger (`components.json` `dropdown.trigger`, VIEW.md §13.9): the
+    /// view fills it with the trigger's tones, its label and arrow inside its padding.
+    Dropdown,
+    /// A row of a dropdown's open list (`dropdown.menu`): filled with the accent while the
+    /// pointer or the keyboard is on it, ticked while it is the one chosen.
+    MenuRow,
+}
+
+/// A dropdown's options and which is chosen (VIEW.md §13.9).
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+pub struct Choice {
+    pub options: Vec<String>,
+    pub chosen: usize,
+}
+
+/// A dropdown (VIEW.md §13.9, GTK's `DropDown`): one choice of several, shown closed as the
+/// chosen one, its options in a list that opens over the window.
+#[derive(Clone, Debug)]
+pub struct Dropdown {
+    /// What a reader calls it: its row's title.
+    pub name: String,
+    pub options: Vec<String>,
+    pub chosen: usize,
+    /// Reported when another option is chosen; read which with `ViewState::value`.
+    pub action: String,
+    pub disabled: bool,
 }
 
 /// A state a control can be shown in for good (`Control::shown`).
@@ -519,6 +549,11 @@ pub enum Role {
     /// One choice of several (`marked`: it is the one chosen). The radios next to each other
     /// in tree order are one group: the arrows move the choice in it, and Tab stops at it once.
     Radio,
+    /// A dropdown (VIEW.md §13.9): activated, its window opens its list; a reader hears a
+    /// combo box holding its options.
+    Dropdown,
+    /// One option of a dropdown's open list (`marked`: it is the one chosen).
+    Option,
 }
 
 /// The constructors a surface builds its view with.
@@ -904,6 +939,7 @@ impl Node {
                 swipe: None,
                 slider: None,
                 field: None,
+                choice: None,
                 on: false,
                 accent: false,
                 surface: false,
@@ -929,6 +965,84 @@ impl Node {
         if let Kind::Control(c) = &mut n.kind {
             c.wash = Wash::None;
             c.face = Face::Button;
+        }
+        n
+    }
+    /// A dropdown (VIEW.md §13.9): the chosen option and the arrow, in the trigger's padding,
+    /// as wide as its widest option so that a choice never moves what lies beside it. Its
+    /// measures, tones and fonts are `style`'s (the exported `dropdown`), the font a step of
+    /// `types`. Activated, the window it is in opens its list (`AppWindow`).
+    pub fn dropdown(
+        key: impl Into<Key>,
+        d: Dropdown,
+        style: &DropdownStyle,
+        types: &TypeScale,
+    ) -> Self {
+        let key = key.into();
+        let k = |part: &str| format!("{}/{part}", key.0);
+        let t = &style.trigger;
+        let chosen = d.chosen.min(d.options.len().saturating_sub(1));
+        let label = d.options.get(chosen).cloned().unwrap_or_default();
+        let drawn = Self::row(
+            k("row"),
+            vec![
+                Self::spacer(k("margin")).width(t.label_margin),
+                Self::text(k("label"), label, types.style(t.font.0, t.font.1))
+                    .room(d.options.clone())
+                    .grow(),
+                Self::spacer(k("gap")).width(t.arrow_gap),
+                Self::icon(k("arrow"), t.arrow.clone(), t.arrow_size).ink(Ink::Dim),
+            ],
+        )
+        .align(Align::Center);
+        let mut n = Self::control(key, d.name, d.action, drawn)
+            .corner(Corner::Fixed(t.radius.round() as u32))
+            .enabled(!d.disabled);
+        if let Kind::Control(c) = &mut n.kind {
+            c.role = Role::Dropdown;
+            c.wash = Wash::None;
+            c.face = Face::Dropdown;
+            c.choice = Some(Choice {
+                options: d.options,
+                chosen,
+            });
+        }
+        n
+    }
+    /// A row of a dropdown's open list: `label` and room for the tick after it, in the row's
+    /// padding (`style`, the exported `dropdown.menu`). `chosen` ticks it.
+    pub fn menu_row(
+        key: impl Into<Key>,
+        label: impl Into<String>,
+        action: impl Into<String>,
+        chosen: bool,
+        style: &MenuStyle,
+        types: &TypeScale,
+    ) -> Self {
+        let key = key.into();
+        let k = |part: &str| format!("{}/{part}", key.0);
+        let label = label.into();
+        let drawn = Self::row(
+            k("row"),
+            vec![
+                Self::text(
+                    k("label"),
+                    label.clone(),
+                    types.style(style.font.0, style.font.1),
+                )
+                .grow(),
+                Self::spacer(k("gap")).width(style.check_gap),
+                Self::slot(k("tick"), style.check_size),
+            ],
+        )
+        .align(Align::Center);
+        let mut n = Self::control(key, label, action, drawn)
+            .corner(Corner::Fixed(style.row_radius.round() as u32))
+            .role(Role::Option)
+            .marked(chosen);
+        if let Kind::Control(c) = &mut n.kind {
+            c.wash = Wash::None;
+            c.face = Face::MenuRow;
         }
         n
     }

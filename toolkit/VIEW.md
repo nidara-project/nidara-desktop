@@ -797,3 +797,48 @@ a page a window's sidebar offers (`Gtk.StackSidebar`'s row), its glyph at the fr
   elsewhere keeps the neutral selection wash.
 - **A reader hears a toggle**, checked when it is the page shown; choosing one reports
   `action`, and the app shows that page.
+
+### 13.9 Dropdown
+
+`Node::dropdown(key, Dropdown { name, options, chosen, action, disabled }, &tokens.dropdown,
+&types)`: one choice of several (`Gtk.DropDown`, `NSPopUpButton`), shown closed as the chosen
+option with an arrow; a setting row ends with it (§13.6).
+
+- **The trigger is off glass** (§13.2, `Face::Dropdown`): the view fills it with
+  `dropdown.trigger`'s tone inside its border, lighter under the pointer and darker while
+  pressed, and draws the focus ring in that border. Its label is the chosen option after the
+  `labelMargin`, the arrow (`nd-pan-down`) at the end inside the padding. It is **as wide as its
+  widest option** (`Node::room`), so a choice never moves what lies beside it. Disabled, its fill
+  is at `disabledOpacity` and what it holds in `Ink::Disabled`.
+- **Its list is the window's** (`AppWindow`). Activated (a click, Enter, Space, Up or Down, or a
+  reader), the trigger does not report: the window opens its list in a popup
+  (`open_menu_popup`) below it, as wide as it and as tall as its rows, never past the window,
+  scrolling when it must; activated again, it closes. The list grabs with the serial of the
+  press or key that opened it; a reader opens it with no grab, and the keys then still go to the
+  list while it is open.
+- **The list's rows** (`Node::menu_row`, `Face::MenuRow`, `Role::Option`) are on Settings'
+  panel glass by the popup's short side, with `dropdown.menu`'s border drawn round it and,
+  without the compositor's glass (D5), `background` under it. The row under the pointer or the
+  keyboard is filled with the accent and drawn in its foreground (the one place the accent marks
+  a row under the pointer, as menus do: design-system.md, "Context menus"), darker by
+  `pressedBlack` while pressed; the chosen one carries the tick. Opened from the keyboard or by a
+  reader, the chosen row is lit at once; opened by the pointer, nothing is until it moves.
+- **Keys in the list:** Up and Down move along it round its ends, Home and End go to its ends,
+  Enter or Space chooses, Escape closes, Tab closes it and moves on. A press outside it closes
+  it and does nothing more. Closing puts the focus back on the trigger, its ring shown only when
+  the list was worked from the keyboard.
+- **The app hears only the choice**: the dropdown's `action` when another option is chosen,
+  read with `AppWindow::value` (`ViewState::value`) as the option's index; the trigger shows it
+  until the app rebuilds with its model. A rebuild that drops the dropdown or gives it other
+  options closes its list.
+- **A reader hears a combo box** named by its row, expandable, expanded while its list is open,
+  holding its options (`Role::Option`, AT-SPI list items), the chosen one selected. Activating
+  an option chooses it whether the list is open or not. While it is open, the options have their
+  rows' places in the popup, and the row the keyboard is on is the focused one.
+- **Measures, tones and fonts** are `components.json` `dropdown` (`toolkit/tokens/dropdown.json`),
+  read into `DropdownStyle`: the trigger's 14 × 4 padding in a 2 border, at the `sm` corner,
+  `fse-small` at `fw-medium`; the list's rows 9 × 6, `inset` 6 from a 1 border at the `md`
+  corner, the tick 14 in a `check.ts` stroke of 2.2. Nothing is a default.
+
+Not carried yet: typing to find an option, and options with icons or sections; Settings asks
+for neither.

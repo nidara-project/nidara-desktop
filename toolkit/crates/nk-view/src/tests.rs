@@ -54,6 +54,13 @@ fn tokens() -> Tokens {
         switch: switch_from(&switch(), &set).unwrap(),
         check: check_from(&check(), &set, &Radii::from_static(&statics()).unwrap()).unwrap(),
         button: button_from(&button(), &set).unwrap(),
+        dropdown: dropdown_from(
+            &dropdown(),
+            &set,
+            &Radii::from_static(&statics()).unwrap(),
+            &Spacing::from_static(&statics()).unwrap(),
+        )
+        .unwrap(),
         row_height: 48.,
         group_radius: 16.,
     }
@@ -79,6 +86,20 @@ fn button() -> serde_json::Value {
         "background": "--nidara-surface", "borderColor": "--nidara-border",
         "hover": "--nidara-surface-hover", "pressed": "--nidara-surface-active",
         "disabledOpacity": 0.45})
+}
+/// `components.json` `dropdown`, as `toolkit/tokens/dropdown.json` exports it.
+fn dropdown() -> serde_json::Value {
+    json!({"trigger": {"paddingX": 14, "paddingY": 4, "border": 2, "minContentHeight": 20,
+        "radius": "sm", "fontSize": "fse-small", "fontWeight": "fw-medium",
+        "labelMargin": "space-2", "arrowSize": 16, "arrowGap": 6, "arrow": "nd-pan-down",
+        "background": "--nidara-surface", "hover": "--nidara-surface-hover",
+        "pressed": "--nidara-surface-active", "text": "--nidara-text",
+        "arrowColor": "--nidara-text-dim", "focus": "--nidara-accent", "disabledOpacity": 0.45},
+        "menu": {"border": 1, "radius": "md", "inset": 6, "paddingX": 9, "paddingY": 6,
+        "rowRadius": "sm", "fontSize": "fse-small", "fontWeight": "fw-regular", "checkSize": 14,
+        "checkGap": 8, "checkStroke": 2.2, "background": "--nidara-bg",
+        "borderColor": "--nidara-border", "text": "--nidara-text", "accent": "--nidara-accent",
+        "accentText": "--nidara-accent-fg", "pressedBlack": 0.15}})
 }
 /// `components.json` `scrollbar`, as `toolkit/tokens/scrollbar.json` exports it.
 fn scrollbar() -> serde_json::Value {
@@ -3870,4 +3891,290 @@ fn a_lifted_pane_leaves_the_windows_glass_and_paint_for_its_own_layer() {
     let layer = ink(&c.finish(), 100, (8., 8.));
     assert_eq!(window, 0, "the window draws none of the sidebar");
     assert!(layer > 20, "the layer draws its text: {layer}");
+}
+
+/// The type scale over `style(14.)`, as `static.json` exports its steps.
+fn types() -> TypeScale {
+    TypeScale::from_static(
+        &json!({"scss": {"fse-mini": "0.75em", "fse-caption": "0.8em", "fse-small": "0.93em",
+            "fse-body": "1em", "fse-subtitle": "1.1em", "fse-title-3": "1.2em",
+            "fse-title-2": "1.4em", "fse-title-1": "1.7em", "fw-regular": "400",
+            "fw-medium": "500", "fw-semibold": "600", "fw-bold": "700"}}),
+        style(14.),
+    )
+    .unwrap()
+}
+fn speed(options: &[&str], chosen: usize, disabled: bool) -> Node {
+    let d = Node::dropdown(
+        "d",
+        Dropdown {
+            name: "Speed".into(),
+            options: options.iter().map(|o| o.to_string()).collect(),
+            chosen,
+            action: "speed".into(),
+            disabled,
+        },
+        &tokens().dropdown,
+        &types(),
+    );
+    // At its own width, as it sits at the end of a row.
+    Node::column(
+        "c",
+        vec![
+            Node::button("before", "Before", "before", style(14.)),
+            Node::row("r", vec![d]),
+        ],
+    )
+    .align(Align::Start)
+}
+const SPEEDS: [&str; 3] = ["Slow", "Medium speed", "Fast"];
+
+#[test]
+fn the_dropdown_tokens_are_read_whole_or_refused() {
+    let (set, radii, spacing) = (
+        json!({"tokens": {"--nidara-text": "#ffffff", "--nidara-text-dim": "#aaaaaa",
+            "--nidara-accent": "#0088FF", "--nidara-accent-fg": "#ffffff", "--nidara-bg": "#161622",
+            "--nidara-border": "#333333", "--nidara-surface": "#222222",
+            "--nidara-surface-hover": "#2a2a2a", "--nidara-surface-active": "#303030"}}),
+        Radii::from_static(&statics()).unwrap(),
+        Spacing::from_static(&statics()).unwrap(),
+    );
+    let d = dropdown_from(&dropdown(), &set, &radii, &spacing).unwrap();
+    assert_eq!(d.trigger.inset(), (16., 6., 32.));
+    assert_eq!(d.trigger.label_margin, 8., "space-2");
+    assert_eq!(
+        (d.trigger.radius, d.menu.radius, d.menu.row_radius),
+        (10., 16., 10.)
+    );
+    assert_eq!(d.trigger.font, (Type::Small, Weight::Medium));
+    assert_eq!(d.menu.font, (Type::Small, Weight::Regular));
+    assert_eq!(d.menu.edge(), 7.);
+    for (part, k) in [
+        ("trigger", "paddingX"),
+        ("trigger", "arrow"),
+        ("trigger", "labelMargin"),
+        ("menu", "accent"),
+        ("menu", "checkSize"),
+        ("menu", "fontWeight"),
+    ] {
+        let mut c = dropdown();
+        c[part].as_object_mut().unwrap().remove(k);
+        assert!(
+            dropdown_from(&c, &set, &radii, &spacing).is_err(),
+            "{part}.{k} missing"
+        );
+    }
+    for (part, k, v) in [
+        ("trigger", "radius", "huge"),
+        ("trigger", "fontSize", "fse-giant"),
+        ("menu", "fontWeight", "fw-heavy"),
+        ("trigger", "labelMargin", "space-7"),
+    ] {
+        let mut c = dropdown();
+        c[part][k] = json!(v);
+        assert!(
+            dropdown_from(&c, &set, &radii, &spacing).is_err(),
+            "{part}.{k} = {v}"
+        );
+    }
+    let mut c = dropdown();
+    c.as_object_mut().unwrap().remove("menu");
+    assert!(
+        dropdown_from(&c, &set, &radii, &spacing).is_err(),
+        "no menu"
+    );
+}
+
+#[test]
+fn a_dropdown_is_its_triggers_height_and_as_wide_as_its_widest_option() {
+    let r = |chosen: usize| rect(&laid(&speed(&SPEEDS, chosen, false), (400., 200.), 1.), "d");
+    let (slow, medium) = (r(0), r(1));
+    assert_eq!(
+        slow[3], 32.,
+        "20 of content, 4 of padding and 2 of border, twice"
+    );
+    assert_eq!(
+        (slow[2], slow[3]),
+        (medium[2], medium[3]),
+        "a choice never moves what lies beside it"
+    );
+    let short = rect(
+        &laid(&speed(&["Slow", "Fast"], 0, false), (400., 200.), 1.),
+        "d",
+    );
+    assert!(short[2] < slow[2], "{short:?} beside {slow:?}");
+    // The label after the margin, the arrow at the end inside the padding.
+    let s = laid(&speed(&SPEEDS, 0, false), (400., 200.), 1.);
+    let (label, arrow) = (rect(&s, "d/label"), rect(&s, "d/arrow"));
+    assert_eq!(label[0] - slow[0], 16. + 8.);
+    assert_eq!(slow[0] + slow[2] - (arrow[0] + arrow[2]), 16.);
+    assert_eq!(arrow[2], 16.);
+}
+
+#[test]
+fn a_reader_finds_a_combo_box_holding_its_options_the_chosen_one_selected() {
+    let mut s = laid(&speed(&SPEEDS, 1, false), (400., 200.), 1.);
+    let tree = s.semantics(nk_a11y::Node::new(1, nk_a11y::Role::Window, "W"), 2);
+    let combo = tree
+        .nodes
+        .values()
+        .find(|n| n.role == nk_a11y::Role::ComboBox)
+        .expect("a combo box");
+    assert_eq!(combo.name, "Speed");
+    assert!(combo.states.expandable && !combo.states.expanded);
+    let options: Vec<_> = combo.children.iter().map(|id| &tree.nodes[id]).collect();
+    assert_eq!(
+        options.iter().map(|o| o.name.as_str()).collect::<Vec<_>>(),
+        SPEEDS
+    );
+    assert!(options.iter().all(|o| o.role == nk_a11y::Role::Option));
+    assert_eq!(
+        options
+            .iter()
+            .map(|o| o.states.selected)
+            .collect::<Vec<_>>(),
+        [false, true, false]
+    );
+    assert_eq!(s.option(combo.children[2]), Some(("d".into(), 2)));
+    assert_eq!(s.option_id(&"d".into(), 2), Some(combo.children[2]));
+    // Open, it is heard expanded; the ids stay.
+    s.set_expanded(Some("d".into()));
+    let again = s.semantics(nk_a11y::Node::new(1, nk_a11y::Role::Window, "W"), 2);
+    let open = again
+        .nodes
+        .values()
+        .find(|n| n.role == nk_a11y::Role::ComboBox)
+        .unwrap();
+    assert!(open.states.expanded);
+    assert_eq!(open.children, combo.children);
+}
+
+#[test]
+fn choosing_an_option_reports_only_a_change_and_holds_it_until_the_rebuild() {
+    let mut s = laid(&speed(&SPEEDS, 0, false), (400., 200.), 1.);
+    let d = Key::from("d");
+    assert_eq!(s.value(&d), Some(0.));
+    assert_eq!(s.choice(&d), Some((SPEEDS.map(String::from).to_vec(), 0)));
+    let a = s.choose(&d, 2).expect("another option");
+    assert_eq!((a.key.0.as_str(), a.action.as_str()), ("d", "speed"));
+    assert_eq!(s.value(&d), Some(2.));
+    assert_eq!(s.choice(&d).unwrap().1, 2, "shown chosen until the rebuild");
+    assert!(s.choose(&d, 2).is_none(), "the one it holds");
+    assert!(s.choose(&d, 3).is_none(), "no such option");
+    assert!(s.choose(&"before".into(), 0).is_none(), "not a dropdown");
+    s.layout(
+        &speed(&SPEEDS, 1, false),
+        (400., 200.),
+        1.,
+        &tokens(),
+        &mut backend(),
+        Instant::now(),
+    );
+    assert_eq!(s.value(&d), Some(1.), "the model's, once rebuilt");
+    let mut off = laid(&speed(&SPEEDS, 0, true), (400., 200.), 1.);
+    assert!(off.choose(&d, 1).is_none(), "disabled");
+}
+
+#[test]
+fn enter_space_and_the_arrows_open_a_dropdown_and_a_disabled_one_is_skipped() {
+    let mut s = laid(&speed(&SPEEDS, 0, false), (400., 200.), 1.);
+    s.key(KeyInput::Tab);
+    s.key(KeyInput::Tab);
+    assert_eq!(s.focus().map(|k| k.0.as_str()), Some("d"));
+    for k in [KeyInput::Activate, KeyInput::Down, KeyInput::Up] {
+        let a = s.key(k).expect("opens");
+        assert_eq!(a.key.0, "d");
+    }
+    assert!(s.focus_visible());
+    let mut off = laid(&speed(&SPEEDS, 0, true), (400., 200.), 1.);
+    off.key(KeyInput::Tab);
+    off.key(KeyInput::Tab);
+    assert_eq!(off.focus().map(|k| k.0.as_str()), Some("before"));
+}
+
+#[test]
+fn a_dropdowns_trigger_is_painted_off_glass_and_rings_inside_its_border() {
+    let t = tokens();
+    let view = |shown: Option<Shown>| {
+        let mut d = Node::dropdown(
+            "d",
+            Dropdown {
+                name: "Speed".into(),
+                options: SPEEDS.map(String::from).to_vec(),
+                chosen: 0,
+                action: "speed".into(),
+                disabled: false,
+            },
+            &t.dropdown,
+            &types(),
+        );
+        if let Some(sh) = shown {
+            d = d.shown(sh);
+        }
+        Node::row("r", vec![d])
+    };
+    let (s, rest) = painted(&view(None), 300, 40);
+    let r = rect(&s, "d");
+    // Its fill inside the border, nothing Hyalo draws.
+    let inside = (r[0] + 5., r[1] + r[3] / 2.);
+    assert!(bgra(&rest, 300, inside)[3] > 0, "the trigger's fill");
+    let mut s2 = laid(&view(None), (300., 40.), 1.);
+    assert!(
+        s2.frame(&t, Instant::now()).states.is_empty(),
+        "no washes for Hyalo"
+    );
+    let (_, hover) = painted(&view(Some(Shown::Hover)), 300, 40);
+    assert_ne!(bgra(&rest, 300, inside), bgra(&hover, 300, inside), "hover");
+    // The ring in the border's room: the accent there only when focused.
+    let edge = (r[0] + 1., r[1] + r[3] / 2.);
+    let (_, ringed) = painted(&view(Some(Shown::Focus)), 300, 40);
+    let ring = bgra(&ringed, 300, edge);
+    assert!(ring[0] > 200 && ring[2] < 50, "the accent: {ring:?}");
+    assert_eq!(bgra(&rest, 300, edge)[3], 0, "no ring at rest");
+}
+
+#[test]
+fn a_menu_row_is_lit_in_the_accent_and_the_chosen_one_ticked() {
+    let t = tokens();
+    let row = |chosen: bool, shown: Option<Shown>| {
+        let mut r = Node::menu_row("m", "Fast", "choose", chosen, &t.dropdown.menu, &types());
+        if let Some(sh) = shown {
+            r = r.shown(sh);
+        }
+        Node::column("c", vec![r])
+    };
+    let (s, rest) = painted(&row(false, None), 200, 40);
+    let r = rect(&s, "m");
+    let left = (r[0] + 3., r[1] + r[3] / 2.);
+    assert_eq!(bgra(&rest, 200, left)[3], 0, "at rest: nothing under it");
+    let (_, lit) = painted(&row(false, Some(Shown::Hover)), 200, 40);
+    let accent = bgra(&lit, 200, left);
+    assert!(
+        accent[0] > 200 && accent[2] < 50,
+        "lit: the accent {accent:?}"
+    );
+    let (_, pressed) = painted(&row(false, Some(Shown::Press)), 200, 40);
+    let dark = bgra(&pressed, 200, left);
+    assert!(dark[0] < accent[0], "pressed: the accent darker {dark:?}");
+    // The tick on its stroke's middle point, only when chosen.
+    let tick = rect(&s, "m/tick");
+    let mid = (
+        tick[0] + 9. * tick[2] / 24.,
+        tick[1] + 17. * tick[3] / 24. - 0.5,
+    );
+    let (_, chosen) = painted(&row(true, None), 200, 40);
+    assert!(
+        bgra(&chosen, 200, mid)[3] > 100,
+        "ticked: {:?}",
+        bgra(&chosen, 200, mid)
+    );
+    assert_eq!(bgra(&rest, 200, mid)[3], 0, "not chosen: no tick");
+    // A reader hears an option, selected when chosen.
+    let mut s = laid(&row(true, None), (200., 40.), 1.);
+    let tree = s.semantics(nk_a11y::Node::new(1, nk_a11y::Role::Window, "W"), 2);
+    assert!(
+        tree.nodes
+            .values()
+            .any(|n| n.role == nk_a11y::Role::Option && n.name == "Fast")
+    );
 }
