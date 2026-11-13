@@ -480,7 +480,7 @@ impl Detail {
                 if row.thumbnail.is_some() {
                     line.push(Node::slot(k("thumb"), 32.));
                 }
-                // A switch row: only the switch responds (VIEW.md §13.4); the row is not a
+                // A switch row: only the switch responds (VIEW.md §12.6); the row is not a
                 // control, so its text takes the disabled ink itself.
                 let switch_row = row.switch && row.checked.is_some();
                 let title = if switch_row && !enabled {

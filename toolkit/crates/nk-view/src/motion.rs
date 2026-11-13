@@ -85,11 +85,12 @@ pub(crate) struct MotionState {
     pub reduced: bool,
 }
 
-/// Each reveal's and switch's key and state; `true` last for a switch, which eases the same
-/// both ways (VIEW.md §12.6).
+/// Each reveal's, switch's and mark's key and state; `true` last for a switch or a mark, which
+/// eases the same both ways (VIEW.md §12.6).
 fn walk<'a>(n: &'a Node, out: &mut Vec<(&'a Key, bool, bool)>) {
     match &n.kind {
         Kind::Switch(sw) => out.push((&n.key, sw.on, true)),
+        Kind::Check(c) => out.push((&n.key, c.on, true)),
         Kind::Reveal(r) => {
             out.push((&n.key, r.open, false));
             walk(&r.child, out);

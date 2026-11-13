@@ -3,8 +3,8 @@
 //! tokens in an appearance, the keys the view understands, and the interface glyphs.
 use crate::state::KeyInput;
 use crate::tokens::{
-    Look, Motion, Radii, Spacing, Tokens, Washes, button_from, scrollbar_from, slider_from,
-    switch_from,
+    Look, Motion, Radii, Spacing, Tokens, Washes, button_from, check_from, scrollbar_from,
+    slider_from, switch_from,
 };
 use nk_platform::{exports::Exports, portal::Appearance};
 use std::{collections::HashMap, sync::Arc};
@@ -15,9 +15,11 @@ impl Tokens {
     pub fn load(e: &Exports, appearance: &Appearance) -> Result<Self, String> {
         let set = e.tokens(appearance)?;
         let colors = serde_json::json!({ "tokens": set.colors });
+        let radii = Radii::from_static(&e.statics)?;
         Ok(Self {
             spacing: Spacing::from_static(&e.statics)?,
-            radii: Radii::from_static(&e.statics)?,
+            check: check_from(&set.components["check"], &colors, &radii)?,
+            radii,
             motion: Motion::from_static(&e.statics)?,
             look: Look::from_colors(&colors)?,
             washes: Washes::from_glass(&e.glass, appearance.dark, appearance.reduce_transparency)?,

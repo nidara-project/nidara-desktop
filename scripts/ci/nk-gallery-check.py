@@ -24,7 +24,8 @@ LOG = Path(os.environ.get('NK_WIDGETS_LOG', ROOT / 'toolkit/target/gallery-evide
 BIN = os.environ.get('NK_WIDGETS_BIN', str(ROOT / 'toolkit/target/debug/nidara-kit-gallery'))
 MSG = [os.environ.get('HYALO_BIN', 'nidara-hyalo'), 'msg']
 TITLE = 'Nidara Kit Gallery'
-PAGES = [('status', 'Status'), ('button', 'Button'), ('switch', 'Switch'), ('slider', 'Slider'),
+PAGES = [('status', 'Status'), ('button', 'Button'), ('switch', 'Switch'),
+         ('check', 'Checkbox and radio'), ('slider', 'Slider'),
          ('field', 'Text field'), ('glass', 'Glass card'), ('text', 'Text'), ('icons', 'Icons'),
          ('layout', 'Layout'), ('scroll', 'Scroll'), ('overlay', 'Overlay'), ('grid', 'Grid'),
          ('reveal', 'Reveal')]
@@ -205,6 +206,18 @@ def run(directory, fault=None, shots=True):
                     live = find(root, 'Wi-Fi', Atspi.Role.TOGGLE_BUTTON)
                     now = has_state(live, Atspi.StateType.CHECKED) or has_state(live, Atspi.StateType.PRESSED)
                     check('switch/flip', was != now, f'the switch stayed {now}')
+                elif page == 'check':
+                    def ticked(name, role):
+                        n = find(root, name, role)
+                        return n is not None and has_state(n, Atspi.StateType.CHECKED)
+                    was = ticked('Show hidden files', Atspi.Role.CHECK_BOX)
+                    activate('Show hidden files', Atspi.Role.CHECK_BOX)
+                    now = ticked('Show hidden files', Atspi.Role.CHECK_BOX)
+                    check('check/flip', was != now, f'the checkbox stayed {now}')
+                    activate('Large', Atspi.Role.RADIO_BUTTON)
+                    chosen = [n for n in ('Small', 'Medium', 'Large') if ticked(n, Atspi.Role.RADIO_BUTTON)]
+                    check('check/choose', chosen == ['Large'] and find(root, 'Try it: hidden files shown, size Large')
+                          is not None, f'chosen {chosen}')
                 elif page == 'slider':
                     node = find(root, 'Volume', Atspi.Role.SLIDER)
                     published(lambda: node.get_value_iface().set_current_value(80.))

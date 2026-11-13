@@ -1,0 +1,23 @@
+{
+  "$comment": [
+    "Checkbox and radio, the mark a CheckButton draws: ui/lib/nidara-kit/styles/_components.scss check/radio — 18px, a 1.5px border on the surface, turning accent when checked; the checkbox at radius xs, the radio round. Checked, the checkbox carries a tick in the accent's foreground and the radio a 4px band of the window background inside its border, leaving an accent dot. Hover lifts the fill and the border, a press darkens the fill.",
+    "Default applies to every component mode variant."
+  ],
+  "default": {
+    "size": 18,
+    "border": 1.5,
+    "radius": "xs",
+    "background": "--nidara-surface",
+    "borderColor": "--nidara-border",
+    "hover": "--nidara-surface-hover",
+    "hoverBorder": "--nidara-surface-strong",
+    "pressed": "--nidara-surface-active",
+    "checked": "--nidara-accent",
+    "tick": "--nidara-accent-fg",
+    "tickWidth": 2,
+    "dotBand": 4,
+    "dotBandColor": "--nidara-bg",
+    "disabledOpacity": 0.45
+  },
+  "variants": []
+}

@@ -19,7 +19,8 @@ usage: settings-tokens-check.py OUT_DIR
   transparency), its states' washes and shared fadeMs, its two inks — a reader has no defaults.
 - Every components.json mode variant carries D8 list focus/highlight/separator tokens with a resolvable colour,
   and the radio groups' choices (toolkit/tokens/choices.json, #882) with resolvable colours and font,
-  the range controls' slider and spin (toolkit/tokens/range.json, #882), the switch (toolkit/tokens/switch.json) and the rows' second line, footer and disclosure (toolkit/tokens/rows.json).
+  the range controls' slider and spin (toolkit/tokens/range.json, #882), the switch (toolkit/tokens/switch.json),
+  the checkbox's and radio's mark (toolkit/tokens/check.json) and the rows' second line, footer and disclosure (toolkit/tokens/rows.json).
 CI also runs it on a copy with one used token dropped from one set, on one with `panel`
 dropped from one glass variant, a control step's `states` dropped, one variant's list highlight dropped, and one variant's swatch dropped, and one variant's slider dropped, and one variant's switch thumb colour dropped; all must fail.
 """
@@ -184,6 +185,14 @@ for variant in component_variants:
             fail.append(f'{where}: missing switch colour token {key}')
     if not (isinstance(switch.get('checkedBorderColor'), str) and switch['checkedBorderColor'].startswith('rgba(')):
         fail.append(f"{where}: switch checkedBorderColor is not a literal rgba(): {switch.get('checkedBorderColor')}")
+    mark = variant.get('check') or {}
+    if not (all(positive_number(mark.get(k)) for k in ('size', 'border', 'tickWidth', 'dotBand', 'disabledOpacity'))
+            and mark['disabledOpacity'] <= 1 and mark['size'] > 2 * (mark['border'] + mark['dotBand'])
+            and mark.get('radius') in static['ts']['RADIUS']):
+        fail.append(f'{where}: incomplete or invalid check')
+    for k in ('background', 'borderColor', 'hover', 'hoverBorder', 'pressed', 'checked', 'tick', 'dotBandColor'):
+        if not isinstance(mark.get(k), str) or not all(mark[k] in s['tokens'] for s in sets):
+            fail.append(f'{where}: missing check colour token {mark.get(k)}')
     rows = variant.get('rows') or {}
     sub, foot, disc = rows.get('subtitle') or {}, rows.get('footer') or {}, rows.get('disclosure') or {}
     if not (positive_number(foot.get('gap'), True) and positive_number(disc.get('iconSize'))
@@ -285,4 +294,4 @@ if fail:
     print('\n'.join(f'FAIL: {f}' for f in fail))
     sys.exit(1)
 print(f'settings tokens OK: {len(sets)} colour sets, {len(used)} used tokens in each, '
-      f'{len(static["scss"])} scss + {len(static["ts"])} ts static, {len(variants)} glass variants, their controls, lists, choices, ranges, switch, rows, dropdown and search complete')
+      f'{len(static["scss"])} scss + {len(static["ts"])} ts static, {len(variants)} glass variants, their controls, lists, choices, ranges, switch, check, rows, dropdown and search complete')

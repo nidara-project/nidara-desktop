@@ -19,13 +19,14 @@ pub use host::{Glyphs, Type, TypeScale, Weight};
 pub use layout::{Fitted, Placed, Rect, TextCache, What, first_line_centre};
 pub use state::{Activated, BUDGET, Frame, FramePane, KeyInput, ScrollBy, Ticked, ViewState};
 pub use tokens::{
-    Bezier, ButtonStyle, Look, Motion, Radii, Radius, SliderStyle, Space, Spacing, SwitchStyle,
-    Tokens, Washes, button_from, parse_color, scrollbar_from, slider_from, switch_from,
+    Bezier, ButtonStyle, CheckStyle, Look, Motion, Radii, Radius, SliderStyle, Space, Spacing,
+    SwitchStyle, Tokens, Washes, button_from, check_from, parse_color, scrollbar_from, slider_from,
+    switch_from,
 };
 pub use view::{
-    Align, Axis, Cell, Control, Corner, Face, Field, Grid, Group, Icon, Ink, Justify, Key, Kind,
-    Layer, Node, Overlay, Padding, Pane, Reveal, Role, Scroll, Shown, Slider, Stack, Switch, Text,
-    Wash,
+    Align, Axis, Cell, Check, Control, Corner, Face, Field, Grid, Group, Icon, Ink, Justify, Key,
+    Kind, Layer, Node, Overlay, Padding, Pane, Reveal, Role, Scroll, Shown, Slider, Stack, Switch,
+    Text, Wash,
 };
 pub use window::{AppWindow, CONTENT, Labels, Page, WindowLook};
 

@@ -455,6 +455,7 @@ impl ViewState {
             scale: self.scale,
             slider: 2. * tokens.slider.thumb_radius,
             switch: (tokens.switch.width, tokens.switch.height),
+            check: tokens.check.size,
             button: (
                 tokens.button.padding_x + tokens.button.border,
                 tokens.button.padding_y + tokens.button.border,
@@ -485,6 +486,7 @@ impl ViewState {
                 scale: self.scale,
                 slider: 2. * tokens.slider.thumb_radius,
                 switch: (tokens.switch.width, tokens.switch.height),
+                check: tokens.check.size,
                 button: (
                     tokens.button.padding_x + tokens.button.border,
                     tokens.button.padding_y + tokens.button.border,
@@ -685,11 +687,12 @@ impl ViewState {
     }
     /// What a control's hover, press and focus ring outline: its thumb for a slider, else
     /// what of it shows.
-    /// Whether control `i` holds a switch, which shows its state itself.
-    fn holds_switch(&self, i: usize) -> bool {
-        self.placed
-            .iter()
-            .any(|p| p.control == Some(i) && matches!(p.what, What::Switch { .. }))
+    /// Whether control `i` holds a switch or a checkbox's or radio's mark, which shows its
+    /// state itself.
+    fn holds_mark(&self, i: usize) -> bool {
+        self.placed.iter().any(|p| {
+            p.control == Some(i) && matches!(p.what, What::Switch { .. } | What::Check { .. })
+        })
     }
     fn silhouette(&self, i: usize) -> Option<Rect> {
         let visible = self.placed[i].visible()?;
@@ -1032,7 +1035,8 @@ impl ViewState {
     }
 
     /// Tab and Shift+Tab move focus through every enabled control in tree order, revealed or
-    /// not; Enter or Space activates the focused one.
+    /// not, a radio group being one stop; Enter or Space activates the focused one; on a radio
+    /// the arrows choose the group's next or previous one.
     pub fn key(&mut self, k: KeyInput) -> Option<Activated> {
         if let Some(i) = self.focus.as_ref().and_then(|f| self.index(f))
             && let Some(s) = self.control(i).slider.clone()
@@ -1079,18 +1083,67 @@ impl ViewState {
             .focus
             .as_ref()
             .and_then(|f| order.iter().position(|&i| &self.placed[i].key == f));
+        // A radio group: the radios next to each other in `order`.
+        let radio = |j: usize| self.control(order[j]).role == Role::Radio;
+        let run = |j: usize| {
+            let (mut a, mut b) = (j, j);
+            while a > 0 && radio(a - 1) {
+                a -= 1;
+            }
+            while b + 1 < order.len() && radio(b + 1) {
+                b += 1;
+            }
+            a..=b
+        };
         match k {
+            KeyInput::Left | KeyInput::Right | KeyInput::Up | KeyInput::Down => {
+                // The arrows move a group's choice, as a click on the next radio would.
+                let a = at.filter(|&a| radio(a))?;
+                let g = run(a);
+                let (first, n) = (*g.start(), g.end() - g.start() + 1);
+                let step = if matches!(k, KeyInput::Left | KeyInput::Up) {
+                    n - 1
+                } else {
+                    1
+                };
+                let i = order[first + (a - first + step) % n];
+                self.focus = Some(self.placed[i].key.clone());
+                self.focus_visible = true;
+                self.scroll_to_focus(i);
+                Some(Activated {
+                    key: self.placed[i].key.clone(),
+                    action: self.control(i).action.clone(),
+                })
+            }
             KeyInput::Tab | KeyInput::ShiftTab => {
-                let n = order.len();
-                let next = match (at, k) {
+                // A radio group is one stop: its chosen radio, else its first.
+                let stops: Vec<usize> = (0..order.len())
+                    .filter(|&j| {
+                        if !radio(j) {
+                            return true;
+                        }
+                        let g = run(j);
+                        match g.clone().find(|&r| self.control(order[r]).marked) {
+                            Some(chosen) => chosen == j,
+                            None => *g.start() == j,
+                        }
+                    })
+                    .collect();
+                let n = stops.len();
+                let here = at.map(|a| {
+                    let g = if radio(a) { run(a) } else { a..=a };
+                    stops.iter().position(|s| g.contains(s)).unwrap_or(0)
+                });
+                let next = match (here, k) {
                     (None, KeyInput::Tab) => 0,
                     (None, _) => n - 1,
                     (Some(a), KeyInput::Tab) => (a + 1) % n,
                     (Some(a), _) => (a + n - 1) % n,
                 };
-                self.focus = Some(self.placed[order[next]].key.clone());
+                let i = order[stops[next]];
+                self.focus = Some(self.placed[i].key.clone());
                 self.focus_visible = true;
-                self.scroll_to_focus(order[next]);
+                self.scroll_to_focus(i);
                 None
             }
             KeyInput::Activate => {
@@ -1375,7 +1428,7 @@ impl ViewState {
                 (3, well)
             } else if self.fading.contains_key(key) {
                 (2, rest)
-            } else if c.marked && !self.holds_switch(i) {
+            } else if c.marked && !self.holds_mark(i) {
                 // Selected (a sidebar's page, a list's choice). A row with a switch shows
                 // its on and off in the switch, so it is never also lit as selected.
                 (3, washes.hover)
@@ -1463,7 +1516,8 @@ impl ViewState {
                     let mut n = nk_a11y::Node::new(0, a11y_role(c.role), c.name.clone());
                     n.description = c.description.clone();
                     n.states.disabled = !c.enabled;
-                    n.states.checked = c.role == Role::Toggle && c.marked;
+                    n.states.checked =
+                        matches!(c.role, Role::Toggle | Role::Check | Role::Radio) && c.marked;
                     n.states.focused = self.focus.as_ref() == Some(&p.key);
                     n.actions = vec![Action::Focus, Action::Activate];
                     if let Some(s) = &c.slider {
@@ -1744,6 +1798,78 @@ impl ViewState {
                     canvas.rounded_rect(rect(&thumb), d / 2., fade(s.thumb));
                     canvas.pop_clip();
                 }
+                What::Check {
+                    radio, progress, ..
+                } => {
+                    // VIEW.md §13.5: a CheckButton's mark, off glass, every state the view's:
+                    // the surface and its border, lifted under the pointer and darker pressed;
+                    // checked, the accent, with a tick or the radio's band around its dot.
+                    let s = &tokens.check;
+                    let t = progress.clamp(0., 1.) as f32;
+                    let (enabled, hover, press) = match p.control {
+                        Some(o) => {
+                            let key = Some(&self.placed[o].key);
+                            let shown = self.control(o).shown;
+                            let hover = self.hover.as_ref() == key || shown == Some(Shown::Hover);
+                            let press = (self.press.as_ref() == key && self.hover.as_ref() == key)
+                                || shown == Some(Shown::Press);
+                            (
+                                self.enabled(o),
+                                hover && self.enabled(o),
+                                press && self.enabled(o),
+                            )
+                        }
+                        None => (true, false, false),
+                    };
+                    let fade = |c: nk_render::Color| {
+                        let a = if enabled {
+                            1.
+                        } else {
+                            s.disabled_opacity as f32
+                        };
+                        ink(c.with_alpha(c.components[3] * a))
+                    };
+                    let side = s.size.min(p.rect[2]).min(p.rect[3]);
+                    let r = [
+                        p.rect[0] + (p.rect[2] - side) / 2.,
+                        p.rect[1] + (p.rect[3] - side) / 2.,
+                        side,
+                        side,
+                    ];
+                    let radius = if *radio { side / 2. } else { s.radius };
+                    let (fill, edge) = if press {
+                        (s.pressed, s.hover_border)
+                    } else if hover {
+                        (s.hover, s.hover_border)
+                    } else {
+                        (s.background, s.border_color)
+                    };
+                    canvas.clip(rect(&visible));
+                    canvas.rounded_rect(rect(&r), radius, fade(mix(fill, s.checked, t)));
+                    canvas.rounded_ring(rect(&r), radius, s.border, fade(mix(edge, s.checked, t)));
+                    if t > 0. {
+                        let on = |c: nk_render::Color| fade(c.with_alpha(c.components[3] * t));
+                        if *radio {
+                            // The band inside the border, the accent left as the dot.
+                            let b = s.border;
+                            let inner = [r[0] + b, r[1] + b, side - 2. * b, side - 2. * b];
+                            canvas.rounded_ring(
+                                rect(&inner),
+                                inner[2] / 2.,
+                                s.dot_band,
+                                on(s.dot_band_color),
+                            );
+                        } else {
+                            let at = |x: f64, y: f64| (r[0] + x * side, r[1] + y * side);
+                            canvas.polyline(
+                                &[at(0.27, 0.52), at(0.44, 0.68), at(0.74, 0.34)],
+                                s.tick_width,
+                                on(s.tick),
+                            );
+                        }
+                    }
+                    canvas.pop_clip();
+                }
                 What::Control(c) if c.face == crate::view::Face::Button => {
                     // A content button (VIEW.md §13.2): the surface, its border, and the
                     // surface's own hover and pressed tones; no glass, nothing for Hyalo.
@@ -1850,9 +1976,9 @@ impl ViewState {
                         && let Some(r) = self.silhouette(i)
                     {
                         let w = tokens.look.focus_width;
-                        // A switch's track is its edge and paints over anything inside it:
-                        // its ring stands outside, a ring's width away.
-                        let out = if self.holds_switch(i) { 2. * w } else { 0. };
+                        // A switch's track or a mark's border is its edge and paints over
+                        // anything inside it: its ring stands outside, a ring's width away.
+                        let out = if self.holds_mark(i) { 2. * w } else { 0. };
                         let r = [r[0] - out, r[1] - out, r[2] + 2. * out, r[3] + 2. * out];
                         canvas.rounded_ring(
                             rect(&r),
@@ -1928,6 +2054,8 @@ fn a11y_role(role: Role) -> nk_a11y::Role {
         Role::Toggle => nk_a11y::Role::ToggleButton,
         Role::Slider => nk_a11y::Role::Slider,
         Role::Field => nk_a11y::Role::TextInput,
+        Role::Check => nk_a11y::Role::CheckBox,
+        Role::Radio => nk_a11y::Role::RadioButton,
     }
 }
 fn inside(r: Rect, p: (f64, f64)) -> bool {

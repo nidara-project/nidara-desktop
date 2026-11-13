@@ -54,10 +54,11 @@ fn status_text(s: &str) -> &'static str {
 }
 
 /// Each page: its id (what the check and `--page` name), its title and its glyph.
-pub const PAGES: [(&str, &str, &str); 13] = [
+pub const PAGES: [(&str, &str, &str); 14] = [
     ("status", "Status", "nd-emblem-default"),
     ("button", "Button", "nd-hand"),
     ("switch", "Switch", "nd-light-mode"),
+    ("check", "Checkbox and radio", "nd-preferences-desktop"),
     ("slider", "Slider", "nd-display-brightness"),
     ("field", "Text field", "nd-input-keyboard"),
     ("glass", "Glass card", "nd-preferences-desktop-theme"),
@@ -74,6 +75,9 @@ pub const PAGES: [(&str, &str, &str); 13] = [
 pub struct Model {
     pub page: usize,
     pub switch: bool,
+    pub check: bool,
+    /// The radio group's choice.
+    pub choice: usize,
     pub toggle: bool,
     pub presses: u32,
     pub slider: f64,
@@ -85,6 +89,8 @@ impl Default for Model {
         Self {
             page: 0,
             switch: true,
+            check: false,
+            choice: 1,
             toggle: false,
             presses: 0,
             slider: 40.,
@@ -266,6 +272,7 @@ fn page(id: &str, m: &Model, cat: &Catalogue, t: &TypeScale) -> Vec<Node> {
         "status" => status(cat, t),
         "button" => buttons(m, t),
         "switch" => switches(m, t),
+        "check" => checks(m, t),
         "slider" => sliders(m, t),
         "field" => fields(t),
         "glass" => glass(t),
@@ -470,7 +477,7 @@ fn buttons(m: &Model, t: &TypeScale) -> Vec<Node> {
     ]
 }
 
-/// A setting row with a switch (VIEW.md §13.4): the row does not respond, only the switch
+/// A setting row with a switch (VIEW.md §12.6): the row does not respond, only the switch
 /// does; the row's text names it. `f` sets the switch's state for the samples.
 fn switch_row(
     key: &str,
@@ -530,6 +537,103 @@ fn switches(m: &Model, t: &TypeScale) -> Vec<Node> {
             t,
             switch_row("sw/live", "Wi-Fi", m.switch, "switch", t, &|n| n),
         ),
+    ]
+}
+
+/// A checkbox or a radio and its label (VIEW.md §13.5): the mark responds, the label names
+/// it and does not. `f` sets the mark's state for the samples.
+fn mark_row(key: &str, label: &str, mark: Node, t: &TypeScale) -> Node {
+    let enabled = !matches!(&mark.kind, nk_view::Kind::Control(c) if !c.enabled);
+    let text = Node::text(
+        format!("{key}/text"),
+        label,
+        t.style(Type::Body, Weight::Regular),
+    )
+    .ink(if enabled { Ink::Primary } else { Ink::Disabled })
+    .grow();
+    Node::row(key, vec![mark, text])
+        .gap(Space::S2)
+        .align(Align::Center)
+        .padding(Padding::symmetric(Space::S2, Space::S2))
+}
+
+fn checks(m: &Model, t: &TypeScale) -> Vec<Node> {
+    let states = |kind: &str, make: &dyn Fn(String, &str, bool) -> Node| {
+        let one = |k: &str, label: &str, on: bool, f: &dyn Fn(Node) -> Node| {
+            let key = format!("{kind}/{k}");
+            mark_row(&key, label, f(make(format!("{key}/mark"), label, on)), t)
+        };
+        Node::column(
+            format!("{kind}/states"),
+            vec![
+                one("off", "Off", false, &|n| n),
+                one("on", "On", true, &|n| n),
+                one("hover", "Hover", false, &|n| n.shown(Shown::Hover)),
+                one("press", "Pressed", false, &|n| n.shown(Shown::Press)),
+                one("focus", "Focus", true, &|n| n.shown(Shown::Focus)),
+                one("disabled", "Disabled", false, &|n| n.enabled(false)),
+                one("disabled-on", "Disabled, on", true, &|n| n.enabled(false)),
+            ],
+        )
+        .gap(Space::S1)
+    };
+    let checkbox = |key: String, label: &str, on: bool| Node::check_control(key, label, "noop", on);
+    let radio = |key: String, label: &str, on: bool| Node::radio_control(key, label, "noop", on);
+    let options = ["Small", "Medium", "Large"];
+    let group = options
+        .iter()
+        .enumerate()
+        .map(|(i, label)| {
+            mark_row(
+                &format!("ck/live/r{i}"),
+                label,
+                Node::radio_control(
+                    format!("ck/live/r{i}/mark"),
+                    *label,
+                    format!("choice:{i}"),
+                    m.choice == i,
+                ),
+                t,
+            )
+        })
+        .collect();
+    let live = Node::column(
+        "ck/live",
+        vec![
+            mark_row(
+                "ck/live/check",
+                "Show hidden files",
+                Node::check_control("ck/live/check/mark", "Show hidden files", "check", m.check),
+                t,
+            ),
+            Node::column("ck/live/group", group).gap(Space::S1),
+            Node::text(
+                "ck/live/said",
+                format!(
+                    "Try it: hidden files {}, size {}",
+                    if m.check { "shown" } else { "hidden" },
+                    options[m.choice.min(options.len() - 1)]
+                ),
+                t.style(Type::Small, Weight::Regular),
+            )
+            .ink(Ink::Secondary),
+        ],
+    )
+    .gap(Space::S2);
+    vec![
+        section(
+            "ck-check",
+            "Checkbox (only the box responds; the label does not)",
+            t,
+            states("ck/c", &checkbox),
+        ),
+        section(
+            "ck-radio",
+            "Radio (one Tab stop per group; the arrows move the choice)",
+            t,
+            states("ck/r", &radio),
+        ),
+        section("ck-live", "Try it", t, live),
     ]
 }
 

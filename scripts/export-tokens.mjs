@@ -138,6 +138,7 @@ const list = JSON.parse(readFileSync(join(repo, "toolkit/tokens/list.json"), "ut
 const choices = JSON.parse(readFileSync(join(repo, "toolkit/tokens/choices.json"), "utf8"))
 const range = JSON.parse(readFileSync(join(repo, "toolkit/tokens/range.json"), "utf8"))
 const switchLook = JSON.parse(readFileSync(join(repo, "toolkit/tokens/switch.json"), "utf8"))
+const check = JSON.parse(readFileSync(join(repo, "toolkit/tokens/check.json"), "utf8"))
 const wallpaper = JSON.parse(readFileSync(join(repo, "toolkit/tokens/wallpaper.json"), "utf8"))
 const search = JSON.parse(readFileSync(join(repo, "toolkit/tokens/search.json"), "utf8"))
 const dropdown = JSON.parse(readFileSync(join(repo, "toolkit/tokens/dropdown.json"), "utf8"))
@@ -187,6 +188,7 @@ for (const dark of [true, false])
             choices: variantFor(choices, dark, reduceTransparency),
             range: variantFor(range, dark, reduceTransparency),
             switch: variantFor(switchLook, dark, reduceTransparency),
+            check: variantFor(check, dark, reduceTransparency),
             rows: variantFor(rows, dark, reduceTransparency),
             dropdown: variantFor(dropdown, dark, reduceTransparency),
             button: variantFor(button, dark, reduceTransparency),

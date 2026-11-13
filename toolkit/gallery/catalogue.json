@@ -32,8 +32,8 @@
       "items": [
         {"name": "Button", "gtk": "Gtk.Button", "appkit": "NSButton", "status": "both", "users": "Settings, NC, CC", "page": "button"},
         {"name": "Toggle button", "gtk": "Gtk.ToggleButton", "appkit": "NSButton (toggle)", "status": "view", "users": "CC", "page": "button"},
-        {"name": "Checkbox", "gtk": "Gtk.CheckButton", "appkit": "NSButton (checkbox)", "status": "missing", "users": "CC details draw a mark by hand"},
-        {"name": "Radio", "gtk": "Gtk.CheckButton (grouped)", "appkit": "NSButton (radio)", "status": "widgets", "users": "Settings"},
+        {"name": "Checkbox", "gtk": "Gtk.CheckButton", "appkit": "NSButton (checkbox)", "status": "view", "users": "CC details draw a mark by hand", "page": "check"},
+        {"name": "Radio", "gtk": "Gtk.CheckButton (grouped)", "appkit": "NSButton (radio)", "status": "both", "users": "Settings", "page": "check"},
         {"name": "Switch", "gtk": "Gtk.Switch", "appkit": "NSSwitch", "status": "both", "users": "Settings, CC details", "page": "switch"},
         {"name": "Slider", "gtk": "Gtk.Scale", "appkit": "NSSlider", "status": "both", "users": "Settings, CC", "page": "slider"},
         {"name": "Number field", "gtk": "Gtk.SpinButton", "appkit": "NSStepper + NSTextField", "status": "widgets", "users": "Settings"},

@@ -248,6 +248,13 @@ pub enum What {
         on: bool,
         progress: f64,
     },
+    /// A checkbox's or a radio's mark: whether it is on, and how far it is from off (0) to
+    /// on (1).
+    Check {
+        on: bool,
+        radio: bool,
+        progress: f64,
+    },
     /// A scroll region: how far it is scrolled, and its content's height.
     Scroll {
         offset: f64,
@@ -280,6 +287,8 @@ pub struct Layouter<'a> {
     pub slider: f64,
     /// A switch's width and height.
     pub switch: (f64, f64),
+    /// A checkbox's or a radio's side.
+    pub check: f64,
     /// A content button's inset on each side (padding and border) across and down, and its
     /// least height (`Face::Button`).
     pub button: (f64, f64, f64),
@@ -324,6 +333,7 @@ impl Layouter<'_> {
             Kind::Overlay(o) => self.natural(&o.base),
             Kind::Grid(g) => g.span(g.columns),
             Kind::Switch(_) => self.switch.0,
+            Kind::Check(_) => self.check,
             Kind::Placeholder(_) => 0.,
             Kind::Stack(s) => {
                 let pad = self.spacing.of(s.padding.left) + self.spacing.of(s.padding.right);
@@ -339,7 +349,7 @@ impl Layouter<'_> {
         match &n.kind {
             Kind::Group(g) => self.min(&g.child),
             Kind::Text(t) if t.lines.is_some() => 0.,
-            Kind::Text(_) | Kind::Icon(_) | Kind::Switch(_) => self.natural(n),
+            Kind::Text(_) | Kind::Icon(_) | Kind::Switch(_) | Kind::Check(_) => self.natural(n),
             Kind::Spacer => 0.,
             Kind::Pane(p) => self.min(&p.child),
             Kind::Control(c) if c.face == Face::Button => self.min(&c.child) + 2. * self.button.0,
@@ -391,6 +401,7 @@ impl Layouter<'_> {
             Kind::Spacer => leaf(0., 0., None),
             Kind::Icon(i) => leaf(self.up(i.size), self.up(i.size), None),
             Kind::Switch(_) => leaf(self.up(self.switch.0), self.up(self.switch.1), None),
+            Kind::Check(_) => leaf(self.up(self.check), self.up(self.check), None),
             Kind::Text(t) => {
                 let (w, h, first) = match self.cache.fit(
                     self.text,
@@ -706,6 +717,11 @@ impl Layouter<'_> {
             Kind::Switch(sw) => What::Switch {
                 on: sw.on,
                 progress: self.progress(&n.key, sw.on),
+            },
+            Kind::Check(c) => What::Check {
+                on: c.on,
+                radio: c.radio,
+                progress: self.progress(&n.key, c.on),
             },
             Kind::Placeholder(_) => What::Spacer,
             Kind::Overlay(_) | Kind::Grid(_) => What::Stack,

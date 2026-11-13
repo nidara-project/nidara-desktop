@@ -219,6 +219,28 @@ impl Canvas {
         let r = snapped_dot(center, diameter, self.scale);
         self.rounded_rect(r, f64::from(r.width) / 2., color);
     }
+    /// An open line through `points`, `width` wide, its ends and joints round: a drawn mark
+    /// (a checkbox's tick) rather than a glyph from a theme.
+    pub fn polyline(&mut self, points: &[(f64, f64)], width: f64, color: Color) {
+        let Some((first, rest)) = points.split_first() else {
+            return;
+        };
+        if width <= 0. || rest.is_empty() {
+            return;
+        }
+        let mut path = BezPath::new();
+        path.move_to(*first);
+        for p in rest {
+            path.line_to(*p);
+        }
+        self.context.set_stroke(
+            Stroke::new(width)
+                .with_caps(Cap::Round)
+                .with_join(Join::Round),
+        );
+        self.context.set_paint(color);
+        self.context.stroke_path(&path);
+    }
     pub fn caret(&mut self, mut r: Rect, color: Color) {
         // Exactly one physical pixel at every fractional scale.
         r.x = ((r.x as f64 * self.scale).round() / self.scale) as f32;

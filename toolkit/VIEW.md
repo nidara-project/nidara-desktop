@@ -717,3 +717,33 @@ reference. What it does:
 A component is in the kit when, in one change: its function is in `nk-view` with its tokens;
 its page is in the gallery with every state; the gallery's check covers that page; and its row
 on the status page says so. A surface may use only components that are in the kit.
+
+### 13.5 Checkbox and radio
+
+`Node::check_control(key, name, action, on)` and `Node::radio_control(key, name, action,
+chosen)`: a `Gtk.CheckButton`, alone or grouped. Put the control first in a `Node::row` with its
+label after it, as a settings page does.
+
+- **The mark is the control, not its row** (owner, 2026-11-12, as the switch's, §12.6). The
+  control (`Role::Check` or `Role::Radio`, `marked(on)`) holds the drawn mark
+  (`Node::check(key/mark, on)` or `Node::radio(key/mark, chosen)`); only it takes hover, press
+  and the click. The label does nothing and takes `Ink::Disabled` itself when the control is
+  disabled. A reader hears one check box or radio button, named by the row, with its checked
+  state.
+- **Off glass, the view paints every state** (§13.2): no wash and nothing for Hyalo. The box
+  is the surface with its border, lifted under the pointer (`hover`, `hoverBorder`) and darker
+  while pressed; checked, it fills with the accent and carries a tick in its foreground; a
+  chosen radio keeps a band of the window's background inside its border, leaving the accent
+  as its dot. Disabled, all of it is drawn at `disabledOpacity`. Its focus ring stands outside
+  the border, as the switch's does.
+- **A radio group is the radios next to each other** in the controls' order. Tab stops on it
+  once, at its chosen radio (else its first); the arrows move the choice to the next or
+  previous one, round the group, and report that radio's action, as a click on it would. The
+  app keeps the choice and rebuilds.
+- **It moves.** A change of `on` blends the fill and fades the tick or the dot in over the
+  motion tokens' `base`, the same both ways, as the switch slides (§6).
+- **Measures and colours** are `components.json` `check` (`toolkit/tokens/check.json`, from the
+  kit's `check`/`radio` styles): 18 square, a 1.5 border, the checkbox at the `xs` corner.
+  Nothing is a default: a field missing from the export is an error.
+
+Not carried yet: the mixed (indeterminate) checkbox; no surface asks for it.
