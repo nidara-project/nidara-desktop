@@ -513,6 +513,78 @@ pub fn switch_from(component: &Value, set: &Value) -> Result<SwitchStyle, String
     Ok(style)
 }
 
+/// The checkbox's and the radio's mark (`components.json` `check`, `toolkit/tokens/check.json`):
+/// a CheckButton's, off glass. The view paints its fill, border and states itself.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct CheckStyle {
+    pub size: f64,
+    pub border: f64,
+    /// The checkbox's corner; the radio is round.
+    pub radius: f64,
+    pub background: Color,
+    pub border_color: Color,
+    pub hover: Color,
+    pub hover_border: Color,
+    pub pressed: Color,
+    pub checked: Color,
+    pub tick: Color,
+    pub tick_width: f64,
+    /// A chosen radio's band of `dot_band_color` inside its border, around the accent dot.
+    pub dot_band: f64,
+    pub dot_band_color: Color,
+    pub disabled_opacity: f64,
+}
+
+/// The mark from its component, its colours named by token and resolved in one set of
+/// `tokens/colors.json`, its corner a step of `radii`.
+pub fn check_from(component: &Value, set: &Value, radii: &Radii) -> Result<CheckStyle, String> {
+    let n = |k: &str| {
+        component[k]
+            .as_f64()
+            .filter(|v| v.is_finite() && *v >= 0.)
+            .ok_or_else(|| format!("check: no {k}"))
+    };
+    let colour = |k: &str| -> Result<Color, String> {
+        let name = component[k]
+            .as_str()
+            .ok_or_else(|| format!("check: no {k}"))?;
+        if !name.starts_with("--") {
+            return parse_color(name);
+        }
+        set["tokens"][name]
+            .as_str()
+            .ok_or_else(|| format!("colors.json: no {name}"))
+            .and_then(parse_color)
+    };
+    let radius = component["radius"]
+        .as_str()
+        .and_then(|r| Radius::ALL.into_iter().find(|x| x.token() == r))
+        .ok_or("check: no radius")?;
+    let style = CheckStyle {
+        size: n("size")?,
+        border: n("border")?,
+        radius: radii.px(radius),
+        background: colour("background")?,
+        border_color: colour("borderColor")?,
+        hover: colour("hover")?,
+        hover_border: colour("hoverBorder")?,
+        pressed: colour("pressed")?,
+        checked: colour("checked")?,
+        tick: colour("tick")?,
+        tick_width: n("tickWidth")?,
+        dot_band: n("dotBand")?,
+        dot_band_color: colour("dotBandColor")?,
+        disabled_opacity: n("disabledOpacity")?,
+    };
+    if style.disabled_opacity > 1.
+        || style.size <= 2. * (style.border + style.dot_band)
+        || style.radius > style.size / 2.
+    {
+        return Err("check: invalid measures".into());
+    }
+    Ok(style)
+}
+
 /// Everything a view is laid out and drawn with.
 #[derive(Clone, Debug)]
 pub struct Tokens {
@@ -524,6 +596,7 @@ pub struct Tokens {
     pub scrollbar: ScrollbarStyle,
     pub slider: SliderStyle,
     pub switch: SwitchStyle,
+    pub check: CheckStyle,
     pub button: ButtonStyle,
     /// A group's corner (`components.json` `common.groupRadius`), as Settings' cards.
     pub group_radius: f64,

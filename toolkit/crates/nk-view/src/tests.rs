@@ -35,7 +35,9 @@ fn tokens() -> Tokens {
         "--nidara-surface": "rgba(255, 255, 255, 0.08)", "--nidara-border": "rgba(255, 255, 255, 0.2)",
         "--nidara-thumb": "#ffffff", "--nidara-text-disabled": "rgba(255, 255, 255, 0.3)",
         "--nidara-surface-hover": "rgba(255, 255, 255, 0.12)",
-        "--nidara-surface-active": "rgba(255, 255, 255, 0.18)"}});
+        "--nidara-surface-active": "rgba(255, 255, 255, 0.18)",
+        "--nidara-surface-strong": "rgba(255, 255, 255, 0.30)", "--nidara-accent-fg": "#ffffff",
+        "--nidara-bg": "rgba(22, 22, 34, 1.00)"}});
     Tokens {
         spacing: Spacing::from_static(&statics()).unwrap(),
         radii: Radii::from_static(&statics()).unwrap(),
@@ -49,6 +51,7 @@ fn tokens() -> Tokens {
         )
         .unwrap(),
         switch: switch_from(&switch(), &set).unwrap(),
+        check: check_from(&check(), &set, &Radii::from_static(&statics()).unwrap()).unwrap(),
         button: button_from(&button(), &set).unwrap(),
         group_radius: 16.,
     }
@@ -59,6 +62,14 @@ fn switch() -> serde_json::Value {
         "checkedBorderColor": "rgba(0, 0, 0, 0.1)", "trackColor": "--nidara-surface",
         "checkedColor": "--nidara-accent", "thumbColor": "--nidara-thumb", "thumbMargin": 3,
         "disabledOpacity": 0.45})
+}
+/// `components.json` `check`, as `toolkit/tokens/check.json` exports it.
+fn check() -> serde_json::Value {
+    json!({"size": 18, "border": 1.5, "radius": "xs", "background": "--nidara-surface",
+        "borderColor": "--nidara-border", "hover": "--nidara-surface-hover",
+        "hoverBorder": "--nidara-surface-strong", "pressed": "--nidara-surface-active",
+        "checked": "--nidara-accent", "tick": "--nidara-accent-fg", "tickWidth": 2,
+        "dotBand": 4, "dotBandColor": "--nidara-bg", "disabledOpacity": 0.45})
 }
 /// `components.json` `button`, as `toolkit/tokens/button.json` exports it.
 fn button() -> serde_json::Value {
@@ -3043,6 +3054,178 @@ fn in_a_setting_row_only_the_switch_responds_and_it_bears_the_rows_name() {
         ringed[0] > ringed[1] && ringed != plain,
         "{plain:?} then {ringed:?}"
     );
+}
+
+#[test]
+fn the_check_tokens_are_read_from_their_export_with_nothing_defaulted() {
+    let t = tokens();
+    let c = t.check;
+    assert_eq!((c.size, c.border, c.radius, c.dot_band), (18., 1.5, 6., 4.));
+    let set = json!({"tokens": {"--nidara-surface": "#000000", "--nidara-border": "#ffffff",
+        "--nidara-surface-hover": "#111111", "--nidara-surface-strong": "#222222",
+        "--nidara-surface-active": "#333333", "--nidara-accent": "#0088ff",
+        "--nidara-accent-fg": "#ffffff", "--nidara-bg": "#000000"}});
+    let radii = Radii::from_static(&statics()).unwrap();
+    assert!(check_from(&check(), &set, &radii).is_ok());
+    for k in ["size", "radius", "tick", "dotBand", "dotBandColor", "disabledOpacity"] {
+        let mut c = check();
+        c.as_object_mut().unwrap().remove(k);
+        assert!(check_from(&c, &set, &radii).is_err(), "{k} missing");
+    }
+    let mut c = check();
+    c["dotBand"] = json!(9);
+    assert!(check_from(&c, &set, &radii).is_err(), "no room for the dot");
+}
+
+/// A row of a checkbox or a radio and its label, as a settings page builds one.
+fn mark_row(key: &str, label: &str, mark: Node) -> Node {
+    Node::row(
+        format!("{key}/row"),
+        vec![mark, Node::text(format!("{key}/label"), label, style(14.)).grow()],
+    )
+    .gap(Space::S2)
+    .align(Align::Center)
+}
+
+#[test]
+fn a_checkbox_responds_only_on_its_box_and_a_reader_finds_it_checked() {
+    let t = tokens();
+    let view = mark_row("wrap", "Wrap lines", Node::check_control("wrap", "Wrap lines", "wrap", true));
+    let mut s = laid(&view, (300., 40.), 1.);
+    let (label, mark) = (rect(&s, "wrap/label"), rect(&s, "wrap"));
+    assert_eq!((mark[2], mark[3]), (18., 18.), "the box at the tokens' size");
+    s.pointer_motion(label[0] + 4., label[1] + label[3] / 2.);
+    assert_eq!(s.hover(), None, "the label takes no hover");
+    s.button(true, Instant::now());
+    assert!(s.button(false, Instant::now()).is_none(), "nor a press");
+    s.pointer_motion(mark[0] + 9., mark[1] + 9.);
+    assert_eq!(s.hover(), Some(&Key::from("wrap")));
+    s.button(true, Instant::now());
+    assert_eq!(s.button(false, Instant::now()).unwrap().action, "wrap");
+    let f = s.frame(&t, Instant::now());
+    assert!(f.states.is_empty(), "off glass: nothing for Hyalo");
+    let tree = s.semantics(nk_a11y::Node::new(1, nk_a11y::Role::Window, "W"), 2);
+    let boxes: Vec<_> = tree
+        .nodes
+        .values()
+        .filter(|n| n.role == nk_a11y::Role::CheckBox)
+        .collect();
+    assert_eq!(boxes.len(), 1);
+    assert_eq!(boxes[0].name, "Wrap lines");
+    assert!(boxes[0].states.checked);
+}
+
+/// The view's pixels, BGRA, `w` by `h`.
+fn painted(view: &Node, w: u16, h: u16) -> (ViewState, Vec<u8>) {
+    let t = tokens();
+    let mut s = laid(view, (f64::from(w), f64::from(h)), 1.);
+    let mut c = nk_render::Canvas::new(w, h, 1.);
+    s.frame(&t, Instant::now());
+    s.paint(&mut c, &t, &mut |_: &str, _: f64| None, None)
+        .unwrap();
+    (s, c.finish())
+}
+fn bgra(px: &[u8], w: usize, (x, y): (f64, f64)) -> [u8; 4] {
+    let i = (y as usize * w + x as usize) * 4;
+    [px[i], px[i + 1], px[i + 2], px[i + 3]]
+}
+
+#[test]
+fn a_checked_box_is_the_accent_with_a_tick_and_a_chosen_radio_a_dot_in_a_band() {
+    let row = |on: bool, radio: bool| {
+        let c = if radio {
+            Node::radio_control("m", "M", "m", on)
+        } else {
+            Node::check_control("m", "M", "m", on)
+        };
+        mark_row("m", "M", c)
+    };
+    let at = |on: bool, radio: bool, (fx, fy): (f64, f64)| {
+        let (s, px) = painted(&row(on, radio), 100, 30);
+        let r = rect(&s, "m");
+        bgra(&px, 100, (r[0] + fx * r[2], r[1] + fy * r[3]))
+    };
+    // Off: the surface, dark over nothing. On: the accent (blue) near the corner, and the
+    // tick (white) on its stroke.
+    let corner = (0.2, 0.2);
+    let (off, on) = (at(false, false, corner), at(true, false, corner));
+    assert!(on[0] > 200 && on[2] < 50, "the accent: {on:?}");
+    assert!(off[0] < 100, "the surface: {off:?}");
+    let tick = at(true, false, (0.44, 0.67));
+    assert!(tick[0] > 200 && tick[1] > 200 && tick[2] > 200, "the tick: {tick:?}");
+    // The radio: the accent dot at its centre, the band of the background between it and the
+    // border.
+    let dot = at(true, true, (0.5, 0.5));
+    assert!(dot[0] > 200 && dot[2] < 50, "the dot: {dot:?}");
+    let band = at(true, true, (0.5, 0.2));
+    assert!(band[0] < 60, "the band: {band:?}");
+    let unchosen = at(false, true, (0.5, 0.5));
+    assert!(unchosen[0] < 100, "an unchosen radio's centre: {unchosen:?}");
+}
+
+#[test]
+fn a_radio_group_is_one_tab_stop_and_the_arrows_move_its_choice() {
+    let radios = |chosen: usize| {
+        let r = |i: usize| {
+            let k = format!("r{i}");
+            mark_row(&k, &k, Node::radio_control(k.clone(), k.clone(), format!("pick{i}"), i == chosen))
+        };
+        Node::column(
+            "c",
+            vec![
+                Node::button("before", "Before", "before", style(14.)),
+                r(0),
+                r(1),
+                r(2),
+                Node::button("after", "After", "after", style(14.)),
+            ],
+        )
+    };
+    let mut s = laid(&radios(1), (200., 200.), 1.);
+    let focus = |s: &ViewState| s.focus().map(|k| k.0.clone());
+    s.key(KeyInput::Tab);
+    assert_eq!(focus(&s).as_deref(), Some("before"));
+    s.key(KeyInput::Tab);
+    assert_eq!(focus(&s).as_deref(), Some("r1"), "the group's stop is its chosen radio");
+    s.key(KeyInput::Tab);
+    assert_eq!(focus(&s).as_deref(), Some("after"), "one stop for the whole group");
+    s.key(KeyInput::ShiftTab);
+    assert_eq!(focus(&s).as_deref(), Some("r1"));
+    let a = s.key(KeyInput::Down).expect("Down chooses the next");
+    assert_eq!((a.action.as_str(), focus(&s).as_deref()), ("pick2", Some("r2")));
+    let a = s.key(KeyInput::Down).expect("and wraps");
+    assert_eq!(a.action, "pick0");
+    let a = s.key(KeyInput::Left).expect("Left the previous");
+    assert_eq!(a.action, "pick2");
+    // Off a radio the arrows choose nothing.
+    s.key(KeyInput::Tab);
+    assert!(s.key(KeyInput::Down).is_none());
+    // A reader finds three radio buttons, one checked.
+    let tree = s.semantics(nk_a11y::Node::new(1, nk_a11y::Role::Window, "W"), 2);
+    let r: Vec<_> = tree
+        .nodes
+        .values()
+        .filter(|n| n.role == nk_a11y::Role::RadioButton)
+        .collect();
+    assert_eq!(r.len(), 3);
+    assert_eq!(r.iter().filter(|n| n.states.checked).count(), 1);
+}
+
+#[test]
+fn a_focused_mark_rings_outside_its_border() {
+    let row = |shown: Option<Shown>| {
+        let mut c = Node::check_control("m", "M", "m", true);
+        if let Some(sh) = shown {
+            c = c.shown(sh);
+        }
+        mark_row("m", "M", c).padding(Padding::all(Space::S3))
+    };
+    let (s, plain) = painted(&row(None), 100, 30);
+    let (_, ringed) = painted(&row(Some(Shown::Focus)), 100, 30);
+    let r = rect(&s, "m");
+    let p = (r[0] - 3., r[1] + r[3] / 2.);
+    let (a, b) = (bgra(&plain, 100, p), bgra(&ringed, 100, p));
+    assert!(b[0] > b[2] && a != b, "{a:?} then {b:?}");
 }
 
 #[test]

@@ -50,6 +50,9 @@ pub enum Kind {
     Grid(Grid),
     /// An on/off switch, drawn only: the control around it is what is pressed (VIEW.md §12.6).
     Switch(Switch),
+    /// A checkbox's or a radio's mark, drawn only: the control around it is what is pressed
+    /// (VIEW.md §13.4).
+    Check(Check),
     /// A row the surface did not build, at the height it had when it was (VIEW.md §8).
     Placeholder(f64),
 }
@@ -59,6 +62,15 @@ pub enum Kind {
 #[derive(Clone, Copy, Debug, PartialEq, Serialize, Deserialize)]
 pub struct Switch {
     pub on: bool,
+}
+
+/// A checkbox's or a radio's mark (VIEW.md §13.4): its size and colours are the tokens'
+/// (`check`); a change of `on` fades it as a switch slides.
+#[derive(Clone, Copy, Debug, PartialEq, Serialize, Deserialize)]
+pub struct Check {
+    pub on: bool,
+    /// Round, one choice of several; else the square checkbox.
+    pub radio: bool,
 }
 
 /// Something that opens and closes in place, unrolling downward (VIEW.md §6).
@@ -437,6 +449,11 @@ pub enum Role {
     Slider,
     /// One line of text being typed (VIEW.md §12.2).
     Field,
+    /// A checkbox: on or off on its own (`marked` is its state).
+    Check,
+    /// One choice of several (`marked`: it is the one chosen). The radios next to each other
+    /// in tree order are one group: the arrows move the choice in it, and Tab stops at it once.
+    Radio,
 }
 
 /// The constructors a surface builds its view with.
@@ -583,6 +600,61 @@ impl Node {
             .corner(Corner::Pill)
             .role(Role::Toggle)
             .marked(on)
+    }
+    /// A checkbox's mark as drawn, for a control that holds one (`check_control`).
+    pub fn check(key: impl Into<Key>, on: bool) -> Self {
+        Self::new(key, Kind::Check(Check { on, radio: false }))
+    }
+    /// A radio's mark as drawn, for a control that holds one (`radio_control`).
+    pub fn radio(key: impl Into<Key>, chosen: bool) -> Self {
+        Self::new(key, Kind::Check(Check { on: chosen, radio: true }))
+    }
+    /// A checkbox (VIEW.md §13.4): as the switch, only the box responds, never the row it
+    /// sits in; `name` is what its row says, `action` is reported on each flip. It is off
+    /// glass, and the view paints its states.
+    pub fn check_control(
+        key: impl Into<Key>,
+        name: impl Into<String>,
+        action: impl Into<String>,
+        on: bool,
+    ) -> Self {
+        let key = key.into();
+        let drawn = Self::check(format!("{}/mark", key.0), on);
+        Self::mark_control(key, name, action, drawn, Role::Check, on)
+    }
+    /// A radio (VIEW.md §13.4): one choice of several; put the group's radios next to each
+    /// other. `action` is reported when it is chosen, by a click or by the arrows.
+    pub fn radio_control(
+        key: impl Into<Key>,
+        name: impl Into<String>,
+        action: impl Into<String>,
+        chosen: bool,
+    ) -> Self {
+        let key = key.into();
+        let drawn = Self::radio(format!("{}/mark", key.0), chosen);
+        Self::mark_control(key, name, action, drawn, Role::Radio, chosen)
+    }
+    fn mark_control(
+        key: Key,
+        name: impl Into<String>,
+        action: impl Into<String>,
+        drawn: Node,
+        role: Role,
+        on: bool,
+    ) -> Self {
+        let corner = if role == Role::Radio {
+            Corner::Pill
+        } else {
+            Corner::Token(Radius::Xs)
+        };
+        let mut n = Self::control(key, name, action, drawn)
+            .corner(corner)
+            .role(role)
+            .marked(on);
+        if let Kind::Control(c) = &mut n.kind {
+            c.wash = Wash::None;
+        }
+        n
     }
     /// Stands in for a row the surface leaves unbuilt, outside a scroll region's window:
     /// `height` is what `ViewState::rect` gave for the row when it was built.
