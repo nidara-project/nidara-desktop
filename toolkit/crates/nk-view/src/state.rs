@@ -1760,7 +1760,9 @@ impl ViewState {
                 What::Icon(icon) => {
                     if let Some(glyph) = icons(&icon.name, icon.size) {
                         canvas.clip(rect(&visible));
-                        canvas.icon(&glyph, rect(&p.rect), content(tokens.look.ink(icon.ink)));
+                        let c = tokens.look.ink(icon.ink);
+                        let c = c.with_alpha(c.components[3] * icon.alpha as f32);
+                        canvas.icon(&glyph, rect(&p.rect), content(c));
                         canvas.pop_clip();
                     }
                 }

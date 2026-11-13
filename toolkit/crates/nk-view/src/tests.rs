@@ -47,7 +47,8 @@ fn tokens() -> Tokens {
         scrollbar: scrollbar_from(&scrollbar(), &set).unwrap(),
         slider: slider_from(
             &json!({"slider": {"width": 140, "track": 6, "thumbRadius": 9,
-            "valueGap": 12, "fillOpacity": 0.9, "pageSteps": 10}}),
+            "valueGap": 12, "fillOpacity": 0.9, "pageSteps": 10, "iconSize": 16,
+            "iconOpacity": 0.5, "iconGap": 12}}),
         )
         .unwrap(),
         switch: switch_from(&switch(), &set).unwrap(),
@@ -3431,6 +3432,94 @@ fn an_activatable_row_never_holds_a_control_of_its_own() {
             Some("flip"),
         ),
     );
+}
+
+fn slider_row(value: f64, icons: bool, disabled: bool) -> Node {
+    let t = tokens();
+    let end = SliderEnd {
+        name: "Brightness".into(),
+        action: "bright".into(),
+        slider: Slider::new(0., 100., 1., value).unit(" %"),
+        value_style: style(14.),
+        icons: icons.then(|| ["nd-display-brightness-low".into(), "nd-display-brightness".into()]),
+        disabled,
+    };
+    Node::column(
+        "c",
+        vec![Node::setting_row(
+            "r",
+            SettingRow {
+                trailing: Some(Node::slider_end("r/slider", end, &t.slider)),
+                disabled,
+                ..setting("Brightness", None, None, None)
+            },
+        )],
+    )
+}
+
+#[test]
+fn a_slider_row_ends_in_the_kits_slider_and_its_value_which_never_moves_it() {
+    let at = |v: f64| {
+        let s = laid(&slider_row(v, false, false), (500., 100.), 1.);
+        (rect(&s, "r/slider"), rect(&s, "r/slider/value"), rect(&s, "r"))
+    };
+    let (slider, value, row) = at(5.);
+    assert_eq!(slider[2], 140., "the kit's slider width");
+    assert_eq!(value[0], slider[0] + 140. + 12., "its value the kit's gap after it");
+    assert_eq!(row[3], 48., "a row's height");
+    let (slider2, value2, _) = at(100.);
+    assert_eq!((slider[0], value[0], value[2]), (slider2[0], value2[0], value2[2]), "5 % and 100 % take the same room");
+    // A reader finds the slider named by its row, and the row is no control.
+    let mut s = laid(&slider_row(40., false, false), (500., 100.), 1.);
+    let tree = s.semantics(nk_a11y::Node::new(1, nk_a11y::Role::Window, "W"), 2);
+    let controls: Vec<_> = tree
+        .nodes
+        .values()
+        .filter(|n| !matches!(n.role, nk_a11y::Role::Window | nk_a11y::Role::Label | nk_a11y::Role::Panel))
+        .collect();
+    assert_eq!(controls.len(), 1, "{controls:?}");
+    assert_eq!((controls[0].role, controls[0].name.as_str()), (nk_a11y::Role::Slider, "Brightness"));
+    assert!(tree.nodes.values().any(|n| n.name == "40 %"), "its value is read too");
+}
+
+#[test]
+fn a_slider_rows_glyphs_flank_it_faded_and_disabled_dims_all_of_it() {
+    let s = laid(&slider_row(40., true, false), (500., 100.), 1.);
+    let (lesser, slider, greater) = (rect(&s, "r/slider/lesser"), rect(&s, "r/slider"), rect(&s, "r/slider/greater"));
+    assert_eq!((lesser[2], greater[2]), (16., 16.));
+    assert_eq!(slider[0], lesser[0] + 16. + 12.);
+    assert_eq!(greater[0], slider[0] + 140. + 12.);
+    match &placed(&s, "r/slider/lesser").what {
+        What::Icon(i) => assert_eq!(i.alpha, 0.5),
+        w => panic!("{w:?}"),
+    }
+    let s = laid(&slider_row(40., true, true), (500., 100.), 1.);
+    for k in ["r/title", "r/slider/value"] {
+        match &placed(&s, k).what {
+            What::Text { ink, .. } => assert_eq!(*ink, Ink::Disabled, "{k}"),
+            w => panic!("{w:?}"),
+        }
+    }
+    match &placed(&s, "r/slider/lesser").what {
+        What::Icon(i) => assert_eq!(i.ink, Ink::Disabled),
+        w => panic!("{w:?}"),
+    }
+    let mut s = s;
+    let r = rect(&s, "r/slider");
+    s.pointer_motion(r[0] + 70., r[1] + r[3] / 2.);
+    s.button(true, Instant::now());
+    assert!(s.button(false, Instant::now()).is_none(), "a disabled slider does not move");
+}
+
+#[test]
+fn the_slider_tokens_need_the_row_measures() {
+    for k in ["width", "valueGap", "iconSize", "iconOpacity", "iconGap"] {
+        let mut v = json!({"slider": {"width": 140, "track": 6, "thumbRadius": 9, "valueGap": 12,
+            "fillOpacity": 0.9, "pageSteps": 10, "iconSize": 16, "iconOpacity": 0.5, "iconGap": 12}});
+        assert!(slider_from(&v).is_ok());
+        v["slider"].as_object_mut().unwrap().remove(k);
+        assert!(slider_from(&v).is_err(), "{k} missing");
+    }
 }
 
 #[test]

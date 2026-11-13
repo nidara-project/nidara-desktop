@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: LGPL-3.0-or-later
 //! The view: a value a surface builds from its model on each change (VIEW.md §2).
-use crate::tokens::{Radii, Radius, Space};
+use crate::tokens::{Radii, Radius, SliderStyle, Space};
 use nk_text::TextStyle;
 use serde::{Deserialize, Serialize};
 
@@ -92,6 +92,21 @@ pub struct SettingRow {
     /// The row responds as a whole and reports this action (GNOME's activatable row). Off by
     /// default: the control in it responds, not the row (owner, 2026-11-12).
     pub action: Option<String>,
+    pub disabled: bool,
+}
+
+/// What a setting row ends with when its control is a slider (VIEW.md §13.7): Settings' slider
+/// row.
+#[derive(Clone, Debug)]
+pub struct SliderEnd {
+    /// What a reader calls the slider: its row's title.
+    pub name: String,
+    /// Reported on every change; read the value with `ViewState::value`.
+    pub action: String,
+    pub slider: Slider,
+    pub value_style: TextStyle,
+    /// The glyphs at its lesser and greater ends (`nd-` names), as Brightness has.
+    pub icons: Option<[String; 2]>,
     pub disabled: bool,
 }
 
@@ -290,6 +305,10 @@ pub struct Text {
     /// Lines it is as tall as however few it fills, so cards of one kind share a height.
     #[serde(default)]
     pub reserve: usize,
+    /// Texts it is as wide as the widest of, so a value that changes (a slider's) never moves
+    /// what lies beside it.
+    #[serde(default)]
+    pub room: Vec<String>,
     /// Not drawn while the pointer is over this pane or focus is inside it, the inverse of
     /// a control's `revealed_with`; it keeps its room, so what replaces it does not move it.
     #[serde(default)]
@@ -302,6 +321,12 @@ pub struct Icon {
     pub name: String,
     pub size: f64,
     pub ink: Ink,
+    /// Its ink's opacity on top of the ink's own (a slider's flanking glyphs).
+    #[serde(default = "opaque")]
+    pub alpha: f64,
+}
+fn opaque() -> f64 {
+    1.
 }
 
 /// What a control's hover and press show on the glass.
@@ -537,6 +562,7 @@ impl Node {
                 ink: Ink::Primary,
                 lines: None,
                 reserve: 0,
+                room: vec![],
                 hidden_with: None,
             }),
         )
@@ -548,6 +574,7 @@ impl Node {
                 name: name.into(),
                 size,
                 ink: Ink::Primary,
+                alpha: 1.,
             }),
         )
     }
@@ -680,6 +707,48 @@ impl Node {
             }
             None => line,
         }
+    }
+    /// A slider and its value, for a setting row to end with (VIEW.md §13.7): the slider at the
+    /// kit's width, its glyphs either side of it when it has them, and its value after it in
+    /// room for its widest text, so the slider never moves as the value changes. Measures are
+    /// `style`'s, the exported `range.slider`.
+    pub fn slider_end(key: impl Into<Key>, end: SliderEnd, style: &SliderStyle) -> Self {
+        let key = key.into();
+        let k = |part: &str| format!("{}/{part}", key.0);
+        let range = end.slider.range();
+        let shown = range.text(end.slider.shown(end.slider.value) as f32);
+        let room = vec![
+            range.text(end.slider.min as f32),
+            range.text(end.slider.max as f32),
+        ];
+        let ink = if end.disabled { Ink::Disabled } else { Ink::Primary };
+        let glyph = |part: &str, name: &str| {
+            Self::icon(k(part), name, style.icon_size)
+                .ink(ink)
+                .alpha(style.icon_opacity)
+        };
+        let gap = |part: &str, w: f64| Self::spacer(k(part)).width(w);
+        let mut parts = vec![];
+        if let Some([lesser, _]) = &end.icons {
+            parts.push(glyph("lesser", lesser));
+            parts.push(gap("lesser-gap", style.icon_gap));
+        }
+        parts.push(
+            Self::slider(key.clone(), end.name, end.action, end.slider)
+                .width(style.width)
+                .enabled(!end.disabled),
+        );
+        if let Some([_, greater]) = &end.icons {
+            parts.push(gap("greater-gap", style.icon_gap));
+            parts.push(glyph("greater", greater));
+        }
+        parts.push(gap("value-gap", style.value_gap));
+        parts.push(
+            Self::text(k("value"), shown, end.value_style)
+                .ink(ink)
+                .room(room),
+        );
+        Self::row(k("end"), parts).align(Align::Center)
     }
     /// Whether a control lies in this node.
     fn holds_control(&self) -> bool {
@@ -935,6 +1004,21 @@ impl Node {
         self
     }
     /// A text at least `n` lines tall.
+    /// A text as wide as the widest of `texts` (and its own), so it does not move what lies
+    /// beside it as it changes.
+    pub fn room(mut self, texts: Vec<String>) -> Self {
+        if let Kind::Text(t) = &mut self.kind {
+            t.room = texts;
+        }
+        self
+    }
+    /// An icon's ink at `alpha` of its own opacity.
+    pub fn alpha(mut self, alpha: f64) -> Self {
+        if let Kind::Icon(i) = &mut self.kind {
+            i.alpha = alpha.clamp(0., 1.);
+        }
+        self
+    }
     pub fn reserve(mut self, n: usize) -> Self {
         if let Kind::Text(t) = &mut self.kind {
             t.reserve = n;

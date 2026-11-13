@@ -377,6 +377,13 @@ pub fn scrollbar_from(component: &Value, set: &Value) -> Result<ScrollbarStyle, 
 /// Page Up and Page Down move.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct SliderStyle {
+    /// A row slider's width, the gap to its value, and its flanking glyphs' size, opacity
+    /// and gap (VIEW.md §13.7).
+    pub width: f64,
+    pub value_gap: f64,
+    pub icon_size: f64,
+    pub icon_opacity: f64,
+    pub icon_gap: f64,
     pub track: f64,
     pub thumb_radius: f64,
     pub fill_opacity: f64,
@@ -391,12 +398,21 @@ pub fn slider_from(range: &Value) -> Result<SliderStyle, String> {
             .ok_or_else(|| format!("range.slider: no {k}"))
     };
     let style = SliderStyle {
+        width: n("width")?,
+        value_gap: n("valueGap")?,
+        icon_size: n("iconSize")?,
+        icon_opacity: n("iconOpacity")?,
+        icon_gap: n("iconGap")?,
         track: n("track")?,
         thumb_radius: n("thumbRadius")?,
         fill_opacity: n("fillOpacity")?,
         page_steps: n("pageSteps")?,
     };
-    if style.fill_opacity > 1. || style.thumb_radius <= 0. {
+    if style.fill_opacity > 1.
+        || style.icon_opacity > 1.
+        || style.thumb_radius <= 0.
+        || style.width <= 2. * style.thumb_radius
+    {
         return Err("range.slider: invalid measures".into());
     }
     Ok(style)
