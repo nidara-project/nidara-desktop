@@ -37,7 +37,7 @@
         {"name": "Switch", "gtk": "Gtk.Switch", "appkit": "NSSwitch", "status": "both", "users": "Settings, CC details", "page": "switch"},
         {"name": "Slider", "gtk": "Gtk.Scale", "appkit": "NSSlider", "status": "both", "users": "Settings, CC", "page": "slider"},
         {"name": "Number field", "gtk": "Gtk.SpinButton", "appkit": "NSStepper + NSTextField", "status": "widgets", "users": "Settings"},
-        {"name": "Dropdown", "gtk": "Gtk.DropDown", "appkit": "NSPopUpButton", "status": "widgets", "users": "Settings"},
+        {"name": "Dropdown", "gtk": "Gtk.DropDown", "appkit": "NSPopUpButton", "status": "both", "users": "Settings", "page": "dropdown"},
         {"name": "Editable combo", "gtk": "Gtk.ComboBox (entry)", "appkit": "NSComboBox", "status": "missing", "users": ""},
         {"name": "Date", "gtk": "Gtk.Calendar", "appkit": "NSDatePicker", "status": "hand", "users": "NC calendar"},
         {"name": "Colour swatch", "gtk": "composite button", "appkit": "NSColorWell", "status": "widgets", "users": "Settings, Appearance"}

@@ -2,6 +2,7 @@
 //! What a view measures and paints with, read from the exported tokens and never written in a
 //! surface: the kit's spacing scale (`tokens/static.json`), the text and focus colours
 //! (`tokens/colors.json`) and the washes of a control's states (`tokens/glass.json`).
+use crate::host::{Type, Weight};
 use nk_render::Color;
 use nk_widgets::ScrollbarStyle;
 use serde::{Deserialize, Serialize};
@@ -607,6 +608,200 @@ pub fn check_from(component: &Value, set: &Value, radii: &Radii) -> Result<Check
     Ok(style)
 }
 
+/// A dropdown's closed trigger (`components.json` `dropdown.trigger`,
+/// `toolkit/tokens/dropdown.json`): Settings' dropdown button, off glass. The view paints it.
+#[derive(Clone, Debug, PartialEq)]
+pub struct TriggerStyle {
+    pub padding_x: f64,
+    pub padding_y: f64,
+    pub border: f64,
+    pub min_content_height: f64,
+    pub radius: f64,
+    pub font: (Type, Weight),
+    /// Room before the label, inside the padding.
+    pub label_margin: f64,
+    pub arrow_size: f64,
+    pub arrow_gap: f64,
+    /// The arrow's `nd-` name.
+    pub arrow: String,
+    pub background: Color,
+    pub hover: Color,
+    pub pressed: Color,
+    pub text: Color,
+    pub arrow_color: Color,
+    pub focus: Color,
+    pub disabled_opacity: f64,
+}
+impl TriggerStyle {
+    /// Its inset on each side across (border and padding) and down, and its least height.
+    pub fn inset(&self) -> (f64, f64, f64) {
+        let down = self.border + self.padding_y;
+        (
+            self.border + self.padding_x,
+            down,
+            self.min_content_height + 2. * down,
+        )
+    }
+}
+
+/// A dropdown's open list (`components.json` `dropdown.menu`): a popup on panel glass, each
+/// option a row, the one under the pointer or the keyboard filled with the accent, the chosen
+/// one ticked.
+#[derive(Clone, Debug, PartialEq)]
+pub struct MenuStyle {
+    pub border: f64,
+    pub radius: f64,
+    /// Room between the menu's border and its rows.
+    pub inset: f64,
+    pub padding_x: f64,
+    pub padding_y: f64,
+    pub row_radius: f64,
+    pub font: (Type, Weight),
+    pub check_size: f64,
+    pub check_gap: f64,
+    /// The tick's stroke, in the 24-unit box it is drawn in.
+    pub check_stroke: f64,
+    /// Under the rows without the compositor's glass (D5).
+    pub background: Color,
+    pub border_color: Color,
+    pub text: Color,
+    pub accent: Color,
+    pub accent_text: Color,
+    /// How much darker a pressed row's accent is.
+    pub pressed_black: f64,
+}
+impl MenuStyle {
+    /// A row's inset across and down, and its least height.
+    pub fn row_inset(&self) -> (f64, f64, f64) {
+        (
+            self.padding_x,
+            self.padding_y,
+            self.check_size + 2. * self.padding_y,
+        )
+    }
+    /// Its rows' distance from its edge.
+    pub fn edge(&self) -> f64 {
+        self.border + self.inset
+    }
+}
+
+#[derive(Clone, Debug, PartialEq)]
+pub struct DropdownStyle {
+    pub trigger: TriggerStyle,
+    pub menu: MenuStyle,
+}
+
+/// The dropdown from its component: colours named by token and resolved in one set of
+/// `tokens/colors.json`, corners steps of `radii`, the label's margin a step of `spacing`,
+/// the fonts steps of the type scale.
+pub fn dropdown_from(
+    component: &Value,
+    set: &Value,
+    radii: &Radii,
+    spacing: &Spacing,
+) -> Result<DropdownStyle, String> {
+    let part = |name: &str| {
+        let c = &component[name];
+        c.is_object()
+            .then_some(c)
+            .ok_or_else(|| format!("dropdown: no {name}"))
+    };
+    let (t, m) = (part("trigger")?, part("menu")?);
+    let n = |c: &Value, k: &str| {
+        c[k].as_f64()
+            .filter(|v| v.is_finite() && *v >= 0.)
+            .ok_or_else(|| format!("dropdown: no {k}"))
+    };
+    let word = |c: &Value, k: &str| {
+        c[k].as_str()
+            .map(str::to_owned)
+            .ok_or_else(|| format!("dropdown: no {k}"))
+    };
+    let colour = |c: &Value, k: &str| -> Result<Color, String> {
+        let name = word(c, k)?;
+        if !name.starts_with("--") {
+            return parse_color(&name);
+        }
+        set["tokens"][&name]
+            .as_str()
+            .ok_or_else(|| format!("colors.json: no {name}"))
+            .and_then(parse_color)
+    };
+    let radius = |c: &Value, k: &str| {
+        let w = word(c, k)?;
+        Radius::ALL
+            .into_iter()
+            .find(|r| r.token() == w)
+            .map(|r| radii.px(r))
+            .ok_or_else(|| format!("dropdown: {k} {w:?} is not a radius"))
+    };
+    let font = |c: &Value| -> Result<(Type, Weight), String> {
+        let (size, weight) = (word(c, "fontSize")?, word(c, "fontWeight")?);
+        Ok((
+            Type::ALL
+                .into_iter()
+                .find(|x| x.token() == size)
+                .ok_or_else(|| format!("dropdown: {size:?} is not a type step"))?,
+            Weight::ALL
+                .into_iter()
+                .find(|x| x.token() == weight)
+                .ok_or_else(|| format!("dropdown: {weight:?} is not a weight"))?,
+        ))
+    };
+    let margin = word(t, "labelMargin")?;
+    let trigger = TriggerStyle {
+        padding_x: n(t, "paddingX")?,
+        padding_y: n(t, "paddingY")?,
+        border: n(t, "border")?,
+        min_content_height: n(t, "minContentHeight")?,
+        radius: radius(t, "radius")?,
+        font: font(t)?,
+        label_margin: Space::ALL
+            .into_iter()
+            .find(|s| s.token() == margin)
+            .map(|s| spacing.px(s))
+            .ok_or_else(|| format!("dropdown: {margin:?} is not a space"))?,
+        arrow_size: n(t, "arrowSize")?,
+        arrow_gap: n(t, "arrowGap")?,
+        arrow: word(t, "arrow")?,
+        background: colour(t, "background")?,
+        hover: colour(t, "hover")?,
+        pressed: colour(t, "pressed")?,
+        text: colour(t, "text")?,
+        arrow_color: colour(t, "arrowColor")?,
+        focus: colour(t, "focus")?,
+        disabled_opacity: n(t, "disabledOpacity")?,
+    };
+    let menu = MenuStyle {
+        border: n(m, "border")?,
+        radius: radius(m, "radius")?,
+        inset: n(m, "inset")?,
+        padding_x: n(m, "paddingX")?,
+        padding_y: n(m, "paddingY")?,
+        row_radius: radius(m, "rowRadius")?,
+        font: font(m)?,
+        check_size: n(m, "checkSize")?,
+        check_gap: n(m, "checkGap")?,
+        check_stroke: n(m, "checkStroke")?,
+        background: colour(m, "background")?,
+        border_color: colour(m, "borderColor")?,
+        text: colour(m, "text")?,
+        accent: colour(m, "accent")?,
+        accent_text: colour(m, "accentText")?,
+        pressed_black: n(m, "pressedBlack")?,
+    };
+    if trigger.disabled_opacity > 1.
+        || menu.pressed_black > 1.
+        || trigger.arrow_size <= 0.
+        || menu.check_size <= 0.
+        || menu.check_stroke <= 0.
+        || trigger.arrow.is_empty()
+    {
+        return Err("dropdown: invalid measures".into());
+    }
+    Ok(DropdownStyle { trigger, menu })
+}
+
 /// Everything a view is laid out and drawn with.
 #[derive(Clone, Debug)]
 pub struct Tokens {
@@ -620,6 +815,7 @@ pub struct Tokens {
     pub switch: SwitchStyle,
     pub check: CheckStyle,
     pub button: ButtonStyle,
+    pub dropdown: DropdownStyle,
     /// A setting row's least height (`static.json` `ts.ROW_HEIGHT.single`).
     pub row_height: f64,
     /// A group's corner (`components.json` `common.groupRadius`), as Settings' cards.

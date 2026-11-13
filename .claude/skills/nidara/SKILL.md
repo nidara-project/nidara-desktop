@@ -387,6 +387,11 @@ A slider row is a setting row ending in `Node::slider_end(key, SliderEnd { .. },
 (§13.7): measures from `range.slider`, its value in room for its widest text (`Node::room`).
 A window's sidebar is built of `Node::sidebar_entry` (§13.8): the selected one in the ACCENT
 (D1, a control's `accent` flag), never the neutral grey wash.
+`Node::dropdown(key, Dropdown { .. }, &tokens.dropdown, &types)` (§13.9) is only the TRIGGER:
+`AppWindow` opens its list as a popup and reports the dropdown's action only on a choice (read
+the index with `AppWindow::value`). Outside an `AppWindow` nothing opens it — a surface hosting a
+`ViewState` itself must open the list as `AppWindow::open_menu` does. It is a combo box with its
+options for readers even closed.
 A new token file goes into `scripts/export-tokens.mjs` AND `scripts/ci/settings-tokens-check.py`;
 until the owner reinstalls, `/usr/share/nidara/settings-data` lacks it, so run tests and the
 headless gallery against a fresh export (`SASS=sass node --experimental-strip-types

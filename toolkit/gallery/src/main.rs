@@ -38,6 +38,7 @@ impl Gallery {
             &look.types,
             &pages::Measures {
                 slider: &look.tokens.slider,
+                dropdown: &look.tokens.dropdown,
                 glyph: look.frame.icon,
             },
         );
@@ -91,6 +92,11 @@ impl Gallery {
             "slider" => {
                 if let Some(v) = self.window.value(&a.key) {
                     self.model.slider = v;
+                }
+            }
+            "speed" => {
+                if let Some(v) = self.window.value(&a.key) {
+                    self.model.speed = v as usize;
                 }
             }
             "bright" => {

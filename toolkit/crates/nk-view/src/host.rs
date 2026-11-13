@@ -3,8 +3,8 @@
 //! tokens in an appearance, the keys the view understands, and the interface glyphs.
 use crate::state::KeyInput;
 use crate::tokens::{
-    Look, Motion, Radii, Spacing, Tokens, Washes, button_from, check_from, scrollbar_from,
-    slider_from, switch_from,
+    Look, Motion, Radii, Spacing, Tokens, Washes, button_from, check_from, dropdown_from,
+    scrollbar_from, slider_from, switch_from,
 };
 use nk_platform::{exports::Exports, portal::Appearance};
 use std::{collections::HashMap, sync::Arc};
@@ -19,6 +19,12 @@ impl Tokens {
         Ok(Self {
             spacing: Spacing::from_static(&e.statics)?,
             check: check_from(&set.components["check"], &colors, &radii)?,
+            dropdown: dropdown_from(
+                &set.components["dropdown"],
+                &colors,
+                &radii,
+                &Spacing::from_static(&e.statics)?,
+            )?,
             radii,
             motion: Motion::from_static(&e.statics)?,
             look: Look::from_colors(&colors)?,
@@ -27,6 +33,7 @@ impl Tokens {
             slider: slider_from(&set.components["range"])?,
             switch: switch_from(&set.components["switch"], &colors)?,
             button: button_from(&set.components["button"], &colors)?,
+
             row_height: e.statics["ts"]["ROW_HEIGHT"]["single"]
                 .as_f64()
                 .filter(|v| v.is_finite() && *v > 0.)
@@ -143,6 +150,12 @@ pub enum Weight {
     Bold,
 }
 impl Weight {
+    pub const ALL: [Weight; 4] = [
+        Weight::Regular,
+        Weight::Medium,
+        Weight::Semibold,
+        Weight::Bold,
+    ];
     pub fn token(self) -> &'static str {
         match self {
             Weight::Regular => "fw-regular",

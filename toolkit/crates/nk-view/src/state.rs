@@ -2,7 +2,7 @@
 //! The interaction state the toolkit derives (VIEW.md §4): hover, press and focus, kept by key
 //! across rebuilds; the panes and state regions a frame declares to Hyalo, within its budget;
 //! the semantics; and the content paint (texts, icons, the focus ring, and the D5 washes).
-use crate::layout::{Layouter, Placed, Rect, TextCache, What};
+use crate::layout::{Faces, Layouter, Placed, Rect, TextCache, What};
 use crate::motion::{MotionState, SWIPE_CLAIM};
 use crate::tokens::Tokens;
 use crate::view::{Key, Node, Role, Shown, Wash};
@@ -186,6 +186,10 @@ pub struct ViewState {
     /// A pane drawn on a layer of its own over the surface (`lift`): a window's sidebar,
     /// whose glass must show the page under it.
     lifted: Option<Key>,
+    /// The dropdown whose list is open (`set_expanded`): a reader hears it expanded.
+    expanded: Option<Key>,
+    /// Each option's semantic id, by its dropdown and its place (`semantics`).
+    options: HashMap<NodeId, (Key, usize)>,
 }
 
 impl ViewState {
@@ -226,6 +230,8 @@ impl ViewState {
             slides: true,
             whole: false,
             lifted: None,
+            expanded: None,
+            options: HashMap::new(),
         }
     }
 
@@ -457,11 +463,7 @@ impl ViewState {
             switch: (tokens.switch.width, tokens.switch.height),
             check: tokens.check.size,
             row: tokens.row_height,
-            button: (
-                tokens.button.padding_x + tokens.button.border,
-                tokens.button.padding_y + tokens.button.border,
-                tokens.button.min_height(),
-            ),
+            faces: Faces::of(tokens),
         }
         .run(view, self.bounds);
         // A rebuild keeps what the reader was looking at in place: each scrolled region's
@@ -489,11 +491,7 @@ impl ViewState {
                 switch: (tokens.switch.width, tokens.switch.height),
                 check: tokens.check.size,
                 row: tokens.row_height,
-                button: (
-                    tokens.button.padding_x + tokens.button.border,
-                    tokens.button.padding_y + tokens.button.border,
-                    tokens.button.min_height(),
-                ),
+                faces: Faces::of(tokens),
             }
             .run(view, self.bounds);
         }
@@ -644,10 +642,13 @@ impl ViewState {
     /// A slider's value: the one the pointer holds it at, else one a key or a reader set
     /// since the last rebuild, else the view's, on a step.
     pub fn value(&self, key: &Key) -> Option<f64> {
-        let s = self
-            .index(key)
-            .and_then(|i| self.control(i).slider.as_ref())?;
+        let i = self.index(key)?;
         let mine = |v: &Option<(Key, f64)>| v.as_ref().filter(|(k, _)| k == key).map(|v| v.1);
+        if let Some(c) = &self.control(i).choice {
+            // A dropdown's: the option chosen since the last rebuild, else the view's.
+            return Some(mine(&self.set).unwrap_or(c.chosen as f64));
+        }
+        let s = self.control(i).slider.as_ref()?;
         Some(
             mine(&self.held)
                 .or_else(|| mine(&self.set))
@@ -731,6 +732,44 @@ impl ViewState {
         let value = s.shown(value).clamp(s.min, s.max);
         let a = self.slide_to(i, value, false)?;
         Some(a)
+    }
+    /// Option `n` of the dropdown `key` was chosen (from its list, or by a reader): its action
+    /// when that is another option than the one it holds; read which with `value`. The
+    /// dropdown shows it until the surface rebuilds with its model.
+    pub fn choose(&mut self, key: &Key, n: usize) -> Option<Activated> {
+        let i = self
+            .index(key)
+            .filter(|&i| matches!(self.placed[i].what, What::Control(_)) && self.enabled(i))?;
+        let c = self.control(i).choice.as_ref()?;
+        if n >= c.options.len() {
+            return None;
+        }
+        let before = self.value(key)?;
+        self.set = Some((key.clone(), n as f64));
+        (before != n as f64).then(|| Activated {
+            key: key.clone(),
+            action: self.control(i).action.clone(),
+        })
+    }
+    /// A dropdown's options and the one it shows chosen; None for any other control.
+    pub fn choice(&self, key: &Key) -> Option<(Vec<String>, usize)> {
+        let c = self.control(self.index(key)?).choice.as_ref()?;
+        Some((c.options.clone(), self.value(key)? as usize))
+    }
+    /// The dropdown whose list is open, which a reader hears expanded.
+    pub fn set_expanded(&mut self, key: Option<Key>) {
+        self.expanded = key;
+    }
+    /// Which dropdown, and which of its options, a semantic id is.
+    pub fn option(&self, id: NodeId) -> Option<(Key, usize)> {
+        self.options.get(&id).cloned()
+    }
+    /// The semantic id of option `n` of the dropdown `key`, once `semantics` gave it one.
+    pub fn option_id(&self, key: &Key, n: usize) -> Option<NodeId> {
+        self.options
+            .iter()
+            .find(|(_, (k, m))| k == key && *m == n)
+            .map(|(id, _)| *id)
     }
     fn index(&self, key: &Key) -> Option<usize> {
         self.placed.iter().position(|p| &p.key == key)
@@ -1061,6 +1100,18 @@ impl ViewState {
                 self.focus_visible = true;
                 return self.slide_to(i, f64::from(next), false);
             }
+        }
+        if let Some(i) = self.focus.as_ref().and_then(|f| self.index(f))
+            && self.control(i).choice.is_some()
+            && self.enabled(i)
+            && matches!(k, KeyInput::Up | KeyInput::Down)
+        {
+            // The arrows open a dropdown's list, as Enter and Space do.
+            self.focus_visible = true;
+            return Some(Activated {
+                key: self.placed[i].key.clone(),
+                action: self.control(i).action.clone(),
+            });
         }
         if matches!(
             k,
@@ -1508,6 +1559,7 @@ impl ViewState {
         let root_id = root.id;
         nodes.insert(root_id, root);
         let mut ids: HashMap<usize, NodeId> = HashMap::new();
+        let mut options = HashMap::new();
         self.next_semantic = self.next_semantic.max(first_id);
         for i in 0..self.placed.len() {
             if !self.in_semantics(i) {
@@ -1525,6 +1577,10 @@ impl ViewState {
                         matches!(c.role, Role::Toggle | Role::Check | Role::Radio) && c.marked;
                     n.states.focused = self.focus.as_ref() == Some(&p.key);
                     n.actions = vec![Action::Focus, Action::Activate];
+                    if c.choice.is_some() {
+                        n.states.expandable = true;
+                        n.states.expanded = self.expanded.as_ref() == Some(&p.key);
+                    }
                     if let Some(s) = &c.slider {
                         let current = self.value(&p.key).unwrap_or(s.value);
                         n.value = Some(nk_a11y::ValueInfo {
@@ -1592,7 +1648,35 @@ impl ViewState {
                 .push(id);
             nodes.insert(id, node);
             ids.insert(i, id);
+            if let What::Control(c) = &p.what
+                && let Some(choice) = &c.choice
+            {
+                // Its options, each said by its name, the chosen one selected; activating one
+                // chooses it, closed or open. Their places are the open list's (`AppWindow`).
+                let chosen = self.value(&p.key).map(|v| v as usize);
+                let key = p.key.clone();
+                for (n, name) in choice.options.iter().enumerate() {
+                    let option = Key(format!("{}/option/{n}", key.0));
+                    let next_semantic = &mut self.next_semantic;
+                    let oid = *self
+                        .semantic_ids
+                        .entry((option, nk_a11y::Role::Option))
+                        .or_insert_with(|| {
+                            *next_semantic += 1;
+                            *next_semantic - 1
+                        });
+                    let mut o = nk_a11y::Node::new(oid, nk_a11y::Role::Option, name.clone());
+                    o.states.selected = chosen == Some(n);
+                    o.states.disabled = !c.enabled;
+                    o.states.offscreen = true;
+                    o.actions = vec![Action::Activate];
+                    nodes.get_mut(&id).expect("just placed").children.push(oid);
+                    nodes.insert(oid, o);
+                    options.insert(oid, (key.clone(), n));
+                }
+            }
         }
+        self.options = options;
         Tree {
             root: root_id,
             nodes,
@@ -1754,10 +1838,13 @@ impl ViewState {
                 What::Text { ink: tier, .. } => {
                     if let Some(f) = self.text.get(&p.key) {
                         canvas.clip(rect(&visible));
+                        let base = self
+                            .face_ink(i, tokens, false)
+                            .unwrap_or_else(|| tokens.look.ink(*tier));
                         let r = canvas.layout(
                             &f.layout,
                             (p.rect[0] as f32, p.rect[1] as f32),
-                            content(tokens.look.ink(*tier)),
+                            content(base),
                         );
                         canvas.pop_clip();
                         r?;
@@ -1766,7 +1853,9 @@ impl ViewState {
                 What::Icon(icon) => {
                     if let Some(glyph) = icons(&icon.name, icon.size) {
                         canvas.clip(rect(&visible));
-                        let c = tokens.look.ink(icon.ink);
+                        let c = self
+                            .face_ink(i, tokens, true)
+                            .unwrap_or_else(|| tokens.look.ink(icon.ink));
                         let c = c.with_alpha(c.components[3] * icon.alpha as f32);
                         canvas.icon(&glyph, rect(&p.rect), content(c));
                         canvas.pop_clip();
@@ -1879,6 +1968,85 @@ impl ViewState {
                         }
                     }
                     canvas.pop_clip();
+                }
+                What::Control(c) if c.face == crate::view::Face::Dropdown => {
+                    // A dropdown's trigger (VIEW.md §13.9): its tone inside its border, which is
+                    // the room its focus ring is drawn in; no glass, nothing for Hyalo.
+                    let t = &tokens.dropdown.trigger;
+                    let key = Some(&p.key);
+                    let fill = if c.enabled
+                        && ((self.press.as_ref() == key && self.hover.as_ref() == key)
+                            || c.shown == Some(Shown::Press))
+                    {
+                        t.pressed
+                    } else if c.enabled
+                        && (self.hover.as_ref() == key || c.shown == Some(Shown::Hover))
+                    {
+                        t.hover
+                    } else {
+                        t.background
+                    };
+                    let a = if c.enabled {
+                        1.
+                    } else {
+                        t.disabled_opacity as f32
+                    };
+                    let (r, b) = (p.rect, t.border);
+                    let inner = [
+                        r[0] + b,
+                        r[1] + b,
+                        (r[2] - 2. * b).max(0.),
+                        (r[3] - 2. * b).max(0.),
+                    ];
+                    canvas.clip(rect(&visible));
+                    canvas.rounded_rect(
+                        rect(&inner),
+                        (t.radius - b).max(0.),
+                        ink(fill.with_alpha(fill.components[3] * a)),
+                    );
+                    canvas.pop_clip();
+                    if c.enabled
+                        && ((self.focus_visible && self.focus.as_ref() == key)
+                            || c.shown == Some(Shown::Focus))
+                    {
+                        canvas.rounded_ring(rect(&r), t.radius, b, ink(t.focus));
+                    }
+                }
+                What::Control(c) if c.face == crate::view::Face::MenuRow => {
+                    // A row of a dropdown's list: the accent under the pointer or the
+                    // keyboard, darker while pressed; the chosen one ticked.
+                    let m = &tokens.dropdown.menu;
+                    let lit = self.lit_row(i);
+                    if lit {
+                        let mut bg = m.accent;
+                        let key = Some(&p.key);
+                        if (self.press.as_ref() == key && self.hover.as_ref() == key)
+                            || c.shown == Some(Shown::Press)
+                        {
+                            for v in &mut bg.components[..3] {
+                                *v *= 1. - m.pressed_black as f32;
+                            }
+                        }
+                        canvas.clip(rect(&visible));
+                        canvas.rounded_rect(rect(&p.rect), m.row_radius, ink(bg));
+                        canvas.pop_clip();
+                    }
+                    if c.marked
+                        && let Some(t) = self.rect(&Key(format!("{}/tick", p.key.0)))
+                    {
+                        // The single-choice tick, `check.ts`'s path in its 24-unit box.
+                        let side = t[2].min(t[3]);
+                        let (x, y) = (t[0] + (t[2] - side) / 2., t[1] + (t[3] - side) / 2.);
+                        let at = |u: f64, v: f64| (x + u * side / 24., y + v * side / 24.);
+                        let tick = if lit { m.accent_text } else { m.text };
+                        canvas.clip(rect(&visible));
+                        canvas.polyline(
+                            &[at(4., 12.), at(9., 17.), at(20., 6.)],
+                            m.check_stroke * side / 24.,
+                            ink(tick),
+                        );
+                        canvas.pop_clip();
+                    }
                 }
                 What::Control(c) if c.face == crate::view::Face::Button => {
                     // A content button (VIEW.md §13.2): the surface, its border, and the
@@ -2017,6 +2185,38 @@ impl ViewState {
 }
 
 /// `a` blended towards `b` by `t`, each channel straight.
+impl ViewState {
+    /// Whether menu row `i` shows the accent: the pointer is on it, or the keyboard is.
+    fn lit_row(&self, i: usize) -> bool {
+        let c = self.control(i);
+        let key = Some(&self.placed[i].key);
+        c.enabled
+            && (self.hover.as_ref() == key
+                || (self.focus_visible && self.focus.as_ref() == key)
+                || matches!(c.shown, Some(Shown::Hover | Shown::Focus | Shown::Press)))
+    }
+    /// The ink a dropdown's trigger or a menu row gives what it holds (`glyph`: an icon, else
+    /// a text); None inside any other control.
+    fn face_ink(&self, i: usize, tokens: &Tokens, glyph: bool) -> Option<nk_render::Color> {
+        let owner = self.placed[i].control.filter(|&o| o != i)?;
+        match self.control(owner).face {
+            crate::view::Face::Dropdown => {
+                let t = &tokens.dropdown.trigger;
+                Some(if glyph { t.arrow_color } else { t.text })
+            }
+            crate::view::Face::MenuRow => {
+                let m = &tokens.dropdown.menu;
+                Some(if self.lit_row(owner) {
+                    m.accent_text
+                } else {
+                    m.text
+                })
+            }
+            _ => None,
+        }
+    }
+}
+
 fn mix(a: nk_render::Color, b: nk_render::Color, t: f32) -> nk_render::Color {
     let mut c = a;
     for (o, (x, y)) in c
@@ -2066,6 +2266,8 @@ fn a11y_role(role: Role) -> nk_a11y::Role {
         Role::Field => nk_a11y::Role::TextInput,
         Role::Check => nk_a11y::Role::CheckBox,
         Role::Radio => nk_a11y::Role::RadioButton,
+        Role::Dropdown => nk_a11y::Role::ComboBox,
+        Role::Option => nk_a11y::Role::Option,
     }
 }
 fn inside(r: Rect, p: (f64, f64)) -> bool {
