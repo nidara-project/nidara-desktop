@@ -74,6 +74,8 @@ impl Gallery {
         match action {
             "press" => self.model.presses += 1,
             "check" => self.model.check = !self.model.check,
+            "row-open" => self.model.opened += 1,
+            "row-flip" => self.model.row_on = !self.model.row_on,
             "toggle" => self.model.toggle = !self.model.toggle,
             "switch" => self.model.switch = !self.model.switch,
             "reveal" => self.model.open = !self.model.open,

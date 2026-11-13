@@ -25,9 +25,8 @@ pub use tokens::{
 };
 pub use view::{
     Align, Axis, Cell, Check, Control, Corner, Face, Field, Grid, Group, Icon, Ink, Justify, Key,
-    Kind, Layer, Node, Overlay, Padding, Pane, Reveal, Role, Scroll, SettingRow, Shown, Slider, Stack,
-    Switch,
-    Text, Wash,
+    Kind, Layer, Node, Overlay, Padding, Pane, Reveal, Role, Scroll, SettingRow, Shown, Slider,
+    Stack, Switch, Text, Wash,
 };
 pub use window::{AppWindow, CONTENT, Labels, Page, WindowLook};
 

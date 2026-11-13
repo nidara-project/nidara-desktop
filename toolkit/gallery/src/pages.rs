@@ -3,8 +3,8 @@
 //! of it a kit node. A page shows one component in each of its states side by side, with
 //! the catalogue entries it answers and their GTK and AppKit equivalents.
 use nk_view::{
-    Align, Cell, Corner, Field, Ink, Justify, Node, Padding, Radius, Role, Shown, Slider, Space,
-    Type, TypeScale, Wash, Weight,
+    Align, Cell, Corner, Field, Ink, Justify, Node, Padding, Radius, Role, SettingRow, Shown,
+    Slider, Space, Type, TypeScale, Wash, Weight,
 };
 use serde::Deserialize;
 
@@ -54,11 +54,12 @@ fn status_text(s: &str) -> &'static str {
 }
 
 /// Each page: its id (what the check and `--page` name), its title and its glyph.
-pub const PAGES: [(&str, &str, &str); 14] = [
+pub const PAGES: [(&str, &str, &str); 15] = [
     ("status", "Status", "nd-emblem-default"),
     ("button", "Button", "nd-hand"),
     ("switch", "Switch", "nd-light-mode"),
     ("check", "Checkbox and radio", "nd-preferences-desktop"),
+    ("row", "Setting row", "nd-preferences-system"),
     ("slider", "Slider", "nd-display-brightness"),
     ("field", "Text field", "nd-input-keyboard"),
     ("glass", "Glass card", "nd-preferences-desktop-theme"),
@@ -76,6 +77,9 @@ pub struct Model {
     pub page: usize,
     pub switch: bool,
     pub check: bool,
+    /// The activatable rows' samples: a page opened, a setting flipped by its whole row.
+    pub opened: u32,
+    pub row_on: bool,
     /// The radio group's choice.
     pub choice: usize,
     pub toggle: bool,
@@ -90,6 +94,8 @@ impl Default for Model {
             page: 0,
             switch: true,
             check: false,
+            opened: 0,
+            row_on: false,
             choice: 1,
             toggle: false,
             presses: 0,
@@ -273,6 +279,7 @@ fn page(id: &str, m: &Model, cat: &Catalogue, t: &TypeScale) -> Vec<Node> {
         "button" => buttons(m, t),
         "switch" => switches(m, t),
         "check" => checks(m, t),
+        "row" => rows(m, t),
         "slider" => sliders(m, t),
         "field" => fields(t),
         "glass" => glass(t),
@@ -477,8 +484,8 @@ fn buttons(m: &Model, t: &TypeScale) -> Vec<Node> {
     ]
 }
 
-/// A setting row with a switch (VIEW.md §12.6): the row does not respond, only the switch
-/// does; the row's text names it. `f` sets the switch's state for the samples.
+/// A setting row with a switch (VIEW.md §12.6, §13.6): the row does not respond, only the
+/// switch does; the row's text names it. `f` sets the switch's state for the samples.
 fn switch_row(
     key: &str,
     label: &str,
@@ -493,18 +500,142 @@ fn switch_row(
         action,
         on,
     ));
-    let enabled = !matches!(&switch.kind, nk_view::Kind::Control(c) if !c.enabled);
-    let text = Node::text(
-        format!("{key}/text"),
-        label,
-        t.style(Type::Body, Weight::Regular),
+    let disabled = matches!(&switch.kind, nk_view::Kind::Control(c) if !c.enabled);
+    Node::setting_row(
+        key,
+        SettingRow {
+            trailing: Some(switch),
+            disabled,
+            ..setting(label, None, t)
+        },
     )
-    .ink(if enabled { Ink::Primary } else { Ink::Disabled })
-    .grow();
-    Node::row(key, vec![text, switch])
-        .gap(Space::S2)
-        .align(Align::Center)
-        .padding(Padding::symmetric(Space::S3, Space::S2))
+}
+
+/// A setting row's text in the kit's styles: the title in the body, the second line small.
+fn setting(title: &str, subtitle: Option<&str>, t: &TypeScale) -> SettingRow {
+    SettingRow {
+        title: title.into(),
+        title_style: t.style(Type::Body, Weight::Regular),
+        subtitle: subtitle.map(Into::into),
+        subtitle_style: t.style(Type::Small, Weight::Regular),
+        ..Default::default()
+    }
+}
+
+fn rows(m: &Model, t: &TypeScale) -> Vec<Node> {
+    let chevron = |k: &str| Node::icon(format!("{k}/chevron"), "nd-pan-end", 16.);
+    let plain = Node::column(
+        "rw/plain",
+        vec![
+            Node::setting_row("rw/p/title", setting("Title only", None, t)),
+            Node::setting_row(
+                "rw/p/sub",
+                setting(
+                    "With a second line",
+                    Some("What the setting does, in a word or two"),
+                    t,
+                ),
+            ),
+            Node::setting_row(
+                "rw/p/switch",
+                SettingRow {
+                    trailing: Some(Node::switch_control(
+                        "rw/p/switch/sw",
+                        "Ending in a switch",
+                        "noop",
+                        true,
+                    )),
+                    ..setting("Ending in a switch", Some("Only the switch responds"), t)
+                },
+            ),
+            Node::setting_row(
+                "rw/p/button",
+                SettingRow {
+                    trailing: Some(content_button("rw/p/button/b", "Browse", "noop", t)),
+                    ..setting("Ending in a button", None, t)
+                },
+            ),
+            Node::setting_row(
+                "rw/p/off",
+                SettingRow {
+                    trailing: Some(
+                        Node::switch_control("rw/p/off/sw", "Disabled", "noop", false)
+                            .enabled(false),
+                    ),
+                    disabled: true,
+                    ..setting("Disabled", Some("Its text says so too"), t)
+                },
+            ),
+        ],
+    );
+    let activatable = |k: &str, label: &str, f: &dyn Fn(Node) -> Node| {
+        f(Node::setting_row(
+            format!("rw/a/{k}"),
+            SettingRow {
+                trailing: Some(chevron(&format!("rw/a/{k}"))),
+                action: Some("noop".into()),
+                ..setting(label, None, t)
+            },
+        ))
+    };
+    let states = Node::column(
+        "rw/act",
+        vec![
+            activatable("rest", "Rest", &|n| n),
+            activatable("hover", "Hover", &|n| n.shown(Shown::Hover)),
+            activatable("press", "Pressed", &|n| n.shown(Shown::Press)),
+            activatable("focus", "Focus", &|n| n.shown(Shown::Focus)),
+            activatable("off", "Disabled", &|n| n.enabled(false)),
+        ],
+    );
+    let live = Node::column(
+        "rw/live",
+        vec![
+            Node::setting_row(
+                "rw/live/open",
+                SettingRow {
+                    trailing: Some(chevron("rw/live/open")),
+                    action: Some("row-open".into()),
+                    ..setting("Displays", Some("Opens its page"), t)
+                },
+            ),
+            Node::setting_row(
+                "rw/live/flip",
+                SettingRow {
+                    trailing: Some(Node::switch("rw/live/flip/sw", m.row_on)),
+                    action: Some("row-flip".into()),
+                    ..setting("Bluetooth", Some("The whole row flips it"), t)
+                },
+            )
+            .role(Role::Toggle)
+            .marked(m.row_on),
+            Node::text(
+                "rw/live/said",
+                format!(
+                    "Try it: opened {} times, Bluetooth {}",
+                    m.opened,
+                    if m.row_on { "on" } else { "off" }
+                ),
+                t.style(Type::Small, Weight::Regular),
+            )
+            .ink(Ink::Secondary),
+        ],
+    );
+    vec![
+        section(
+            "rw-plain",
+            "Not activatable (the default): only its control responds",
+            t,
+            plain,
+        ),
+        section(
+            "rw-act",
+            "Activatable (the app's choice): the whole row responds, painted by the kit",
+            t,
+            states,
+        ),
+        section("rw-live", "Try it", t, live),
+    ]
 }
 
 fn switches(m: &Model, t: &TypeScale) -> Vec<Node> {

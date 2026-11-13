@@ -634,13 +634,21 @@ impl Node {
         let key = key.into();
         let ink = |normal| if row.disabled { Ink::Disabled } else { normal };
         let mut text = vec![
-            Self::text(format!("{}/title", key.0), row.title.clone(), row.title_style)
-                .ink(ink(Ink::Primary)),
+            Self::text(
+                format!("{}/title", key.0),
+                row.title.clone(),
+                row.title_style,
+            )
+            .ink(ink(Ink::Primary)),
         ];
         if let Some(sub) = &row.subtitle {
             text.push(
-                Self::text(format!("{}/subtitle", key.0), sub.clone(), row.subtitle_style)
-                    .ink(ink(Ink::Dim)),
+                Self::text(
+                    format!("{}/subtitle", key.0),
+                    sub.clone(),
+                    row.subtitle_style,
+                )
+                .ink(ink(Ink::Dim)),
             );
         }
         let mut line = vec![Self::column(format!("{}/text", key.0), text).grow()];

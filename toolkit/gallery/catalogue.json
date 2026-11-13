@@ -62,7 +62,7 @@
       "name": "Lists and collections",
       "items": [
         {"name": "Settings group", "gtk": "Gtk.ListBox", "appkit": "NSStackView (grouped)", "status": "both", "users": "Settings (nk-widgets), this gallery's sections (Node::group)"},
-        {"name": "Setting row", "gtk": "Gtk.ListBoxRow", "appkit": "NSTableCellView", "status": "widgets", "users": "Settings, CC details by hand"},
+        {"name": "Setting row", "gtk": "Gtk.ListBoxRow", "appkit": "NSTableCellView", "status": "both", "users": "Settings, CC details by hand", "page": "row"},
         {"name": "Large list", "gtk": "Gtk.ListView", "appkit": "NSTableView", "status": "missing", "users": ""},
         {"name": "Tile grid", "gtk": "Gtk.GridView", "appkit": "NSCollectionView", "status": "view", "users": "CC; Apps by hand", "page": "grid"},
         {"name": "Tree", "gtk": "Gtk.TreeListModel + Gtk.ListView", "appkit": "NSOutlineView", "status": "missing", "users": ""},
