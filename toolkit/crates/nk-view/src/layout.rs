@@ -322,7 +322,10 @@ impl Layouter<'_> {
         }
         match &n.kind {
             Kind::Group(g) => self.natural(&g.child),
-            Kind::Text(t) => self.cache.natural(self.text, &n.key, &t.text, &t.style),
+            Kind::Text(t) => {
+                let own = self.cache.natural(self.text, &n.key, &t.text, &t.style);
+                own.max(self.room(t))
+            }
             Kind::Icon(i) => i.size,
             Kind::Spacer => 0.,
             Kind::Pane(p) => self.natural(&p.child),
@@ -343,6 +346,14 @@ impl Layouter<'_> {
                 pad + self.combine(s, &ws)
             }
         }
+    }
+    /// The widest of a text's `room` texts, each one line in its style.
+    fn room(&mut self, t: &crate::view::Text) -> f64 {
+        t.room
+            .iter()
+            .filter_map(|r| self.text.layout(r, &t.style, UNBOUNDED).ok())
+            .map(|l| natural_width(&l))
+            .fold(0., f64::max)
     }
     fn min(&mut self, n: &Node) -> f64 {
         if let Some(w) = n.width {
@@ -425,8 +436,12 @@ impl Layouter<'_> {
                     }
                     None => (0., 0., None),
                 };
-                let w = self.up(if t.lines.is_some() { w.min(width) } else { w });
-                leaf(w, self.up(h), first)
+                let w = if t.lines.is_some() {
+                    w.min(width)
+                } else {
+                    w.max(self.room(t))
+                };
+                leaf(self.up(w), self.up(h), first)
             }
             Kind::Group(g) => {
                 let c = self.measure(&g.child, width);

@@ -4,7 +4,7 @@
 //! the catalogue entries it answers and their GTK and AppKit equivalents.
 use nk_view::{
     Align, Cell, Corner, Field, Ink, Justify, Node, Padding, Radius, Role, SettingRow, Shown,
-    Slider, Space, Type, TypeScale, Wash, Weight,
+    Slider, SliderEnd, SliderStyle, Space, Type, TypeScale, Wash, Weight,
 };
 use serde::Deserialize;
 
@@ -77,6 +77,8 @@ pub struct Model {
     pub page: usize,
     pub switch: bool,
     pub check: bool,
+    /// The slider row's sample (Brightness).
+    pub bright: f64,
     /// The activatable rows' samples: a page opened, a setting flipped by its whole row.
     pub opened: u32,
     pub row_on: bool,
@@ -94,6 +96,7 @@ impl Default for Model {
             page: 0,
             switch: true,
             check: false,
+            bright: 70.,
             opened: 0,
             row_on: false,
             choice: 1,
@@ -106,7 +109,7 @@ impl Default for Model {
     }
 }
 
-pub fn view(m: &Model, cat: &Catalogue, t: &TypeScale) -> View {
+pub fn view(m: &Model, cat: &Catalogue, t: &TypeScale, sl: &SliderStyle) -> View {
     let nav = PAGES
         .iter()
         .enumerate()
@@ -144,7 +147,7 @@ pub fn view(m: &Model, cat: &Catalogue, t: &TypeScale) -> View {
     );
     let (id, title, _) = PAGES[m.page.min(PAGES.len() - 1)];
     let mut body = vec![header(id, cat, t)];
-    body.extend(page(id, m, cat, t));
+    body.extend(page(id, m, cat, t, sl));
     let content = Node::column(format!("page/{id}"), body)
         .gap(Space::S5)
         .padding(Padding {
@@ -273,14 +276,14 @@ fn button(key: &str, text: &str, action: &str, t: &TypeScale) -> Node {
     )
 }
 
-fn page(id: &str, m: &Model, cat: &Catalogue, t: &TypeScale) -> Vec<Node> {
+fn page(id: &str, m: &Model, cat: &Catalogue, t: &TypeScale, sl: &SliderStyle) -> Vec<Node> {
     match id {
         "status" => status(cat, t),
         "button" => buttons(m, t),
         "switch" => switches(m, t),
         "check" => checks(m, t),
         "row" => rows(m, t),
-        "slider" => sliders(m, t),
+        "slider" => sliders(m, t, sl),
         "field" => fields(t),
         "glass" => glass(t),
         "text" => text(t),
@@ -768,7 +771,7 @@ fn checks(m: &Model, t: &TypeScale) -> Vec<Node> {
     ]
 }
 
-fn sliders(m: &Model, t: &TypeScale) -> Vec<Node> {
+fn sliders(m: &Model, t: &TypeScale, sl: &SliderStyle) -> Vec<Node> {
     let line = |k: &str, label: &str, s: Node| {
         Node::row(
             format!("sl/{k}/line"),
@@ -845,8 +848,54 @@ fn sliders(m: &Model, t: &TypeScale) -> Vec<Node> {
                 )],
             ),
         ),
+        section(
+            "sl-rows",
+            "In a setting row (Settings')",
+            t,
+            slider_rows(m, t, sl),
+        ),
         section("sl-tile", "Tile slider (the CC's)", t, tile),
     ]
+}
+
+/// Settings' slider rows (VIEW.md §13.7): the kit's slider and its value at a row's end,
+/// with its glyphs when it has them; the row itself does not respond.
+fn slider_rows(m: &Model, t: &TypeScale, sl: &SliderStyle) -> Node {
+    let row = |k: &str, title: &str, action: &str, value: f64, icons: bool, disabled: bool| {
+        let key = format!("sl/r/{k}");
+        Node::setting_row(
+            key.clone(),
+            SettingRow {
+                trailing: Some(Node::slider_end(
+                    format!("{key}/slider"),
+                    SliderEnd {
+                        name: title.into(),
+                        action: action.into(),
+                        slider: Slider::new(0., 100., 1., value).unit(" %"),
+                        value_style: t.style(Type::Body, Weight::Regular),
+                        icons: icons.then(|| {
+                            [
+                                "nd-display-brightness-low".into(),
+                                "nd-display-brightness".into(),
+                            ]
+                        }),
+                        disabled,
+                    },
+                    sl,
+                )),
+                disabled,
+                ..setting(title, None, t)
+            },
+        )
+    };
+    Node::column(
+        "sl/rows",
+        vec![
+            row("plain", "Plain", "noop", 30., false, false),
+            row("live", "Brightness", "bright", m.bright, true, false),
+            row("off", "Disabled", "noop", 60., true, true),
+        ],
+    )
 }
 
 fn fields(t: &TypeScale) -> Vec<Node> {
@@ -1356,7 +1405,11 @@ mod tests {
                 open: true,
                 ..Default::default()
             };
-            let v = view(&m, &cat, &t);
+            let sl = nk_view::slider_from(&serde_json::json!({"slider": {"width": 140, "track": 6,
+                "thumbRadius": 9, "valueGap": 12, "fillOpacity": 0.9, "pageSteps": 10,
+                "iconSize": 16, "iconOpacity": 0.5, "iconGap": 12}}))
+            .unwrap();
+            let v = view(&m, &cat, &t, &sl);
             let mut all = vec![];
             keys(&v.sidebar, &mut all);
             keys(&v.content, &mut all);

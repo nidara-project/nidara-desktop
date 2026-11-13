@@ -766,3 +766,20 @@ in `Ink::Dim`, and what it ends with.
   `Node::switch`, a mark): a control inside a control would be two things to press, and the
   builder refuses it in debug builds. A row that flips a setting it shows takes
   `Role::Toggle` and `marked(on)`, so a reader hears a toggle.
+
+### 13.7 Slider row
+
+A setting row (§13.6) that ends in `Node::slider_end(key, SliderEnd { name, action, slider,
+value_style, icons, disabled }, &tokens.slider)`: Settings' slider row (`NidaraSliderRow`).
+
+- **The slider at the kit's width** (`range.slider.width`), its value after it at `valueGap`,
+  and, when it has them, a glyph either side of it (`icons`: the lesser end's, the greater
+  end's, as Brightness has) at `iconSize`, `iconGap` away, its ink at `iconOpacity`
+  (`Node::alpha`). All of it from the exported `range.slider`, read into `SliderStyle`.
+- **The value never moves the slider.** Its text is laid out as wide as the widest of the
+  range's ends (`Node::room`), so 5 % and 100 % take the same room.
+- **The row does not respond**; the slider does (§13.6). A reader finds one slider named by the
+  row's title, and the value as text. `disabled` disables the slider and puts the value and the
+  glyphs in `Ink::Disabled`; the row's own `disabled` does its title.
+- **The app keeps the value**: `action` is reported on each change, read with
+  `ViewState::value`, and the next view carries it in `slider.value`.
