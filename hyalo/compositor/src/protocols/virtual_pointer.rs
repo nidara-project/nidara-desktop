@@ -114,9 +114,7 @@ impl Dispatch2<ZwlrVirtualPointerV1, Hyalo> for VirtualPointer {
                     return;
                 }
                 let Some(area) = self.area(state) else { return };
-                let fx = x as f64 / x_extent as f64;
-                let fy = y as f64 / y_extent as f64;
-                let local = Point::from((fx * area.size.w as f64, fy * area.size.h as f64));
+                let local = Point::from((scaled(x, x_extent, area.size.w), scaled(y, y_extent, area.size.h)));
                 if let Some(output) = &self.output {
                     state.pointer_moved_on_output(output, local, now);
                 } else {
@@ -195,5 +193,31 @@ fn axis_of(axis: WEnum<wl_pointer::Axis>) -> Option<Axis> {
         WEnum::Value(wl_pointer::Axis::VerticalScroll) => Some(Axis::Vertical),
         WEnum::Value(wl_pointer::Axis::HorizontalScroll) => Some(Axis::Horizontal),
         _ => None,
+    }
+}
+
+/// `v` of `extent`, in an area `size` wide: multiplied before it is divided, so a point given in
+/// the area's own units (extent == size, as nidara-input sends it) lands exactly on itself. The
+/// other way round, 123 / 1920 * 1920 is 122.99999999999999, and the pointer stopped a pixel
+/// short on a 1920-wide output.
+fn scaled(v: u32, extent: u32, size: i32) -> f64 {
+    v as f64 * size as f64 / extent as f64
+}
+
+#[cfg(test)]
+mod tests {
+    use super::scaled;
+
+    #[test]
+    fn a_point_in_the_areas_own_units_lands_exactly_on_itself() {
+        for size in [800, 1024, 1280, 1366, 1440, 1600, 1920, 2560, 3840] {
+            for v in 0..size as u32 {
+                assert_eq!(scaled(v, size as u32, size), v as f64, "{v} of {size}");
+            }
+        }
+        // The old order fails here: the case the boot check met on a 1920-wide vkms.
+        assert_ne!(123. / 1920. * 1920., 123.);
+        // Another extent still maps by proportion.
+        assert_eq!(scaled(50, 100, 1920), 960.);
     }
 }
