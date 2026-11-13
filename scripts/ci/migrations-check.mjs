@@ -62,6 +62,26 @@ for (const u of units) {
 }
 if (failures === 0) ok("every unit is valid bash")
 
+// ── 1b. no pipe into a reader that quits early ───────────────────────────────
+// The runner is `set -o pipefail`. `… | grep -q` (or `| head`) exits as soon as it
+// has its answer; when the writer is still writing it dies of SIGPIPE and the whole
+// pipeline FAILS, at random — measured 2026-11-13, ~5 % of runs under load, and
+// it is what made this check flaky on unrelated PRs. Read the output whole first
+// (schema_has_key in the runner).
+const EARLY_EXIT_PIPE = /\|\s*(?:grep\s+(?:-\S*\s+)*-[A-Za-z]*[qm][A-Za-z]*|head)\b/
+const lintPipes = (text) => text.split("\n").map((l, i) => [i + 1, l])
+    .filter(([, l]) => !/^\s*#/.test(l) && EARLY_EXIT_PIPE.test(l))
+if (lintPipes(`x | grep -qx -- "$key"\nx | head -1\nx | grep -c y\ngrep -qx k <<< "$v"`).length !== 2) {
+    fail("[control] the early-exit pipe lint catches `| grep -q` and `| head`, and only those")
+}
+let pipeHits = 0
+for (const [label, path] of [["bin/nidara-migrate", RUNNER], ...units.map(u => [u, join(UNITS_DIR, u)])]) {
+    for (const [n, l] of lintPipes(readFileSync(path, "utf8"))) {
+        pipeHits++; fail(`${label}:${n} pipes into a reader that quits early (SIGPIPE under pipefail)`, l.trim())
+    }
+}
+if (pipeHits === 0) ok("no unit pipes into a reader that quits early")
+
 // ── the harness ──────────────────────────────────────────────────────────────
 /** Run the runner against a scratch HOME seeded with `files`, `times` times,
  *  clearing the marker between runs when `clearMarkers`. Returns the config dir

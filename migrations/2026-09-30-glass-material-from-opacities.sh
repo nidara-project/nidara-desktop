@@ -23,7 +23,7 @@
 
 schema=org.nidara.appearance
 command -v gsettings >/dev/null 2>&1 || { warn "gsettings is missing"; return 1; }
-gsettings list-keys "$schema" 2>/dev/null | grep -qx glass-material \
+schema_has_key "$schema" glass-material \
     || { warn "schema $schema has no glass-material yet — not migrated"; return 1; }
 if [ "${GSETTINGS_BACKEND:-dconf}" = dconf ]; then
     gdbus call --session --dest ca.desrt.dconf --object-path /ca/desrt/dconf/Writer/user \

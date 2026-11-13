@@ -1911,6 +1911,15 @@ second call free. The runner ALWAYS exits 0 — a broken migration must cost a l
 user's session — and a failure stops the CHAIN so a later unit never runs against a state its
 predecessor failed to produce.
 
+⚠️ **No `… | grep -q` and no `… | head` in the runner or a unit.** The runner is `set -o pipefail`
+and units inherit it: `grep -q`/`head` exit as soon as they have their answer, the writer still
+writing dies of SIGPIPE (141), and the pipeline reports FAILURE although the key is there — at
+random, ~5 % of runs under load (measured 2026-11-13). It dropped real settings as "retired" in
+`settings_import` and stopped the chain at the glass unit, and made `migrations-check` flaky on PRs
+that touched no migration. Ask "does the schema have this key" with the runner's
+`schema_has_key <schema> <key>`, which reads the list whole first; `migrations-check` lints for the
+pattern.
+
 🔑 **Leave a stamp alone unless you mean to skip what it gates.** The `transparency` unit writes
 the raw `1 - t` and deliberately does not touch `glassModel`, because a file predating the glass
 rescale still has to be rescaled by the reader — stamping the model in the migration would silently
