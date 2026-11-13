@@ -13,6 +13,7 @@ mod tokens;
 mod view;
 
 mod frame;
+mod window;
 pub use frame::{BACK, Band, FORWARD, FrameStyle, SIDEBAR, Sidebar};
 pub use host::{Glyphs, Type, TypeScale, Weight};
 pub use layout::{Fitted, Placed, Rect, TextCache, What, first_line_centre};
@@ -26,6 +27,7 @@ pub use view::{
     Layer, Node, Overlay, Padding, Pane, Reveal, Role, Scroll, Shown, Slider, Stack, Switch, Text,
     Wash,
 };
+pub use window::{AppWindow, CONTENT, Labels, Page, WindowLook};
 
 #[cfg(test)]
 mod tests;

@@ -3210,6 +3210,9 @@ fn a_lifted_pane_leaves_the_windows_glass_and_paint_for_its_own_layer() {
     let before = (f.panes.len(), f.states.len());
     let lifted = s.lift_out(&mut f).expect("the sidebar is laid out");
     assert_eq!(s.lifted_rect(), Some([8., 8., 100., 80.]));
+    // A choice in it is known as the sidebar's (one open over the page closes on it).
+    assert!(s.lifts(&"side/entry".into()));
+    assert!(!s.lifts(&"page/button".into()));
     // The window keeps the page's glass and wash; the layer has the sidebar's, at its origin.
     assert!(f.panes.iter().all(|p| p.key != Key::from("side")));
     assert_eq!(lifted.panes.len(), 1);
