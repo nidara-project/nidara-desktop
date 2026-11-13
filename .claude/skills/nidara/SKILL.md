@@ -380,6 +380,9 @@ that is on or off ends its row with one; a choice among several keeps its mark s
 `Node::check_control` / `Node::radio_control` are the CheckButton (`components.json` `check`,
 `VIEW.md` §13.5): the mark is the control, its label is not; off glass, so nk-view paints every
 state; the radios next to each other are one group, one Tab stop, the arrows moving the choice.
+`Node::setting_row(key, SettingRow { .. })` is Settings' row (`VIEW.md` §13.6): at least
+`ROW_HEIGHT.single` (`row_floor`), NOT activatable unless the app gives it an `action` — then the
+whole row is the control and what it ends with must be drawn only (a chevron, `Node::switch`).
 A new token file goes into `scripts/export-tokens.mjs` AND `scripts/ci/settings-tokens-check.py`;
 until the owner reinstalls, `/usr/share/nidara/settings-data` lacks it, so run tests and the
 headless gallery against a fresh export (`SASS=sass node --experimental-strip-types

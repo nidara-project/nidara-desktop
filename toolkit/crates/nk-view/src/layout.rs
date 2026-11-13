@@ -289,6 +289,8 @@ pub struct Layouter<'a> {
     pub switch: (f64, f64),
     /// A checkbox's or a radio's side.
     pub check: f64,
+    /// The kit's row height (`row_floor`).
+    pub row: f64,
     /// A content button's inset on each side (padding and border) across and down, and its
     /// least height (`Face::Button`).
     pub button: (f64, f64, f64),
@@ -384,6 +386,8 @@ impl Layouter<'_> {
         if let Some(h) = n.height {
             m.h = self.up(h);
             m.give = 0.;
+        } else if n.row_floor {
+            m.h = m.h.max(self.up(self.row));
         }
         m
     }

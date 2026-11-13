@@ -747,3 +747,22 @@ label after it, as a settings page does.
   Nothing is a default: a field missing from the export is an error.
 
 Not carried yet: the mixed (indeterminate) checkbox; no surface asks for it.
+
+### 13.6 Setting row
+
+`Node::setting_row(key, SettingRow { title, subtitle, trailing, action, disabled, .. })`:
+Settings' row (`Gtk.ListBoxRow` in a boxed list), its title, an optional second line under it
+in `Ink::Dim`, and what it ends with.
+
+- **Its size is the kit's.** At least `ROW_HEIGHT.single` tall (`Node::row_floor`, from
+  `static.json`), taller when its text is, with `space-3` round its content and its text
+  centred; the second line under the title.
+- **Not activatable by default** (owner, 2026-11-12). The row is then no control: what it ends
+  with responds on its own (a switch, a button, a mark), and a reader finds only that control.
+  `disabled` puts its text in `Ink::Disabled`; the app disables the control itself.
+- **Activatable is the app's choice** (`action`, as GNOME's `activatable`). The row is then one
+  control named by its title and described by its second line, at the `sm` corner; off glass,
+  the view paints its hover and press (§13.2). What it ends with is drawn only (a chevron,
+  `Node::switch`, a mark): a control inside a control would be two things to press, and the
+  builder refuses it in debug builds. A row that flips a setting it shows takes
+  `Role::Toggle` and `marked(on)`, so a reader hears a toggle.

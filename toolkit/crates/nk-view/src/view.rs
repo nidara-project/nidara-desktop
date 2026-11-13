@@ -28,6 +28,10 @@ pub struct Node {
     pub width: Option<f64>,
     #[serde(default)]
     pub height: Option<f64>,
+    /// At least the kit's row height (`ROW_HEIGHT.single`), whatever its content measures; taller
+    /// when its content is.
+    #[serde(default)]
+    pub row_floor: bool,
     pub kind: Kind,
 }
 
@@ -71,6 +75,24 @@ pub struct Check {
     pub on: bool,
     /// Round, one choice of several; else the square checkbox.
     pub radio: bool,
+}
+
+/// A setting row (VIEW.md §13.6), Settings' row: its title, a second line under it, and what
+/// it ends with.
+#[derive(Clone, Debug, Default)]
+pub struct SettingRow {
+    pub title: String,
+    pub title_style: TextStyle,
+    pub subtitle: Option<String>,
+    pub subtitle_style: TextStyle,
+    /// What the row ends with. In a row that is not activatable: a control that responds on its
+    /// own (`switch_control`, a button, a slider). In an activatable one: what it shows, drawn
+    /// only (`Node::switch`, a mark, a chevron), since the row is then the control.
+    pub trailing: Option<Node>,
+    /// The row responds as a whole and reports this action (GNOME's activatable row). Off by
+    /// default: the control in it responds, not the row (owner, 2026-11-12).
+    pub action: Option<String>,
+    pub disabled: bool,
 }
 
 /// Something that opens and closes in place, unrolling downward (VIEW.md §6).
@@ -464,6 +486,7 @@ impl Node {
             grow: false,
             width: None,
             height: None,
+            row_floor: false,
             kind,
         }
     }
@@ -600,6 +623,79 @@ impl Node {
             .corner(Corner::Pill)
             .role(Role::Toggle)
             .marked(on)
+    }
+    /// A setting row (VIEW.md §13.6): its title and second line, what it ends with, at least
+    /// the kit's row height, its padding the kit's. Not activatable, it is no control: the
+    /// control it ends with responds, and its text says the state (disabled). Activatable
+    /// (`action`), the row is one control named by its title and described by its second
+    /// line, with the view's hover and press off glass; set its role and `marked` as for any
+    /// control (a row that flips a switch it shows is `Role::Toggle`, `marked(on)`).
+    pub fn setting_row(key: impl Into<Key>, row: SettingRow) -> Self {
+        let key = key.into();
+        let ink = |normal| if row.disabled { Ink::Disabled } else { normal };
+        let mut text = vec![
+            Self::text(
+                format!("{}/title", key.0),
+                row.title.clone(),
+                row.title_style,
+            )
+            .ink(ink(Ink::Primary)),
+        ];
+        if let Some(sub) = &row.subtitle {
+            text.push(
+                Self::text(
+                    format!("{}/subtitle", key.0),
+                    sub.clone(),
+                    row.subtitle_style,
+                )
+                .ink(ink(Ink::Dim)),
+            );
+        }
+        let mut line = vec![Self::column(format!("{}/text", key.0), text).grow()];
+        if let Some(t) = row.trailing {
+            debug_assert!(
+                row.action.is_none() || !t.holds_control(),
+                "an activatable row is the control: what it ends with is drawn only"
+            );
+            line.push(t);
+        }
+        let line_key = match row.action {
+            Some(_) => Key(format!("{}/line", key.0)),
+            None => key.clone(),
+        };
+        let line = Self::row(line_key, line)
+            .gap(Space::S3)
+            .align(Align::Center)
+            .padding(Padding::all(Space::S3))
+            .row_floor();
+        match row.action {
+            Some(action) => {
+                let mut n = Self::control(key, row.title, action, line)
+                    .corner(Corner::Token(Radius::Sm))
+                    .enabled(!row.disabled);
+                if let Some(sub) = row.subtitle {
+                    n = n.description(sub);
+                }
+                n
+            }
+            None => line,
+        }
+    }
+    /// Whether a control lies in this node.
+    fn holds_control(&self) -> bool {
+        match &self.kind {
+            Kind::Control(_) => true,
+            Kind::Stack(s) => s.children.iter().any(Self::holds_control),
+            Kind::Pane(p) => p.child.holds_control(),
+            Kind::Group(g) => g.child.holds_control(),
+            Kind::Reveal(r) => r.child.holds_control(),
+            Kind::Scroll(sc) => sc.child.holds_control(),
+            Kind::Overlay(o) => {
+                o.base.holds_control() || o.layers.iter().any(|l| l.child.holds_control())
+            }
+            Kind::Grid(g) => g.cells.iter().any(|c| c.child.holds_control()),
+            _ => false,
+        }
     }
     /// A checkbox's mark as drawn, for a control that holds one (`check_control`).
     pub fn check(key: impl Into<Key>, on: bool) -> Self {
@@ -820,6 +916,12 @@ impl Node {
     /// Laid out at this height, from a token, whatever its content measures.
     pub fn height(mut self, px: f64) -> Self {
         self.height = Some(px);
+        self
+    }
+    /// At least the kit's row height (`ROW_HEIGHT.single`), its content centred in it when its
+    /// stack aligns to the centre; taller when the content is.
+    pub fn row_floor(mut self) -> Self {
+        self.row_floor = true;
         self
     }
     pub fn grow(mut self) -> Self {

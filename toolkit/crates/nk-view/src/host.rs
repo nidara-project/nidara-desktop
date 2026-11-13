@@ -27,6 +27,10 @@ impl Tokens {
             slider: slider_from(&set.components["range"])?,
             switch: switch_from(&set.components["switch"], &colors)?,
             button: button_from(&set.components["button"], &colors)?,
+            row_height: e.statics["ts"]["ROW_HEIGHT"]["single"]
+                .as_f64()
+                .filter(|v| v.is_finite() && *v > 0.)
+                .ok_or("static.json: no ROW_HEIGHT.single")?,
             group_radius: set.components["common"]["groupRadius"]
                 .as_f64()
                 .filter(|v| v.is_finite() && *v >= 0.)

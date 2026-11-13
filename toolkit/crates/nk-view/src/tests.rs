@@ -53,6 +53,7 @@ fn tokens() -> Tokens {
         switch: switch_from(&switch(), &set).unwrap(),
         check: check_from(&check(), &set, &Radii::from_static(&statics()).unwrap()).unwrap(),
         button: button_from(&button(), &set).unwrap(),
+        row_height: 48.,
         group_radius: 16.,
     }
 }
@@ -3265,6 +3266,171 @@ fn a_focused_mark_rings_outside_its_border() {
     let p = (r[0] - 3., r[1] + r[3] / 2.);
     let (a, b) = (bgra(&plain, 100, p), bgra(&ringed, 100, p));
     assert!(b[0] > b[2] && a != b, "{a:?} then {b:?}");
+}
+
+fn setting(
+    title: &str,
+    subtitle: Option<&str>,
+    trailing: Option<Node>,
+    action: Option<&str>,
+) -> SettingRow {
+    SettingRow {
+        title: title.into(),
+        title_style: style(14.),
+        subtitle: subtitle.map(Into::into),
+        subtitle_style: style(12.),
+        trailing,
+        action: action.map(Into::into),
+        disabled: false,
+    }
+}
+
+#[test]
+fn a_setting_row_is_the_kits_row_height_and_grows_with_a_second_line() {
+    let one = Node::column(
+        "c",
+        vec![Node::setting_row("r", setting("Wi-Fi", None, None, None))],
+    );
+    let s = laid(&one, (400., 200.), 1.);
+    assert_eq!(rect(&s, "r")[3], 48., "the kit's row height");
+    // The title centred in it.
+    let (r, t) = (rect(&s, "r"), rect(&s, "r/title"));
+    assert!(
+        ((t[1] + t[3] / 2.) - (r[1] + r[3] / 2.)).abs() < 1.,
+        "{r:?} {t:?}"
+    );
+    let two = Node::column(
+        "c",
+        vec![Node::setting_row(
+            "r",
+            setting(
+                "Wi-Fi",
+                Some("Connected to Home, and a long second line"),
+                None,
+                None,
+            ),
+        )],
+    );
+    let s = laid(&two, (400., 200.), 1.);
+    let (r, t, sub) = (rect(&s, "r"), rect(&s, "r/title"), rect(&s, "r/subtitle"));
+    assert!(r[3] > 48., "taller with a second line: {r:?}");
+    assert!(sub[1] >= t[1] + t[3] - 0.5, "under the title");
+    assert_eq!(
+        r[3],
+        t[3] + sub[3] + 24.,
+        "the kit's padding round its text"
+    );
+}
+
+#[test]
+fn a_setting_row_is_not_activatable_by_default_only_its_control_responds() {
+    let view = Node::setting_row(
+        "r",
+        setting(
+            "Wi-Fi",
+            Some("Home"),
+            Some(Node::switch_control("r/sw", "Wi-Fi", "flip", true)),
+            None,
+        ),
+    );
+    let mut s = laid(&view, (400., 80.), 1.);
+    let t = rect(&s, "r/title");
+    s.pointer_motion(t[0] + 4., t[1] + 4.);
+    assert_eq!(s.hover(), None, "the row takes no hover");
+    s.button(true, Instant::now());
+    assert!(s.button(false, Instant::now()).is_none(), "nor a press");
+    let tree = s.semantics(nk_a11y::Node::new(1, nk_a11y::Role::Window, "W"), 2);
+    let controls: Vec<_> = tree
+        .nodes
+        .values()
+        .filter(|n| matches!(n.role, nk_a11y::Role::Button | nk_a11y::Role::ToggleButton))
+        .collect();
+    assert_eq!(controls.len(), 1, "one control, the switch");
+    assert_eq!(controls[0].role, nk_a11y::Role::ToggleButton);
+}
+
+#[test]
+fn an_activatable_setting_row_responds_as_a_whole_and_is_painted_off_glass() {
+    let row = |disabled: bool| {
+        let mut r = setting(
+            "Wi-Fi",
+            Some("Home"),
+            Some(Node::switch("r/sw", true)),
+            Some("flip"),
+        );
+        r.disabled = disabled;
+        Node::group(
+            "g",
+            Node::column(
+                "c",
+                vec![Node::setting_row("r", r).role(Role::Toggle).marked(true)],
+            ),
+        )
+    };
+    let mut s = laid(&row(false), (400., 80.), 1.);
+    let t = rect(&s, "r/title");
+    s.pointer_motion(t[0] + 4., t[1] + 4.);
+    assert_eq!(s.hover(), Some(&Key::from("r")), "its title is the row");
+    s.button(true, Instant::now());
+    assert_eq!(s.button(false, Instant::now()).unwrap().action, "flip");
+    let tree = s.semantics(nk_a11y::Node::new(1, nk_a11y::Role::Window, "W"), 2);
+    let toggles: Vec<_> = tree
+        .nodes
+        .values()
+        .filter(|n| n.role == nk_a11y::Role::ToggleButton)
+        .collect();
+    assert_eq!(toggles.len(), 1, "one toggle: the row");
+    assert_eq!(
+        (toggles[0].name.as_str(), toggles[0].description.as_str()),
+        ("Wi-Fi", "Home")
+    );
+    assert!(toggles[0].states.checked);
+    // Its hover is the view's to paint: no glass under it, nothing for Hyalo.
+    let tok = tokens();
+    let paint = |s: &mut ViewState| {
+        let mut c = nk_render::Canvas::new(400, 80, 1.);
+        let f = s.frame(&tok, Instant::now());
+        assert!(f.states.is_empty(), "off glass: nothing for Hyalo");
+        s.paint(&mut c, &tok, &mut |_: &str, _: f64| None, None)
+            .unwrap();
+        c.finish()
+    };
+    let hovered = paint(&mut s);
+    let mut rest = laid(&row(false), (400., 80.), 1.);
+    let plain = paint(&mut rest);
+    let r = rect(&s, "r");
+    let at = (r[0] + r[2] / 2., r[1] + 4.);
+    assert_ne!(
+        bgra(&hovered, 400, at),
+        bgra(&plain, 400, at),
+        "the hover is painted"
+    );
+    // Disabled: it does not respond, and its text says so.
+    let mut s = laid(&row(true), (400., 80.), 1.);
+    s.pointer_motion(t[0] + 4., t[1] + 4.);
+    s.button(true, Instant::now());
+    assert!(
+        s.button(false, Instant::now()).is_none(),
+        "a disabled row does nothing"
+    );
+    match &placed(&s, "r/title").what {
+        What::Text { ink, .. } => assert_eq!(*ink, Ink::Disabled),
+        w => panic!("{w:?}"),
+    }
+}
+
+#[test]
+#[should_panic(expected = "an activatable row is the control")]
+fn an_activatable_row_never_holds_a_control_of_its_own() {
+    let _ = Node::setting_row(
+        "r",
+        setting(
+            "Wi-Fi",
+            None,
+            Some(Node::switch_control("r/sw", "Wi-Fi", "flip", true)),
+            Some("flip"),
+        ),
+    );
 }
 
 #[test]

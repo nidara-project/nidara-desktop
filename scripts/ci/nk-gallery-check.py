@@ -25,7 +25,7 @@ BIN = os.environ.get('NK_WIDGETS_BIN', str(ROOT / 'toolkit/target/debug/nidara-k
 MSG = [os.environ.get('HYALO_BIN', 'nidara-hyalo'), 'msg']
 TITLE = 'Nidara Kit Gallery'
 PAGES = [('status', 'Status'), ('button', 'Button'), ('switch', 'Switch'),
-         ('check', 'Checkbox and radio'), ('slider', 'Slider'),
+         ('check', 'Checkbox and radio'), ('row', 'Setting row'), ('slider', 'Slider'),
          ('field', 'Text field'), ('glass', 'Glass card'), ('text', 'Text'), ('icons', 'Icons'),
          ('layout', 'Layout'), ('scroll', 'Scroll'), ('overlay', 'Overlay'), ('grid', 'Grid'),
          ('reveal', 'Reveal')]
@@ -218,6 +218,18 @@ def run(directory, fault=None, shots=True):
                     chosen = [n for n in ('Small', 'Medium', 'Large') if ticked(n, Atspi.Role.RADIO_BUTTON)]
                     check('check/choose', chosen == ['Large'] and find(root, 'Try it: hidden files shown, size Large')
                           is not None, f'chosen {chosen}')
+                elif page == 'row':
+                    check('row/inert', find(root, 'Title only', Atspi.Role.PUSH_BUTTON) is None
+                          and find(root, 'Ending in a switch', Atspi.Role.TOGGLE_BUTTON) is not None,
+                          'a row that is not activatable became a control, or lost its switch')
+                    activate('Displays', Atspi.Role.PUSH_BUTTON)
+                    check('row/open', find(root, 'Try it: opened 1 times, Bluetooth off') is not None,
+                          'an activatable row did not reach the model')
+                    activate('Bluetooth', Atspi.Role.TOGGLE_BUTTON)
+                    flipped = find(root, 'Bluetooth', Atspi.Role.TOGGLE_BUTTON)
+                    check('row/flip', flipped is not None and has_state(flipped, Atspi.StateType.CHECKED)
+                          and find(root, 'Try it: opened 1 times, Bluetooth on') is not None,
+                          'the whole row did not flip its setting')
                 elif page == 'slider':
                     node = find(root, 'Volume', Atspi.Role.SLIDER)
                     published(lambda: node.get_value_iface().set_current_value(80.))

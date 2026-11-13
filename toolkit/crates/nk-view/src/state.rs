@@ -456,6 +456,7 @@ impl ViewState {
             slider: 2. * tokens.slider.thumb_radius,
             switch: (tokens.switch.width, tokens.switch.height),
             check: tokens.check.size,
+            row: tokens.row_height,
             button: (
                 tokens.button.padding_x + tokens.button.border,
                 tokens.button.padding_y + tokens.button.border,
@@ -487,6 +488,7 @@ impl ViewState {
                 slider: 2. * tokens.slider.thumb_radius,
                 switch: (tokens.switch.width, tokens.switch.height),
                 check: tokens.check.size,
+                row: tokens.row_height,
                 button: (
                     tokens.button.padding_x + tokens.button.border,
                     tokens.button.padding_y + tokens.button.border,
