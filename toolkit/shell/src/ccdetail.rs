@@ -480,6 +480,14 @@ impl Detail {
                 if row.thumbnail.is_some() {
                     line.push(Node::slot(k("thumb"), 32.));
                 }
+                // A switch row: only the switch responds (VIEW.md §13.4); the row is not a
+                // control, so its text takes the disabled ink itself.
+                let switch_row = row.switch && row.checked.is_some();
+                let title = if switch_row && !enabled {
+                    title.ink(Ink::Disabled)
+                } else {
+                    title
+                };
                 let mut text = vec![title];
                 if !row.description.is_empty() {
                     text.push(
@@ -497,8 +505,16 @@ impl Detail {
                         ..
                     })
                 );
-                if let (true, Some(on)) = (row.switch, row.checked) {
-                    line.push(Node::switch(k("switch"), on));
+                if let (true, Some(on)) = (switch_row, row.checked) {
+                    line.push(
+                        Node::switch_control(key.clone(), label.clone(), "row", on)
+                            .enabled(enabled)
+                            .description(row.description.clone()),
+                    );
+                    return Node::row(k("line"), line)
+                        .gap(Space::S2)
+                        .align(nk_view::Align::Center)
+                        .padding(Padding::symmetric(Space::S3, Space::S2));
                 }
                 if clip_row {
                     line.push(
@@ -1933,6 +1949,36 @@ mod tests {
         }
     }
     #[test]
+    fn in_a_switch_row_only_the_switch_takes_the_pointer_and_its_release_acts() {
+        let mut d = Detail::new("night_light", 1);
+        let mut s = status();
+        s.night = Some(crate::status::Night {
+            enabled: false,
+            temperature: 4000,
+        });
+        if !laid(&mut d, &s, [0., 50., 396., 400.]) {
+            return;
+        }
+        let id = d.rows[1].id;
+        let line = d.state.rect(&format!("r{id}/line").into()).unwrap();
+        let switch = d.state.rect(&row_key(id)).unwrap();
+        assert!(
+            switch[2] < line[2] / 4.,
+            "the control is the switch, not the row"
+        );
+        // Over the row's text: nothing answers, and a click does nothing.
+        let text = (line[0] + 20., line[1] + line[3] / 2.);
+        d.motion(text);
+        assert_eq!(d.state.hover(), None, "the row's text must not light");
+        d.press();
+        assert_eq!(d.release(), None, "a click on the text must not flip it");
+        // Over the switch: it lights and its release asks the row's action.
+        d.motion((switch[0] + switch[2] / 2., switch[1] + switch[3] / 2.));
+        assert_eq!(d.state.hover(), Some(&row_key(id)));
+        d.press();
+        assert!(d.release().is_some(), "the switch's release must act");
+    }
+    #[test]
     fn a_switch_the_service_turned_on_slides_there_as_the_page_is_ticked() {
         let mut d = Detail::new("night_light", 1);
         let mut s = status();
@@ -1945,7 +1991,7 @@ mod tests {
         }
         let id = d.rows[1].id;
         let progress = |d: &Detail| {
-            let key = format!("r{id}/switch").into();
+            let key = format!("r{id}/track").into();
             match d
                 .state
                 .placed()
@@ -2139,26 +2185,36 @@ mod tests {
         };
         let (audio, region) = (id(Action::ToggleAudio), id(Action::SetMode("region")));
         let at = |key: String| d.state.rect(&key.into());
-        let row = d.state.rect(&row_key(audio)).unwrap();
-        let switch = at(format!("r{audio}/switch")).expect("the audio row's switch");
+        // The switch is the row's control; the row around it is only its line.
+        let row = at(format!("r{audio}/line")).expect("the audio row's line");
+        let switch = d
+            .state
+            .rect(&row_key(audio))
+            .expect("the audio row's switch");
         assert!(at(format!("r{audio}/check")).is_none(), "no mark beside it");
         assert!(
             (row[0] + row[2]) - (switch[0] + switch[2]) < 20.,
             "at the row's end: {row:?} {switch:?}"
         );
         assert!(
+            switch[2] < row[2] / 4.,
+            "the switch, not the row: {switch:?}"
+        );
+        assert!(
             at(format!("r{region}/check")).is_some(),
             "a mode keeps its mark"
         );
-        assert!(at(format!("r{region}/switch")).is_none());
-        // Said as GTK says a switch: one toggle button, the whole row, with its state.
+        assert!(at(format!("r{region}/track")).is_none());
+        // Said as GTK says a switch: one toggle button, the switch, bearing the row's name.
         let nodes = d.nodes(1, None);
         let said: Vec<_> = nodes
             .iter()
-            .filter(|(n, _)| n.bounds.y == row[1] && n.bounds.height == row[3])
+            .filter(|(n, _)| n.bounds.y >= row[1] && n.bounds.y < row[1] + row[3])
             .collect();
-        assert_eq!(said.len(), 1, "one node for the row and its switch");
+        assert_eq!(said.len(), 1, "one node in the row: the switch");
         assert_eq!(said[0].0.role, nk_a11y::Role::ToggleButton);
+        assert_eq!(said[0].0.bounds.width, switch[2]);
+        assert!(!said[0].0.name.is_empty(), "named after its row");
     }
     #[test]
     fn a_row_acts_when_released_over_itself_and_not_elsewhere() {

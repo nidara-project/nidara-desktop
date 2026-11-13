@@ -547,10 +547,16 @@ in the owner's session with their OK.
 picks one of several things keeps its check mark (§12.3); a switch is for a setting that is
 on or off.
 
-- **It is drawn, not pressed.** The switch is a leaf with no hover and no action of its own;
-  the row around it is the control (`Role::Toggle`, `marked(on)`), so the whole row toggles,
-  Tab stops once, and a reader hears one toggle button with its checked state, as GTK says a
-  switch.
+- **The switch is the control, not its row** (owner, 2026-11-12, #1079). A setting row is
+  `Node::row` holding its text and `Node::switch_control(key, name, action, on)`: a control
+  (`Role::Toggle`, `marked(on)`, pill corner) that holds the drawn track
+  (`Node::switch(key/track, on)`). Only the switch takes hover, press and the click; the
+  row's text does nothing, and takes `Ink::Disabled` itself when the switch is disabled, since
+  the row is not a control. Tab stops on the switch, and a reader hears one toggle button named
+  by the row (`name`) with its checked state, as GTK says a switch. A row that activates as a
+  whole is an app's choice (a row property), never the default.
+- **Its focus ring stands outside the track**, one ring width away: the track is the switch's
+  edge and would cover a ring drawn inside it.
 - **Measures and colours are the native switch's** (`components.json` `switch`,
   `toolkit/tokens/switch.json`): 44×24, a pill track in `trackColor` turning `checkedColor`,
   its 1 px border in `borderColor` turning `checkedBorderColor`, a thumb in `thumbColor` kept
