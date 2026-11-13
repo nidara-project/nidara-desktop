@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: LGPL-3.0-or-later
 //! The view: a value a surface builds from its model on each change (VIEW.md §2).
 use crate::host::TypeScale;
-use crate::tokens::{DropdownStyle, MenuStyle, Radii, Radius, SliderStyle, Space};
+use crate::tokens::{DropdownStyle, MenuStyle, Radii, Radius, SegmentStyle, SliderStyle, Space};
 use nk_text::TextStyle;
 use serde::{Deserialize, Serialize};
 
@@ -390,6 +390,10 @@ pub struct Control {
     /// A dropdown's options and the one chosen (VIEW.md §13.9); its role is `Dropdown`.
     #[serde(default)]
     pub choice: Option<Choice>,
+    /// Which segment of a segmented choice this is (VIEW.md §13.10): its place decides which
+    /// of its corners are the group's.
+    #[serde(default)]
+    pub segment: Option<Segment>,
     /// On (VIEW.md §12.4): the glass under it is white, the primary ink at full, and what it
     /// holds is drawn in the accent. Hover and press do not show over it.
     #[serde(default)]
@@ -434,6 +438,28 @@ pub enum Face {
     /// A row of a dropdown's open list (`dropdown.menu`): filled with the accent while the
     /// pointer or the keyboard is on it, ticked while it is the one chosen.
     MenuRow,
+    /// One segment of a segmented choice (`components.json` `choices.segmented`, VIEW.md
+    /// §13.10): its label centred in its padding; the chosen one is the accent.
+    Segment,
+}
+
+/// A segment's place in its segmented choice: `index` of `count`.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct Segment {
+    pub index: usize,
+    pub count: usize,
+}
+
+/// A segmented choice (VIEW.md §13.10, GTK's linked toggle buttons): one choice of a few, all
+/// shown side by side, the chosen one in the accent. Choosing one reports `"{action}:{n}"`.
+#[derive(Clone, Debug)]
+pub struct Segmented {
+    /// What a reader calls the group: its row's title, said with each segment.
+    pub name: String,
+    pub options: Vec<String>,
+    pub chosen: usize,
+    pub action: String,
+    pub disabled: bool,
 }
 
 /// A dropdown's options and which is chosen (VIEW.md §13.9).
@@ -940,6 +966,7 @@ impl Node {
                 slider: None,
                 field: None,
                 choice: None,
+                segment: None,
                 on: false,
                 accent: false,
                 surface: false,
@@ -1008,6 +1035,45 @@ impl Node {
             });
         }
         n
+    }
+    /// A segmented choice (VIEW.md §13.10): a row of segments, each a radio of one group, so
+    /// that the arrows move the choice and Tab stops at it once. Segment `n` is keyed
+    /// `"{key}/{n}"` and reports `"{action}:{n}"` when it is chosen; its measures, tones and
+    /// font are `style`'s (the exported `choices.segmented`), the font a step of `types`.
+    pub fn segmented(
+        key: impl Into<Key>,
+        s: Segmented,
+        style: &SegmentStyle,
+        types: &TypeScale,
+    ) -> Self {
+        let key = key.into();
+        let count = s.options.len();
+        let segments = s
+            .options
+            .iter()
+            .enumerate()
+            .map(|(n, label)| {
+                let k = format!("{}/{n}", key.0);
+                let text = Self::text(
+                    format!("{k}/label"),
+                    label.clone(),
+                    types.style(style.font.0, style.font.1),
+                );
+                let mut c = Self::control(k, label.clone(), format!("{}:{n}", s.action), text)
+                    .corner(Corner::Fixed(style.radius.round() as u32))
+                    .role(Role::Radio)
+                    .marked(n == s.chosen)
+                    .enabled(!s.disabled)
+                    .description(s.name.clone());
+                if let Kind::Control(c) = &mut c.kind {
+                    c.wash = Wash::None;
+                    c.face = Face::Segment;
+                    c.segment = Some(Segment { index: n, count });
+                }
+                c
+            })
+            .collect();
+        Self::row(key, segments)
     }
     /// A row of a dropdown's open list: `label` and room for the tick after it, in the row's
     /// padding (`style`, the exported `dropdown.menu`). `chosen` ticks it.

@@ -302,6 +302,7 @@ pub struct Faces {
     pub button: (f64, f64, f64),
     pub dropdown: (f64, f64, f64),
     pub menu_row: (f64, f64, f64),
+    pub segment: (f64, f64, f64),
 }
 impl Faces {
     pub fn of(tokens: &crate::tokens::Tokens) -> Self {
@@ -314,6 +315,7 @@ impl Faces {
             ),
             dropdown: tokens.dropdown.trigger.inset(),
             menu_row: tokens.dropdown.menu.row_inset(),
+            segment: tokens.segmented.inset(),
         }
     }
     /// A face's inset, None for a face that pads nothing.
@@ -323,6 +325,7 @@ impl Faces {
             Face::Button => Some(self.button),
             Face::Dropdown => Some(self.dropdown),
             Face::MenuRow => Some(self.menu_row),
+            Face::Segment => Some(self.segment),
         }
     }
 }
@@ -811,13 +814,13 @@ impl Layouter<'_> {
             }
             Kind::Group(g) => self.place(&g.child, &m.children[0], r, inner, out),
             Kind::Control(c) if c.face != Face::Plain => {
-                // A button's label centred in it, inside its padding and border; what a
+                // A button's or a segment's label centred in it, inside its padding and border; what a
                 // dropdown or a menu row holds fills it across, inside theirs.
                 inner.control = Some(index);
                 let child = &m.children[0];
                 let x = self.faces.inset(c.face).map_or(0., |i| i.0);
                 let room = (r[2] - 2. * x).max(0.);
-                let w = if c.face == Face::Button {
+                let w = if matches!(c.face, Face::Button | Face::Segment) {
                     room.min(child.w)
                 } else {
                     room

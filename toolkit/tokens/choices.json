@@ -8,11 +8,22 @@
       "paddingX": 14,
       "paddingY": 5,
       "border": 1,
+      "minContentHeight": 20,
+      "radius": "sm",
       "borderColor": "--nidara-border",
       "fontSize": "fse-small",
+      "fontWeight": "fw-medium",
       "selectedColor": "--nidara-accent",
       "selectedText": "--nidara-accent-fg",
-      "source": "button.settings-preset-btn: padding 5px 14px, 1px border var(--nidara-border), font-size $fse-small, radius $nidara-radius-sm (components common.radius); selected = .nidara-btn--primary, the accent with accent-fg text."
+      "background": "--nidara-surface",
+      "hover": "--nidara-surface-hover",
+      "pressed": "--nidara-surface-active",
+      "text": "--nidara-text",
+      "focus": "--nidara-accent",
+      "selectedHoverWhite": 0.15,
+      "selectedPressedBlack": 0.3,
+      "disabledOpacity": 0.45,
+      "source": "button.settings-preset-btn: padding 5px 14px, 1px border var(--nidara-border), font-size $fse-small, radius $nidara-radius-sm (components common.radius); selected = .nidara-btn--primary, the accent with accent-fg text. Rest/hover/pressed: --nidara-surface / -hover / -active with --nidara-text, weight $fw-medium; the chosen one's hover mixes 15% white into the accent and its press 30% black; disabled 0.45 opacity. minContentHeight is the button's (button.json): the segment's text line."
     },
     "swatch": {
       "diameter": 30,

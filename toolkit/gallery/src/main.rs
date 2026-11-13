@@ -39,6 +39,7 @@ impl Gallery {
             &pages::Measures {
                 slider: &look.tokens.slider,
                 dropdown: &look.tokens.dropdown,
+                segmented: &look.tokens.segmented,
                 glyph: look.frame.icon,
             },
         );
@@ -76,6 +77,10 @@ impl Gallery {
         if self.inert {
             eprintln!("CONTROL_APPLIED inert");
             return;
+        }
+        if let Some(i) = action.strip_prefix("size:").and_then(|i| i.parse().ok()) {
+            self.model.size = i;
+            return self.rebuild();
         }
         if let Some(i) = action.strip_prefix("choice:").and_then(|i| i.parse().ok()) {
             self.model.choice = i;

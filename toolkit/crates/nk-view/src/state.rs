@@ -1136,14 +1136,24 @@ impl ViewState {
             .focus
             .as_ref()
             .and_then(|f| order.iter().position(|&i| &self.placed[i].key == f));
-        // A radio group: the radios next to each other in `order`.
+        // A radio group: the radios next to each other in `order`; a segmented choice is a
+        // group of its own, whatever lies next to it.
         let radio = |j: usize| self.control(order[j]).role == Role::Radio;
+        let joined = |j: usize| {
+            // Whether radio `j` and radio `j + 1` are one group.
+            let seg = |k: usize| self.control(order[k]).segment;
+            match (seg(j), seg(j + 1)) {
+                (None, None) => true,
+                (Some(a), Some(b)) => a.index + 1 < a.count && b.index > 0,
+                _ => false,
+            }
+        };
         let run = |j: usize| {
             let (mut a, mut b) = (j, j);
-            while a > 0 && radio(a - 1) {
+            while a > 0 && radio(a - 1) && joined(a - 1) {
                 a -= 1;
             }
-            while b + 1 < order.len() && radio(b + 1) {
+            while b + 1 < order.len() && radio(b + 1) && joined(b) {
                 b += 1;
             }
             a..=b
@@ -2048,6 +2058,60 @@ impl ViewState {
                         canvas.pop_clip();
                     }
                 }
+                What::Control(c) if c.face == crate::view::Face::Segment => {
+                    // A segment (VIEW.md §13.10): its tone inside the group's outline, cut to
+                    // it, so only the group's two ends are rounded. The chosen one is the accent
+                    // to its edges; another draws the outline's border and the line before it.
+                    // Its ring is drawn after every segment (below), so a neighbour never covers it.
+                    let s = &tokens.segmented;
+                    let key = Some(&p.key);
+                    let pressed = c.enabled
+                        && ((self.press.as_ref() == key && self.hover.as_ref() == key)
+                            || c.shown == Some(Shown::Press));
+                    let hovered =
+                        c.enabled && (self.hover.as_ref() == key || c.shown == Some(Shown::Hover));
+                    let white = nk_render::Color::new([1., 1., 1., 1.]);
+                    let black = nk_render::Color::new([0., 0., 0., 1.]);
+                    let fill = match (c.marked, pressed, hovered) {
+                        (true, true, _) => mix(s.selected, black, s.selected_pressed_black as f32),
+                        (true, false, true) => {
+                            mix(s.selected, white, s.selected_hover_white as f32)
+                        }
+                        (true, ..) => s.selected,
+                        (false, true, _) => s.pressed,
+                        (false, false, true) => s.hover,
+                        (false, ..) => s.background,
+                    };
+                    let a = if c.enabled {
+                        1.
+                    } else {
+                        s.disabled_opacity as f32
+                    };
+                    let faded =
+                        |colour: nk_render::Color| ink(colour.with_alpha(colour.components[3] * a));
+                    let (index, count) = c.segment.map_or((0, 1), |g| (g.index, g.count));
+                    let (r, round) = (p.rect, s.radius);
+                    // A join's corner lies a corner's width past the segment's clip, and
+                    // another, since the canvas's corner curves on beyond its radius.
+                    let before = if index > 0 { 2. * round } else { 0. };
+                    let after = if index + 1 < count { 2. * round } else { 0. };
+                    let outline = [r[0] - before, r[1], r[2] + before + after, r[3]];
+                    canvas.clip(rect(&visible));
+                    canvas.clip(rect(&r));
+                    canvas.rounded_rect(rect(&outline), round, faded(fill));
+                    if !c.marked && s.border > 0. {
+                        canvas.rounded_ring(rect(&outline), round, s.border, faded(s.border_color));
+                        if index > 0 {
+                            canvas.rounded_rect(
+                                rect(&[r[0], r[1], s.border, r[3]]),
+                                0.,
+                                faded(s.border_color),
+                            );
+                        }
+                    }
+                    canvas.pop_clip();
+                    canvas.pop_clip();
+                }
                 What::Control(c) if c.face == crate::view::Face::Button => {
                     // A content button (VIEW.md §13.2): the surface, its border, and the
                     // surface's own hover and pressed tones; no glass, nothing for Hyalo.
@@ -2169,6 +2233,30 @@ impl ViewState {
                 _ => {}
             }
         }
+        for (i, p) in self.placed.iter().enumerate() {
+            // A segment's ring, outside it by a ring's width (the chosen one is the accent, as
+            // the ring is), over its neighbours.
+            if let What::Control(c) = &p.what
+                && c.face == crate::view::Face::Segment
+                && c.enabled
+                && part(i)
+                && self.shown(i)
+                && p.visible().is_some()
+                && ((self.focus_visible && self.focus.as_ref() == Some(&p.key))
+                    || c.shown == Some(Shown::Focus))
+            {
+                let (w, s) = (tokens.look.focus_width, &tokens.segmented);
+                let out = 2. * w;
+                let r = p.rect;
+                let r = [r[0] - out, r[1] - out, r[2] + 2. * out, r[3] + 2. * out];
+                canvas.rounded_ring(
+                    rect(&r),
+                    s.radius + out,
+                    w,
+                    s.focus.with_alpha(s.focus.components[3] * p.alpha as f32),
+                );
+            }
+        }
         for s in self.regions().filter(|&s| part(s)) {
             if let (Some(bar), Some(g)) = (self.bars.get(&self.placed[s].key), self.bar_geometry(s))
             {
@@ -2203,6 +2291,16 @@ impl ViewState {
             crate::view::Face::Dropdown => {
                 let t = &tokens.dropdown.trigger;
                 Some(if glyph { t.arrow_color } else { t.text })
+            }
+            crate::view::Face::Segment => {
+                let (c, s) = (self.control(owner), &tokens.segmented);
+                let ink = if c.marked { s.selected_text } else { s.text };
+                let a = if c.enabled {
+                    1.
+                } else {
+                    s.disabled_opacity as f32
+                };
+                Some(ink.with_alpha(ink.components[3] * a))
             }
             crate::view::Face::MenuRow => {
                 let m = &tokens.dropdown.menu;
