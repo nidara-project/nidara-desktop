@@ -67,8 +67,13 @@ impl Gallery {
             eprintln!("CONTROL_APPLIED inert");
             return;
         }
+        if let Some(i) = action.strip_prefix("choice:").and_then(|i| i.parse().ok()) {
+            self.model.choice = i;
+            return self.rebuild();
+        }
         match action {
             "press" => self.model.presses += 1,
+            "check" => self.model.check = !self.model.check,
             "toggle" => self.model.toggle = !self.model.toggle,
             "switch" => self.model.switch = !self.model.switch,
             "reveal" => self.model.open = !self.model.open,

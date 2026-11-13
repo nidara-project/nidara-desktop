@@ -3067,7 +3067,14 @@ fn the_check_tokens_are_read_from_their_export_with_nothing_defaulted() {
         "--nidara-accent-fg": "#ffffff", "--nidara-bg": "#000000"}});
     let radii = Radii::from_static(&statics()).unwrap();
     assert!(check_from(&check(), &set, &radii).is_ok());
-    for k in ["size", "radius", "tick", "dotBand", "dotBandColor", "disabledOpacity"] {
+    for k in [
+        "size",
+        "radius",
+        "tick",
+        "dotBand",
+        "dotBandColor",
+        "disabledOpacity",
+    ] {
         let mut c = check();
         c.as_object_mut().unwrap().remove(k);
         assert!(check_from(&c, &set, &radii).is_err(), "{k} missing");
@@ -3081,7 +3088,10 @@ fn the_check_tokens_are_read_from_their_export_with_nothing_defaulted() {
 fn mark_row(key: &str, label: &str, mark: Node) -> Node {
     Node::row(
         format!("{key}/row"),
-        vec![mark, Node::text(format!("{key}/label"), label, style(14.)).grow()],
+        vec![
+            mark,
+            Node::text(format!("{key}/label"), label, style(14.)).grow(),
+        ],
     )
     .gap(Space::S2)
     .align(Align::Center)
@@ -3090,10 +3100,18 @@ fn mark_row(key: &str, label: &str, mark: Node) -> Node {
 #[test]
 fn a_checkbox_responds_only_on_its_box_and_a_reader_finds_it_checked() {
     let t = tokens();
-    let view = mark_row("wrap", "Wrap lines", Node::check_control("wrap", "Wrap lines", "wrap", true));
+    let view = mark_row(
+        "wrap",
+        "Wrap lines",
+        Node::check_control("wrap", "Wrap lines", "wrap", true),
+    );
     let mut s = laid(&view, (300., 40.), 1.);
     let (label, mark) = (rect(&s, "wrap/label"), rect(&s, "wrap"));
-    assert_eq!((mark[2], mark[3]), (18., 18.), "the box at the tokens' size");
+    assert_eq!(
+        (mark[2], mark[3]),
+        (18., 18.),
+        "the box at the tokens' size"
+    );
     s.pointer_motion(label[0] + 4., label[1] + label[3] / 2.);
     assert_eq!(s.hover(), None, "the label takes no hover");
     s.button(true, Instant::now());
@@ -3152,7 +3170,10 @@ fn a_checked_box_is_the_accent_with_a_tick_and_a_chosen_radio_a_dot_in_a_band() 
     assert!(on[0] > 200 && on[2] < 50, "the accent: {on:?}");
     assert!(off[0] < 100, "the surface: {off:?}");
     let tick = at(true, false, (0.44, 0.67));
-    assert!(tick[0] > 200 && tick[1] > 200 && tick[2] > 200, "the tick: {tick:?}");
+    assert!(
+        tick[0] > 200 && tick[1] > 200 && tick[2] > 200,
+        "the tick: {tick:?}"
+    );
     // The radio: the accent dot at its centre, the band of the background between it and the
     // border.
     let dot = at(true, true, (0.5, 0.5));
@@ -3160,7 +3181,10 @@ fn a_checked_box_is_the_accent_with_a_tick_and_a_chosen_radio_a_dot_in_a_band() 
     let band = at(true, true, (0.5, 0.2));
     assert!(band[0] < 60, "the band: {band:?}");
     let unchosen = at(false, true, (0.5, 0.5));
-    assert!(unchosen[0] < 100, "an unchosen radio's centre: {unchosen:?}");
+    assert!(
+        unchosen[0] < 100,
+        "an unchosen radio's centre: {unchosen:?}"
+    );
 }
 
 #[test]
@@ -3168,7 +3192,11 @@ fn a_radio_group_is_one_tab_stop_and_the_arrows_move_its_choice() {
     let radios = |chosen: usize| {
         let r = |i: usize| {
             let k = format!("r{i}");
-            mark_row(&k, &k, Node::radio_control(k.clone(), k.clone(), format!("pick{i}"), i == chosen))
+            mark_row(
+                &k,
+                &k,
+                Node::radio_control(k.clone(), k.clone(), format!("pick{i}"), i == chosen),
+            )
         };
         Node::column(
             "c",
@@ -3186,13 +3214,24 @@ fn a_radio_group_is_one_tab_stop_and_the_arrows_move_its_choice() {
     s.key(KeyInput::Tab);
     assert_eq!(focus(&s).as_deref(), Some("before"));
     s.key(KeyInput::Tab);
-    assert_eq!(focus(&s).as_deref(), Some("r1"), "the group's stop is its chosen radio");
+    assert_eq!(
+        focus(&s).as_deref(),
+        Some("r1"),
+        "the group's stop is its chosen radio"
+    );
     s.key(KeyInput::Tab);
-    assert_eq!(focus(&s).as_deref(), Some("after"), "one stop for the whole group");
+    assert_eq!(
+        focus(&s).as_deref(),
+        Some("after"),
+        "one stop for the whole group"
+    );
     s.key(KeyInput::ShiftTab);
     assert_eq!(focus(&s).as_deref(), Some("r1"));
     let a = s.key(KeyInput::Down).expect("Down chooses the next");
-    assert_eq!((a.action.as_str(), focus(&s).as_deref()), ("pick2", Some("r2")));
+    assert_eq!(
+        (a.action.as_str(), focus(&s).as_deref()),
+        ("pick2", Some("r2"))
+    );
     let a = s.key(KeyInput::Down).expect("and wraps");
     assert_eq!(a.action, "pick0");
     let a = s.key(KeyInput::Left).expect("Left the previous");

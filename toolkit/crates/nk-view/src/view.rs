@@ -51,7 +51,7 @@ pub enum Kind {
     /// An on/off switch, drawn only: the control around it is what is pressed (VIEW.md §12.6).
     Switch(Switch),
     /// A checkbox's or a radio's mark, drawn only: the control around it is what is pressed
-    /// (VIEW.md §13.4).
+    /// (VIEW.md §13.5).
     Check(Check),
     /// A row the surface did not build, at the height it had when it was (VIEW.md §8).
     Placeholder(f64),
@@ -64,7 +64,7 @@ pub struct Switch {
     pub on: bool,
 }
 
-/// A checkbox's or a radio's mark (VIEW.md §13.4): its size and colours are the tokens'
+/// A checkbox's or a radio's mark (VIEW.md §13.5): its size and colours are the tokens'
 /// (`check`); a change of `on` fades it as a switch slides.
 #[derive(Clone, Copy, Debug, PartialEq, Serialize, Deserialize)]
 pub struct Check {
@@ -585,7 +585,7 @@ impl Node {
     pub fn switch(key: impl Into<Key>, on: bool) -> Self {
         Self::new(key, Kind::Switch(Switch { on }))
     }
-    /// A switch (VIEW.md §13.4): only the switch responds, never the row it sits in. `name`
+    /// A switch (VIEW.md §12.6): only the switch responds, never the row it sits in. `name`
     /// is what its row says, so a reader calls the switch by it; `action` is reported on each
     /// flip. Off glass its hover and press are the view's, on its own pill.
     pub fn switch_control(
@@ -607,9 +607,15 @@ impl Node {
     }
     /// A radio's mark as drawn, for a control that holds one (`radio_control`).
     pub fn radio(key: impl Into<Key>, chosen: bool) -> Self {
-        Self::new(key, Kind::Check(Check { on: chosen, radio: true }))
+        Self::new(
+            key,
+            Kind::Check(Check {
+                on: chosen,
+                radio: true,
+            }),
+        )
     }
-    /// A checkbox (VIEW.md §13.4): as the switch, only the box responds, never the row it
+    /// A checkbox (VIEW.md §13.5): as the switch, only the box responds, never the row it
     /// sits in; `name` is what its row says, `action` is reported on each flip. It is off
     /// glass, and the view paints its states.
     pub fn check_control(
@@ -622,7 +628,7 @@ impl Node {
         let drawn = Self::check(format!("{}/mark", key.0), on);
         Self::mark_control(key, name, action, drawn, Role::Check, on)
     }
-    /// A radio (VIEW.md §13.4): one choice of several; put the group's radios next to each
+    /// A radio (VIEW.md §13.5): one choice of several; put the group's radios next to each
     /// other. `action` is reported when it is chosen, by a click or by the arrows.
     pub fn radio_control(
         key: impl Into<Key>,

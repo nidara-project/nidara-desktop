@@ -377,6 +377,13 @@ and keeps the model; the panel's scroll region places the grid, so the grid view
 the row around it is the control (`Role::Toggle`, `marked(on)`). It slides over `base`/`ease`
 both ways, faded at `disabledOpacity` while its row is disabled (`VIEW.md` §12.6). A setting
 that is on or off ends its row with one; a choice among several keeps its mark slot.
+`Node::check_control` / `Node::radio_control` are the CheckButton (`components.json` `check`,
+`VIEW.md` §13.5): the mark is the control, its label is not; off glass, so nk-view paints every
+state; the radios next to each other are one group, one Tab stop, the arrows moving the choice.
+A new token file goes into `scripts/export-tokens.mjs` AND `scripts/ci/settings-tokens-check.py`;
+until the owner reinstalls, `/usr/share/nidara/settings-data` lacks it, so run tests and the
+headless gallery against a fresh export (`SASS=sass node --experimental-strip-types
+scripts/export-tokens.mjs <dir>` over a copy of the installed data, then `NK_SETTINGS_DATA=<dir>`).
 
 **nk-view is the kit's one way to build, for apps too (#1079, `VIEW.md` §13).** An application
 window IS the kit's: `nk_view::AppWindow` (§13.2), as `toolkit/gallery` uses it. The app keeps

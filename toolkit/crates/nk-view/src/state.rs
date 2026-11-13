@@ -1801,7 +1801,7 @@ impl ViewState {
                 What::Check {
                     radio, progress, ..
                 } => {
-                    // VIEW.md §13.4: a CheckButton's mark, off glass, every state the view's:
+                    // VIEW.md §13.5: a CheckButton's mark, off glass, every state the view's:
                     // the surface and its border, lifted under the pointer and darker pressed;
                     // checked, the accent, with a tick or the radio's band around its dot.
                     let s = &tokens.check;
@@ -1813,7 +1813,11 @@ impl ViewState {
                             let hover = self.hover.as_ref() == key || shown == Some(Shown::Hover);
                             let press = (self.press.as_ref() == key && self.hover.as_ref() == key)
                                 || shown == Some(Shown::Press);
-                            (self.enabled(o), hover && self.enabled(o), press && self.enabled(o))
+                            (
+                                self.enabled(o),
+                                hover && self.enabled(o),
+                                press && self.enabled(o),
+                            )
                         }
                         None => (true, false, false),
                     };

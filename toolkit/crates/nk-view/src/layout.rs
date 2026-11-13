@@ -349,9 +349,7 @@ impl Layouter<'_> {
         match &n.kind {
             Kind::Group(g) => self.min(&g.child),
             Kind::Text(t) if t.lines.is_some() => 0.,
-            Kind::Text(_) | Kind::Icon(_) | Kind::Switch(_) | Kind::Check(_) => {
-                self.natural(n)
-            }
+            Kind::Text(_) | Kind::Icon(_) | Kind::Switch(_) | Kind::Check(_) => self.natural(n),
             Kind::Spacer => 0.,
             Kind::Pane(p) => self.min(&p.child),
             Kind::Control(c) if c.face == Face::Button => self.min(&c.child) + 2. * self.button.0,
