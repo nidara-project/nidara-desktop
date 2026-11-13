@@ -694,6 +694,116 @@ pub struct DropdownStyle {
 /// The dropdown from its component: colours named by token and resolved in one set of
 /// `tokens/colors.json`, corners steps of `radii`, the label's margin a step of `spacing`,
 /// the fonts steps of the type scale.
+/// A segmented choice's look (VIEW.md §13.10; `components.json` `choices.segmented`, from
+/// `toolkit/tokens/choices.json`): Settings' linked preset buttons, off glass. The view paints
+/// it; the chosen segment is the accent.
+#[derive(Clone, Debug, PartialEq)]
+pub struct SegmentStyle {
+    pub padding_x: f64,
+    pub padding_y: f64,
+    pub border: f64,
+    /// The text line's least height inside the padding (the button's).
+    pub min_content_height: f64,
+    /// The group's corner: its two ends are rounded, the joins between segments are not.
+    pub radius: f64,
+    pub font: (Type, Weight),
+    pub background: Color,
+    pub hover: Color,
+    pub pressed: Color,
+    pub text: Color,
+    pub border_color: Color,
+    pub selected: Color,
+    pub selected_text: Color,
+    /// How much white the chosen segment takes under the pointer, and black while pressed.
+    pub selected_hover_white: f64,
+    pub selected_pressed_black: f64,
+    pub focus: Color,
+    pub disabled_opacity: f64,
+}
+impl SegmentStyle {
+    /// A segment's padding across and down, and its least height (as `TriggerStyle::inset`).
+    pub fn inset(&self) -> (f64, f64, f64) {
+        let down = self.border + self.padding_y;
+        (
+            self.border + self.padding_x,
+            down,
+            self.min_content_height + 2. * down,
+        )
+    }
+}
+
+/// The segmented choice's look from the exported `choices.segmented` (`component`), its colours
+/// resolved in `set` (one `colors.json` set) and its corner in `radii`. A field missing or out of
+/// range is an error: there is no default here.
+pub fn segmented_from(
+    component: &Value,
+    set: &Value,
+    radii: &Radii,
+) -> Result<SegmentStyle, String> {
+    let c = component;
+    if !c.is_object() {
+        return Err("choices: no segmented".into());
+    }
+    let n = |k: &str| {
+        c[k].as_f64()
+            .filter(|v| v.is_finite() && *v >= 0.)
+            .ok_or_else(|| format!("segmented: no {k}"))
+    };
+    let word = |k: &str| {
+        c[k].as_str()
+            .map(str::to_owned)
+            .ok_or_else(|| format!("segmented: no {k}"))
+    };
+    let colour = |k: &str| -> Result<Color, String> {
+        let name = word(k)?;
+        if !name.starts_with("--") {
+            return parse_color(&name);
+        }
+        set["tokens"][&name]
+            .as_str()
+            .ok_or_else(|| format!("colors.json: no {name}"))
+            .and_then(parse_color)
+    };
+    let corner = word("radius")?;
+    let (size, weight) = (word("fontSize")?, word("fontWeight")?);
+    let s = SegmentStyle {
+        padding_x: n("paddingX")?,
+        padding_y: n("paddingY")?,
+        border: n("border")?,
+        min_content_height: n("minContentHeight")?,
+        radius: Radius::ALL
+            .into_iter()
+            .find(|r| r.token() == corner)
+            .map(|r| radii.px(r))
+            .ok_or_else(|| format!("segmented: radius {corner:?} is not a radius"))?,
+        font: (
+            Type::ALL
+                .into_iter()
+                .find(|x| x.token() == size)
+                .ok_or_else(|| format!("segmented: {size:?} is not a type step"))?,
+            Weight::ALL
+                .into_iter()
+                .find(|x| x.token() == weight)
+                .ok_or_else(|| format!("segmented: {weight:?} is not a weight"))?,
+        ),
+        background: colour("background")?,
+        hover: colour("hover")?,
+        pressed: colour("pressed")?,
+        text: colour("text")?,
+        border_color: colour("borderColor")?,
+        selected: colour("selectedColor")?,
+        selected_text: colour("selectedText")?,
+        selected_hover_white: n("selectedHoverWhite")?,
+        selected_pressed_black: n("selectedPressedBlack")?,
+        focus: colour("focus")?,
+        disabled_opacity: n("disabledOpacity")?,
+    };
+    if s.disabled_opacity > 1. || s.selected_hover_white > 1. || s.selected_pressed_black > 1. {
+        return Err("segmented: invalid measures".into());
+    }
+    Ok(s)
+}
+
 pub fn dropdown_from(
     component: &Value,
     set: &Value,
@@ -816,6 +926,7 @@ pub struct Tokens {
     pub check: CheckStyle,
     pub button: ButtonStyle,
     pub dropdown: DropdownStyle,
+    pub segmented: SegmentStyle,
     /// A setting row's least height (`static.json` `ts.ROW_HEIGHT.single`).
     pub row_height: f64,
     /// A group's corner (`components.json` `common.groupRadius`), as Settings' cards.

@@ -3,9 +3,9 @@
 //! of it a kit node. A page shows one component in each of its states side by side, with
 //! the catalogue entries it answers and their GTK and AppKit equivalents.
 use nk_view::{
-    Align, Cell, Corner, Dropdown, DropdownStyle, Field, Ink, Justify, Node, Padding, Radius, Role,
-    SettingRow, Shown, SidebarEntry, Slider, SliderEnd, SliderStyle, Space, Type, TypeScale, Wash,
-    Weight,
+    Align, Cell, Corner, Dropdown, DropdownStyle, Field, Ink, Justify, Kind, Node, Padding, Radius,
+    Role, SegmentStyle, Segmented, SettingRow, Shown, SidebarEntry, Slider, SliderEnd, SliderStyle,
+    Space, Type, TypeScale, Wash, Weight,
 };
 use serde::Deserialize;
 
@@ -55,12 +55,13 @@ fn status_text(s: &str) -> &'static str {
 }
 
 /// Each page: its id (what the check and `--page` name), its title and its glyph.
-pub const PAGES: [(&str, &str, &str); 16] = [
+pub const PAGES: [(&str, &str, &str); 17] = [
     ("status", "Status", "nd-emblem-default"),
     ("button", "Button", "nd-hand"),
     ("switch", "Switch", "nd-light-mode"),
     ("check", "Checkbox and radio", "nd-preferences-desktop"),
     ("dropdown", "Dropdown", "nd-pan-down"),
+    ("segmented", "Segmented choice", "nd-view-grid"),
     ("row", "Setting row", "nd-preferences-system"),
     ("slider", "Slider", "nd-display-brightness"),
     ("field", "Text field", "nd-input-keyboard"),
@@ -88,6 +89,8 @@ pub struct Model {
     pub choice: usize,
     /// The live dropdown's choice.
     pub speed: usize,
+    /// The live segmented choice's.
+    pub size: usize,
     pub toggle: bool,
     pub presses: u32,
     pub slider: f64,
@@ -105,6 +108,7 @@ impl Default for Model {
             row_on: false,
             choice: 1,
             speed: 1,
+            size: 1,
             toggle: false,
             presses: 0,
             slider: 40.,
@@ -118,6 +122,7 @@ impl Default for Model {
 pub struct Measures<'a> {
     pub slider: &'a SliderStyle,
     pub dropdown: &'a DropdownStyle,
+    pub segmented: &'a SegmentStyle,
     pub glyph: f64,
 }
 
@@ -149,7 +154,7 @@ pub fn view(m: &Model, cat: &Catalogue, t: &TypeScale, k: &Measures) -> View {
     );
     let (id, title, _) = PAGES[m.page.min(PAGES.len() - 1)];
     let mut body = vec![header(id, cat, t)];
-    body.extend(page(id, m, cat, t, sl, k.dropdown));
+    body.extend(page(id, m, cat, t, sl, k));
     let content = Node::column(format!("page/{id}"), body)
         .gap(Space::S5)
         .padding(Padding {
@@ -284,14 +289,15 @@ fn page(
     cat: &Catalogue,
     t: &TypeScale,
     sl: &SliderStyle,
-    dd: &DropdownStyle,
+    k: &Measures,
 ) -> Vec<Node> {
     match id {
         "status" => status(cat, t),
         "button" => buttons(m, t),
         "switch" => switches(m, t),
         "check" => checks(m, t),
-        "dropdown" => dropdowns(m, t, dd),
+        "dropdown" => dropdowns(m, t, k.dropdown),
+        "segmented" => segmenteds(m, t, k.segmented),
         "row" => rows(m, t),
         "slider" => sliders(m, t, sl),
         "field" => fields(t),
@@ -897,6 +903,112 @@ fn dropdowns(m: &Model, t: &TypeScale, dd: &DropdownStyle) -> Vec<Node> {
             Node::row("dd/list/row", vec![list]),
         ),
         section("dd-live", "Try it", t, live),
+    ]
+}
+
+/// The live segmented choice's options.
+pub const SIZES: [&str; 3] = ["Small", "Medium", "Large"];
+
+/// A segmented choice with `shown` forced on some of its segments, for the states page.
+fn segments_shown(mut n: Node, shown: &[(usize, Shown)]) -> Node {
+    if let Kind::Stack(s) = &mut n.kind {
+        for (i, sh) in shown {
+            s.children[*i] = s.children[*i].clone().shown(*sh);
+        }
+    }
+    n
+}
+
+fn segmenteds(m: &Model, t: &TypeScale, seg: &SegmentStyle) -> Vec<Node> {
+    let sizes = || SIZES.map(String::from).to_vec();
+    let one = |k: &str, label: &str, shown: &[(usize, Shown)], disabled: bool| {
+        let key = format!("sg/s/{k}");
+        Node::setting_row(
+            key.clone(),
+            SettingRow {
+                trailing: Some(segments_shown(
+                    Node::segmented(
+                        format!("{key}/g"),
+                        Segmented {
+                            name: label.into(),
+                            options: sizes(),
+                            chosen: 1,
+                            action: "noop".into(),
+                            disabled,
+                        },
+                        seg,
+                        t,
+                    ),
+                    shown,
+                )),
+                disabled,
+                ..setting(label, None, t)
+            },
+        )
+    };
+    // Each state on the first segment and on the chosen one, side by side.
+    let states = Node::column(
+        "sg/states",
+        vec![
+            one("rest", "Rest", &[], false),
+            one(
+                "hover",
+                "Hover",
+                &[(0, Shown::Hover), (1, Shown::Hover)],
+                false,
+            ),
+            one(
+                "press",
+                "Pressed",
+                &[(0, Shown::Press), (1, Shown::Press)],
+                false,
+            ),
+            one("focus", "Focus", &[(1, Shown::Focus)], false),
+            one("disabled", "Disabled", &[], true),
+        ],
+    );
+    let live = Node::column(
+        "sg/live",
+        vec![
+            Node::setting_row(
+                "sg/live/row",
+                SettingRow {
+                    trailing: Some(Node::segmented(
+                        "sg/live/g",
+                        Segmented {
+                            name: "Dock size".into(),
+                            options: sizes(),
+                            chosen: m.size,
+                            action: "size".into(),
+                            disabled: false,
+                        },
+                        seg,
+                        t,
+                    )),
+                    ..setting(
+                        "Dock size",
+                        Some("Click, or Tab to it and move the choice with the arrows"),
+                        t,
+                    )
+                },
+            ),
+            Node::text(
+                "sg/live/said",
+                format!("Try it: dock size {}", SIZES[m.size.min(SIZES.len() - 1)]),
+                t.style(Type::Small, Weight::Regular),
+            )
+            .ink(Ink::Secondary),
+        ],
+    )
+    .gap(Space::S2);
+    vec![
+        section(
+            "sg-states",
+            "Segmented choice (the first segment and the chosen one in each state)",
+            t,
+            states,
+        ),
+        section("sg-live", "Try it", t, live),
     ]
 }
 
@@ -1557,6 +1669,33 @@ mod tests {
         .unwrap()
     }
 
+    /// The segmented choice as `toolkit/tokens/choices.json` gives it, its colours any.
+    fn segmented() -> nk_view::SegmentStyle {
+        let file: serde_json::Value =
+            serde_json::from_str(include_str!("../../tokens/choices.json")).unwrap();
+        let names = [
+            "--nidara-surface",
+            "--nidara-surface-hover",
+            "--nidara-surface-active",
+            "--nidara-border",
+            "--nidara-text",
+            "--nidara-accent",
+            "--nidara-accent-fg",
+        ];
+        let set = serde_json::json!({ "tokens": names
+            .iter()
+            .map(|n| (n.to_string(), serde_json::json!("#808080")))
+            .collect::<serde_json::Map<_, _>>() });
+        let statics = serde_json::json!({
+            "ts": {"RADIUS": {"xs": 6, "sm": 10, "md": 16, "lg": 24, "xl": 32}}});
+        nk_view::segmented_from(
+            &file["default"]["segmented"],
+            &set,
+            &nk_view::Radii::from_static(&statics).unwrap(),
+        )
+        .unwrap()
+    }
+
     #[test]
     fn every_page_builds_with_unique_keys() {
         let cat = Catalogue::load().unwrap();
@@ -1578,6 +1717,7 @@ mod tests {
                 &Measures {
                     slider: &sl,
                     dropdown: &dropdown(),
+                    segmented: &segmented(),
                     glyph: 16.,
                 },
             );

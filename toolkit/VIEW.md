@@ -842,3 +842,32 @@ option with an arrow; a setting row ends with it (§13.6).
 
 Not carried yet: typing to find an option, and options with icons or sections; Settings asks
 for neither.
+
+### 13.10 Segmented choice
+
+`Node::segmented(key, Segmented { name, options, chosen, action, disabled },
+&tokens.segmented, &types)`: one choice of a few, all shown side by side, the chosen one in the
+accent (GTK's linked toggle buttons, `NSSegmentedControl`); a setting row ends with it (§13.6).
+Settings' dock size and gaming mode presets are this.
+
+- **Its segments are radios of one group** (§13.5): segment `n` is keyed `"{key}/{n}"`, a
+  `Role::Radio` control marked when chosen, so Tab stops at the group once (on the chosen
+  segment), the arrows move the choice round its ends, and a reader hears radio buttons named by
+  their options, each described by the group's `name`. Unlike plain radios, which are one group
+  while they are next to each other, a segmented choice is always a group of its own, so rows of
+  them may follow one another. Choosing segment `n` reports
+  `"{action}:{n}"`; the app rebuilds with its model.
+- **Off glass** (`Face::Segment`): each segment is as wide as its label in the padding, as tall
+  as a button, with no gap between. The view paints each one's tone inside the group's outline
+  cut to it, so only the group's two ends are rounded (`radius`) and the joins are square. An
+  unchosen segment is `background`, `hover` under the pointer, `pressed` while pressed, with the
+  outline's `border` and a line before it; the chosen one is `selectedColor` to its edges with
+  `selectedText`, lighter by `selectedHoverWhite` under the pointer and darker by
+  `selectedPressedBlack` while pressed. Disabled, all of it is at `disabledOpacity`.
+- **The focus ring** stands outside the segment a ring's width away, since the chosen segment is
+  the accent as the ring is, and is drawn after every segment so a neighbour never covers it.
+- **Measures, tones and the font** are `components.json` `choices.segmented`
+  (`toolkit/tokens/choices.json`), read into `SegmentStyle`: 14 × 5 padding in a 1 border, a
+  20 text line, the `sm` corner, `fse-small` at `fw-medium`. Nothing is a default.
+
+Not carried yet: segments with icons, and a segment disabled alone; Settings asks for neither.

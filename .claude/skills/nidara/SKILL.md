@@ -392,6 +392,10 @@ A window's sidebar is built of `Node::sidebar_entry` (§13.8): the selected one 
 the index with `AppWindow::value`). Outside an `AppWindow` nothing opens it — a surface hosting a
 `ViewState` itself must open the list as `AppWindow::open_menu` does. It is a combo box with its
 options for readers even closed.
+`Node::segmented(key, Segmented { .. }, &tokens.segmented, &types)` (§13.10) is a row of RADIOS:
+segment `n` reports `"{action}:{n}"` and the arrows move the choice. Plain radios next to each
+other are one group to the keys; a segmented choice is always a group of its own (its `segment`
+place ends the run), so rows of them may follow one another.
 A new token file goes into `scripts/export-tokens.mjs` AND `scripts/ci/settings-tokens-check.py`;
 until the owner reinstalls, `/usr/share/nidara/settings-data` lacks it, so run tests and the
 headless gallery against a fresh export (`SASS=sass node --experimental-strip-types

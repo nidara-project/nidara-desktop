@@ -4,7 +4,7 @@
 use crate::state::KeyInput;
 use crate::tokens::{
     Look, Motion, Radii, Spacing, Tokens, Washes, button_from, check_from, dropdown_from,
-    scrollbar_from, slider_from, switch_from,
+    scrollbar_from, segmented_from, slider_from, switch_from,
 };
 use nk_platform::{exports::Exports, portal::Appearance};
 use std::{collections::HashMap, sync::Arc};
@@ -25,6 +25,7 @@ impl Tokens {
                 &radii,
                 &Spacing::from_static(&e.statics)?,
             )?,
+            segmented: segmented_from(&set.components["choices"]["segmented"], &colors, &radii)?,
             radii,
             motion: Motion::from_static(&e.statics)?,
             look: Look::from_colors(&colors)?,

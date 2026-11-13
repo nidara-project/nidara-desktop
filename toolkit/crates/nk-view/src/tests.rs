@@ -61,9 +61,20 @@ fn tokens() -> Tokens {
             &Spacing::from_static(&statics()).unwrap(),
         )
         .unwrap(),
+        segmented: segmented_from(&segmented(), &set, &Radii::from_static(&statics()).unwrap())
+            .unwrap(),
         row_height: 48.,
         group_radius: 16.,
     }
+}
+/// `components.json` `choices.segmented`, as `toolkit/tokens/choices.json` exports it.
+fn segmented() -> serde_json::Value {
+    json!({"paddingX": 14, "paddingY": 5, "border": 1, "minContentHeight": 20, "radius": "sm",
+        "borderColor": "--nidara-border", "fontSize": "fse-small", "fontWeight": "fw-medium",
+        "selectedColor": "--nidara-accent", "selectedText": "--nidara-accent-fg",
+        "background": "--nidara-surface", "hover": "--nidara-surface-hover",
+        "pressed": "--nidara-surface-active", "text": "--nidara-text", "focus": "--nidara-accent",
+        "selectedHoverWhite": 0.15, "selectedPressedBlack": 0.3, "disabledOpacity": 0.45})
 }
 /// `components.json` `switch`, as `toolkit/tokens/switch.json` exports it.
 fn switch() -> serde_json::Value {
@@ -4177,4 +4188,235 @@ fn a_menu_row_is_lit_in_the_accent_and_the_chosen_one_ticked() {
             .values()
             .any(|n| n.role == nk_a11y::Role::Option && n.name == "Fast")
     );
+}
+
+/// A segmented choice of three sizes, `chosen` in the accent, between two buttons.
+fn sizes(chosen: usize, disabled: bool) -> Node {
+    Node::column(
+        "c",
+        vec![
+            Node::button("before", "Before", "before", style(14.)),
+            Node::segmented(
+                "g",
+                Segmented {
+                    name: "Dock size".into(),
+                    options: ["Small", "Medium", "Large"].map(String::from).to_vec(),
+                    chosen,
+                    action: "size".into(),
+                    disabled,
+                },
+                &tokens().segmented,
+                &types(),
+            ),
+            Node::button("after", "After", "after", style(14.)),
+        ],
+    )
+    .gap(Space::S2)
+}
+
+#[test]
+fn the_segmented_tokens_are_read_whole_or_refused() {
+    let set = json!({"tokens": {"--nidara-text": "#ffffff", "--nidara-accent": "#0088FF",
+        "--nidara-accent-fg": "#ffffff", "--nidara-border": "#333333",
+        "--nidara-surface": "#222222", "--nidara-surface-hover": "#2a2a2a",
+        "--nidara-surface-active": "#303030"}});
+    let radii = Radii::from_static(&statics()).unwrap();
+    let s = segmented_from(&segmented(), &set, &radii).unwrap();
+    assert_eq!(s.inset(), (15., 6., 32.));
+    assert_eq!(s.radius, 10., "sm");
+    assert_eq!(s.font, (Type::Small, Weight::Medium));
+    for k in [
+        "radius",
+        "fontWeight",
+        "hover",
+        "selectedColor",
+        "selectedPressedBlack",
+        "disabledOpacity",
+    ] {
+        let mut c = segmented();
+        c.as_object_mut().unwrap().remove(k);
+        assert!(segmented_from(&c, &set, &radii).is_err(), "without {k}");
+    }
+    let mut c = segmented();
+    c["selectedHoverWhite"] = json!(1.5);
+    assert!(
+        segmented_from(&c, &set, &radii).is_err(),
+        "more than all white"
+    );
+    assert!(segmented_from(&json!(null), &set, &radii).is_err());
+}
+
+#[test]
+fn a_segmented_choice_lays_its_segments_side_by_side_as_tall_as_a_button() {
+    let s = laid(&sizes(1, false), (400., 200.), 1.);
+    let (a, b, c) = (rect(&s, "g/0"), rect(&s, "g/1"), rect(&s, "g/2"));
+    assert_eq!((a[3], b[3], c[3]), (32., 32., 32.));
+    assert_eq!(b[0], a[0] + a[2], "no gap between segments");
+    assert_eq!(c[0], b[0] + b[2]);
+    assert!(b[2] > a[2], "each as wide as its label");
+    // The label inside the padding.
+    let l = rect(&s, "g/1/label");
+    assert!(l[0] - b[0] >= 15. - 0.5, "inside its padding");
+}
+
+#[test]
+fn a_segmented_choice_is_one_tab_stop_the_arrows_move_its_choice_and_a_reader_hears_radios() {
+    let mut s = laid(&sizes(1, false), (400., 200.), 1.);
+    let focus = |s: &ViewState| s.focus().map(|k| k.0.clone());
+    s.key(KeyInput::Tab);
+    s.key(KeyInput::Tab);
+    assert_eq!(focus(&s).as_deref(), Some("g/1"), "the chosen segment");
+    let a = s.key(KeyInput::Right).expect("Right chooses the next");
+    assert_eq!((a.key.0.as_str(), a.action.as_str()), ("g/2", "size:2"));
+    let a = s.key(KeyInput::Right).expect("and wraps");
+    assert_eq!(a.action, "size:0");
+    s.key(KeyInput::Tab);
+    assert_eq!(
+        focus(&s).as_deref(),
+        Some("after"),
+        "one stop for the group"
+    );
+    let tree = s.semantics(nk_a11y::Node::new(1, nk_a11y::Role::Window, "W"), 2);
+    let mut r: Vec<_> = tree
+        .nodes
+        .values()
+        .filter(|n| n.role == nk_a11y::Role::RadioButton)
+        .collect();
+    r.sort_by_key(|n| n.name.clone());
+    assert_eq!(
+        r.iter().map(|n| n.name.as_str()).collect::<Vec<_>>(),
+        ["Large", "Medium", "Small"]
+    );
+    assert!(
+        r.iter().all(|n| n.description == "Dock size"),
+        "the group's name"
+    );
+    assert_eq!(
+        r.iter().map(|n| n.states.checked).collect::<Vec<_>>(),
+        [false, true, false]
+    );
+    // Two choices in a row, and a radio after them: three groups, three stops.
+    let two = Node::column(
+        "two",
+        vec![
+            sizes(0, false),
+            Node::segmented(
+                "h",
+                Segmented {
+                    name: "Gaming mode".into(),
+                    options: ["Off", "On"].map(String::from).to_vec(),
+                    chosen: 1,
+                    action: "mode".into(),
+                    disabled: false,
+                },
+                &tokens().segmented,
+                &types(),
+            ),
+            Node::radio_control("x", "X", "x", true),
+        ],
+    );
+    let mut s = laid(&two, (400., 300.), 1.);
+    let mut stops = vec![];
+    for _ in 0..5 {
+        s.key(KeyInput::Tab);
+        stops.push(focus(&s).unwrap());
+    }
+    assert_eq!(
+        stops,
+        ["before", "g/0", "after", "h/1", "x"],
+        "each group one stop"
+    );
+    let a = s.key(KeyInput::ShiftTab);
+    assert!(a.is_none());
+    let a = s.key(KeyInput::Right).expect("Right in the second");
+    assert_eq!(a.action, "mode:0", "wraps inside its own group");
+    // Disabled, Tab passes it by.
+    let mut off = laid(&sizes(1, true), (400., 200.), 1.);
+    off.key(KeyInput::Tab);
+    off.key(KeyInput::Tab);
+    assert_eq!(focus(&off).as_deref(), Some("after"));
+}
+
+#[test]
+fn a_segmented_choice_is_painted_off_glass_the_chosen_one_in_the_accent() {
+    let t = tokens();
+    let view = |shown: &[(usize, Shown)]| {
+        let mut n = Node::segmented(
+            "g",
+            Segmented {
+                name: "Dock size".into(),
+                options: ["Small", "Medium", "Large"].map(String::from).to_vec(),
+                chosen: 1,
+                action: "size".into(),
+                disabled: false,
+            },
+            &t.segmented,
+            &types(),
+        );
+        if let Kind::Stack(st) = &mut n.kind {
+            for (i, sh) in shown {
+                st.children[*i] = st.children[*i].clone().shown(*sh);
+            }
+        }
+        Node::row("r", vec![n]).padding(Padding::all(Space::S2))
+    };
+    let (s, rest) = painted(&view(&[]), 400, 60);
+    let (a, b, c) = (rect(&s, "g/0"), rect(&s, "g/1"), rect(&s, "g/2"));
+    let mid = |r: Rect, dx: f64| (r[0] + dx, r[1] + r[3] / 2.);
+    let px = |img: &[u8], at| bgra(img, 400, at);
+    let accent = |p: [u8; 4]| p[0] > 200 && p[2] < 50 && p[3] > 200;
+    assert!(
+        accent(px(&rest, mid(b, 3.))),
+        "the chosen segment: {:?}",
+        px(&rest, mid(b, 3.))
+    );
+    assert!(
+        !accent(px(&rest, mid(a, 5.))) && px(&rest, mid(a, 5.))[3] > 0,
+        "another: its tone"
+    );
+    assert_ne!(
+        px(&rest, mid(c, 0.)),
+        px(&rest, mid(c, 5.)),
+        "the line after the chosen one"
+    );
+    // Only the group's ends are rounded.
+    assert_eq!(
+        px(&rest, (a[0] + 0.5, a[1] + 0.5))[3],
+        0,
+        "the first's outer corner"
+    );
+    assert!(
+        accent(px(&rest, (b[0] + 0.5, b[1] + 0.5))),
+        "a join is square: {:?} at {b:?}",
+        px(&rest, (b[0] + 0.5, b[1] + 0.5))
+    );
+    let mut s2 = laid(&view(&[]), (400., 60.), 1.);
+    assert!(
+        s2.frame(&t, Instant::now()).states.is_empty(),
+        "nothing for Hyalo"
+    );
+    // Hover and press change the tone, the chosen one's too.
+    let (_, hover) = painted(&view(&[(0, Shown::Hover), (1, Shown::Hover)]), 400, 60);
+    assert_ne!(px(&rest, mid(a, 5.)), px(&hover, mid(a, 5.)), "hover");
+    assert_ne!(
+        px(&rest, mid(b, 3.)),
+        px(&hover, mid(b, 3.)),
+        "the chosen one's hover"
+    );
+    let (_, press) = painted(&view(&[(1, Shown::Press)]), 400, 60);
+    assert_ne!(
+        px(&hover, mid(b, 3.)),
+        px(&press, mid(b, 3.)),
+        "the chosen one pressed"
+    );
+    // The ring outside the segment, over both of its neighbours.
+    let (_, ringed) = painted(&view(&[(1, Shown::Focus)]), 400, 60);
+    for at in [mid(b, -3.), mid(b, b[2] + 3.)] {
+        assert!(
+            accent(px(&ringed, at)),
+            "ring at {at:?}: {:?}",
+            px(&ringed, at)
+        );
+        assert!(!accent(px(&rest, at)), "no ring at rest");
+    }
 }

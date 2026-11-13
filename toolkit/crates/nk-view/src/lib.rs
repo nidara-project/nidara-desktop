@@ -20,13 +20,14 @@ pub use layout::{Fitted, Placed, Rect, TextCache, What, first_line_centre};
 pub use state::{Activated, BUDGET, Frame, FramePane, KeyInput, ScrollBy, Ticked, ViewState};
 pub use tokens::{
     Bezier, ButtonStyle, CheckStyle, DropdownStyle, Look, MenuStyle, Motion, Radii, Radius,
-    SliderStyle, Space, Spacing, SwitchStyle, Tokens, TriggerStyle, Washes, button_from,
-    check_from, dropdown_from, parse_color, scrollbar_from, slider_from, switch_from,
+    SegmentStyle, SliderStyle, Space, Spacing, SwitchStyle, Tokens, TriggerStyle, Washes,
+    button_from, check_from, dropdown_from, parse_color, scrollbar_from, segmented_from,
+    slider_from, switch_from,
 };
 pub use view::{
     Align, Axis, Cell, Check, Choice, Control, Corner, Dropdown, Face, Field, Grid, Group, Icon,
-    Ink, Justify, Key, Kind, Layer, Node, Overlay, Padding, Pane, Reveal, Role, Scroll, SettingRow,
-    Shown, SidebarEntry, Slider, SliderEnd, Stack, Switch, Text, Wash,
+    Ink, Justify, Key, Kind, Layer, Node, Overlay, Padding, Pane, Reveal, Role, Scroll, Segment,
+    Segmented, SettingRow, Shown, SidebarEntry, Slider, SliderEnd, Stack, Switch, Text, Wash,
 };
 pub use window::{AppWindow, CONTENT, Labels, Page, WindowLook};
 
