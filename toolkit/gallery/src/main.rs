@@ -30,6 +30,8 @@ const ROOT: u64 = 1;
 const CONTENT: &str = "frame/content";
 /// Where the band's semantic ids start, clear of the window's.
 const BAND_ROOT: u64 = 1_000_000;
+/// The window frame's sidebar pane, drawn on its own layer (`ViewState::lift`).
+const SIDE: &str = "frame/side";
 
 /// What the window paints with in one appearance.
 struct Look {
@@ -80,6 +82,13 @@ struct Gallery {
     blur_layer: Option<LayerId>,
     band_layer: Option<LayerId>,
     band_dirty: bool,
+    /// The sidebar's layer, over the content, the blur and the band: its glass shows the page
+    /// under it, as Settings' sidebar does. Created last, so it stacks on top.
+    side_layer: Option<LayerId>,
+    side_last: Option<nk_view::Frame>,
+    /// The view changed what it shows: the frame is taken again, the sidebar's layer painted
+    /// and the window redrawn.
+    paint_dirty: bool,
     /// The pointer over the band, and the last press on it where nothing else is (a second
     /// one within the double-click time toggles maximised).
     band_pointer: Option<(f64, f64)>,
@@ -132,7 +141,6 @@ impl Gallery {
         let f = &self.look.frame;
         let shown = self.sidebar.shown(now, &self.look.tokens.motion);
         let narrow = self.sidebar.narrow();
-        let room = f.room(shown, narrow);
         let main = f.view(self.size, shown, narrow, v.sidebar, v.content);
         // The frame moves the sidebar's glass and the content's panes itself as the sidebar
         // slides or the window resizes. An ease of nk-view's own over each step would trail
@@ -145,7 +153,7 @@ impl Gallery {
         self.laid_size = self.size;
         let band = f.band(
             self.size,
-            room,
+            f.slid(shown),
             self.controls,
             Band {
                 title: Node::text(
@@ -375,6 +383,10 @@ impl Gallery {
         if changed {
             self.place_controls(window)?;
             self.publish()?;
+        }
+        if changed || self.paint_dirty {
+            self.paint_dirty = false;
+            self.take_frame(window)?;
             window.redraw();
         }
         if self.band_dirty {
@@ -386,6 +398,73 @@ impl Gallery {
             }
         }
         Ok(())
+    }
+
+    /// The view's frame for this turn: the window's glass and washes, and the sidebar's,
+    /// taken out of them onto its layer, which is placed, given Settings' panel glass and
+    /// painted. A closed sidebar leaves its layer empty and out of the pointer's way.
+    fn take_frame(&mut self, window: &mut Window) -> Result<()> {
+        let Some(side) = self.side_layer else {
+            return Ok(());
+        };
+        self.last = self.state.frame(&self.look.tokens, Instant::now());
+        self.side_last = self.state.lift_out(&mut self.last);
+        let (Some(r), Some(f)) = (self.state.lifted_rect(), &self.side_last) else {
+            window.set_layer_material(side, None)?;
+            window.set_layer_input_region(side, Some(&[]))?;
+            window.set_layer_size(side, (1, 1))?;
+            window.paint_layer(side, |frame| {
+                Ok(
+                    nk_render::Canvas::new(frame.pixel_width, frame.pixel_height, frame.scale)
+                        .finish(),
+                )
+            })?;
+            return Ok(());
+        };
+        let size = (r[2].max(1.) as u32, r[3].max(1.) as u32);
+        window.set_position(side, r[0], r[1])?;
+        window.set_layer_size(side, size)?;
+        window.set_layer_input_region(side, None)?;
+        window.set_layer_material(side, glass(&self.look, f).as_ref())?;
+        let (state, tokens, glyphs) = (&self.state, &self.look.tokens, &mut self.glyphs);
+        let painted = window.paint_layer(side, |frame| {
+            let mut c = nk_render::Canvas::at(
+                frame.pixel_width,
+                frame.pixel_height,
+                frame.scale,
+                (r[0], r[1]),
+            );
+            state.paint_lifted(&mut c, tokens, &mut |n, s| glyphs.get(n, s))?;
+            Ok(c.finish())
+        })?;
+        // A layer with both buffers busy: tried again on the next turn.
+        self.paint_dirty |= !painted;
+        Ok(())
+    }
+
+    /// The pointer over the sidebar's layer, passed on to the view in window coordinates.
+    fn side_event(&mut self, event: LayerEvent) -> bool {
+        let Some(r) = self.state.lifted_rect() else {
+            return false;
+        };
+        match event {
+            LayerEvent::Motion(x, y) => {
+                self.pointer = Some((x + r[0], y + r[1]));
+                self.state.pointer_motion(x + r[0], y + r[1])
+            }
+            LayerEvent::Leave => {
+                self.pointer = None;
+                self.state.pointer_leave()
+            }
+            LayerEvent::Button { pressed, .. } => {
+                if let Some(a) = self.state.button(pressed, Instant::now()) {
+                    self.activated(a);
+                }
+                true
+            }
+            LayerEvent::Scroll(amount) => self.state.scroll(amount.into()),
+            _ => false,
+        }
     }
 
     fn band_event(&mut self, event: LayerEvent, window: &mut Window) -> Result<bool> {
@@ -509,7 +588,7 @@ impl Application for Gallery {
             for a in ticked.activated {
                 self.activated(a);
             }
-            window.redraw();
+            self.paint_dirty = true;
         }
         self.after(changed, window)
     }
@@ -528,6 +607,9 @@ impl Application for Gallery {
                     window.set_layer_input_region(blur, Some(&[]))?;
                     self.blur_layer = Some(blur);
                     self.band_layer = Some(window.create_layer((1, 1))?);
+                    self.side_layer = Some(window.create_layer((1, 1))?);
+                    // Only with a layer to draw it on: without (D5) the window paints it.
+                    self.state.lift(Some(SIDE.into()));
                 }
                 self.sidebar.adapt(self.size.0, &self.look.frame);
                 self.rebuild(now);
@@ -541,6 +623,7 @@ impl Application for Gallery {
             Event::Layer { id, event } if Some(id) == self.band_layer => {
                 self.band_event(event, window)?
             }
+            Event::Layer { id, event } if Some(id) == self.side_layer => self.side_event(event),
             Event::Motion(x, y) => {
                 self.pointer = Some((x, y));
                 self.state.pointer_motion(x, y)
@@ -610,7 +693,10 @@ impl Application for Gallery {
             );
         }
         let now = Instant::now();
-        self.last = self.state.frame(&self.look.tokens, now);
+        if self.side_layer.is_none() {
+            // No layers (D5): the sidebar is painted with the rest, its washes ours.
+            self.last = self.state.frame(&self.look.tokens, now);
+        }
         let glyphs = &mut self.glyphs;
         self.state.paint(
             &mut c,
@@ -718,6 +804,9 @@ fn run() -> Result<()> {
         blur_layer: None,
         band_layer: None,
         band_dirty: false,
+        side_layer: None,
+        side_last: None,
+        paint_dirty: false,
         band_pointer: None,
         last_press: None,
         last: Default::default(),

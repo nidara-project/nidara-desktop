@@ -10,6 +10,10 @@
 //! buttons in a layer of their own over the blur, so Hyalo draws their hover and press. The
 //! sidebar slides in and out with the kit's motion, and below the width the window layout
 //! gives a sidebar and a page it closes and opens over the content instead (`Sidebar`).
+//!
+//! The sidebar's pane (`frame/side`) is drawn on a layer of its own over the page
+//! (`ViewState::lift`, VIEW.md §13.2), with Settings' panel glass, so it shows the page
+//! under it.
 use crate::tokens::Motion;
 use crate::view::{Align, Corner, Ink, Justify, Node, Role};
 use nk_platform::{exports::Exports, portal::Appearance};
@@ -159,10 +163,11 @@ impl FrameStyle {
         if narrow { 0. } else { self.slid(shown) }
     }
 
-    /// How much of the sidebar's width is in, in whole pixels: the page's edge and the
-    /// glass's both come from it, so the glass keeps its width and its gap to the page at
-    /// every step of the slide, rather than each edge rounding its own way.
-    fn slid(&self, shown: f64) -> f64 {
+    /// How much of the sidebar's width is in, in whole pixels: the page's edge, the glass's
+    /// and the band's buttons all come from it, so the glass keeps its width and its gap to
+    /// the page at every step of the slide, rather than each edge rounding its own way. Over
+    /// the content (a narrow window) it is still where the band's buttons start.
+    pub fn slid(&self, shown: f64) -> f64 {
         (self.sidebar * shown.clamp(0., 1.)).round()
     }
 
@@ -239,22 +244,25 @@ impl FrameStyle {
     /// blur, or in the window when there are no layers (D5). The sidebar's toggle, back and
     /// forward and the title follow one another from the page's edge (owner, 2026-11-12:
     /// the toggle is the band's, never over the sidebar), clear of the window controls.
+    ///
+    /// `edge` is the sidebar's (`slid`), not the page's: open over the content in a narrow
+    /// window, the sidebar takes no room from the page, and the buttons still start past it.
     pub fn band(
         &self,
         size: (f64, f64),
-        room: f64,
+        edge: f64,
         controls: Option<ControlsLayout>,
         band: Band<'_>,
     ) -> Node {
         let empty = |key: &str| Node::column(key, vec![]);
         let at = controls.map(|c| (c, self.controls_at(size, c)));
-        // Always in the band over the page, never over the sidebar: from the page's edge, and
-        // after the window controls when they are on the left and the sidebar is closed.
+        // Always in the band, never over the sidebar: from the sidebar's edge, and after the
+        // window controls when they are on the left and the sidebar is closed.
         let after_controls = match at {
             Some((c, (cx, _))) if c.side == ControlsSide::Left => cx + c.width + self.gap,
             _ => self.inset,
         };
-        let tx = (room + self.inset).max(after_controls);
+        let tx = (edge + self.inset).max(after_controls);
         let nx = tx + self.button + self.inset;
         let nw = 2. * self.nav_edge + 2. * self.nav_button + self.nav_gap;
         let title_x = nx + nw + self.title_gap;

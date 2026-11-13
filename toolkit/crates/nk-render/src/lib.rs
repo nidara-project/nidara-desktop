@@ -65,16 +65,28 @@ pub struct Canvas {
     context: RenderContext,
     resources: Resources,
     scale: f64,
+    /// The logical point at the canvas's top left: what is laid out in a window's
+    /// coordinates paints into a layer placed at `origin` (`Canvas::at`).
+    origin: (f64, f64),
 }
 impl Canvas {
     pub fn new(width: u16, height: u16, scale: f64) -> Self {
+        Self::at(width, height, scale, (0., 0.))
+    }
+    /// A canvas whose top left is the logical point `origin`: a layer at `origin` in its
+    /// window paints what lies under it in the window's coordinates.
+    pub fn at(width: u16, height: u16, scale: f64, origin: (f64, f64)) -> Self {
         let mut context = RenderContext::new(width, height);
-        context.set_transform(Affine::scale(scale));
+        context.set_transform(Affine::scale(scale) * Affine::translate((-origin.0, -origin.1)));
         Self {
             context,
             resources: Resources::new(),
             scale,
+            origin,
         }
+    }
+    fn base(&self) -> Affine {
+        Affine::scale(self.scale) * Affine::translate((-self.origin.0, -self.origin.1))
     }
     pub fn image(&mut self, image: &Raster, bounds: Rect, fit: ImageFit) {
         if bounds.width <= 0. || bounds.height <= 0. {
@@ -262,7 +274,7 @@ impl Canvas {
         let alpha = color.components[3];
         let color = color.with_alpha(1.);
         self.context.push_opacity_layer(alpha);
-        let fit = Affine::scale(self.scale)
+        let fit = self.base()
             * Affine::translate((r.x as f64, r.y as f64))
             * Affine::scale_non_uniform((r.width / w) as f64, (r.height / h) as f64);
         self.context.set_transform(fit);
@@ -306,7 +318,7 @@ impl Canvas {
             }
         }
         self.context.set_fill_rule(Fill::NonZero);
-        self.context.set_transform(Affine::scale(self.scale));
+        self.context.set_transform(self.base());
         self.context.pop_layer();
     }
     /// Native-endian wl_shm ARGB8888: premultiplied, sRGB encoded.
