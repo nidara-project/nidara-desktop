@@ -20,7 +20,7 @@
 schema=org.gnome.desktop.wm.preferences
 command -v gsettings >/dev/null 2>&1 || { warn "gsettings is missing"; return 1; }
 # Not installed (gsettings-desktop-schemas is a dependency; a bare CI schema dir has none of it).
-gsettings list-keys "$schema" 2>/dev/null | grep -qx button-layout || return 0
+schema_has_key "$schema" button-layout || return 0
 if [ "${GSETTINGS_BACKEND:-dconf}" = dconf ]; then
     gdbus call --session --dest ca.desrt.dconf --object-path /ca/desrt/dconf/Writer/user \
         --method org.freedesktop.DBus.Peer.Ping >/dev/null 2>&1 \

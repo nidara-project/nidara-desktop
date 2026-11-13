@@ -65,6 +65,22 @@ json_edit() {
     log "  edited $(basename "$file")"
 }
 
+# schema_has_key <schema> <key>
+#
+# Whether GSettings has <schema> installed with <key> in it. Absent schema = no.
+#
+# ⚠️ NEVER `gsettings list-keys … | grep -q …` in here or in a unit. This runner
+# is `set -o pipefail`, and `grep -q` exits on its first match: when gsettings
+# is still writing at that moment it dies of SIGPIPE (141), and the pipeline
+# reports FAILURE although the key is there. Measured 2026-11-13: ~5 % of runs
+# under load. It dropped real settings as "retired" and stopped the chain at
+# the glass migration. The list is read whole first, then searched.
+schema_has_key() {
+    local keys
+    keys="$(gsettings list-keys "$1" 2>/dev/null)" || return 1
+    grep -qx -- "$2" <<< "$keys"
+}
+
 # settings_import <file> <schema-name>
 #
 # Import a settings JSON under $CONFIG_DIR into GSettings `org.nidara.<schema-name>`
@@ -107,7 +123,7 @@ settings_import() {
 
     while IFS= read -r field; do
         key="$(printf '%s' "$field" | sed -E 's/([A-Z])/-\L\1/g')"
-        if ! gsettings list-keys "$schema" | grep -qx -- "$key"; then
+        if ! schema_has_key "$schema" "$key"; then
             log "  $name: dropped retired field $field"
             continue
         fi
@@ -115,7 +131,7 @@ settings_import() {
             continue
         fi
 
-        type="$(gsettings range "$schema" "$key" | head -1)"
+        type="$(gsettings range "$schema" "$key")"; type="${type%%$'\n'*}"   # first line, without a pipe (see schema_has_key)
         case "$type" in
             "range "*|"type "*) type="${type#* }"; type="${type%% *}" ;;
             enum) type=s ;;
