@@ -783,3 +783,17 @@ value_style, icons, disabled }, &tokens.slider)`: Settings' slider row (`NidaraS
   glyphs in `Ink::Disabled`; the row's own `disabled` does its title.
 - **The app keeps the value**: `action` is reported on each change, read with
   `ViewState::value`, and the next view carries it in `slider.value`.
+
+### 13.8 Sidebar entry
+
+`Node::sidebar_entry(key, SidebarEntry { title, glyph, action, selected, style }, glyph_size)`:
+a page a window's sidebar offers (`Gtk.StackSidebar`'s row), its glyph at the frame's glyph size
+(`FrameStyle::icon`) and its title, in the kit's padding at the `sm` corner.
+
+- **The selected entry is the accent** (owner, 2026-11-12, D1, as macOS's source list): its
+  wash is `--nidara-accent`, declared to Hyalo on glass and painted by the view off it, and
+  what it holds is drawn in `--nidara-accent-fg`. The pointer does not change it; the other
+  entries show the neutral hover. The control's `accent` flag does this; a list's choice
+  elsewhere keeps the neutral selection wash.
+- **A reader hears a toggle**, checked when it is the page shown; choosing one reports
+  `action`, and the app shows that page.

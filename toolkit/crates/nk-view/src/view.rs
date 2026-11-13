@@ -773,20 +773,16 @@ impl Node {
         Self::row(k("end"), parts).align(Align::Center)
     }
     /// An entry of a window's sidebar (VIEW.md §13.8, GTK's `StackSidebar` row): its glyph at
-    /// the frame's glyph size and its title, in the kit's padding. The selected one is filled
-    /// with the accent and drawn in the accent's foreground (D1); a reader hears a toggle,
-    /// checked when it is the page shown.
-    pub fn sidebar_entry(
-        key: impl Into<Key>,
-        entry: SidebarEntry,
-        frame: &crate::FrameStyle,
-    ) -> Self {
+    /// `glyph_size` (the frame's, `FrameStyle::icon`) and its title, in the kit's padding. The
+    /// selected one is filled with the accent and drawn in the accent's foreground (D1); a
+    /// reader hears a toggle, checked when it is the page shown.
+    pub fn sidebar_entry(key: impl Into<Key>, entry: SidebarEntry, glyph_size: f64) -> Self {
         let key = key.into();
         let k = |part: &str| format!("{}/{part}", key.0);
         let line = Self::row(
             k("row"),
             vec![
-                Self::icon(k("icon"), entry.glyph, frame.icon),
+                Self::icon(k("icon"), entry.glyph, glyph_size),
                 Self::text(k("text"), entry.title.clone(), entry.style),
             ],
         )
