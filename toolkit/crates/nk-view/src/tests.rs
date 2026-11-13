@@ -2971,6 +2971,76 @@ fn a_content_button_is_padded_to_its_height_and_painted_by_the_view_in_the_surfa
 }
 
 #[test]
+fn in_a_setting_row_only_the_switch_responds_and_it_bears_the_rows_name() {
+    let t = tokens();
+    let view = Node::row(
+        "row",
+        vec![
+            Node::text("row/text", "Wi-Fi", style(14.)).grow(),
+            Node::switch_control("wifi", "Wi-Fi", "flip", true),
+        ],
+    )
+    .align(Align::Center);
+    let mut s = laid(&view, (300., 40.), 1.);
+    let (text, switch) = (rect(&s, "row/text"), rect(&s, "wifi"));
+    assert_eq!(switch[2], 44., "the switch's own width, not the row's");
+    // Over the row's text: nothing responds, nothing is hovered, a press does nothing.
+    s.pointer_motion(text[0] + 4., text[1] + text[3] / 2.);
+    assert_eq!(s.hover(), None, "the row takes no hover");
+    s.button(true, Instant::now());
+    assert!(s.button(false, Instant::now()).is_none(), "nor a press");
+    // Over the switch: hover, and a press flips it.
+    s.pointer_motion(switch[0] + 22., switch[1] + switch[3] / 2.);
+    assert_eq!(s.hover(), Some(&Key::from("wifi")));
+    s.button(true, Instant::now());
+    let a = s.button(false, Instant::now()).expect("the switch flips");
+    assert_eq!(a.action, "flip");
+    // On, it is not lit as a selection: the switch shows it.
+    let f = s.frame(&t, Instant::now());
+    assert!(f.states.is_empty(), "off glass: nothing for Hyalo");
+    // A reader finds one toggle, checked, named by the row.
+    let tree = s.semantics(nk_a11y::Node::new(1, nk_a11y::Role::Window, "W"), 2);
+    let toggles: Vec<_> = tree
+        .nodes
+        .values()
+        .filter(|n| n.role == nk_a11y::Role::ToggleButton)
+        .collect();
+    assert_eq!(toggles.len(), 1);
+    assert_eq!(toggles[0].name, "Wi-Fi");
+    // Focused, its ring stands outside the track, which would cover one inside it.
+    let ring = |shown: Option<Shown>| {
+        let mut v = view.clone();
+        if let Some(sh) = shown {
+            v = Node::row(
+                "row",
+                vec![
+                    Node::text("row/text", "Wi-Fi", style(14.)).grow(),
+                    Node::switch_control("wifi", "Wi-Fi", "flip", true).shown(sh),
+                ],
+            )
+            .align(Align::Center);
+        }
+        let mut s = laid(&v, (300., 40.), 1.);
+        let mut c = nk_render::Canvas::new(300, 40, 1.);
+        s.frame(&t, Instant::now());
+        s.paint(&mut c, &t, &mut |_: &str, _: f64| None, None)
+            .unwrap();
+        let px = c.finish();
+        let (x, y) = (
+            (switch[0] - 3.) as usize,
+            (switch[1] + switch[3] / 2.) as usize,
+        );
+        [px[(y * 300 + x) * 4], px[(y * 300 + x) * 4 + 2]]
+    };
+    let (plain, ringed) = (ring(None), ring(Some(Shown::Focus)));
+    // BGRA: the accent is blue.
+    assert!(
+        ringed[0] > ringed[1] && ringed != plain,
+        "{plain:?} then {ringed:?}"
+    );
+}
+
+#[test]
 fn a_row_with_a_switch_is_not_lit_as_selected() {
     let t = tokens();
     let row = |key: &str, child: Node| {

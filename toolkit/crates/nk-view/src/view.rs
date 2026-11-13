@@ -239,6 +239,9 @@ pub enum Ink {
     Primary,
     Secondary,
     Dim,
+    /// The text of something unavailable (`--nidara-text-disabled`): a row whose control is
+    /// disabled (VIEW.md §13.4, point 5).
+    Disabled,
 }
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
@@ -560,8 +563,26 @@ impl Node {
     }
     /// An on/off switch (VIEW.md §12.6), at the tokens' size. It is drawn only: put it in a
     /// control with `Role::Toggle` and `marked(on)`, which is what is pressed and said.
+    /// A switch as drawn, for a control that holds one (`switch_control`, or a row an app
+    /// makes activatable as a whole).
     pub fn switch(key: impl Into<Key>, on: bool) -> Self {
         Self::new(key, Kind::Switch(Switch { on }))
+    }
+    /// A switch (VIEW.md §13.4): only the switch responds, never the row it sits in. `name`
+    /// is what its row says, so a reader calls the switch by it; `action` is reported on each
+    /// flip. Off glass its hover and press are the view's, on its own pill.
+    pub fn switch_control(
+        key: impl Into<Key>,
+        name: impl Into<String>,
+        action: impl Into<String>,
+        on: bool,
+    ) -> Self {
+        let key = key.into();
+        let drawn = Self::switch(format!("{}/track", key.0), on);
+        Self::control(key, name, action, drawn)
+            .corner(Corner::Pill)
+            .role(Role::Toggle)
+            .marked(on)
     }
     /// Stands in for a row the surface leaves unbuilt, outside a scroll region's window:
     /// `height` is what `ViewState::rect` gave for the row when it was built.

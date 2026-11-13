@@ -470,46 +470,57 @@ fn buttons(m: &Model, t: &TypeScale) -> Vec<Node> {
     ]
 }
 
-/// A switch row exactly as the CC's details build it (`ccdetail.rs`): the control is the
-/// row, marked while on; the switch is drawn.
-fn switch_row(key: &str, label: &str, on: bool, action: &str, t: &TypeScale) -> Node {
-    Node::control(
-        key,
+/// A setting row with a switch (VIEW.md §13.4): the row does not respond, only the switch
+/// does; the row's text names it. `f` sets the switch's state for the samples.
+fn switch_row(
+    key: &str,
+    label: &str,
+    on: bool,
+    action: &str,
+    t: &TypeScale,
+    f: &dyn Fn(Node) -> Node,
+) -> Node {
+    let switch = f(Node::switch_control(
+        format!("{key}/switch"),
         label,
         action,
-        Node::row(
-            format!("{key}/row"),
-            vec![
-                Node::text(
-                    format!("{key}/text"),
-                    label,
-                    t.style(Type::Body, Weight::Regular),
-                )
-                .grow(),
-                Node::switch(format!("{key}/switch"), on),
-            ],
-        )
+        on,
+    ));
+    let enabled = !matches!(&switch.kind, nk_view::Kind::Control(c) if !c.enabled);
+    let text = Node::text(
+        format!("{key}/text"),
+        label,
+        t.style(Type::Body, Weight::Regular),
+    )
+    .ink(if enabled { Ink::Primary } else { Ink::Disabled })
+    .grow();
+    Node::row(key, vec![text, switch])
         .gap(Space::S2)
         .align(Align::Center)
-        .padding(Padding::symmetric(Space::S3, Space::S2)),
-    )
-    .corner(Corner::Token(Radius::Md))
-    .role(Role::Toggle)
-    .marked(on)
+        .padding(Padding::symmetric(Space::S3, Space::S2))
 }
 
 fn switches(m: &Model, t: &TypeScale) -> Vec<Node> {
     let rows = vec![
-        switch_row("sw/off", "Off", false, "noop", t),
-        switch_row("sw/on", "On", true, "noop", t),
-        switch_row("sw/hover", "Hover", false, "noop", t).shown(Shown::Hover),
-        switch_row("sw/focus", "Focus", true, "noop", t).shown(Shown::Focus),
-        switch_row("sw/disabled", "Disabled", true, "noop", t).enabled(false),
+        switch_row("sw/off", "Off", false, "noop", t, &|n| n),
+        switch_row("sw/on", "On", true, "noop", t, &|n| n),
+        switch_row("sw/hover", "Hover", false, "noop", t, &|n| {
+            n.shown(Shown::Hover)
+        }),
+        switch_row("sw/press", "Pressed", false, "noop", t, &|n| {
+            n.shown(Shown::Press)
+        }),
+        switch_row("sw/focus", "Focus", true, "noop", t, &|n| {
+            n.shown(Shown::Focus)
+        }),
+        switch_row("sw/disabled", "Disabled", true, "noop", t, &|n| {
+            n.enabled(false)
+        }),
     ];
     vec![
         section(
             "sw-states",
-            "States",
+            "States (only the switch responds; the row does not)",
             t,
             Node::column("sw/states", rows).gap(Space::S1),
         ),
@@ -517,7 +528,7 @@ fn switches(m: &Model, t: &TypeScale) -> Vec<Node> {
             "sw-live",
             "Try it",
             t,
-            switch_row("sw/live", "Wi-Fi", m.switch, "switch", t),
+            switch_row("sw/live", "Wi-Fi", m.switch, "switch", t, &|n| n),
         ),
     ]
 }
