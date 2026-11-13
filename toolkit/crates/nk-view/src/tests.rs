@@ -3557,6 +3557,95 @@ fn the_slider_tokens_need_the_row_measures() {
     }
 }
 
+/// A sidebar of three entries on glass, `selected` the page shown.
+fn sidebar(selected: usize) -> Node {
+    let f = frame_style();
+    let entries = ["General", "Display", "Sound"]
+        .iter()
+        .enumerate()
+        .map(|(i, title)| {
+            Node::sidebar_entry(
+                format!("nav/{i}"),
+                SidebarEntry {
+                    title: (*title).into(),
+                    glyph: "nd-globe".into(),
+                    action: format!("page:{i}"),
+                    selected: i == selected,
+                    style: style(14.),
+                },
+                &f,
+            )
+        })
+        .collect();
+    Node::pane("side", Corner::Token(Radius::Lg), Node::column("side/col", entries))
+}
+
+#[test]
+fn the_selected_sidebar_entry_is_the_accent_and_stays_so_under_the_pointer() {
+    let t = tokens();
+    let mut s = laid(&sidebar(1), (240., 200.), 1.);
+    let wash_at = |s: &mut ViewState, k: &str| {
+        let r = rect(s, k);
+        let f = s.frame(&t, Instant::now());
+        f.states
+            .iter()
+            .find(|st| (st.bounds.y - r[1]).abs() < 0.5)
+            .map(|st| st.wash)
+    };
+    let accent = t.look.accent.components.map(f64::from);
+    assert_eq!(wash_at(&mut s, "nav/1"), Some(accent), "selected: the accent, declared to Hyalo");
+    assert!(
+        wash_at(&mut s, "nav/0").is_none_or(|w| w[3] == 0.),
+        "the others rest"
+    );
+    let r = rect(&s, "nav/1");
+    s.pointer_motion(r[0] + 10., r[1] + r[3] / 2.);
+    assert_eq!(wash_at(&mut s, "nav/1"), Some(accent), "the pointer does not grey it");
+    let r = rect(&s, "nav/2");
+    s.pointer_motion(r[0] + 10., r[1] + r[3] / 2.);
+    let hover = wash_at(&mut s, "nav/2").unwrap();
+    assert!(hover != accent && hover[3] > 0., "another entry's hover is the neutral one");
+    // A reader: three toggles, the selected one checked.
+    let tree = s.semantics(nk_a11y::Node::new(1, nk_a11y::Role::Window, "W"), 2);
+    let checked: Vec<_> = tree
+        .nodes
+        .values()
+        .filter(|n| n.role == nk_a11y::Role::ToggleButton && n.states.checked)
+        .map(|n| n.name.clone())
+        .collect();
+    assert_eq!(checked, vec!["Display".to_string()]);
+}
+
+#[test]
+fn the_selected_sidebar_entrys_text_is_the_accents_foreground() {
+    // A foreground unlike the text's, so the two can be told apart.
+    let mut t = tokens();
+    t.look.accent_fg = nk_render::Color::new([0., 0., 0., 1.]);
+    let darkest = |selected: usize, k: &str| {
+        let mut s = laid(&sidebar(selected), (240., 200.), 1.);
+        let mut c = nk_render::Canvas::new(240, 200, 1.);
+        s.frame(&t, Instant::now());
+        s.paint(&mut c, &t, &mut |_: &str, _: f64| None, None).unwrap();
+        let px = c.finish();
+        let r = rect(&s, k);
+        // The most opaque pixel of the title: its ink.
+        let mut best = [0u8; 4];
+        for y in r[1] as usize..(r[1] + r[3]) as usize {
+            for x in r[0] as usize..(r[0] + r[2]) as usize {
+                let p = bgra(&px, 240, (x as f64, y as f64));
+                if p[3] > best[3] {
+                    best = p;
+                }
+            }
+        }
+        best
+    };
+    let on = darkest(1, "nav/1/text");
+    let off = darkest(0, "nav/1/text");
+    assert!(on[3] > 128 && on[0] < 40 && on[1] < 40 && on[2] < 40, "the accent's foreground: {on:?}");
+    assert!(off[0] > 200, "unselected: the text's ink: {off:?}");
+}
+
 #[test]
 fn a_row_with_a_switch_is_not_lit_as_selected() {
     let t = tokens();

@@ -110,6 +110,19 @@ pub struct SliderEnd {
     pub disabled: bool,
 }
 
+/// An entry of a window's sidebar (VIEW.md §13.8): a page the app can show.
+#[derive(Clone, Debug)]
+pub struct SidebarEntry {
+    pub title: String,
+    /// Its glyph's `nd-` name.
+    pub glyph: String,
+    /// Reported when it is chosen.
+    pub action: String,
+    /// It is the page shown.
+    pub selected: bool,
+    pub style: TextStyle,
+}
+
 /// Something that opens and closes in place, unrolling downward (VIEW.md §6).
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub struct Reveal {
@@ -392,6 +405,11 @@ pub struct Control {
     /// How it is drawn: on glass, by Hyalo's washes, or as a button in a page's content.
     #[serde(default)]
     pub face: Face,
+    /// Marked, it is filled with the accent and what it holds is drawn in the accent's
+    /// foreground: a sidebar's selected entry (owner, 2026-11-12, D1). Else marked is the
+    /// neutral selection wash.
+    #[serde(default)]
+    pub accent: bool,
     pub child: Box<Node>,
 }
 
@@ -754,6 +772,36 @@ impl Node {
         );
         Self::row(k("end"), parts).align(Align::Center)
     }
+    /// An entry of a window's sidebar (VIEW.md §13.8, GTK's `StackSidebar` row): its glyph at
+    /// the frame's glyph size and its title, in the kit's padding. The selected one is filled
+    /// with the accent and drawn in the accent's foreground (D1); a reader hears a toggle,
+    /// checked when it is the page shown.
+    pub fn sidebar_entry(
+        key: impl Into<Key>,
+        entry: SidebarEntry,
+        frame: &crate::FrameStyle,
+    ) -> Self {
+        let key = key.into();
+        let k = |part: &str| format!("{}/{part}", key.0);
+        let line = Self::row(
+            k("row"),
+            vec![
+                Self::icon(k("icon"), entry.glyph, frame.icon),
+                Self::text(k("text"), entry.title.clone(), entry.style),
+            ],
+        )
+        .gap(Space::S2)
+        .align(Align::Center)
+        .padding(Padding::symmetric(Space::S2, Space::S3));
+        let mut n = Self::control(key, entry.title, entry.action, line)
+            .role(Role::Toggle)
+            .marked(entry.selected)
+            .corner(Corner::Token(Radius::Sm));
+        if let Kind::Control(c) = &mut n.kind {
+            c.accent = true;
+        }
+        n
+    }
     /// Whether a control lies in this node.
     fn holds_control(&self) -> bool {
         match &self.kind {
@@ -861,6 +909,7 @@ impl Node {
                 slider: None,
                 field: None,
                 on: false,
+                accent: false,
                 surface: false,
                 pointer: true,
                 shown: None,

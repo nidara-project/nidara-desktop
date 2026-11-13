@@ -209,6 +209,10 @@ pub struct Look {
     /// (`--nidara-surface`) (VIEW.md §12.4).
     pub on: Color,
     pub surface: Color,
+    /// A selection in the accent (`--nidara-accent`) and what lies on it
+    /// (`--nidara-accent-fg`): a sidebar's selected entry (D1).
+    pub accent: Color,
+    pub accent_fg: Color,
     /// A disabled control's text and glyphs (`--nidara-text-disabled`).
     pub disabled: Color,
     /// The ring's width, as `nk-widgets` draws it (D8).
@@ -231,6 +235,8 @@ impl Look {
             focus: token("--nidara-accent")?,
             on: token("--nidara-on")?,
             surface: token("--nidara-surface")?,
+            accent: token("--nidara-accent")?,
+            accent_fg: token("--nidara-accent-fg")?,
             disabled: token("--nidara-text-disabled")?,
             focus_width: 2.,
         })
