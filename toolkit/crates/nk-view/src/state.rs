@@ -1420,6 +1420,9 @@ impl ViewState {
             };
             let (priority, wash) = if c.on {
                 (0, wash_of(tokens.look.on))
+            } else if c.marked && c.accent {
+                // The selection in the accent (D1): it stays as it is under the pointer.
+                (0, wash_of(tokens.look.accent))
             } else if (self.press.as_ref() == Some(key) && self.hover.as_ref() == Some(key))
                 || c.shown == Some(Shown::Press)
             {
@@ -1728,6 +1731,9 @@ impl ViewState {
                 }
                 if self.control(owner).on {
                     return ink(tokens.look.focus);
+                }
+                if o.marked && o.accent {
+                    return ink(tokens.look.accent_fg);
                 }
                 match self.fill_top(owner) {
                     Some(top) if p.rect[1] + p.rect[3] / 2. >= top => ink(FILL_INK),

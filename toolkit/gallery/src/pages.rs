@@ -4,7 +4,7 @@
 //! the catalogue entries it answers and their GTK and AppKit equivalents.
 use nk_view::{
     Align, Cell, Corner, Field, Ink, Justify, Node, Padding, Radius, Role, SettingRow, Shown,
-    Slider, SliderEnd, SliderStyle, Space, Type, TypeScale, Wash, Weight,
+    SidebarEntry, Slider, SliderEnd, SliderStyle, Space, Type, TypeScale, Wash, Weight,
 };
 use serde::Deserialize;
 
@@ -109,33 +109,29 @@ impl Default for Model {
     }
 }
 
-pub fn view(m: &Model, cat: &Catalogue, t: &TypeScale, sl: &SliderStyle) -> View {
+/// The kit's measures a page needs besides its type: the slider's, and the frame's glyph size.
+pub struct Measures<'a> {
+    pub slider: &'a SliderStyle,
+    pub glyph: f64,
+}
+
+pub fn view(m: &Model, cat: &Catalogue, t: &TypeScale, k: &Measures) -> View {
+    let sl = k.slider;
     let nav = PAGES
         .iter()
         .enumerate()
         .map(|(i, (id, title, glyph))| {
-            Node::control(
+            Node::sidebar_entry(
                 format!("nav/{id}"),
-                *title,
-                format!("page:{id}"),
-                Node::row(
-                    format!("nav/{id}/row"),
-                    vec![
-                        Node::icon(format!("nav/{id}/icon"), *glyph, 16.),
-                        Node::text(
-                            format!("nav/{id}/text"),
-                            *title,
-                            t.style(Type::Body, Weight::Regular),
-                        ),
-                    ],
-                )
-                .gap(Space::S2)
-                .align(Align::Center)
-                .padding(Padding::symmetric(Space::S2, Space::S3)),
+                SidebarEntry {
+                    title: (*title).into(),
+                    glyph: (*glyph).into(),
+                    action: format!("page:{id}"),
+                    selected: m.page == i,
+                    style: t.style(Type::Body, Weight::Regular),
+                },
+                k.glyph,
             )
-            .role(Role::Toggle)
-            .marked(m.page == i)
-            .corner(Corner::Token(Radius::Sm))
         })
         .collect();
     // The sidebar's list; the window's frame (nk-view FrameStyle) puts it in its glass.
@@ -1409,7 +1405,15 @@ mod tests {
                 "thumbRadius": 9, "valueGap": 12, "fillOpacity": 0.9, "pageSteps": 10,
                 "iconSize": 16, "iconOpacity": 0.5, "iconGap": 12}}))
             .unwrap();
-            let v = view(&m, &cat, &t, &sl);
+            let v = view(
+                &m,
+                &cat,
+                &t,
+                &Measures {
+                    slider: &sl,
+                    glyph: 16.,
+                },
+            );
             let mut all = vec![];
             keys(&v.sidebar, &mut all);
             keys(&v.content, &mut all);

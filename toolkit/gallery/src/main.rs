@@ -36,7 +36,10 @@ impl Gallery {
             &self.model,
             &self.catalogue,
             &look.types,
-            &look.tokens.slider,
+            &pages::Measures {
+                slider: &look.tokens.slider,
+                glyph: look.frame.icon,
+            },
         );
         self.window.show(Page {
             sidebar: v.sidebar,

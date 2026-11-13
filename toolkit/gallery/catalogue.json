@@ -20,7 +20,7 @@
       "name": "Navigation",
       "items": [
         {"name": "Page deck", "gtk": "Gtk.Stack", "appkit": "NSTabView (tabless)", "status": "widgets", "users": "Settings"},
-        {"name": "Sidebar navigator", "gtk": "Gtk.StackSidebar", "appkit": "NSOutlineView (source list)", "status": "widgets", "users": "Settings, this gallery (as toggles for now)"},
+        {"name": "Sidebar navigator", "gtk": "Gtk.StackSidebar", "appkit": "NSOutlineView (source list)", "status": "both", "users": "Settings, this gallery"},
         {"name": "Tabs", "gtk": "Gtk.Notebook / Gtk.StackSwitcher", "appkit": "NSTabView", "status": "missing", "users": ""},
         {"name": "Segmented choice", "gtk": "Gtk.ToggleButton (grouped)", "appkit": "NSSegmentedControl", "status": "widgets", "users": "Settings"},
         {"name": "Disclosure", "gtk": "Gtk.Expander", "appkit": "NSDisclosureButton", "status": "missing", "users": ""},
