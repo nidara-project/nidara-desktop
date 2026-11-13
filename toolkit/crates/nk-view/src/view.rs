@@ -721,7 +721,11 @@ impl Node {
             range.text(end.slider.min as f32),
             range.text(end.slider.max as f32),
         ];
-        let ink = if end.disabled { Ink::Disabled } else { Ink::Primary };
+        let ink = if end.disabled {
+            Ink::Disabled
+        } else {
+            Ink::Primary
+        };
         let glyph = |part: &str, name: &str| {
             Self::icon(k(part), name, style.icon_size)
                 .ink(ink)

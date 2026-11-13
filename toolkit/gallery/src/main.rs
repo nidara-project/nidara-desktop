@@ -31,7 +31,13 @@ struct Gallery {
 impl Gallery {
     /// The page the model shows, for the window.
     fn rebuild(&mut self) {
-        let v = pages::view(&self.model, &self.catalogue, &self.window.look().types);
+        let look = self.window.look();
+        let v = pages::view(
+            &self.model,
+            &self.catalogue,
+            &look.types,
+            &look.tokens.slider,
+        );
         self.window.show(Page {
             sidebar: v.sidebar,
             content: v.content,
@@ -82,6 +88,11 @@ impl Gallery {
             "slider" => {
                 if let Some(v) = self.window.value(&a.key) {
                     self.model.slider = v;
+                }
+            }
+            "bright" => {
+                if let Some(v) = self.window.value(&a.key) {
+                    self.model.bright = v;
                 }
             }
             "tile" => {

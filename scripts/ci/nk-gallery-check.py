@@ -235,6 +235,11 @@ def run(directory, fault=None, shots=True):
                     published(lambda: node.get_value_iface().set_current_value(80.))
                     check('slider/value', find(root, 'Try it: 80 %') is not None,
                           'a value set by a reader did not reach the model')
+                    row = find(root, 'Brightness', Atspi.Role.SLIDER)
+                    published(lambda: row.get_value_iface().set_current_value(25.))
+                    check('slider/row', find(root, '25 %') is not None
+                          and find(root, 'Plain', Atspi.Role.PUSH_BUTTON) is None,
+                          'a slider row did not show its value, or its row became a control')
                 elif page == 'reveal':
                     activate('Open', Atspi.Role.PUSH_BUTTON)
                     check('reveal/open', find(root, 'Revealed') is not None, 'the reveal did not open')

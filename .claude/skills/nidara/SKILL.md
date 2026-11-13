@@ -383,6 +383,8 @@ state; the radios next to each other are one group, one Tab stop, the arrows mov
 `Node::setting_row(key, SettingRow { .. })` is Settings' row (`VIEW.md` §13.6): at least
 `ROW_HEIGHT.single` (`row_floor`), NOT activatable unless the app gives it an `action` — then the
 whole row is the control and what it ends with must be drawn only (a chevron, `Node::switch`).
+A slider row is a setting row ending in `Node::slider_end(key, SliderEnd { .. }, &tokens.slider)`
+(§13.7): measures from `range.slider`, its value in room for its widest text (`Node::room`).
 A new token file goes into `scripts/export-tokens.mjs` AND `scripts/ci/settings-tokens-check.py`;
 until the owner reinstalls, `/usr/share/nidara/settings-data` lacks it, so run tests and the
 headless gallery against a fresh export (`SASS=sass node --experimental-strip-types

@@ -3441,7 +3441,12 @@ fn slider_row(value: f64, icons: bool, disabled: bool) -> Node {
         action: "bright".into(),
         slider: Slider::new(0., 100., 1., value).unit(" %"),
         value_style: style(14.),
-        icons: icons.then(|| ["nd-display-brightness-low".into(), "nd-display-brightness".into()]),
+        icons: icons.then(|| {
+            [
+                "nd-display-brightness-low".into(),
+                "nd-display-brightness".into(),
+            ]
+        }),
         disabled,
     };
     Node::column(
@@ -3461,31 +3466,58 @@ fn slider_row(value: f64, icons: bool, disabled: bool) -> Node {
 fn a_slider_row_ends_in_the_kits_slider_and_its_value_which_never_moves_it() {
     let at = |v: f64| {
         let s = laid(&slider_row(v, false, false), (500., 100.), 1.);
-        (rect(&s, "r/slider"), rect(&s, "r/slider/value"), rect(&s, "r"))
+        (
+            rect(&s, "r/slider"),
+            rect(&s, "r/slider/value"),
+            rect(&s, "r"),
+        )
     };
     let (slider, value, row) = at(5.);
     assert_eq!(slider[2], 140., "the kit's slider width");
-    assert_eq!(value[0], slider[0] + 140. + 12., "its value the kit's gap after it");
+    assert_eq!(
+        value[0],
+        slider[0] + 140. + 12.,
+        "its value the kit's gap after it"
+    );
     assert_eq!(row[3], 48., "a row's height");
     let (slider2, value2, _) = at(100.);
-    assert_eq!((slider[0], value[0], value[2]), (slider2[0], value2[0], value2[2]), "5 % and 100 % take the same room");
+    assert_eq!(
+        (slider[0], value[0], value[2]),
+        (slider2[0], value2[0], value2[2]),
+        "5 % and 100 % take the same room"
+    );
     // A reader finds the slider named by its row, and the row is no control.
     let mut s = laid(&slider_row(40., false, false), (500., 100.), 1.);
     let tree = s.semantics(nk_a11y::Node::new(1, nk_a11y::Role::Window, "W"), 2);
     let controls: Vec<_> = tree
         .nodes
         .values()
-        .filter(|n| !matches!(n.role, nk_a11y::Role::Window | nk_a11y::Role::Label | nk_a11y::Role::Panel))
+        .filter(|n| {
+            !matches!(
+                n.role,
+                nk_a11y::Role::Window | nk_a11y::Role::Label | nk_a11y::Role::Panel
+            )
+        })
         .collect();
     assert_eq!(controls.len(), 1, "{controls:?}");
-    assert_eq!((controls[0].role, controls[0].name.as_str()), (nk_a11y::Role::Slider, "Brightness"));
-    assert!(tree.nodes.values().any(|n| n.name == "40 %"), "its value is read too");
+    assert_eq!(
+        (controls[0].role, controls[0].name.as_str()),
+        (nk_a11y::Role::Slider, "Brightness")
+    );
+    assert!(
+        tree.nodes.values().any(|n| n.name == "40 %"),
+        "its value is read too"
+    );
 }
 
 #[test]
 fn a_slider_rows_glyphs_flank_it_faded_and_disabled_dims_all_of_it() {
     let s = laid(&slider_row(40., true, false), (500., 100.), 1.);
-    let (lesser, slider, greater) = (rect(&s, "r/slider/lesser"), rect(&s, "r/slider"), rect(&s, "r/slider/greater"));
+    let (lesser, slider, greater) = (
+        rect(&s, "r/slider/lesser"),
+        rect(&s, "r/slider"),
+        rect(&s, "r/slider/greater"),
+    );
     assert_eq!((lesser[2], greater[2]), (16., 16.));
     assert_eq!(slider[0], lesser[0] + 16. + 12.);
     assert_eq!(greater[0], slider[0] + 140. + 12.);
@@ -3508,7 +3540,10 @@ fn a_slider_rows_glyphs_flank_it_faded_and_disabled_dims_all_of_it() {
     let r = rect(&s, "r/slider");
     s.pointer_motion(r[0] + 70., r[1] + r[3] / 2.);
     s.button(true, Instant::now());
-    assert!(s.button(false, Instant::now()).is_none(), "a disabled slider does not move");
+    assert!(
+        s.button(false, Instant::now()).is_none(),
+        "a disabled slider does not move"
+    );
 }
 
 #[test]
