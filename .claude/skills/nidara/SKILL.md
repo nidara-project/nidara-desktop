@@ -338,6 +338,12 @@ phase0 stays independent. The fixed-data demo and libatspi controls live in
 `toolkit/widgets-demo` and `scripts/ci/nk-widgets-check.py`. Builds, evidence and
 logs for this work belong in target/ or ~/Nidara/ChatGPT/, never /tmp.
 
+The phase0 pixel check confirms each typed key before saving its committed reference:
+at 1.25, the first glyph alone can pass the two-key ink threshold. Keep the original
+whole-text threshold and exact preedit-cancel comparison; synchronise the keys rather
+than waiting a fixed time. IPC failures must show stdout/stderr (the CLI prints its
+structured rejection on stdout). See `toolkit/phase0/README.md`.
+
 ### Appearance for a native program (nk-platform)
 
 Any Rust program of ours learns its appearance from `toolkit/crates/nk-platform` (#1072): the
