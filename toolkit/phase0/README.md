@@ -44,6 +44,14 @@ mapping, material requests, keyboard editing and preedit independently: every
 broken path must fail at its own assertion. Controls are explicit `--control-*`
 arguments to this test binary, not environment switches affecting installed apps.
 
+The typed reference is captured only after each of its two keys changes the field's
+pixels and adds ink. The original whole-text threshold still applies after the second
+key. A single glyph can satisfy that threshold at fractional scale, so sending both
+keys and then taking the first acceptable screenshot can save an incomplete reference;
+preedit cancellation would then be compared against the wrong committed text. IPC
+failures include the request, exit status, stdout and stderr rather than hiding the
+compositor's rejection behind `CalledProcessError`.
+
 The scripted input method is the existing `hyalo-ime-probe.c` with `--script`;
 it acknowledges `preedit TEXT`, `cancel`, `commit TEXT` after Wayland roundtrips.
 It uses Hyalo's real text-input bridge. It does not stand in for a candidate UI or

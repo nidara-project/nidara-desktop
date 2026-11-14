@@ -23,7 +23,10 @@ CONTROL_PIPE = open(CONTROL, 'w', buffering=1)
 
 
 def msg(*args):
-    return json.loads(subprocess.check_output([*MSG, *map(str, args)]))['ok']
+    result = subprocess.run([*MSG, *map(str, args)], capture_output=True, text=True)
+    if result.returncode:
+        raise RuntimeError(f'msg {args}: exit {result.returncode}: {result.stdout}{result.stderr}')
+    return json.loads(result.stdout)['ok']
 
 
 def control(line):
@@ -125,8 +128,12 @@ def run(label, flag=None, stop=None):
         empty = crop(before, win, box)
         control(f"click {win['x']+48} {win['y']+125}")
         control('key 49')  # n
+        first = field('first-key', lambda p: ink(p) > ink(empty) and differs(empty,p) > 100,
+                      'keyboard: first glyph did not appear')
         control('key 37')  # k
-        typed = field('typed', lambda p: ink(p) > ink(empty)+75 and differs(empty,p) > 100, 'keyboard: typed glyphs did not appear')
+        typed = field('typed', lambda p: ink(p) > ink(first) and differs(first,p) > 100
+                      and ink(p) > ink(empty)+75 and differs(empty,p) > 100,
+                      'keyboard: second glyph did not appear')
         if stop == 'keyboard':
             return
         with (directory / 'ime.log').open('w') as stream:
