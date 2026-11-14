@@ -5,7 +5,7 @@
 use nk_view::{
     Align, Cell, Corner, Dropdown, DropdownStyle, Field, Ink, Justify, Kind, Node, Padding, Radius,
     Role, SegmentStyle, Segmented, SettingRow, Shown, SidebarEntry, Slider, SliderEnd, SliderStyle,
-    Space, Type, TypeScale, Wash, Weight,
+    Space, SwatchStyle, Swatches, Type, TypeScale, Wash, Weight,
 };
 use serde::Deserialize;
 
@@ -55,13 +55,14 @@ fn status_text(s: &str) -> &'static str {
 }
 
 /// Each page: its id (what the check and `--page` name), its title and its glyph.
-pub const PAGES: [(&str, &str, &str); 17] = [
+pub const PAGES: [(&str, &str, &str); 18] = [
     ("status", "Status", "nd-emblem-default"),
     ("button", "Button", "nd-hand"),
     ("switch", "Switch", "nd-light-mode"),
     ("check", "Checkbox and radio", "nd-preferences-desktop"),
     ("dropdown", "Dropdown", "nd-pan-down"),
     ("segmented", "Segmented choice", "nd-view-grid"),
+    ("swatches", "Swatches", "nd-view-grid"),
     ("row", "Setting row", "nd-preferences-system"),
     ("slider", "Slider", "nd-display-brightness"),
     ("field", "Text field", "nd-input-keyboard"),
@@ -91,6 +92,7 @@ pub struct Model {
     pub speed: usize,
     /// The live segmented choice's.
     pub size: usize,
+    pub accent: usize,
     pub toggle: bool,
     pub presses: u32,
     pub slider: f64,
@@ -109,6 +111,7 @@ impl Default for Model {
             choice: 1,
             speed: 1,
             size: 1,
+            accent: 0,
             toggle: false,
             presses: 0,
             slider: 40.,
@@ -123,6 +126,8 @@ pub struct Measures<'a> {
     pub slider: &'a SliderStyle,
     pub dropdown: &'a DropdownStyle,
     pub segmented: &'a SegmentStyle,
+    pub swatch: &'a SwatchStyle,
+    pub colors: &'a [(String, nk_render::Color)],
     pub glyph: f64,
 }
 
@@ -298,6 +303,7 @@ fn page(
         "check" => checks(m, t),
         "dropdown" => dropdowns(m, t, k.dropdown),
         "segmented" => segmenteds(m, t, k.segmented),
+        "swatches" => swatches(m, t, k.swatch, k.colors),
         "row" => rows(m, t),
         "slider" => sliders(m, t, sl),
         "field" => fields(t),
@@ -1012,6 +1018,130 @@ fn segmenteds(m: &Model, t: &TypeScale, seg: &SegmentStyle) -> Vec<Node> {
     ]
 }
 
+pub fn colors_from(export: &serde_json::Value) -> Result<Vec<(String, nk_render::Color)>, String> {
+    let colors = export["accents"]
+        .as_object()
+        .filter(|v| !v.is_empty())
+        .ok_or("colors.json: no accents")?;
+    colors
+        .iter()
+        .map(|(key, value)| {
+            let name = export["accentNames"][key]
+                .as_str()
+                .filter(|s| !s.is_empty())
+                .ok_or_else(|| format!("colors.json: no accent name {key}"))?;
+            let color = nk_view::parse_color(
+                value
+                    .as_str()
+                    .ok_or_else(|| format!("colors.json: no accent colour {key}"))?,
+            )?;
+            Ok((name.into(), color))
+        })
+        .collect()
+}
+fn swatches(
+    m: &Model,
+    t: &TypeScale,
+    s: &SwatchStyle,
+    colors: &[(String, nk_render::Color)],
+) -> Vec<Node> {
+    let one = |key: &str, name: &str, disabled: bool, shown: &[(usize, Shown)]| {
+        let mut samples = Node::swatches(
+            format!("sw/{key}/g"),
+            Swatches {
+                name: name.into(),
+                colors: colors.to_vec(),
+                chosen: 0,
+                action: "noop".into(),
+                disabled,
+            },
+            s,
+        );
+        if let Kind::Stack(st) = &mut samples.kind {
+            for node in &mut st.children {
+                if let Kind::Control(c) = &mut node.kind
+                    && let Some(part) = c.choice_part
+                    && let Some((_, state)) = shown.iter().find(|(index, _)| *index == part.index)
+                {
+                    c.shown = Some(*state);
+                }
+            }
+        }
+        Node::setting_row(
+            format!("sw/{key}"),
+            SettingRow {
+                trailing: Some(samples),
+                disabled,
+                ..setting(name, None, t)
+            },
+        )
+    };
+    let states = Node::column(
+        "sw/states",
+        vec![
+            one("rest", "Rest", false, &[]),
+            one(
+                "hover",
+                "Hover",
+                false,
+                &[(0, Shown::Hover), (1, Shown::Hover)],
+            ),
+            one(
+                "pressed",
+                "Pressed",
+                false,
+                &[(0, Shown::Press), (1, Shown::Press)],
+            ),
+            one("focus", "Focus", false, &[(0, Shown::Focus)]),
+            one("disabled", "Disabled", true, &[]),
+        ],
+    );
+    let chosen = m.accent.min(colors.len().saturating_sub(1));
+    let live = Node::column(
+        "sw/live",
+        vec![
+            Node::setting_row(
+                "sw/live/row",
+                SettingRow {
+                    trailing: Some(Node::swatches(
+                        "sw/live/g",
+                        Swatches {
+                            name: "Accent colour".into(),
+                            colors: colors.to_vec(),
+                            chosen,
+                            action: "accent".into(),
+                            disabled: false,
+                        },
+                        s,
+                    )),
+                    ..setting(
+                        "Accent colour",
+                        Some("Choose a colour, or use Tab and the arrow keys"),
+                        t,
+                    )
+                },
+            ),
+            Node::text(
+                "sw/live/said",
+                format!(
+                    "Try it: accent {}",
+                    colors
+                        .get(chosen)
+                        .map(|(name, _)| name.as_str())
+                        .unwrap_or("none")
+                ),
+                t.style(Type::Small, Weight::Regular),
+            )
+            .ink(Ink::Secondary),
+        ],
+    )
+    .gap(Space::S2);
+    vec![
+        section("sw-states", "Swatches in every state", t, states),
+        section("sw-live", "Try it", t, live),
+    ]
+}
+
 fn sliders(m: &Model, t: &TypeScale, sl: &SliderStyle) -> Vec<Node> {
     let line = |k: &str, label: &str, s: Node| {
         Node::row(
@@ -1697,6 +1827,34 @@ mod tests {
     }
 
     #[test]
+    fn palette_requires_exported_colours_and_names() {
+        let good = serde_json::json!({"accents":{"blue":"#0088ff","red":"#ff0000"},
+            "accentNames":{"blue":"Blue","red":"Red"}});
+        let c = colors_from(&good).unwrap();
+        assert_eq!(
+            c.iter().map(|c| c.0.as_str()).collect::<Vec<_>>(),
+            ["Blue", "Red"]
+        );
+        assert_eq!(c[0].1.components, [0., 136. / 255., 1., 1.]);
+        for bad in [serde_json::json!({}), serde_json::json!({"accents":{}})] {
+            assert!(colors_from(&bad).is_err());
+        }
+        for (field, value) in [
+            ("accentNames", serde_json::json!({})),
+            ("accents", serde_json::json!({"blue":"invalid"})),
+        ] {
+            let mut bad = good.clone();
+            bad[field] = value;
+            assert!(colors_from(&bad).is_err(), "{field}");
+        }
+    }
+
+    fn swatch() -> nk_view::SwatchStyle {
+        let f: serde_json::Value =
+            serde_json::from_str(include_str!("../../tokens/choices.json")).unwrap();
+        nk_view::swatch_from(&f["default"]["swatch"],&serde_json::json!({"tokens":{"--nidara-text":"#ffffff","--nidara-text-dim":"#808080","--nidara-accent":"#0088ff"}})).unwrap()
+    }
+    #[test]
     fn every_page_builds_with_unique_keys() {
         let cat = Catalogue::load().unwrap();
         let t = scale();
@@ -1718,6 +1876,11 @@ mod tests {
                     slider: &sl,
                     dropdown: &dropdown(),
                     segmented: &segmented(),
+                    swatch: &swatch(),
+                    colors: &[
+                        ("Blue".into(), nk_render::rgba(0, 128, 255, 255)),
+                        ("Red".into(), nk_render::rgba(255, 0, 0, 255)),
+                    ],
                     glyph: 16.,
                 },
             );

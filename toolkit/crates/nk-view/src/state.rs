@@ -1136,15 +1136,17 @@ impl ViewState {
             .focus
             .as_ref()
             .and_then(|f| order.iter().position(|&i| &self.placed[i].key == f));
-        // A radio group: the radios next to each other in `order`; a segmented choice is a
-        // group of its own, whatever lies next to it.
+        // A radio group: plain radios join their neighbours in `order`; each segmented
+        // choice or swatch row is a group of its own.
         let radio = |j: usize| self.control(order[j]).role == Role::Radio;
         let joined = |j: usize| {
             // Whether radio `j` and radio `j + 1` are one group.
-            let seg = |k: usize| self.control(order[k]).segment;
+            let seg = |k: usize| self.control(order[k]).choice_part;
             match (seg(j), seg(j + 1)) {
                 (None, None) => true,
-                (Some(a), Some(b)) => a.index + 1 < a.count && b.index > 0,
+                (Some(a), Some(b)) => {
+                    a.index + 1 < a.count && b.index == a.index + 1 && b.count == a.count
+                }
                 _ => false,
             }
         };
@@ -2058,6 +2060,51 @@ impl ViewState {
                         canvas.pop_clip();
                     }
                 }
+                What::Control(c) if matches!(c.face, crate::view::Face::Swatch(_)) => {
+                    let crate::view::Face::Swatch(color) = c.face else {
+                        unreachable!()
+                    };
+                    let s = &tokens.swatch;
+                    let alpha = if c.enabled {
+                        1.
+                    } else {
+                        s.disabled_opacity as f32
+                    };
+                    let fade = |color: nk_render::Color| {
+                        ink(color.with_alpha(color.components[3] * alpha))
+                    };
+                    canvas.clip(rect(&visible));
+                    let d = s.diameter;
+                    let b = s.border;
+                    let circle = [
+                        p.rect[0] + (p.rect[2] - d) / 2.,
+                        p.rect[1] + (p.rect[3] - d) / 2.,
+                        d,
+                        d,
+                    ];
+                    let inside = [circle[0] + b, circle[1] + b, d - 2. * b, d - 2. * b];
+                    canvas.rounded_rect(
+                        rect(&inside),
+                        (d - 2. * b) / 2.,
+                        fade(nk_render::Color::new(color)),
+                    );
+                    if c.marked {
+                        let r = s.ring;
+                        let outside = [circle[0] - r, circle[1] - r, d + 2. * r, d + 2. * r];
+                        canvas.rounded_ring(
+                            rect(&outside),
+                            (d + 2. * r) / 2.,
+                            b + r,
+                            fade(s.selected),
+                        );
+                    } else if c.enabled
+                        && (self.hover.as_ref() == Some(&p.key)
+                            || matches!(c.shown, Some(Shown::Hover | Shown::Press)))
+                    {
+                        canvas.rounded_ring(rect(&circle), d / 2., b, fade(s.hover));
+                    }
+                    canvas.pop_clip();
+                }
                 What::Control(c) if c.face == crate::view::Face::Segment => {
                     // A segment (VIEW.md §13.10): its tone inside the group's outline, cut to
                     // it, so only the group's two ends are rounded. The chosen one is the accent
@@ -2089,7 +2136,7 @@ impl ViewState {
                     };
                     let faded =
                         |colour: nk_render::Color| ink(colour.with_alpha(colour.components[3] * a));
-                    let (index, count) = c.segment.map_or((0, 1), |g| (g.index, g.count));
+                    let (index, count) = c.choice_part.map_or((0, 1), |g| (g.index, g.count));
                     let (r, round) = (p.rect, s.radius);
                     // A join's corner lies a corner's width past the segment's clip, and
                     // another, since the canvas's corner curves on beyond its radius.
@@ -2234,10 +2281,12 @@ impl ViewState {
             }
         }
         for (i, p) in self.placed.iter().enumerate() {
-            // A segment's ring, outside it by a ring's width (the chosen one is the accent, as
-            // the ring is), over its neighbours.
+            // A choice's focus ring clears its selected band, above its neighbours.
             if let What::Control(c) = &p.what
-                && c.face == crate::view::Face::Segment
+                && matches!(
+                    c.face,
+                    crate::view::Face::Segment | crate::view::Face::Swatch(_)
+                )
                 && c.enabled
                 && part(i)
                 && self.shown(i)
@@ -2245,15 +2294,20 @@ impl ViewState {
                 && ((self.focus_visible && self.focus.as_ref() == Some(&p.key))
                     || c.shown == Some(Shown::Focus))
             {
-                let (w, s) = (tokens.look.focus_width, &tokens.segmented);
+                let w = tokens.look.focus_width;
+                let (radius, color) = if matches!(c.face, crate::view::Face::Swatch(_)) {
+                    (p.rect[2] / 2., tokens.swatch.focus)
+                } else {
+                    (tokens.segmented.radius, tokens.segmented.focus)
+                };
                 let out = 2. * w;
                 let r = p.rect;
                 let r = [r[0] - out, r[1] - out, r[2] + 2. * out, r[3] + 2. * out];
                 canvas.rounded_ring(
                     rect(&r),
-                    s.radius + out,
+                    radius + out,
                     w,
-                    s.focus.with_alpha(s.focus.components[3] * p.alpha as f32),
+                    color.with_alpha(color.components[3] * p.alpha as f32),
                 );
             }
         }

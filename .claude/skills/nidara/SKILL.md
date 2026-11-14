@@ -394,8 +394,13 @@ the index with `AppWindow::value`). Outside an `AppWindow` nothing opens it — 
 options for readers even closed.
 `Node::segmented(key, Segmented { .. }, &tokens.segmented, &types)` (§13.10) is a row of RADIOS:
 segment `n` reports `"{action}:{n}"` and the arrows move the choice. Plain radios next to each
-other are one group to the keys; a segmented choice is always a group of its own (its `segment`
+other are one group to the keys; a segmented choice is always a group of its own (its `choice_part`
 place ends the run), so rows of them may follow one another.
+`Node::swatches(key, Swatches { .. }, &tokens.swatch)` (§13.11) uses the same group rule:
+coloured radios, named by the palette and described by the group, one Tab stop, arrow choices
+reporting `"{action}:{n}"`. It paints off glass; the selected band and outer keyboard focus ring
+are separate. Read every measure, tone and disabled opacity from `choices.swatch`; the gallery
+reads its named palette from exported `colors.json`, never a second list of accent colours.
 A new token file goes into `scripts/export-tokens.mjs` AND `scripts/ci/settings-tokens-check.py`;
 until the owner reinstalls, `/usr/share/nidara/settings-data` lacks it, so run tests and the
 headless gallery against a fresh export (`SASS=sass node --experimental-strip-types
