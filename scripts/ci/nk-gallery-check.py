@@ -283,6 +283,10 @@ def run(directory, fault=None, shots=True):
                     check('swatches/choose', chosen == [name]
                           and find(root, f'Try it: accent {name}') is not None,
                           f'chosen {chosen}, or the colour did not reach the model')
+                    if shots:
+                        # Keep the model's chosen state as visual evidence too.
+                        pump(.3)
+                        ipc('screenshot', directory / 'swatches-chosen.png')
                 elif page == 'row':
                     check('row/inert', find(root, 'Title only', Atspi.Role.PUSH_BUTTON) is None
                           and find(root, 'Ending in a switch', Atspi.Role.TOGGLE_BUTTON) is not None,
