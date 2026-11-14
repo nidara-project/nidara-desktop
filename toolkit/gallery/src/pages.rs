@@ -1023,9 +1023,21 @@ pub fn colors_from(export: &serde_json::Value) -> Result<Vec<(String, nk_render:
         .as_object()
         .filter(|v| !v.is_empty())
         .ok_or("colors.json: no accents")?;
-    colors
+    let order = export["accentOrder"]
+        .as_array()
+        .filter(|v| v.len() == colors.len())
+        .ok_or("colors.json: no complete accentOrder")?;
+    let mut seen = std::collections::BTreeSet::new();
+    order
         .iter()
-        .map(|(key, value)| {
+        .map(|key| {
+            let key = key.as_str().ok_or("colors.json: invalid accentOrder key")?;
+            if !seen.insert(key) {
+                return Err("colors.json: repeated accentOrder key".into());
+            }
+            let value = colors
+                .get(key)
+                .ok_or("colors.json: unknown accentOrder key")?;
             let name = export["accentNames"][key]
                 .as_str()
                 .filter(|s| !s.is_empty())
@@ -1828,20 +1840,28 @@ mod tests {
 
     #[test]
     fn palette_requires_exported_colours_and_names() {
-        let good = serde_json::json!({"accents":{"blue":"#0088ff","red":"#ff0000"},
+        let good = serde_json::json!({"accentOrder":["red","blue"],"accents":{"blue":"#0088ff","red":"#ff0000"},
             "accentNames":{"blue":"Blue","red":"Red"}});
         let c = colors_from(&good).unwrap();
         assert_eq!(
             c.iter().map(|c| c.0.as_str()).collect::<Vec<_>>(),
-            ["Blue", "Red"]
+            ["Red", "Blue"]
         );
-        assert_eq!(c[0].1.components, [0., 136. / 255., 1., 1.]);
+        assert_eq!(c[1].1.components, [0., 136. / 255., 1., 1.]);
         for bad in [serde_json::json!({}), serde_json::json!({"accents":{}})] {
             assert!(colors_from(&bad).is_err());
         }
         for (field, value) in [
             ("accentNames", serde_json::json!({})),
-            ("accents", serde_json::json!({"blue":"invalid"})),
+            ("accentOrder", serde_json::json!(null)),
+            ("accentOrder", serde_json::json!([])),
+            ("accentOrder", serde_json::json!(["red", "red"])),
+            ("accentOrder", serde_json::json!(["red", "unknown"])),
+            ("accentOrder", serde_json::json!(["red", 1])),
+            (
+                "accents",
+                serde_json::json!({"blue":"invalid","red":"#ff0000"}),
+            ),
         ] {
             let mut bad = good.clone();
             bad[field] = value;

@@ -394,7 +394,7 @@ pub struct Control {
     pub choice: Option<Choice>,
     /// Membership in an independent choice row (segmented or swatches). Its index/count
     /// also decide a segment's rounded ends.
-    #[serde(default, alias = "segment")]
+    #[serde(default)]
     pub choice_part: Option<ChoicePart>,
     /// On (VIEW.md §12.4): the glass under it is white, the primary ink at full, and what it
     /// holds is drawn in the accent. Hover and press do not show over it.
@@ -453,9 +453,6 @@ pub struct ChoicePart {
     pub index: usize,
     pub count: usize,
 }
-
-/// Compatibility name for a segment's membership in a choice row.
-pub type Segment = ChoicePart;
 
 /// Colour samples: one radio group, each choice reports `"{action}:{n}"`.
 #[derive(Clone, Debug)]

@@ -400,7 +400,8 @@ place ends the run), so rows of them may follow one another.
 coloured radios, named by the palette and described by the group, one Tab stop, arrow choices
 reporting `"{action}:{n}"`. It paints off glass; the selected band and outer keyboard focus ring
 are separate. Read every measure, tone and disabled opacity from `choices.swatch`; the gallery
-reads its named palette from exported `colors.json`, never a second list of accent colours.
+reads its named palette from exported `colors.json` in `accentOrder` (required, complete and
+unique), never the object-map order or a second list of accent colours.
 A new token file goes into `scripts/export-tokens.mjs` AND `scripts/ci/settings-tokens-check.py`;
 until the owner reinstalls, `/usr/share/nidara/settings-data` lacks it, so run tests and the
 headless gallery against a fresh export (`SASS=sass node --experimental-strip-types
