@@ -107,6 +107,8 @@ write(join(out, "tokens/colors.json"), {
         accent: "appearance.accent", dark: "appearance.darkMode",
         reduceTransparency: "accessibility.reduceTransparency", windowBackground: "appearance.windowBackground",
     },
+    // Product order survives JSON readers whose objects are sorted maps.
+    accentOrder: accents,
     accents: Object.fromEntries(accents.map(k => [k, engine.ACCENT_PALETTE[k].color])),
     // What each swatch is called (the current Settings names its buttons so, in English).
     accentNames: Object.fromEntries(accents.map(k => [k, engine.ACCENT_PALETTE[k].name])),

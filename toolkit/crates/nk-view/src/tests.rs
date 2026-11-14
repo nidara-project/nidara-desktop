@@ -63,6 +63,14 @@ fn tokens() -> Tokens {
         .unwrap(),
         segmented: segmented_from(&segmented(), &set, &Radii::from_static(&statics()).unwrap())
             .unwrap(),
+        swatch: swatch_from(
+            &serde_json::from_str::<serde_json::Value>(include_str!(
+                "../../../tokens/choices.json"
+            ))
+            .unwrap()["default"]["swatch"],
+            &set,
+        )
+        .unwrap(),
         row_height: 48.,
         group_radius: 16.,
     }
@@ -4244,6 +4252,250 @@ fn the_segmented_tokens_are_read_whole_or_refused() {
         "more than all white"
     );
     assert!(segmented_from(&json!(null), &set, &radii).is_err());
+}
+
+fn sample_colors() -> Vec<(String, nk_render::Color)> {
+    vec![
+        ("Red".into(), nk_render::rgba(255, 0, 0, 255)),
+        ("Green".into(), nk_render::rgba(0, 255, 0, 255)),
+        ("Blue".into(), nk_render::rgba(0, 0, 255, 255)),
+    ]
+}
+fn samples(key: &str, chosen: usize, disabled: bool) -> Node {
+    Node::swatches(
+        key,
+        Swatches {
+            name: "Accent colour".into(),
+            colors: sample_colors(),
+            chosen,
+            action: "accent".into(),
+            disabled,
+        },
+        &tokens().swatch,
+    )
+}
+fn sample_row(chosen: usize, disabled: bool) -> Node {
+    Node::row(
+        "sw-row",
+        vec![
+            Node::button("before", "Before", "before", style(14.)),
+            samples("sw", chosen, disabled),
+            Node::button("after", "After", "after", style(14.)),
+        ],
+    )
+    .gap(Space::S2)
+}
+#[test]
+fn swatch_tokens_are_whole_or_rejected() {
+    let all: serde_json::Value =
+        serde_json::from_str(include_str!("../../../tokens/choices.json")).unwrap();
+    let source = &all["default"]["swatch"];
+    let set = json!({"tokens":{"--nidara-text":"#ffffff","--nidara-text-dim":"#999999","--nidara-accent":"#0088ff"}});
+    let s = swatch_from(source, &set).unwrap();
+    assert_eq!(
+        (s.diameter, s.border, s.ring, s.gap, s.disabled_opacity),
+        (30., 3., 2., 8., 0.45)
+    );
+    for key in [
+        "diameter",
+        "border",
+        "ring",
+        "gap",
+        "selectedColor",
+        "hoverColor",
+        "focus",
+        "disabledOpacity",
+    ] {
+        let mut c = source.clone();
+        c.as_object_mut().unwrap().remove(key);
+        assert!(swatch_from(&c, &set).is_err(), "missing {key}");
+    }
+    for (key, value) in [
+        ("diameter", 0.),
+        ("border", 15.),
+        ("ring", -1.),
+        ("gap", 0.),
+        ("disabledOpacity", 1.1),
+    ] {
+        let mut c = source.clone();
+        c[key] = json!(value);
+        assert!(swatch_from(&c, &set).is_err(), "bad {key}");
+    }
+    assert!(swatch_from(source, &json!({"tokens":{}})).is_err());
+    assert!(swatch_from(&json!(null), &set).is_err());
+}
+#[test]
+fn swatches_measure_diameter_ring_and_gap_from_tokens() {
+    let mut t = tokens();
+    t.swatch.diameter = 40.;
+    t.swatch.ring = 4.;
+    t.swatch.gap = 12.;
+    let n = Node::swatches(
+        "sw",
+        Swatches {
+            name: "Accent".into(),
+            colors: sample_colors(),
+            chosen: 0,
+            action: "pick".into(),
+            disabled: false,
+        },
+        &t.swatch,
+    );
+    let s = laid(&n, (400., 100.), 1.);
+    let a = rect(&s, "sw/0");
+    let b = rect(&s, "sw/1");
+    let c = rect(&s, "sw/2");
+    assert_eq!((a[2], a[3]), (48., 48.));
+    assert_eq!(b[0] - a[0] - a[2], 12.);
+    assert_eq!(c[0] - b[0] - b[2], 12.);
+}
+#[test]
+fn swatches_are_one_stop_and_arrows_wrap_inside_their_own_group() {
+    let mut s = laid(&sample_row(1, false), (500., 80.), 1.);
+    s.key(KeyInput::Tab);
+    s.key(KeyInput::Tab);
+    assert_eq!(s.focus().map(|k| k.0.as_str()), Some("sw/1"));
+    assert_eq!(s.key(KeyInput::Right).unwrap().action, "accent:2");
+    assert_eq!(s.key(KeyInput::Right).unwrap().action, "accent:0");
+    assert_eq!(s.key(KeyInput::Left).unwrap().action, "accent:2");
+    s.key(KeyInput::Tab);
+    assert_eq!(s.focus().map(|k| k.0.as_str()), Some("after"));
+    s.key(KeyInput::ShiftTab);
+    assert_eq!(s.focus().map(|k| k.0.as_str()), Some("sw/1"));
+    // Adjacent independent rows, a segment group, and plain radios must not merge.
+    let n = Node::column(
+        "mixed",
+        vec![
+            samples("a", 0, false),
+            samples("b", 2, false),
+            Node::segmented(
+                "seg",
+                Segmented {
+                    name: "Size".into(),
+                    options: vec!["Small".into(), "Large".into()],
+                    chosen: 1,
+                    action: "size".into(),
+                    disabled: false,
+                },
+                &tokens().segmented,
+                &types(),
+            ),
+            Node::radio_control("plain", "Plain", "plain", true),
+        ],
+    );
+    let mut s = laid(&n, (500., 250.), 1.);
+    let mut stops = Vec::new();
+    for _ in 0..4 {
+        s.key(KeyInput::Tab);
+        stops.push(s.focus().unwrap().0.clone());
+    }
+    assert_eq!(stops, ["a/0", "b/2", "seg/1", "plain"]);
+    s.key(KeyInput::ShiftTab);
+    assert_eq!(s.key(KeyInput::Right).unwrap().action, "size:0");
+    s.key(KeyInput::ShiftTab);
+    assert_eq!(s.key(KeyInput::Right).unwrap().key.0, "b/0");
+}
+#[test]
+fn swatches_readers_and_pointer_report_named_radio_choices() {
+    let mut s = laid(&sample_row(1, false), (500., 80.), 1.);
+    let tree = s.semantics(nk_a11y::Node::new(1, nk_a11y::Role::Window, "W"), 2);
+    let radios: Vec<_> = tree
+        .nodes
+        .values()
+        .filter(|n| n.role == nk_a11y::Role::RadioButton)
+        .collect();
+    assert_eq!(radios.len(), 3);
+    assert!(radios.iter().all(|n| n.description == "Accent colour"));
+    assert_eq!(
+        radios
+            .iter()
+            .filter(|n| n.states.checked)
+            .map(|n| n.name.as_str())
+            .collect::<Vec<_>>(),
+        ["Green"]
+    );
+    assert_eq!(
+        s.request(&Key::from("sw/2"), true).unwrap().action,
+        "accent:2"
+    );
+    let r = rect(&s, "sw/0");
+    s.pointer_motion(r[0] + r[2] / 2., r[1] + r[3] / 2.);
+    s.button(true, Instant::now());
+    assert_eq!(s.button(false, Instant::now()).unwrap().action, "accent:0");
+    let mut off = laid(&sample_row(1, true), (500., 80.), 1.);
+    off.key(KeyInput::Tab);
+    off.key(KeyInput::Tab);
+    assert_eq!(off.focus().map(|k| k.0.as_str()), Some("after"));
+    assert!(off.request(&Key::from("sw/2"), true).is_none());
+    let tree = off.semantics(nk_a11y::Node::new(1, nk_a11y::Role::Window, "W"), 2);
+    assert!(
+        tree.nodes
+            .values()
+            .filter(|n| n.role == nk_a11y::Role::RadioButton)
+            .all(|n| n.states.disabled)
+    );
+}
+fn sample_picture(chosen: usize, disabled: bool, shown: Option<Shown>) -> Node {
+    let mut n = samples("sw", chosen, disabled);
+    if let Kind::Stack(st) = &mut n.kind
+        && let Kind::Control(c) = &mut st.children[0].kind
+    {
+        c.shown = shown;
+    }
+    Node::row("picture", vec![n]).padding(Padding::all(Space::S3))
+}
+#[test]
+fn swatches_paint_palette_border_selection_hover_disabled_and_outer_focus() {
+    let (s, rest) = painted(&sample_picture(0, false, None), 200, 70);
+    let a = rect(&s, "sw/0");
+    let b = rect(&s, "sw/1");
+    let middle = |r: Rect, dx: f64| (r[0] + dx, r[1] + r[3] / 2.);
+    assert_eq!(bgra(&rest, 200, middle(a, a[2] / 2.)), [0, 0, 255, 255]);
+    assert_eq!(bgra(&rest, 200, middle(b, b[2] / 2.)), [0, 255, 0, 255]);
+    assert_eq!(
+        bgra(&rest, 200, middle(a, 1.)),
+        [255, 255, 255, 255],
+        "outer selection ring"
+    );
+    assert_eq!(
+        bgra(&rest, 200, middle(a, 4.)),
+        [255, 255, 255, 255],
+        "selection border"
+    );
+    assert_eq!(
+        bgra(&rest, 200, (a[0] + 0.5, a[1] + 0.5))[3],
+        0,
+        "round corner"
+    );
+    let (_, plain) = painted(&sample_picture(2, false, None), 200, 70);
+    assert_eq!(bgra(&plain, 200, middle(a, 3.))[3], 0);
+    let (_, hover) = painted(&sample_picture(2, false, Some(Shown::Hover)), 200, 70);
+    assert!(
+        (150..=155).contains(&bgra(&hover, 200, middle(a, 3.))[3]),
+        "hover border"
+    );
+    let (_, off) = painted(&sample_picture(0, true, Some(Shown::Hover)), 200, 70);
+    let alpha = bgra(&off, 200, middle(a, a[2] / 2.))[3];
+    assert!((112..=117).contains(&alpha), "disabled fill alpha {alpha}");
+    let alpha = bgra(&off, 200, middle(a, 1.))[3];
+    assert!(
+        (112..=117).contains(&alpha),
+        "disabled selection alpha {alpha}"
+    );
+    let (_, focused) = painted(&sample_picture(0, false, Some(Shown::Focus)), 200, 70);
+    let at = middle(a, -3.);
+    assert_eq!(bgra(&rest, 200, at)[3], 0);
+    assert!(
+        bgra(&focused, 200, at)[3] > 200,
+        "focus clears selection band"
+    );
+    let (_, off_focus) = painted(&sample_picture(0, true, Some(Shown::Focus)), 200, 70);
+    assert_eq!(bgra(&off_focus, 200, at)[3], 0);
+    let mut s = laid(&sample_picture(0, false, None), (200., 70.), 1.);
+    assert!(
+        s.frame(&tokens(), Instant::now()).states.is_empty(),
+        "no client glass/washes"
+    );
 }
 
 #[test]

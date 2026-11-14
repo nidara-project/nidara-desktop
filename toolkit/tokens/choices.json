@@ -32,7 +32,9 @@
       "gap": 8,
       "selectedColor": "--nidara-text",
       "hoverColor": "--nidara-text-dim",
-      "source": "button.accent-circle-btn: min 30px, 3px border, selected = border and a 2px outer ring of --nidara-text, hover border --nidara-text-dim. Gap: space-2 between swatches (provisional)."
+      "source": "button.accent-circle-btn: min 30px, 3px border, selected = border and a 2px outer ring of --nidara-text, hover border --nidara-text-dim. Gap: space-2 between swatches (provisional). Focus: the kit focus accent outside the selected band; disabled opacity 0.45, as the native choice family.",
+      "focus": "--nidara-accent",
+      "disabledOpacity": 0.45
     }
   },
   "variants": []

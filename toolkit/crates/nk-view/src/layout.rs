@@ -321,7 +321,7 @@ impl Faces {
     /// A face's inset, None for a face that pads nothing.
     fn inset(&self, face: Face) -> Option<(f64, f64, f64)> {
         match face {
-            Face::Plain => None,
+            Face::Plain | Face::Swatch(_) => None,
             Face::Button => Some(self.button),
             Face::Dropdown => Some(self.dropdown),
             Face::MenuRow => Some(self.menu_row),

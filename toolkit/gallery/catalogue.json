@@ -40,7 +40,7 @@
         {"name": "Dropdown", "gtk": "Gtk.DropDown", "appkit": "NSPopUpButton", "status": "both", "users": "Settings", "page": "dropdown"},
         {"name": "Editable combo", "gtk": "Gtk.ComboBox (entry)", "appkit": "NSComboBox", "status": "missing", "users": ""},
         {"name": "Date", "gtk": "Gtk.Calendar", "appkit": "NSDatePicker", "status": "hand", "users": "NC calendar"},
-        {"name": "Colour swatch", "gtk": "composite button", "appkit": "NSColorWell", "status": "widgets", "users": "Settings, Appearance"}
+        {"name": "Colour swatch", "gtk": "composite button", "appkit": "NSColorWell", "status": "both", "users": "Settings, Appearance", "page": "swatches"}
       ]
     },
     {
