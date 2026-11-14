@@ -193,14 +193,6 @@ def run(directory, fault=None, shots=True):
                           and (has_state(n, Atspi.StateType.CHECKED) or has_state(n, Atspi.StateType.PRESSED))]
                 check(f'{page}/alone', not marked, f'other entries marked: {marked}')
                 if shots:
-                    if page == 'swatches':
-                        # At fractional scale the narrow window overlays its sidebar on the
-                        # content. Capture the samples and their labels together, unobscured.
-                        activate('Hide sidebar', Atspi.Role.PUSH_BUTTON)
-                        barrier(lambda: find(root, 'Show sidebar', Atspi.Role.PUSH_BUTTON)
-                                and find(root, PAGES[0][1], Atspi.Role.TOGGLE_BUTTON) is None,
-                                'swatches sidebar hidden')
-                        pump(.3)
                     png = directory / f'{page}.png'
                     ipc('screenshot', png)
                     hashes[page] = hashlib.sha256(png.read_bytes()).hexdigest()

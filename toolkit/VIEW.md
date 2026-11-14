@@ -877,13 +877,13 @@ Not carried yet: segments with icons, and a segment disabled alone; Settings ask
 `Node::swatches(key, Swatches { name, colors, chosen, action, disabled }, &tokens.swatch)`
 shows named `(String, Color)` samples as circles. The application supplies the palette and
 rebuilds with the chosen index; the gallery reads its palette and names from exported
-`colors.json` (`accents` and `accentNames`).
+`colors.json` (`accentOrder`, `accents` and `accentNames`), retaining the product order.
 
 - Each sample is a `Role::Radio` keyed `"{key}/{n}"`, named by its colour and described by
   the group's `name`. Choosing it reports `"{action}:{n}"`. One Tab stop enters on the chosen
   sample; arrows wrap within the group. Disabled samples cannot be focused or activated.
-- Swatches and segmented choices share `Control::choice_part` (`ChoicePart`; `Segment` remains
-  an alias). Every row starts a new group even beside another choice row or plain radios.
+- Swatches and segmented choices share `Control::choice_part` (`ChoicePart`). Every row starts
+  a new group even beside another choice row or plain radios.
 - `Face::Swatch` paints off glass, with no compositor state region: the colour inside the border,
   the hover border on unchosen samples, and the chosen border plus outer ring in `selectedColor`.
   Disabled fill and band use `disabledOpacity`; the keyboard focus ring stands outside the chosen

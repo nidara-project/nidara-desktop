@@ -47,6 +47,13 @@ if len(used) < 10:
 
 sets = colors['sets']
 accents = colors['accents']
+accent_order = colors.get('accentOrder')
+if (not isinstance(accent_order, list) or not accent_order
+        or not all(isinstance(k, str) for k in accent_order)
+        or len(accent_order) != len(accents)
+        or len(set(accent_order)) != len(accent_order)
+        or set(accent_order) != set(accents)):
+    fail.append('missing or invalid accentOrder: must name every accent exactly once')
 want = set(product(accents, [True, False], [False, True], ['opaque', 'tinted', 'translucent']))
 got = [(s['accent'], s['dark'], s['reduceTransparency'], s['windowBackground']) for s in sets]
 if set(got) != want or len(got) != len(want):
