@@ -804,6 +804,56 @@ pub fn segmented_from(
     Ok(s)
 }
 
+/// Colour samples, outside glass; every field comes from `choices.swatch`.
+#[derive(Clone, Debug, PartialEq)]
+pub struct SwatchStyle {
+    pub diameter: f64,
+    pub border: f64,
+    pub ring: f64,
+    pub gap: f64,
+    pub selected: Color,
+    pub hover: Color,
+    pub focus: Color,
+    pub disabled_opacity: f64,
+}
+pub fn swatch_from(c: &Value, set: &Value) -> Result<SwatchStyle, String> {
+    let n = |k: &str| {
+        c[k].as_f64()
+            .filter(|v| v.is_finite() && *v >= 0.)
+            .ok_or_else(|| format!("swatch: no {k}"))
+    };
+    let color = |k: &str| -> Result<Color, String> {
+        let word = c[k].as_str().ok_or_else(|| format!("swatch: no {k}"))?;
+        let value = if word.starts_with("--") {
+            set["tokens"][word]
+                .as_str()
+                .ok_or_else(|| format!("colors.json: no {word}"))?
+        } else {
+            word
+        };
+        parse_color(value)
+    };
+    let s = SwatchStyle {
+        diameter: n("diameter")?,
+        border: n("border")?,
+        ring: n("ring")?,
+        gap: n("gap")?,
+        selected: color("selectedColor")?,
+        hover: color("hoverColor")?,
+        focus: color("focus")?,
+        disabled_opacity: n("disabledOpacity")?,
+    };
+    if [s.diameter, s.border, s.ring, s.gap]
+        .iter()
+        .any(|v| *v <= 0.)
+        || s.border * 2. >= s.diameter
+        || s.disabled_opacity > 1.
+    {
+        return Err("swatch: invalid measures".into());
+    }
+    Ok(s)
+}
+
 pub fn dropdown_from(
     component: &Value,
     set: &Value,
@@ -927,6 +977,7 @@ pub struct Tokens {
     pub button: ButtonStyle,
     pub dropdown: DropdownStyle,
     pub segmented: SegmentStyle,
+    pub swatch: SwatchStyle,
     /// A setting row's least height (`static.json` `ts.ROW_HEIGHT.single`).
     pub row_height: f64,
     /// A group's corner (`components.json` `common.groupRadius`), as Settings' cards.

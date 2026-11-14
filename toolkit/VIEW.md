@@ -871,3 +871,26 @@ Settings' dock size and gaming mode presets are this.
   20 text line, the `sm` corner, `fse-small` at `fw-medium`. Nothing is a default.
 
 Not carried yet: segments with icons, and a segment disabled alone; Settings asks for neither.
+
+### 13.11 Colour swatches
+
+`Node::swatches(key, Swatches { name, colors, chosen, action, disabled }, &tokens.swatch)`
+shows named `(String, Color)` samples as circles. The application supplies the palette and
+rebuilds with the chosen index; the gallery reads its palette and names from exported
+`colors.json` (`accents` and `accentNames`).
+
+- Each sample is a `Role::Radio` keyed `"{key}/{n}"`, named by its colour and described by
+  the group's `name`. Choosing it reports `"{action}:{n}"`. One Tab stop enters on the chosen
+  sample; arrows wrap within the group. Disabled samples cannot be focused or activated.
+- Swatches and segmented choices share `Control::choice_part` (`ChoicePart`; `Segment` remains
+  an alias). Every row starts a new group even beside another choice row or plain radios.
+- `Face::Swatch` paints off glass, with no compositor state region: the colour inside the border,
+  the hover border on unchosen samples, and the chosen border plus outer ring in `selectedColor`.
+  Disabled fill and band use `disabledOpacity`; the keyboard focus ring stands outside the chosen
+  band and disappears when disabled.
+- `SwatchStyle` requires every field from `components.json` `choices.swatch`: diameter 30,
+  border 3, outer ring 2, gap 8, selected and hover colours, focus colour and disabled opacity.
+  There are no decoder defaults. The row keeps circular controls and the exact gap when stretched.
+
+The Swatches gallery page shows rest, selected, hover, pressed, focus and disabled states plus
+a live Accent colour choice. These checks do not replace owner review in the installed session.

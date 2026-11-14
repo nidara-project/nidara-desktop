@@ -165,12 +165,14 @@ for variant in component_variants:
             and all(unit(segmented.get(k)) for k in ('selectedHoverWhite', 'selectedPressedBlack', 'disabledOpacity'))
             and segmented.get('radius') in static['ts']['RADIUS']
             and segmented.get('fontWeight') in static['scss']
-            and all(positive_number(swatch.get(k)) for k in ('diameter', 'border', 'ring', 'gap'))):
+            and all(positive_number(swatch.get(k)) for k in ('diameter', 'border', 'ring', 'gap'))
+            and swatch['border'] * 2 < swatch['diameter']
+            and unit(swatch.get('disabledOpacity'))):
         fail.append(f'{where}: incomplete or invalid choices (segmented/swatch)')
     for key in (segmented.get('borderColor'), segmented.get('selectedColor'), segmented.get('selectedText'),
                 segmented.get('background'), segmented.get('hover'), segmented.get('pressed'),
                 segmented.get('text'), segmented.get('focus'),
-                swatch.get('selectedColor'), swatch.get('hoverColor')):
+                swatch.get('selectedColor'), swatch.get('hoverColor'), swatch.get('focus')):
         if not isinstance(key, str) or not all(key in color_set['tokens'] for color_set in sets):
             fail.append(f'{where}: missing choices colour token {key}')
     ranged = variant.get('range') or {}
