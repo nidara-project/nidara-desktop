@@ -133,7 +133,10 @@ a=sys.argv[1:]
 assert a[0:2]==['--bus','7'],a
 mode=(root/'ddc-mode').read_text()
 if mode=='hang':
-    (root/'child-pid').write_text(str(os.getpid()))
+    # Existence signals readiness to the Rust waiters: publish only a complete PID.
+    pending_pid=root/('child-pid.'+str(os.getpid())+'.tmp')
+    pending_pid.write_text(str(os.getpid()))
+    pending_pid.replace(root/'child-pid')
     time.sleep(30)
 if mode=='fail':sys.exit(1)
 if a[2:]==['--terse','getvcp','10']:

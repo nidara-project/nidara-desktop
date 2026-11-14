@@ -3108,6 +3108,12 @@ this same integration to fail specifically at `replaces_id replaces the live ent
 It restores the source before the real build/lint/tests. A random startup error
 cannot count as the control catching the rule.
 
+The fake DDC child in `power/brightness/tests.rs` publishes `child-pid` by writing
+a sibling temporary file and renaming it. Both cancellation waiters use the
+marker's existence as readiness; writing directly to it exposes an empty file
+between creation and write and makes PID parsing race under load. Preserve the
+atomic publication when changing this fixture.
+
 **The daemon does not poll at idle (#1054), so a fake provider must signal.** BlueZ,
 obex, NetworkManager, tray and audio work is woken by the provider's own signals,
 owner changes and request wake-ups; only a slow reconciliation (30 s) and active
