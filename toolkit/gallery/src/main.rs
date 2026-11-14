@@ -18,6 +18,7 @@ struct Gallery {
     portal: Portal,
     window: AppWindow,
     catalogue: Catalogue,
+    colors: Vec<(String, nk_render::Color)>,
     model: Model,
     /// The pages visited, and where in them back and forward stand.
     history: Vec<usize>,
@@ -40,6 +41,8 @@ impl Gallery {
                 slider: &look.tokens.slider,
                 dropdown: &look.tokens.dropdown,
                 segmented: &look.tokens.segmented,
+                swatch: &look.tokens.swatch,
+                colors: &self.colors,
                 glyph: look.frame.icon,
             },
         );
@@ -77,6 +80,10 @@ impl Gallery {
         if self.inert {
             eprintln!("CONTROL_APPLIED inert");
             return;
+        }
+        if let Some(i) = action.strip_prefix("accent:").and_then(|i| i.parse().ok()) {
+            self.model.accent = i;
+            return self.rebuild();
         }
         if let Some(i) = action.strip_prefix("size:").and_then(|i| i.parse().ok()) {
             self.model.size = i;
@@ -240,7 +247,9 @@ fn run() -> Result<()> {
         Glyphs::new(icons()?),
         appearance.reduced_motion,
     );
+    let colors = pages::colors_from(&exports.colors)?;
     let mut gallery = Gallery {
+        colors,
         exports,
         portal,
         window,

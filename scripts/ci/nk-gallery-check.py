@@ -26,7 +26,7 @@ MSG = [os.environ.get('HYALO_BIN', 'nidara-hyalo'), 'msg']
 TITLE = 'Nidara Kit Gallery'
 PAGES = [('status', 'Status'), ('button', 'Button'), ('switch', 'Switch'),
          ('check', 'Checkbox and radio'), ('dropdown', 'Dropdown'),
-         ('segmented', 'Segmented choice'), ('row', 'Setting row'), ('slider', 'Slider'),
+         ('segmented', 'Segmented choice'), ('swatches', 'Swatches'), ('row', 'Setting row'), ('slider', 'Slider'),
          ('field', 'Text field'), ('glass', 'Glass card'), ('text', 'Text'), ('icons', 'Icons'),
          ('layout', 'Layout'), ('scroll', 'Scroll'), ('overlay', 'Overlay'), ('grid', 'Grid'),
          ('reveal', 'Reveal')]
@@ -261,6 +261,24 @@ def run(directory, fault=None, shots=True):
                     check('segmented/choose', chosen == ['Large']
                           and find(root, 'Try it: dock size Large') is not None,
                           f'chosen {chosen}, or the choice did not reach the model')
+                elif page == 'swatches':
+                    group = [n for n in walk(root) if n.get_role() == Atspi.Role.RADIO_BUTTON
+                             and n.get_description() == 'Accent colour']
+                    check('swatches/group', len(group) >= 2
+                          and sum(has_state(n, Atspi.StateType.CHECKED) for n in group) == 1,
+                          'the live colours are not a radio group with one chosen')
+                    target = next(n for n in group if not has_state(n, Atspi.StateType.CHECKED))
+                    name = target.get_name()
+                    published(lambda: target.get_action_iface().do_action(0))
+                    chosen = [n.get_name() for n in walk(root) if n.get_role() == Atspi.Role.RADIO_BUTTON
+                              and n.get_description() == 'Accent colour' and has_state(n, Atspi.StateType.CHECKED)]
+                    check('swatches/choose', chosen == [name]
+                          and find(root, f'Try it: accent {name}') is not None,
+                          f'chosen {chosen}, or the colour did not reach the model')
+                    if shots:
+                        # Keep the model's chosen state as visual evidence too.
+                        pump(.3)
+                        ipc('screenshot', directory / 'swatches-chosen.png')
                 elif page == 'row':
                     check('row/inert', find(root, 'Title only', Atspi.Role.PUSH_BUTTON) is None
                           and find(root, 'Ending in a switch', Atspi.Role.TOGGLE_BUTTON) is not None,

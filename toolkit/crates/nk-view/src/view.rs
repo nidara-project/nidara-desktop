@@ -1,7 +1,9 @@
 // SPDX-License-Identifier: LGPL-3.0-or-later
 //! The view: a value a surface builds from its model on each change (VIEW.md §2).
 use crate::host::TypeScale;
-use crate::tokens::{DropdownStyle, MenuStyle, Radii, Radius, SegmentStyle, SliderStyle, Space};
+use crate::tokens::{
+    DropdownStyle, MenuStyle, Radii, Radius, SegmentStyle, SliderStyle, Space, SwatchStyle,
+};
 use nk_text::TextStyle;
 use serde::{Deserialize, Serialize};
 
@@ -390,10 +392,10 @@ pub struct Control {
     /// A dropdown's options and the one chosen (VIEW.md §13.9); its role is `Dropdown`.
     #[serde(default)]
     pub choice: Option<Choice>,
-    /// Which segment of a segmented choice this is (VIEW.md §13.10): its place decides which
-    /// of its corners are the group's.
+    /// Membership in an independent choice row (segmented or swatches). Its index/count
+    /// also decide a segment's rounded ends.
     #[serde(default)]
-    pub segment: Option<Segment>,
+    pub choice_part: Option<ChoicePart>,
     /// On (VIEW.md §12.4): the glass under it is white, the primary ink at full, and what it
     /// holds is drawn in the accent. Hover and press do not show over it.
     #[serde(default)]
@@ -422,7 +424,7 @@ pub struct Control {
 }
 
 /// How a control is drawn (VIEW.md §13.2).
-#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Clone, Copy, Debug, Default, PartialEq, Serialize, Deserialize)]
 pub enum Face {
     /// What it holds, with the washes of its state: Hyalo's on glass, the view's off it.
     #[default]
@@ -441,13 +443,25 @@ pub enum Face {
     /// One segment of a segmented choice (`components.json` `choices.segmented`, VIEW.md
     /// §13.10): its label centred in its padding; the chosen one is the accent.
     Segment,
+    /// One colour sample, with its border/selection band outside glass (VIEW.md §13.11).
+    Swatch([f32; 4]),
 }
 
-/// A segment's place in its segmented choice: `index` of `count`.
+/// A radio's place in an independent choice row (segments or swatches): `index` of `count`.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
-pub struct Segment {
+pub struct ChoicePart {
     pub index: usize,
     pub count: usize,
+}
+
+/// Colour samples: one radio group, each choice reports `"{action}:{n}"`.
+#[derive(Clone, Debug)]
+pub struct Swatches {
+    pub name: String,
+    pub colors: Vec<(String, nk_render::Color)>,
+    pub chosen: usize,
+    pub action: String,
+    pub disabled: bool,
 }
 
 /// A segmented choice (VIEW.md §13.10, GTK's linked toggle buttons): one choice of a few, all
@@ -966,7 +980,7 @@ impl Node {
                 slider: None,
                 field: None,
                 choice: None,
-                segment: None,
+                choice_part: None,
                 on: false,
                 accent: false,
                 surface: false,
@@ -1068,12 +1082,43 @@ impl Node {
                 if let Kind::Control(c) = &mut c.kind {
                     c.wash = Wash::None;
                     c.face = Face::Segment;
-                    c.segment = Some(Segment { index: n, count });
+                    c.choice_part = Some(ChoicePart { index: n, count });
                 }
                 c
             })
             .collect();
         Self::row(key, segments)
+    }
+    /// A row of colour samples, with the exported swatch geometry and independent radio membership.
+    pub fn swatches(key: impl Into<Key>, s: Swatches, style: &SwatchStyle) -> Self {
+        let key = key.into();
+        let count = s.colors.len();
+        let side = style.diameter + 2. * style.ring;
+        let mut children = Vec::new();
+        for (n, (name, color)) in s.colors.iter().enumerate() {
+            if n > 0 {
+                children.push(Self::row(format!("{}/gap/{n}", key.0), vec![]).width(style.gap));
+            }
+            let k = format!("{}/{n}", key.0);
+            let mut node = Self::control(
+                k.clone(),
+                name.clone(),
+                format!("{}:{n}", s.action),
+                Self::spacer(format!("{k}/circle")).width(side).height(side),
+            )
+            .role(Role::Radio)
+            .marked(n == s.chosen)
+            .enabled(!s.disabled)
+            .description(s.name.clone())
+            .height(side);
+            if let Kind::Control(c) = &mut node.kind {
+                c.face = Face::Swatch(color.components);
+                c.wash = Wash::None;
+                c.choice_part = Some(ChoicePart { index: n, count });
+            }
+            children.push(node);
+        }
+        Self::row(key, children).align(Align::Center)
     }
     /// A row of a dropdown's open list: `label` and room for the tick after it, in the row's
     /// padding (`style`, the exported `dropdown.menu`). `chosen` ticks it.
