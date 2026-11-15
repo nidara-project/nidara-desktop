@@ -487,6 +487,10 @@ fn post_logical_repaint(
     if crate::render::stats::overlay_animating(&output.name()) {
         state.queue_redraw(Some(output));
     }
+    // A wallpaper fading in over the one before it (render/wallpaper.rs).
+    if crate::render::wallpaper::animating(output) {
+        state.queue_redraw(Some(output));
+    }
     // Glass easing to its backdrop's answer, or a button's wash fading (protocols/material.rs
     // `Presenting`): a frame until it settles, none after.
     if crate::protocols::material::take_easing() {

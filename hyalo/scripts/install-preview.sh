@@ -16,7 +16,7 @@ set -eu
 here=$(cd "$(dirname "$0")" && pwd)
 repo=$(cd "$here/../.." && pwd)
 
-files="/usr/bin/nidara-hyalo /usr/bin/nidara-hyalo-session /usr/lib/nidara-hyalo/restore-wallpaper
+files="/usr/bin/nidara-hyalo /usr/bin/nidara-hyalo-session
 /usr/lib/nidara-hyalo/start-shell /usr/bin/nidara-shell
 /usr/lib/systemd/user/nidara-rust-shell.service
 /usr/share/nidara/hyalo/hyalo.toml /usr/share/wayland-sessions/nidara-hyalo.desktop"
@@ -64,7 +64,6 @@ echo "Building the Rust shell (release)…"
 echo "Installing (sudo)…"
 sudo install -Dm755 "$repo/hyalo/target/release/nidara-hyalo"         /usr/bin/nidara-hyalo
 sudo install -Dm755 "$repo/bin/nidara-hyalo-session"                   /usr/bin/nidara-hyalo-session
-sudo install -Dm755 "$repo/hyalo/session/restore-wallpaper"            /usr/lib/nidara-hyalo/restore-wallpaper
 sudo install -Dm755 "$repo/hyalo/session/start-shell"                  /usr/lib/nidara-hyalo/start-shell
 sudo install -Dm755 "$repo/toolkit/target/release/nidara-shell"        /usr/bin/nidara-shell
 sudo install -Dm644 "$repo/bin/nidara-rust-shell.service"                    /usr/lib/systemd/user/nidara-rust-shell.service

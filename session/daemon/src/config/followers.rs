@@ -194,7 +194,16 @@ async fn request(path: &Path, value: Json) -> Result<(), String> {
     .await
     .map_err(|_| "Hyalo request timed out".to_owned())?
 }
+/// On Hyalo the compositor draws the wallpaper and is told of it (#1044); on the frozen
+/// Hyprland session a separate program still does.
 async fn wallpaper((path, transition): (String, String)) -> Result<(), String> {
+    if let Some(hyalo) = socket().filter(|p| p.exists()) {
+        return request(
+            &hyalo,
+            json!({"request":"wallpaper", "path":path, "transition":transition}),
+        )
+        .await;
+    }
     // No shell: a path, including whitespace or metacharacters, stays a single argument.
     let mut command = tokio::process::Command::new("awww");
     command

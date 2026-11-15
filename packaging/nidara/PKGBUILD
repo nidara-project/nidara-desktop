@@ -634,12 +634,11 @@ package_nidara-hyalo() {
   # pango + cairo: the title bar's text (render/title_bar.rs). xorg-xwayland: X11 apps — Steam
   # and most games — with Hyalo as their window manager (xwayland.rs, #683).
   depends=("nidara-desktop=$pkgver-$pkgrel" uwsm libinput seatd libdisplay-info libxkbcommon mesa
-           systemd-libs awww pango cairo xorg-xwayland)
+           systemd-libs pango cairo xorg-xwayland)
 
   cd "$srcdir/nidara-desktop-$pkgver"
   install -Dm755 hyalo/target/release/nidara-hyalo "$pkgdir/usr/bin/nidara-hyalo"
   install -Dm755 bin/nidara-hyalo-session "$pkgdir/usr/bin/nidara-hyalo-session"
-  install -Dm755 hyalo/session/restore-wallpaper "$pkgdir/usr/lib/nidara-hyalo/restore-wallpaper"
   install -Dm755 toolkit/target/release/nidara-shell "$pkgdir/usr/bin/nidara-shell"
   install -Dm755 toolkit/target/release/nidara-kit-gallery "$pkgdir/usr/bin/nidara-kit-gallery"
   install -Dm644 toolkit/gallery/nidara-kit-gallery.desktop "$pkgdir/usr/share/applications/nidara-kit-gallery.desktop"

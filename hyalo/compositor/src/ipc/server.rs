@@ -204,7 +204,8 @@ fn operation(req: &Request) -> Operation {
         Request::SetOutput { .. } => Operation::Outputs,
         Request::OutputPower { .. } | Request::PowerWake | Request::PowerLock => Operation::Power,
         Request::NightLight { .. } => Operation::NightLight,
-        Request::Settings { .. } => Operation::Configure,
+        // A setting of the session's, as the cursor is: the daemon that owns it, and Settings.
+        Request::Settings { .. } | Request::Wallpaper { .. } => Operation::Configure,
         Request::ReloadConfig => Operation::Reload,
         Request::MinimizeTargets { .. } => Operation::MinimizeTargets,
         Request::DebugOverlay { .. } => Operation::WindowControl,
@@ -284,6 +285,17 @@ fn handle(state: &mut Hyalo, req: Request) -> Reply {
         },
         Request::DebugOverlay { on } => {
             crate::render::stats::set_overlay(on);
+            state.queue_redraw(None);
+            Reply::Ok(Response::Handled)
+        }
+        Request::Wallpaper { path, transition } => {
+            let path = std::path::PathBuf::from(path);
+            if !path.is_absolute() {
+                return Reply::Error("wallpaper: the path must be absolute".into());
+            }
+            let transition = crate::render::wallpaper::Transition::named(transition.as_deref().unwrap_or("none"));
+            let fade = std::time::Duration::from_millis(state.config.animations.fade as u64);
+            crate::render::wallpaper::set(path, transition, fade);
             state.queue_redraw(None);
             Reply::Ok(Response::Handled)
         }

@@ -17,9 +17,7 @@ autostart = [
   # One Rust shell (bar, dock, panels), restarted on failure, after all session services.
   # No TS shell or separate dock in Hyalo (#1017).
   "/usr/lib/nidara-hyalo/start-shell",
-  # The wallpaper: awww draws it; the user's choice is in ~/.config/nidara/wallpaper.
-  "uwsm app -s b -- awww-daemon",
-  "/usr/lib/nidara-hyalo/restore-wallpaper",
+  # No wallpaper program: Hyalo draws the user's choice (~/.config/nidara/wallpaper) itself.
   "uwsm app -s b -- /usr/lib/polkit-gnome/polkit-gnome-authentication-agent-1",
   # Completes the keyring PAM unlocked at login (see config/hypr/hyprland.lua for why this
   # line is not a formality).

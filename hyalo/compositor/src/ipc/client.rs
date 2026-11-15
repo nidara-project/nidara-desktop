@@ -124,6 +124,10 @@ fn parse(args: &[String]) -> Result<Option<String>, String> {
         "lock" => Request::Lock,
         "idle" => Request::Idle,
         "xwayland" => Request::Xwayland,
+        "wallpaper" => Request::Wallpaper {
+            path: args.get(1).ok_or("wallpaper needs the absolute path of a picture")?.clone(),
+            transition: args.get(2).cloned(),
+        },
         "night-light" => {
             let arg = args.get(1).ok_or("night-light needs a temperature in kelvin, or `off`")?;
             let temperature = if arg == "off" { None } else { Some(arg.parse::<u32>().map_err(|e| format!("night-light: {e}"))?) };

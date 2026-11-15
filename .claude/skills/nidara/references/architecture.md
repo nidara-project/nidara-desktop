@@ -1183,6 +1183,10 @@ portal stack, and only then `hl.dsp.exit()`. Two rules for anything added there:
 
 ### Wallpaper at login: never trust awww's cache
 
+**This section is the Hyprland session's.** On Hyalo no program draws the wallpaper and none
+of this applies: Hyalo reads the same file and draws it itself (`references/hyalo.md`, "The
+wallpaper is Hyalo's", #1044).
+
 `~/.config/nidara/wallpaper` is the **single source of truth** (written by `WallpaperManager`,
 shown in Settings, resolved by greeter/lockscreen via `ui/lib/wallpaper.ts`). `awww-daemon` keeps a
 per-output cache of its own (`~/.cache/awww/<ver>/<OUTPUT>`), but it is **shadow state, not
