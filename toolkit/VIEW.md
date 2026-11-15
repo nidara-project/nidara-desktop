@@ -1006,6 +1006,8 @@ the supplied model wins at reconciliation. The chevron target and the Reveal ret
 that rebuild, within the same application turn and before its commit. The component
 never changes the application's model or edits its content.
 
+Disclosure on glass is not covered: it paints its own hover for content surfaces.
+
 The header accepts click anywhere, Enter, Space and reader activation. Its actual reader
 role is ToggleButton with expandable/expanded states. The ordinary Reveal removes closed
 content from Tab order and the reader tree. A disabled header neither activates nor
@@ -1025,3 +1027,81 @@ the next tick and uses its destination immediately. This fixes the common motion
 not a disclosure branch; the midflight regression fails without the correction. Generic
 state/layout files otherwise remain unchanged. This step does not add editable text,
 nested tree rows, a layer-surface host or install anything in the live session.
+
+
+## 17. Retained editable and search fields (#1103, step 4)
+
+`components::EditableField::new(text).node(key, name, changed_action)` is a nonsecret,
+single-line editor. Its public data includes placeholder, optional submit action, chrome
+and Escape-clearing policy; new component data does not add Configure variants. Enter
+reports the submit action, while each committed text change reports changed_action with
+`Value::Text`. Selection, preedit, focus changes and no-op SetText do not activate the app.
+The application applies the new text and rebuilds before AppWindow commits.
+
+External text (model, reader SetText/Set, paste and IME commit) shares one single-line
+normalization: remove exactly one final logical line break, map interior line breaks and
+tabs to spaces, and remove other control characters. CRLF counts as one break; CR, LF,
+NEL and Unicode line/paragraph separators are recognized. Ordinary spaces and Unicode
+content remain unchanged. Model and placeholder text are normalized before preparation,
+so these characters cannot terminate the window through a preparation error. Reconciliation,
+reader text and search's clear-control visibility use the normalized value. Model cleanup
+does not emit an edit; input actions report the normalized committed text. Preedit remains
+validated without rewriting its IME byte offsets, and an invalid preedit/delete batch is
+still rejected before changing committed text. Secrets retain their separate policy.
+
+The component owns nk-text::Editor in keyed, typed state. A rebuild echoing the current text
+acknowledges the pending report and leaves the editor, selection, undo and composition alone.
+A pending report is also retired on an external replacement: an old reported value must
+never shadow a later model replacement. Other model text replaces the buffer and ends
+composition. Appearance changes reflow the
+same editor. TextBackend::fork creates an independent engine with the same FontSet and
+system-font policy; the generic prepare question supplies look and backend. Unsupported
+backends/preparation failures are exposed through ViewState::component_errors and checked
+by AppWindow, never silently replaced with a different font source.
+
+Build can read retained state. Read.part(suffix) locates a node of the component's own body;
+focused_part queries its focus. FrameSpec's Inset placement fills both axes within its
+padding (unlike FillWidth's natural-height centering). Disclosure now uses its actual
+chevron slot and this placement; its Settings SVG endpoint comparisons remain exact.
+The arrange question lets a component update its own viewport state after geometry changes.
+Editable's native Layout drives drawing, hit testing, word selection, caret/selection,
+reader text geometry and horizontal scrolling. No editable-field branches enter the view,
+layout, motion or host.
+
+Raw keys (symbol, text, Ctrl/Shift/Alt) reach the focused component before the common
+navigation mapping. Typed Unicode, visual and word movement, Home/End, extended selection,
+Backspace/Delete, select-all, undo/redo and cut/copy/paste reuse Editor. Pointer press focuses
+and captures; drag extends; a double press selects a word. AppWindow passes the existing
+header double-click interval. Blur is a separate component callback from cancellation,
+so retiring an editor's composition does not discard another control's pending input.
+Disabling, hiding or removing the focused field ends its IME context and makes stale replies
+ineligible.
+
+The host fulfils Copy, Paste and TextInput requests. A ReplyTarget contains the owner key,
+component TypeId, a process-unique instance and the editor revision. The latest paste intent
+reserves a fresh revision; replies after editing, cursor movement, blur, replacement or a
+newer request are ignored. Instances cannot alias across ViewState lifetimes. The native
+Window allocates clipboard request IDs, so replacing a host cannot recycle a pending wire
+ID. request_paste returns that ID, with one PasteReply for success/cancel/invalid data or a
+five-second timeout; reads remain bounded by the existing 16 MiB cap. Legacy paste/Event::Paste
+stays available to existing applications. Local Respond/Focus host intents compose a clear
+control with its entry without teaching AppWindow what search is.
+
+IME batches reuse the existing search rules: preedit is a separate display buffer, batches
+are validated before committed mutation, cancellation restores the committed text, and the
+forwarded Escape after commit/cancel consumes a one-shot boundary. The host receives the
+current caret rectangle and committed surrounding text every turn; nk-wayland suppresses
+unchanged requests and applies the protocol's UTF-8 limit. Preedit is not published as
+committed accessible text. Reader SetText/SetSelection use the published semantic identities
+and publication revision, with Editor's UTF-8/grapheme validation and native geometry.
+
+`components::Search` composes the token glyph, a chrome-free EditableField and a clear
+control inside one search chrome. The clear intent enters the same editor and returns focus;
+Escape first handles composition, then clears a nonempty query, then is left for the host.
+Search/entry measures and colors come from components.search; the clear glyph comes from
+search.clearIcon. State, keyboard, semantics and painting are shared, not a second editor.
+
+Secrets keep the owner-edited display field and the CC's existing bounded/paste/no-copy
+rules. No secret is migrated into Editor or IME. Multiline and numeric entry, Settings'
+actual migration, and a host for shell layer surfaces remain out of this step. Private
+headless/AT-SPI/scripted-IME checks do not establish physical-session or Orca acceptance.

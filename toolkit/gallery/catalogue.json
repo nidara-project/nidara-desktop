@@ -48,9 +48,9 @@
       "items": [
         {"name": "Label", "gtk": "Gtk.Label", "appkit": "NSTextField (label)", "status": "both", "users": "everything", "page": "text"},
         {"name": "Heading", "gtk": "Gtk.Label (title class)", "appkit": "NSTextField (title font)", "status": "view", "users": "NC, CC", "page": "text"},
-        {"name": "Text field", "gtk": "Gtk.Entry", "appkit": "NSTextField", "status": "both", "users": "CC passwords", "page": "field"},
+        {"name": "Text field", "gtk": "Gtk.Entry", "appkit": "NSTextField", "status": "both", "users": "Settings (nk-widgets), gallery editor (nk-view); CC uses owner-edited display field", "page": "entry"},
         {"name": "Password field", "gtk": "Gtk.PasswordEntry", "appkit": "NSSecureTextField", "status": "view", "users": "CC passwords", "page": "field"},
-        {"name": "Search field", "gtk": "Gtk.SearchEntry", "appkit": "NSSearchField", "status": "hand", "users": "Settings (nk-widgets), Apps (by hand)"},
+        {"name": "Search field", "gtk": "Gtk.SearchEntry", "appkit": "NSSearchField", "status": "both", "users": "Settings (nk-widgets), gallery (nk-view); Apps remains by hand", "page": "search"},
         {"name": "Text editor", "gtk": "Gtk.TextView", "appkit": "NSTextView", "status": "missing", "users": ""},
         {"name": "Link", "gtk": "Gtk.LinkButton", "appkit": "NSTextField (link)", "status": "missing", "users": ""},
         {"name": "Icon", "gtk": "Gtk.Image", "appkit": "NSImageView (symbol)", "status": "both", "users": "everything", "page": "icons"},

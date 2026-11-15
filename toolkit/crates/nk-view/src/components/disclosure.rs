@@ -47,6 +47,10 @@ impl Disclosure {
             .unwrap_or(self.expanded)
     }
     fn set(&self, cx: &mut Input<'_>, expanded: bool) {
+        if self.current(cx.state.as_deref()) == expanded {
+            cx.effects.handled = true;
+            return;
+        }
         if let Some(s) = cx
             .state
             .as_deref_mut()
@@ -85,7 +89,7 @@ impl Component for Disclosure {
         FrameSpec {
             inset: (t.padding, t.padding),
             least: (0., t.height),
-            body: BodyPlacement::FillWidth,
+            body: BodyPlacement::Inset,
         }
     }
     fn target(&self) -> Option<f64> {
@@ -141,8 +145,14 @@ impl Component for Disclosure {
             cx.canvas
                 .rounded_rect(rect(&r), 0., cx.ink(ink.with_alpha(t.hover_opacity as f32)));
         }
-        let side = t.icon_size.min(r[2]).min(r[3]);
-        let center = (r[0] + r[2] - t.padding - side / 2., r[1] + r[3] / 2.);
+        let Some(slot) = cx.read.part("chevron") else {
+            return;
+        };
+        let side = t.icon_size.min(slot.rect[2]).min(slot.rect[3]);
+        let center = (
+            slot.rect[0] + slot.rect[2] / 2.,
+            slot.rect[1] + slot.rect[3] / 2.,
+        );
         let angle = cx
             .progress
             .unwrap_or(f64::from(self.expanded))

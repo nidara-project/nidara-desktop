@@ -4,7 +4,7 @@
 //! the semantics; and the content paint (texts, icons, the focus ring, and the D5 washes).
 use crate::components::{
     Capture, ComponentLook, HostRequest, Input, Interaction, ListSpec, Membership, Outcome, Paint,
-    PaintPhase, Read, Request, SemanticChild, StateStore, Value,
+    PaintPhase, Read, ReplyTarget, Request, SemanticChild, StateStore, Value,
 };
 use crate::layout::{Layouter, Placed, Rect, TextCache, What};
 use crate::motion::{MotionState, SWIPE_CLAIM};
@@ -191,6 +191,9 @@ pub struct ViewState {
     /// Pointer sequence owner and component identity, independent of hover.
     capture: Option<(Key, std::any::TypeId)>,
     host_requests: Vec<HostRequest>,
+    clicks: u8,
+    last_click: Option<(Key, Instant, (f64, f64))>,
+    double_click: Option<Duration>,
     /// Semantic item targets retain their owner key, component identity and value.
     options: HashMap<NodeId, (Key, std::any::TypeId, Value)>,
 }
@@ -235,6 +238,9 @@ impl ViewState {
             lifted: None,
             capture: None,
             host_requests: Vec::new(),
+            clicks: 1,
+            last_click: None,
+            double_click: None,
             options: HashMap::new(),
         }
     }
@@ -363,7 +369,7 @@ impl ViewState {
             .filter(|p| matches!(p.what, What::Pane(_)))
             .map(|p| (p.key.clone(), p.rect))
             .collect();
-        let expanded = self.components.expand(view, look);
+        let expanded = self.components.expand(view, look, text);
         self.motion.view(&expanded, now, &tokens.motion);
         self.tokens = Some(tokens.clone());
         self.types = Some(look.types.clone());
@@ -377,6 +383,9 @@ impl ViewState {
             .filter(|&i| self.enabled(i))
             .map(|i| self.placed[i].key.clone())
             .collect();
+        if self.focus.as_ref().is_some_and(|k| !live.contains(k)) {
+            self.blur_key(self.focus.clone());
+        }
         for state in [&mut self.press, &mut self.focus] {
             if state.as_ref().is_some_and(|k| !live.contains(k)) {
                 *state = None;
@@ -527,6 +536,19 @@ impl ViewState {
         self.now = now;
         self.laid = placed;
         self.reswipe();
+        if self
+            .focus
+            .as_ref()
+            .and_then(|key| self.index(key))
+            .is_some_and(|i| self.placed[i].alpha <= 0.)
+        {
+            self.blur();
+        }
+        for i in 0..self.placed.len() {
+            if self.placed[i].part().is_some() {
+                self.component_input(i, |c, cx| c.arrange(cx));
+            }
+        }
     }
 
     /// Each scrolled region's first pane in view, and how far below the region's top it is.
@@ -650,6 +672,9 @@ impl ViewState {
             interaction: self.interaction(i),
             role: p.control.map(|o| self.control(o).role),
             focused: self.focus.as_ref() == Some(&p.key),
+            focus: self.focus.as_ref(),
+            instance: self.components.instance(&p.key),
+            clicks: self.clicks,
             owns_mark: self.holds_mark(i),
             fading: self.fading.contains_key(&p.key),
             state: self.components.get(&p.key),
@@ -682,7 +707,9 @@ impl ViewState {
         i: usize,
         event: impl FnOnce(&dyn crate::components::Component, &mut Input<'_>),
     ) -> Option<Outcome> {
-        if !self.enabled(i) {
+        if matches!(self.placed[i].what, What::Control(_))
+            && (!self.enabled(i) || self.placed[i].alpha <= 0.)
+        {
             return None;
         }
         let part = self.placed[i].part()?;
@@ -696,8 +723,15 @@ impl ViewState {
             rect: p.rect,
             visible: p.visible().unwrap_or(p.rect),
             interaction,
-            role: Some(self.control(i).role),
+            role: if let What::Control(c) = &p.what {
+                Some(c.role)
+            } else {
+                None
+            },
             focused: self.focus.as_ref() == Some(&key),
+            focus: self.focus.as_ref(),
+            instance: self.components.instance(&p.key),
+            clicks: self.clicks,
             owns_mark,
             fading: self.fading.contains_key(&key),
             state: None,
@@ -714,6 +748,9 @@ impl ViewState {
             Capture::Keep => {}
         }
         if effects.focus {
+            if self.focus.as_ref() != Some(&key) {
+                self.blur_key(self.focus.clone());
+            }
             self.focus = Some(key);
             self.focus_visible = false;
         }
@@ -723,7 +760,9 @@ impl ViewState {
     fn activated(&self, i: usize, effects: Outcome) -> Option<Activated> {
         effects.activate.then(|| Activated {
             key: self.placed[i].key.clone(),
-            action: self.control(i).action.clone(),
+            action: effects
+                .action
+                .unwrap_or_else(|| self.control(i).action.clone()),
             value: effects
                 .value
                 .or_else(|| self.typed_value(&self.placed[i].key)),
@@ -734,6 +773,64 @@ impl ViewState {
             .part()
             .map(|p| p.component().group(&self.context(i)))
             .unwrap_or(Membership::None)
+    }
+    pub fn component_errors(&self) -> Vec<(Key, String)> {
+        self.components.errors()
+    }
+    pub fn set_double_click_ms(&mut self, ms: u32) {
+        self.double_click = Some(Duration::from_millis(ms.into()));
+    }
+    pub fn text_input(&self) -> nk_wayland::TextInput {
+        self.focus
+            .as_ref()
+            .and_then(|k| self.index(k))
+            .filter(|&i| self.enabled(i) && self.shown(i))
+            .and_then(|i| {
+                self.placed[i]
+                    .part()?
+                    .component()
+                    .text_input(&self.context(i))
+            })
+            .unwrap_or_default()
+    }
+    pub fn reply(&mut self, target: &ReplyTarget, request: Request) -> Option<Activated> {
+        let i = self
+            .index(&target.owner)
+            .filter(|&i| self.enabled(i) && self.shown(i))?;
+        let part = self.placed[i].part()?.component();
+        if self.focus.as_ref() != Some(&target.owner)
+            || part.type_id() != target.kind
+            || self.components.instance(&target.owner) != target.instance
+            || part.revision(self.components.get(&target.owner)) != Some(target.revision)
+        {
+            return None;
+        }
+        self.respond(&target.owner, request)
+    }
+    pub fn key_event(&mut self, key: &nk_wayland::Key) -> (bool, Option<Activated>) {
+        if let Some(i) = self
+            .focus
+            .as_ref()
+            .and_then(|k| self.index(k))
+            .filter(|&i| self.enabled(i))
+            && let Some(effects) = self.component_input(i, |c, cx| c.key_event(cx, key))
+            && effects.handled
+        {
+            return (true, self.activated(i, effects));
+        }
+        match crate::KeyInput::from_key(key) {
+            Some(k) => (true, self.key(k)),
+            None => (false, None),
+        }
+    }
+    pub fn ime(&mut self, batch: &nk_wayland::ImeBatch) -> Option<Activated> {
+        let i = self
+            .focus
+            .as_ref()
+            .and_then(|k| self.index(k))
+            .filter(|&i| self.enabled(i))?;
+        let effects = self.component_input(i, |c, cx| c.ime(cx, batch))?;
+        self.activated(i, effects)
     }
     pub fn take_host_requests(&mut self) -> Vec<HostRequest> {
         std::mem::take(&mut self.host_requests)
@@ -1069,10 +1166,26 @@ impl ViewState {
             let i = self.hover.as_ref().and_then(|k| self.index(k))?;
             let at = self.pointer.unwrap_or_default();
             let key = self.placed[i].key.clone();
+            self.clicks = if self.last_click.as_ref().is_some_and(|(k, t, pt)| {
+                k == &key
+                    && self
+                        .double_click
+                        .is_some_and(|span| now.saturating_duration_since(*t) <= span)
+                    && (pt.0 - at.0).abs() <= 4.
+                    && (pt.1 - at.1).abs() <= 4.
+            }) {
+                2
+            } else {
+                1
+            };
+            self.last_click = Some((key.clone(), now, at));
             let effects = self.component_input(i, |c, cx| c.press(cx, at))?;
             self.press = effects.arm.then_some(key.clone());
             self.focus_visible = false;
-            if self.editing().is_some() {
+            if self.editing().is_some() || self.text_input().focused {
+                if self.focus.as_ref() != Some(&key) {
+                    self.blur_key(self.focus.clone());
+                }
                 self.focus = Some(key.clone());
             }
             self.drag = self
@@ -1107,6 +1220,14 @@ impl ViewState {
     /// not, a radio group being one stop; Enter or Space activates the focused one; on a radio
     /// the arrows choose the group's next or previous one.
     pub fn key(&mut self, k: KeyInput) -> Option<Activated> {
+        let before = self.focus.clone();
+        let result = self.key_inner(k);
+        if before != self.focus {
+            self.blur_key(before);
+        }
+        result
+    }
+    fn key_inner(&mut self, k: KeyInput) -> Option<Activated> {
         if let Some(i) = self.focus.as_ref().and_then(|key| self.index(key))
             && let Some(effects) = self.component_input(i, |c, cx| c.key(cx, k))
             && effects.handled
@@ -1676,7 +1797,14 @@ impl ViewState {
     }
 
     /// Focus leaves the view: the surface moved it to something of its own.
+    fn blur_key(&mut self, key: Option<Key>) {
+        if let Some(key) = key {
+            self.components.blur(&key);
+            self.pending = true;
+        }
+    }
     pub fn blur(&mut self) {
+        self.blur_key(self.focus.clone());
         self.focus = None;
         self.focus_visible = false;
     }
@@ -1698,6 +1826,9 @@ impl ViewState {
         if activate {
             let effects = self.component_input(i, |c, cx| c.request(cx, Request::Activate))?;
             return self.activated(i, effects);
+        }
+        if self.focus.as_ref() != Some(key) {
+            self.blur_key(self.focus.clone());
         }
         self.focus = Some(key.clone());
         self.focus_visible = true;

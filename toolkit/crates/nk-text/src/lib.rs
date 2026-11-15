@@ -179,6 +179,10 @@ pub struct ClusterBox {
 }
 
 pub trait TextBackend {
+    /// An independent retained editor using the same font source and engine policy.
+    fn fork(&self) -> Result<Box<dyn TextBackend>> {
+        Err("text backend cannot create a retained editor".into())
+    }
     fn name(&self) -> &'static str;
     fn layout(&mut self, text: &str, style: &TextStyle, max_width: f32) -> Result<Layout>;
 }

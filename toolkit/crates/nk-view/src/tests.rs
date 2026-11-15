@@ -5,7 +5,7 @@ use serde_json::json;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 
-fn backend() -> ParleyBackend {
+pub(crate) fn backend() -> ParleyBackend {
     ParleyBackend::new(Arc::new(FontSet::discover_required().unwrap())).unwrap()
 }
 fn statics() -> serde_json::Value {
@@ -37,7 +37,7 @@ pub(crate) fn tokens() -> Tokens {
         "--nidara-surface-hover": "rgba(255, 255, 255, 0.12)",
         "--nidara-surface-active": "rgba(255, 255, 255, 0.18)",
         "--nidara-surface-strong": "rgba(255, 255, 255, 0.30)", "--nidara-accent-fg": "#ffffff",
-        "--nidara-bg": "rgba(22, 22, 34, 1.00)"}});
+        "--nidara-surface-back": "rgba(255, 255, 255, 0.04)", "--nidara-accent-30": "rgba(0, 136, 255, 0.3)", "--nidara-radius-pill": "9999px", "--nidara-bg": "rgba(22, 22, 34, 1.00)"}});
     Tokens {
         spacing: Spacing::from_static(&statics()).unwrap(),
         radii: Radii::from_static(&statics()).unwrap(),
@@ -72,6 +72,7 @@ pub(crate) fn tokens() -> Tokens {
         )
         .unwrap(),
         disclosure: disclosure_from(&json!({"common":{"padding":12}, "list":{"highlight":{"hoverOpacity":0.08}, "focus":{"width":2}}, "rows":serde_json::from_str::<serde_json::Value>(include_str!("../../../tokens/rows.json")).unwrap()["default"]}), &json!({"ts":{"ROW_HEIGHT":{"single":48}}})).unwrap(),
+        entry: entry_from(&serde_json::from_str::<serde_json::Value>(include_str!("../../../tokens/search.json")).unwrap()["default"], &set).unwrap(),
         row_height: 48.,
         group_radius: 16.,
     }
@@ -4245,7 +4246,7 @@ fn a_lifted_pane_leaves_the_windows_glass_and_paint_for_its_own_layer() {
 pub(crate) fn types() -> TypeScale {
     types_with(14.)
 }
-fn types_with(size: f32) -> TypeScale {
+pub(crate) fn types_with(size: f32) -> TypeScale {
     TypeScale::from_static(
         &json!({"scss": {"fse-mini": "0.75em", "fse-caption": "0.8em", "fse-small": "0.93em",
             "fse-body": "1em", "fse-subtitle": "1.1em", "fse-title-3": "1.2em",
@@ -5257,7 +5258,10 @@ fn a_list_request_is_generic_and_revalidated_at_the_host_boundary() {
     let HostRequest::OpenList {
         owner: receiver,
         list,
-    } = host.requests.pop().unwrap();
+    } = host.requests.pop().unwrap()
+    else {
+        panic!("expected list request");
+    };
     assert_eq!(receiver, owner);
     assert_eq!(
         list.items

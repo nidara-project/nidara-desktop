@@ -7,6 +7,11 @@ use std::{
     any::{Any, TypeId},
     collections::{HashMap, HashSet},
 };
+mod editable;
+pub use editable::EditableField;
+mod search;
+use search::Clear;
+pub use search::Search;
 mod disclosure;
 pub use disclosure::Disclosure;
 mod slider_end;
@@ -67,6 +72,8 @@ pub enum BodyPlacement {
     Fill,
     NaturalCentered,
     FillWidth,
+    /// Fill both axes inside the frame inset, rather than centering natural height.
+    Inset,
 }
 #[derive(Clone, Copy, Debug, Default, PartialEq)]
 pub struct FrameSpec {
@@ -78,11 +85,17 @@ pub struct Build<'a> {
     pub key: &'a Key,
     pub look: ComponentLook<'a>,
     pub child: &'a Node,
+    pub state: Option<&'a dyn Any>,
 }
 impl Build<'_> {
     pub fn key(&self, suffix: &str) -> Key {
         format!("{}/{suffix}", self.key.0).into()
     }
+}
+pub struct Prepare<'a> {
+    pub look: ComponentLook<'a>,
+    pub state: Option<&'a mut dyn Any>,
+    pub text: &'a mut dyn nk_text::TextBackend,
 }
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum PaintPhase {
@@ -127,6 +140,7 @@ pub struct Outcome {
     pub redraw: bool,
     pub arm: bool,
     pub activate: bool,
+    pub action: Option<String>,
     pub value: Option<Value>,
     pub capture: Capture,
     pub focus: bool,
@@ -139,6 +153,18 @@ pub struct Input<'a> {
     pub context: Option<Read<'a>>,
 }
 pub trait Component: Any {
+    fn prepare(&self, _cx: &mut Prepare<'_>) -> Result<(), String> {
+        Ok(())
+    }
+    fn arrange(&self, _cx: &mut Input<'_>) {}
+    fn key_event(&self, _cx: &mut Input<'_>, _key: &nk_wayland::Key) {}
+    fn ime(&self, _cx: &mut Input<'_>, _batch: &nk_wayland::ImeBatch) {}
+    fn text_input(&self, _cx: &Read<'_>) -> Option<nk_wayland::TextInput> {
+        None
+    }
+    fn revision(&self, _state: Option<&dyn Any>) -> Option<u64> {
+        None
+    }
     fn body(&self, cx: &Build<'_>) -> Node;
     fn frame(&self, _look: ComponentLook<'_>) -> FrameSpec {
         FrameSpec::default()
@@ -218,6 +244,7 @@ pub trait Component: Any {
     }
     fn reconcile(&self, _state: Option<&mut dyn Any>) {}
     fn cancel(&self, _state: Option<&mut dyn Any>) {}
+    fn blur(&self, _state: Option<&mut dyn Any>) {}
     fn group(&self, _cx: &Read<'_>) -> Membership {
         Membership::None
     }
@@ -248,6 +275,9 @@ pub enum Part {
     Dropdown(Dropdown),
     MenuRow(MenuRow),
     Disclosure(Disclosure),
+    Editable(EditableField),
+    Search(Search),
+    SearchClear(Clear),
 }
 impl Part {
     pub fn configured(&self, property: Configure) -> Self {
@@ -272,6 +302,9 @@ impl Part {
             Self::Dropdown(c) => c,
             Self::MenuRow(c) => c,
             Self::Disclosure(c) => c,
+            Self::Editable(c) => c,
+            Self::Search(c) => c,
+            Self::SearchClear(c) => c,
         }
     }
 }
@@ -286,6 +319,8 @@ struct Entry {
     part: Option<Part>,
     kind: TypeId,
     value: Option<Box<dyn Any>>,
+    instance: u64,
+    error: Option<String>,
 }
 #[derive(Default)]
 pub(crate) struct StateStore {
@@ -294,21 +329,41 @@ pub(crate) struct StateStore {
 impl StateStore {
     fn see(&mut self, key: &Key, c: &dyn Component) {
         let kind = c.type_id();
-        let entry = self.entries.entry(key.clone()).or_insert_with(|| Entry {
-            kind,
-            part: None,
-            value: c.state(),
-        });
-        if entry.kind != kind {
-            if let Some(part) = &entry.part {
-                part.component().cancel(entry.value.as_deref_mut());
-            }
-            *entry = Entry {
-                kind,
-                part: None,
-                value: c.state(),
-            };
+        if self.entries.get(key).is_some_and(|e| e.kind == kind) {
+            return;
         }
+        if let Some(mut old) = self.entries.remove(key)
+            && let Some(part) = old.part
+        {
+            part.component().cancel(old.value.as_deref_mut());
+        }
+        static NEXT_INSTANCE: std::sync::Mutex<u64> = std::sync::Mutex::new(0);
+        let instance = {
+            let mut next = NEXT_INSTANCE
+                .lock()
+                .expect("component instance lock poisoned");
+            *next = next.checked_add(1).expect("component instance exhausted");
+            *next
+        };
+        self.entries.insert(
+            key.clone(),
+            Entry {
+                part: None,
+                kind,
+                value: c.state(),
+                instance,
+                error: None,
+            },
+        );
+    }
+    pub fn instance(&self, key: &Key) -> u64 {
+        self.entries.get(key).map_or(0, |e| e.instance)
+    }
+    pub fn errors(&self) -> Vec<(Key, String)> {
+        self.entries
+            .iter()
+            .filter_map(|(k, e)| e.error.as_ref().map(|s| (k.clone(), s.clone())))
+            .collect()
     }
     pub fn get(&self, key: &Key) -> Option<&dyn Any> {
         self.entries.get(key)?.value.as_deref()
@@ -349,6 +404,13 @@ impl StateStore {
             part.component().cancel(e.value.as_deref_mut());
         }
     }
+    pub fn blur(&mut self, key: &Key) {
+        if let Some(e) = self.entries.get_mut(key)
+            && let Some(part) = &e.part
+        {
+            part.component().blur(e.value.as_deref_mut());
+        }
+    }
     pub fn take_changed(&mut self, key: &Key) -> Option<Value> {
         let e = self.entries.get_mut(key)?;
         e.part
@@ -356,7 +418,12 @@ impl StateStore {
             .component()
             .take_changed(e.value.as_deref_mut())
     }
-    pub fn expand(&mut self, tree: &Node, look: ComponentLook<'_>) -> Node {
+    pub fn expand(
+        &mut self,
+        tree: &Node,
+        look: ComponentLook<'_>,
+        text: &mut dyn nk_text::TextBackend,
+    ) -> Node {
         let mut tree = tree.clone();
         let mut live = HashSet::new();
         fn walk(
@@ -364,6 +431,7 @@ impl StateStore {
             look: ComponentLook<'_>,
             store: &mut StateStore,
             live: &mut HashSet<Key>,
+            text: &mut dyn nk_text::TextBackend,
         ) {
             let part = match &n.kind {
                 Kind::Control(c) => c.part.as_deref(),
@@ -386,10 +454,19 @@ impl StateStore {
                         .get_mut(&n.key)
                         .and_then(|e| e.value.as_deref_mut()),
                 );
+                let entry = store.entries.get_mut(&n.key).unwrap();
+                entry.error = component
+                    .prepare(&mut Prepare {
+                        look,
+                        state: entry.value.as_deref_mut(),
+                        text,
+                    })
+                    .err();
                 let body = component.body(&Build {
                     key: &n.key,
                     look,
                     child,
+                    state: store.get(&n.key),
                 });
                 match &mut n.kind {
                     Kind::Control(c) => *c.child = body,
@@ -398,32 +475,32 @@ impl StateStore {
                 }
             }
             match &mut n.kind {
-                Kind::Control(c) => walk(&mut c.child, look, store, live),
-                Kind::Drawing(d) => walk(&mut d.child, look, store, live),
+                Kind::Control(c) => walk(&mut c.child, look, store, live, text),
+                Kind::Drawing(d) => walk(&mut d.child, look, store, live, text),
                 Kind::Stack(s) => {
                     for c in &mut s.children {
-                        walk(c, look, store, live);
+                        walk(c, look, store, live, text);
                     }
                 }
-                Kind::Pane(p) => walk(&mut p.child, look, store, live),
-                Kind::Group(g) => walk(&mut g.child, look, store, live),
-                Kind::Reveal(r) => walk(&mut r.child, look, store, live),
-                Kind::Scroll(s) => walk(&mut s.child, look, store, live),
+                Kind::Pane(p) => walk(&mut p.child, look, store, live, text),
+                Kind::Group(g) => walk(&mut g.child, look, store, live, text),
+                Kind::Reveal(r) => walk(&mut r.child, look, store, live, text),
+                Kind::Scroll(s) => walk(&mut s.child, look, store, live, text),
                 Kind::Overlay(o) => {
-                    walk(&mut o.base, look, store, live);
+                    walk(&mut o.base, look, store, live, text);
                     for l in &mut o.layers {
-                        walk(&mut l.child, look, store, live);
+                        walk(&mut l.child, look, store, live, text);
                     }
                 }
                 Kind::Grid(g) => {
                     for c in &mut g.cells {
-                        walk(&mut c.child, look, store, live);
+                        walk(&mut c.child, look, store, live, text);
                     }
                 }
                 _ => {}
             }
         }
-        walk(&mut tree, look, self, &mut live);
+        walk(&mut tree, look, self, &mut live, text);
         self.entries.retain(|k, e| {
             if !live.contains(k) {
                 if let Some(part) = &e.part {
@@ -533,14 +610,22 @@ mod tests {
         let mut control =
             Node::button("disabled", "Button", "go", nk_text::TextStyle::default()).enabled(false);
         let tree = Node::row("row", vec![control.clone(), Node::switch("drawn", true)]);
-        store.expand(&tree, tokens.with_types(&types));
+        store.expand(
+            &tree,
+            tokens.with_types(&types),
+            &mut crate::tests::backend(),
+        );
         assert_eq!(dropped.get(), 1);
         assert!(store.entries.contains_key(&"disabled".into()));
         assert!(store.entries.contains_key(&"drawn".into()));
         if let Kind::Control(c) = &mut control.kind {
             c.enabled = true;
         }
-        store.expand(&control, tokens.with_types(&types));
+        store.expand(
+            &control,
+            tokens.with_types(&types),
+            &mut crate::tests::backend(),
+        );
         assert!(store.entries.contains_key(&"disabled".into()));
         assert!(!store.entries.contains_key(&"drawn".into()));
     }

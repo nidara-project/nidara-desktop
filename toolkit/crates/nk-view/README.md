@@ -97,3 +97,13 @@ is an app-owned Bool toggle and a common Reveal. Apply Activated.value and rebui
 committing the window. The header alone is available with `.header(key, action)`; it exposes
 expandable/expanded reader state and responds across its whole row. No Configure addition is
 needed for a new component. See VIEW.md §16 for Settings token provenance and motion.
+
+
+**Editable/search fields.** Build `components::EditableField::new(text).node(key, name,
+changed_action)`, optionally setting placeholder and submit action. Apply its Text value and
+rebuild; model echoes preserve the keyed Editor, selection, composition and undo. Search is
+a composition over that same entry, including clear and Escape behavior. The host handles
+clipboard replies with key/type/instance/revision identity and wire IDs, and updates IME
+surrounding text/caret geometry. Read.part uses actual body geometry; Inset fills a frame's
+inner box. Backends implement fork for retained editors; preparation errors are explicit.
+Owner-edited secret fields are unchanged. See VIEW.md §17 for the full lifecycle and limits.

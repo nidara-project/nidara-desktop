@@ -1684,3 +1684,15 @@ Settings row tokens. New component data goes through its constructor, without ex
 Configure. The only generic motion change snaps existing eases when reduced motion is enabled
 midflight. See VIEW.md §16; physical-session and Orca acceptance remain separate from private
 headless fixtures.
+
+
+### Retained single-line fields (#1103 step 4)
+
+nk-view's EditableField owns the existing nk-text Editor in typed keyed state; Search composes
+it with the token glyph and clear control. Data echoes preserve selection/composition/undo;
+external model text replaces the buffer. Raw keys, IME, placement, preparation and blur are
+component questions; the host knows no field. Clipboard answers require the original
+key/type/process-unique instance/revision plus a native Window-owned request ID. No-op value
+requests do not activate. The view's existing display/secret field remains owner edited and
+never enters the new editor/IME path. See VIEW.md §17 for API, token provenance, wire lifetime
+and explicit private-vs-physical acceptance limits.

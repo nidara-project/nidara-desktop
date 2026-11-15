@@ -11,6 +11,8 @@ Run it with toolkit/gallery/check-headless.sh, never against the live session.
 import hashlib
 import json
 import os
+import struct
+import zlib
 from pathlib import Path
 import subprocess
 import time
@@ -29,7 +31,7 @@ PAGES = [('status', 'Status'), ('button', 'Button'), ('switch', 'Switch'),
          ('segmented', 'Segmented choice'), ('swatches', 'Swatches'), ('row', 'Setting row'), ('slider', 'Slider'),
          ('field', 'Text field'), ('glass', 'Glass card'), ('text', 'Text'), ('icons', 'Icons'),
          ('layout', 'Layout'), ('scroll', 'Scroll'), ('overlay', 'Overlay'), ('grid', 'Grid'),
-         ('reveal', 'Reveal'), ('disclosure', 'Disclosure')]
+         ('reveal', 'Reveal'), ('disclosure', 'Disclosure'), ('entry','Editable field'), ('search','Search')]
 if Path(os.environ['XDG_RUNTIME_DIR']).resolve() != Path(os.environ['NK_WIDGETS_RUN']).resolve() / 'runtime':
     raise RuntimeError('use toolkit/gallery/check-headless.sh')
 if LOG == Path('/tmp') or Path('/tmp') in LOG.parents:
@@ -130,7 +132,7 @@ session.call_sync('org.a11y.Bus', '/org/a11y/bus', 'org.freedesktop.DBus.Propert
                   None, Gio.DBusCallFlags.NONE, 5000, None)
 
 
-def run(directory, fault=None, shots=True):
+def run(directory, fault=None, shots=True, editor_only=False):
     directory.mkdir(parents=True, exist_ok=True)
     log = directory / 'client.log'
     env = dict(os.environ)
@@ -159,6 +161,147 @@ def run(directory, fault=None, shots=True):
                 raise OracleFailure(f'{stage}: {detail}')
             print(f'  {stage}: PASS', flush=True)
 
+        def key(code):
+            PIPE.write(f'key {code}\n')
+            PIPE.flush()
+
+        def chord(mod, code):
+            PIPE.write(f'keydown {mod}\nkey {code}\nkeyup {mod}\n')
+            PIPE.flush()
+
+        def text_of(name):
+            node = find(root, name, Atspi.Role.ENTRY)
+            return Atspi.Text.get_text(node.get_text_iface(), 0, -1) if node else None
+
+        def content_ready():
+            # Keyboard/pointer walks enter the content through the public frame control.
+            # This is also the user path in a narrow window, where the sidebar overlays it.
+            if find(root, 'Hide sidebar', Atspi.Role.PUSH_BUTTON):
+                activate('Hide sidebar', Atspi.Role.PUSH_BUTTON)
+                barrier(lambda: find(root, PAGES[0][1], Atspi.Role.TOGGLE_BUTTON) is None,
+                        'sidebar no longer covers content')
+
+        def entry_pixels(stage):
+            node = find(root, 'Editable text', Atspi.Role.ENTRY)
+            box = node.get_component_iface().get_extents(Atspi.CoordType.WINDOW)
+            win = next(w for w in ipc('windows')['windows'] if w['app_id'] == 'nidara-kit-gallery')
+            output = ipc('outputs')['outputs'][0]
+            scale = output['scale']
+            path = directory / f'entry-{stage}.ppm'
+            ipc('screenshot', path)
+            head, dims, depth, pixels = path.read_bytes().split(b'\n', 3)
+            if head != b'P6' or depth != b'255':
+                raise InfrastructureError('expected PPM screenshot')
+            w, h = map(int, dims.split())
+            x0 = int((win['x'] + box.x + 14) * scale)
+            y0 = int((win['y'] + box.y + 2) * scale)
+            x1 = int((win['x'] + box.x + box.width - 14) * scale)
+            y1 = int((win['y'] + box.y + box.height - 2) * scale)
+            if not (0 <= x0 < x1 <= w and 0 <= y0 < y1 <= h):
+                raise InfrastructureError(f'entry screenshot outside output: {box}, {win}')
+            rgb = b''.join(pixels[(y*w+x0)*3:(y*w+x1)*3] for y in range(y0,y1))
+            def chunk(tag, data):
+                return struct.pack('!I',len(data)) + tag + data + struct.pack('!I',zlib.crc32(tag+data))
+            rows = b''.join(b'\0'+rgb[y*(x1-x0)*3:(y+1)*(x1-x0)*3] for y in range(y1-y0))
+            path.with_suffix('.png').write_bytes(b'\x89PNG\r\n\x1a\n'
+                + chunk(b'IHDR',struct.pack('!2I5B',x1-x0,y1-y0,8,2,0,0,0))
+                + chunk(b'IDAT',zlib.compress(rows)) + chunk(b'IEND',b''))
+            return rgb
+
+        def pixel_change(stage, reference, changed):
+            def sample():
+                pixels = entry_pixels(stage)
+                if len(pixels) != len(reference):
+                    raise InfrastructureError('entry extent changed during input')
+                different = sum(max(abs(pixels[j]-reference[j]) for j in range(i,i+3)) > 20
+                                for i in range(0,len(pixels),3))
+                return pixels if (different > 20 if changed else different < 5) else None
+            try:
+                pixels = barrier(sample, f'entry/{stage} pixels')
+            except InfrastructureError as error:
+                raise OracleFailure(f'entry/{stage}: {error}') from error
+            check(f'entry/{stage}', True, '')
+            return pixels
+
+        def input_text(stage, value):
+            try:
+                barrier(lambda: text_of('Editable text') == value, f'entry/{stage} committed text')
+            except InfrastructureError as error:
+                raise OracleFailure(f'entry/{stage}: {error}') from error
+            check(f'entry/{stage}', True, '')
+
+        def entry_walk():
+            content_ready()
+            field = find(root, 'Editable text', Atspi.Role.ENTRY)
+            published(lambda: field.get_editable_text_iface().set_text_contents(''))
+            published(lambda: field.get_component_iface().grab_focus())
+            input_text('reader', '')
+            empty = entry_pixels('empty')
+            key(49)  # n, as in phase0's keyboard path.
+            input_text('first-key', 'n')
+            first = pixel_change('first-key-painted',empty,True)
+            key(37)  # k
+            input_text('second-key','nk')
+            typed = pixel_change('second-key-painted',first,True)
+            ime_log = directory / 'ime.log'
+            with ime_log.open('w') as stream:
+                ime = subprocess.Popen([os.environ.get('HYALO_IME_PROBE_BIN','hyalo-ime-probe'),'--script'],stdin=subprocess.PIPE,
+                                       stdout=stream,stderr=stream,text=True)
+            try:
+                barrier(lambda: 'STATE 1 ' in ime_log.read_text(), 'entry IME activated')
+                def command(line):
+                    count = ime_log.read_text().count('SENT '+line)
+                    ime.stdin.write(line+'\n'); ime.stdin.flush()
+                    barrier(lambda: ime_log.read_text().count('SENT '+line) > count,
+                            'IME acknowledged '+line)
+                command('preedit 日本')
+                pre = pixel_change('preedit',typed,True)
+                check('entry/preedit-not-committed',text_of('Editable text')=='nk','preedit leaked into the model')
+                command('preedit 日本語')
+                pixel_change('replace',pre,True)
+                command('cancel')
+                pixel_change('cancel',typed,False)
+                command('commit 日本')
+                input_text('commit','nk日本')
+                committed = pixel_change('commit-painted',typed,True)
+            finally:
+                ime.terminate()
+                try: ime.wait(timeout=3)
+                except subprocess.TimeoutExpired: ime.kill(); ime.wait()
+            chord(29,30)  # Ctrl+A
+            try:
+                barrier(lambda: (n:=find(root,'Editable text',Atspi.Role.ENTRY))
+                        and Atspi.Text.get_n_selections(n.get_text_iface())==1, 'entry/select range')
+            except InfrastructureError as error:
+                raise OracleFailure(f'entry/select: {error}') from error
+            pixel_change('select',committed,True)
+            chord(29,46)  # Ctrl+C through the real Wayland data device.
+            key(14)  # Remove selection without replacing the clipboard.
+            input_text('copy-cleared','')
+            pixel_change('copy-cleared-painted',empty,False)
+            chord(29,47)
+            input_text('copy','nk日本')
+            pixel_change('copy-painted',committed,False)
+            chord(29,30)
+            barrier(lambda: Atspi.Text.get_n_selections(find(root,'Editable text',Atspi.Role.ENTRY).get_text_iface())==1,
+                    'entry selected again for cut')
+            chord(29,45)  # Ctrl+X
+            input_text('cut','')
+            cleared = pixel_change('cut-painted',empty,False)
+            chord(29,47)  # Ctrl+V
+            input_text('paste','nk日本')
+            pixel_change('paste-painted',committed,False)
+            chord(29,44)  # Ctrl+Z
+            input_text('undo','')
+            pixel_change('undo-painted',cleared,False)
+            PIPE.write('keydown 29\nkeydown 42\nkey 44\nkeyup 42\nkeyup 29\n'); PIPE.flush()
+            input_text('redo','nk日本')
+            pixel_change('redo-painted',committed,False)
+            key(28)  # Enter is the submission action, not a text change.
+            try: barrier(lambda: find(root,'Submitted: 1'), 'entry submitted')
+            except InfrastructureError as error: raise OracleFailure(f'entry/submit: {error}') from error
+            check('entry/submit',text_of('Editable text')=='nk日本','submission changed the text')
+
         def sidebar_open():
             # A narrow window starts with it closed, and a choice there closes it again.
             if find(root, 'Show sidebar', Atspi.Role.PUSH_BUTTON):
@@ -175,7 +318,7 @@ def run(directory, fault=None, shots=True):
             barrier(lambda: 'CONTENT_READY' in text() and 'A11Y_READY' in text(), 'gallery readiness', 15)
             root = barrier(app_tree, 'AT-SPI window')
             hashes = {}
-            for page, title in PAGES:
+            for page, title in ([p for p in PAGES if p[0]=="entry"] if editor_only else PAGES):
                 sidebar_open()
                 entry = barrier(lambda: find(root, title, Atspi.Role.TOGGLE_BUTTON), f'sidebar entry {title}')
                 if page != 'status':
@@ -196,7 +339,24 @@ def run(directory, fault=None, shots=True):
                     png = directory / f'{page}.png'
                     ipc('screenshot', png)
                     hashes[page] = hashlib.sha256(png.read_bytes()).hexdigest()
-                if page == 'button':
+                if page == 'entry':
+                    entry_walk()
+                elif page == 'search':
+                    content_ready()
+                    field = find(root,'Search text',Atspi.Role.ENTRY)
+                    published(lambda: field.get_editable_text_iface().set_text_contents('needle'))
+                    barrier(lambda: text_of('Search text')=='needle' and find(root,'Clear search',Atspi.Role.PUSH_BUTTON), 'search filled')
+                    published(lambda: field.get_component_iface().grab_focus())
+                    key(1)  # Escape clears before the host closes the sidebar/window.
+                    barrier(lambda: text_of('Search text')=='', 'search Escape cleared')
+                    check('search/escape',find(root,'Clear search',Atspi.Role.PUSH_BUTTON) is None,'clear control remained after clearing')
+                    field = find(root,'Search text',Atspi.Role.ENTRY)
+                    published(lambda: field.get_editable_text_iface().set_text_contents('again'))
+                    barrier(lambda: text_of('Search text')=='again', 'search refilled')
+                    activate('Clear search',Atspi.Role.PUSH_BUTTON)
+                    barrier(lambda: text_of('Search text')=='', 'search clear control')
+                    check('search/clear-focus',has_state(find(root,'Search text',Atspi.Role.ENTRY),Atspi.StateType.FOCUSED),'clear did not return focus')
+                elif page == 'button':
                     activate('Press me', Atspi.Role.PUSH_BUTTON)
                     check('button/press', find(root, 'Pressed 1 times') is not None,
                           'a press did not reach the model')
@@ -328,6 +488,8 @@ def run(directory, fault=None, shots=True):
                 elif page == 'reveal':
                     activate('Open', Atspi.Role.PUSH_BUTTON)
                     check('reveal/open', find(root, 'Revealed') is not None, 'the reveal did not open')
+            if editor_only:
+                return "PASS"
             # The band: back and forward walk the pages visited, the toggle hides the sidebar.
             activate('Back', Atspi.Role.PUSH_BUTTON)
             sidebar_open()
@@ -369,6 +531,21 @@ try:
         ipc('output', output['name'], f'scale={scale}')
         print(f'scale {scale}', flush=True)
         results[f'scale{scale}'] = run(LOG / f'scale{scale}')
+    print('controls: editor paths independently disabled', flush=True)
+    # Each control must fail an oracle in its own input phase, never an infrastructure wait.
+    for fault, stage in [('editor-no-keyboard','first-key'), ('editor-no-ime','preedit'),
+                         ('editor-no-replace','replace'), ('editor-no-cancel','cancel'),
+                         ('editor-no-commit','commit'), ('editor-no-select','select'),
+                         ('editor-no-copy','copy'), ('editor-no-cut','cut'), ('editor-no-paste','paste'),
+                         ('editor-no-undo','undo'), ('editor-no-redo','redo')]:
+        try:
+            run(LOG / fault,fault=fault,shots=False,editor_only=True)
+            raise InfrastructureError(f'editor control {fault} passed')
+        except OracleFailure as error:
+            if 'entry/'+stage not in str(error):
+                raise InfrastructureError(f'{fault} failed the wrong oracle: {error}') from error
+            print(f'  control CAUGHT {fault}: {error}',flush=True)
+            results[fault]='CAUGHT'
     print('control: activations dropped', flush=True)
     try:
         run(LOG / 'control-inert', fault='inert', shots=False)
