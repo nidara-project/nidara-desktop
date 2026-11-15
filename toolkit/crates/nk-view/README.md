@@ -90,3 +90,10 @@ component-built list requests with the existing popup and reader behavior. See V
 Reader request bindings follow the IDs/roles actually published by the component and are
 filtered to live controls of the same component type. A display field publishing Password
 therefore binds its real ID; old bindings retire on the next publication or type replacement.
+
+
+**Disclosure.** `components::Disclosure { label, expanded }.node(key, action, content)`
+is an app-owned Bool toggle and a common Reveal. Apply Activated.value and rebuild before
+committing the window. The header alone is available with `.header(key, action)`; it exposes
+expandable/expanded reader state and responds across its whole row. No Configure addition is
+needed for a new component. See VIEW.md §16 for Settings token provenance and motion.

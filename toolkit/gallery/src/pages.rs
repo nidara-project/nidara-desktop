@@ -55,7 +55,7 @@ fn status_text(s: &str) -> &'static str {
 }
 
 /// Each page: its id (what the check and `--page` name), its title and its glyph.
-pub const PAGES: [(&str, &str, &str); 18] = [
+pub const PAGES: [(&str, &str, &str); 19] = [
     ("status", "Status", "nd-emblem-default"),
     ("button", "Button", "nd-hand"),
     ("switch", "Switch", "nd-light-mode"),
@@ -74,6 +74,7 @@ pub const PAGES: [(&str, &str, &str); 18] = [
     ("overlay", "Overlay", "nd-sidebar-show"),
     ("grid", "Grid", "nd-control-center"),
     ("reveal", "Reveal", "nd-pan-end"),
+    ("disclosure", "Disclosure", "nd-pan-end"),
 ];
 
 /// What the view is built from: the page, and what the live samples hold.
@@ -98,6 +99,7 @@ pub struct Model {
     pub slider: f64,
     pub tile: f64,
     pub open: bool,
+    pub expanded: bool,
 }
 impl Default for Model {
     fn default() -> Self {
@@ -117,6 +119,7 @@ impl Default for Model {
             slider: 40.,
             tile: 60.,
             open: false,
+            expanded: false,
         }
     }
 }
@@ -304,6 +307,7 @@ fn page(id: &str, m: &Model, cat: &Catalogue, t: &TypeScale, k: &Measures) -> Ve
         "overlay" => overlay(t),
         "grid" => grid(t),
         "reveal" => reveal(m, t),
+        "disclosure" => disclosures(m, t),
         _ => vec![],
     }
 }
@@ -1702,6 +1706,59 @@ fn reveal(m: &Model, t: &TypeScale) -> Vec<Node> {
             ),
         ),
         block("r/below", "Below the reveal", t),
+    ]
+}
+
+fn disclosures(m: &Model, t: &TypeScale) -> Vec<Node> {
+    use nk_view::components::Disclosure;
+    let sample = |key: &str, label: &str, open: bool| {
+        Disclosure {
+            label: label.into(),
+            expanded: open,
+        }
+        .header(key, "noop")
+    };
+    let states = Node::column(
+        "d/states",
+        vec![
+            sample("d/closed", "Closed", false),
+            sample("d/open", "Expanded", true),
+            sample("d/hover", "Hover", false).shown(Shown::Hover),
+            sample("d/press", "Pressed", true).shown(Shown::Press),
+            sample("d/focus", "Focus", false).shown(Shown::Focus),
+            sample("d/disabled", "Disabled", false).enabled(false),
+        ],
+    );
+    let live = Disclosure {
+        label: "Advanced".into(),
+        expanded: m.expanded,
+    }
+    .node(
+        "d/live",
+        "disclosure",
+        Node::column(
+            "d/details",
+            vec![
+                Node::text(
+                    "d/explanation",
+                    "The model owns expansion; the component reports its new value.",
+                    t.style(Type::Body, Weight::Regular),
+                )
+                .lines(2),
+                content_button("d/child", "Revealed action", "press", t),
+            ],
+        )
+        .gap(Space::S3)
+        .padding(Padding::all(Space::S3)),
+    );
+    vec![
+        section(
+            "d/live-section",
+            "Try it: click the whole header, Enter or Space",
+            t,
+            live,
+        ),
+        section("d/state-section", "States", t, states),
     ]
 }
 

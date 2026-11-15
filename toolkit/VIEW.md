@@ -993,3 +993,35 @@ an ID guessed from Control's base role. This matters when a display field publis
 Only current published controls bind requests; disappearance or a component type change drops
 the binding before the next publication. The component's reader properties remain authoritative
 without adding a component/role special case to the view's input lookup.
+
+
+## 16. Disclosure (#1103, step 3)
+
+`components::Disclosure { label, expanded }.node(key, action, content)` builds its
+whole-row toggle header at `key/header` followed by an ordinary Reveal at `key/content`.
+`header(key, action)` builds the header alone, including the gallery state specimens.
+The application owns expanded and applies the Bool carried by Activated, then rebuilds.
+The header keeps a pending Bool for successive input and reader state until that rebuild;
+the supplied model wins at reconciliation. The chevron target and the Reveal retarget on
+that rebuild, within the same application turn and before its commit. The component
+never changes the application's model or edits its content.
+
+The header accepts click anywhere, Enter, Space and reader activation. Its actual reader
+role is ToggleButton with expandable/expanded states. The ordinary Reveal removes closed
+content from Tab order and the reader tree. A disabled header neither activates nor
+accepts a reader request. No new Configure property or view-specific dispatch is needed:
+new components receive their data in their constructor.
+
+Measures and tones match Settings' existing nk-widgets disclosure: common padding,
+ROW_HEIGHT.single, body text and disabled inks, full-row neutral hover and square focus
+ring. rows.disclosure exports the 16px icon and the nd-pan-end 24-unit path/stroke;
+turning it by 90 degrees reproduces nd-pan-down, with intermediate angles supplied by
+the generic target motion. The body reserves its icon slot with a fixed empty row,
+not a flex spacer. The gallery catalogue now records both implementations; Settings
+keeps nk-widgets until its own migration.
+
+Enabling reduced motion during an existing target/Reveal ease now drops that ease at
+the next tick and uses its destination immediately. This fixes the common motion engine,
+not a disclosure branch; the midflight regression fails without the correction. Generic
+state/layout files otherwise remain unchanged. This step does not add editable text,
+nested tree rows, a layer-surface host or install anything in the live session.

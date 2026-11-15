@@ -74,6 +74,11 @@ cell hierarchies, XML/nib files and layout algorithms are not a migration recipe
 | Detail disclosure **(proposal)** | [Gtk.Expander] | [NSButton] with [disclosure bezel style][disclosure-style], plus child layout; no matching container | `TOGGLE_BUTTON`, expanded state and controlled content relation | Inspect expanded state: `none`; expand/collapse: `reversible` | no | 1 |
 | History navigator **(proposal)** | [Gtk.Stack] plus app-owned history; the stack is not a history model | [NSPageController]; swipe navigation is additional behavior | `PANEL`, named back/forward `PUSH_BUTTON` children | Inspect destination: `none`; back/forward: `reversible` subject to pending-edit policy | no | later |
 
+Disclosure is available in both nk-view and nk-widgets, with gallery page `disclosure`.
+The current reader bridge exposes ToggleButton and expandable/expanded states; the explicit
+controlled-content relation in the table remains a catalogue target. Closed content leaves
+the reader tree through the common Reveal, as in the existing Settings implementation.
+
 ## Controls
 
 | Nidara Kit | GTK4 | AppKit | AT-SPI role | Agent view (proposal) | Glass | Phase |

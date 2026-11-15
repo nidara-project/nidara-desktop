@@ -20,10 +20,10 @@ pub use host::{Glyphs, Type, TypeScale, Weight};
 pub use layout::{Fitted, Placed, Rect, TextCache, What, first_line_centre};
 pub use state::{Activated, BUDGET, Frame, FramePane, KeyInput, ScrollBy, Ticked, ViewState};
 pub use tokens::{
-    Bezier, ButtonStyle, CheckStyle, DropdownStyle, Look, MenuStyle, Motion, Radii, Radius,
-    SegmentStyle, SliderStyle, Space, Spacing, SwatchStyle, SwitchStyle, Tokens, TriggerStyle,
-    Washes, button_from, check_from, dropdown_from, parse_color, scrollbar_from, segmented_from,
-    slider_from, swatch_from, switch_from,
+    Bezier, ButtonStyle, CheckStyle, DisclosureStyle, DropdownStyle, Look, MenuStyle, Motion,
+    Radii, Radius, SegmentStyle, SliderStyle, Space, Spacing, SwatchStyle, SwitchStyle, Tokens,
+    TriggerStyle, Washes, button_from, check_from, disclosure_from, dropdown_from, parse_color,
+    scrollbar_from, segmented_from, slider_from, swatch_from, switch_from,
 };
 pub use view::{
     Align, Axis, Cell, Control, Corner, Dropdown, Field, Grid, Group, Icon, Ink, Justify, Key,

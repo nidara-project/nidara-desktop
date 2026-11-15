@@ -71,6 +71,7 @@ pub(crate) fn tokens() -> Tokens {
             &set,
         )
         .unwrap(),
+        disclosure: disclosure_from(&json!({"common":{"padding":12}, "list":{"highlight":{"hoverOpacity":0.08}, "focus":{"width":2}}, "rows":serde_json::from_str::<serde_json::Value>(include_str!("../../../tokens/rows.json")).unwrap()["default"]}), &json!({"ts":{"ROW_HEIGHT":{"single":48}}})).unwrap(),
         row_height: 48.,
         group_radius: 16.,
     }
@@ -5586,4 +5587,254 @@ fn semantic_keys_bind_the_actual_component_role_and_retire_old_bindings() {
         !s.semantic_keys().contains_key(&text),
         "a queued request cannot bind a new component before publication"
     );
+}
+
+fn disclosure(open: bool) -> Node {
+    crate::components::Disclosure {
+        label: "Advanced".into(),
+        expanded: open,
+    }
+    .node(
+        "detail",
+        "detail-toggle",
+        Node::button("detail-child", "Child", "child", style(14.)),
+    )
+}
+#[test]
+fn disclosure_header_uses_settings_measures_and_clicks_across_the_whole_row() {
+    for scale in [1., 1.25] {
+        let mut s = laid(&disclosure(false), (360., 200.), scale);
+        let r = rect(&s, "detail/header");
+        assert_eq!(r[3], 48.);
+        assert_eq!(rect(&s, "detail/header/body")[0], 12.);
+        assert_eq!(rect(&s, "detail/header/chevron")[2], 16.);
+        for x in [r[0] + 1., r[0] + r[2] / 2., r[0] + r[2] - 1.] {
+            s.pointer_motion(x, r[1] + r[3] / 2.);
+            assert!(s.button(true, Instant::now()).is_none());
+            let a = s
+                .button(false, Instant::now())
+                .expect("whole header activates");
+            assert_eq!(a.action, "detail-toggle");
+            assert!(matches!(a.value, Some(Value::Bool(_))));
+        }
+    }
+}
+#[test]
+fn disclosure_reports_pending_expansion_to_the_model_and_reader_until_rebuild() {
+    let mut s = laid(&disclosure(false), (360., 200.), 1.);
+    s.key(KeyInput::Tab);
+    let a = s.key(KeyInput::Activate).unwrap();
+    assert_eq!(a.value, Some(Value::Bool(true)));
+    let tree = s.semantics(nk_a11y::Node::new(1, nk_a11y::Role::Window, "W"), 2);
+    let header = tree.nodes.values().find(|n| n.name == "Advanced").unwrap();
+    assert_eq!(header.role, nk_a11y::Role::ToggleButton);
+    assert!(header.states.expandable && header.states.expanded);
+    assert_eq!(
+        s.semantic_keys().get(&header.id),
+        Some(&Key::from("detail/header"))
+    );
+    assert_eq!(
+        s.key(KeyInput::Activate).unwrap().value,
+        Some(Value::Bool(false))
+    );
+    assert_eq!(
+        s.respond(
+            &"detail/header".into(),
+            crate::components::Request::Expanded(true)
+        )
+        .unwrap()
+        .value,
+        Some(Value::Bool(true))
+    );
+    s.layout(
+        &disclosure(false),
+        (360., 200.),
+        1.,
+        tokens().with_types(&types()),
+        &mut backend(),
+        Instant::now(),
+    );
+    assert_eq!(
+        s.typed_value(&"detail/header".into()),
+        Some(Value::Bool(false)),
+        "the owner model remains authoritative"
+    );
+}
+#[test]
+fn disclosure_closed_content_leaves_the_reader_and_tab_order() {
+    let root = || nk_a11y::Node::new(1, nk_a11y::Role::Window, "W");
+    for expanded in [false, true] {
+        let mut s = laid(&disclosure(expanded), (360., 200.), 1.);
+        let tree = s.semantics(root(), 2);
+        assert_eq!(tree.nodes.values().any(|n| n.name == "Child"), expanded);
+        s.key(KeyInput::Tab);
+        assert_eq!(s.focus(), Some(&Key::from("detail/header")));
+        s.key(KeyInput::Tab);
+        assert_eq!(
+            s.focus(),
+            Some(&Key::from(if expanded {
+                "detail-child"
+            } else {
+                "detail/header"
+            }))
+        );
+    }
+    let header = crate::components::Disclosure {
+        label: "Disabled".into(),
+        expanded: false,
+    }
+    .header("disabled", "toggle")
+    .enabled(false);
+    let mut s = laid(&header, (360., 60.), 1.);
+    s.pointer_motion(100., 24.);
+    s.button(true, Instant::now());
+    assert!(s.button(false, Instant::now()).is_none());
+    assert!(
+        s.respond(&"disabled".into(), crate::components::Request::Activate)
+            .is_none()
+    );
+    let tree = s.semantics(root(), 2);
+    assert!(
+        tree.nodes
+            .values()
+            .find(|n| n.name == "Disabled")
+            .unwrap()
+            .states
+            .disabled
+    );
+}
+#[test]
+fn disclosure_chevron_and_reveal_share_generic_motion_and_stop_with_reduced_motion() {
+    let t = tokens();
+    let ty = types();
+    let mut b = backend();
+    let now = Instant::now();
+    let mut s = ViewState::new(1000);
+    s.layout(
+        &disclosure(false),
+        (360., 200.),
+        1.25,
+        t.with_types(&ty),
+        &mut b,
+        now,
+    );
+    s.layout(
+        &disclosure(true),
+        (360., 200.),
+        1.25,
+        t.with_types(&ty),
+        &mut b,
+        now,
+    );
+    s.tick(t.with_types(&ty), &mut b, now + t.motion.base / 2);
+    let p = placed(&s, "detail/header").progress.unwrap();
+    assert!(p > 0. && p < 1.);
+    let content = rect(&s, "detail/content")[3];
+    assert!(content > 0. && content < rect(&s, "detail-child")[3]);
+    s.set_reduced_motion(true);
+    s.tick(t.with_types(&ty), &mut b, now + t.motion.base / 2);
+    assert_eq!(placed(&s, "detail/header").progress, Some(1.));
+    assert_eq!(rect(&s, "detail/content")[3], rect(&s, "detail-child")[3]);
+    assert!(!s.animating());
+    s.layout(
+        &disclosure(false),
+        (360., 200.),
+        1.25,
+        t.with_types(&ty),
+        &mut b,
+        now + t.motion.base,
+    );
+    assert_eq!(placed(&s, "detail/header").progress, Some(0.));
+    assert_eq!(rect(&s, "detail/content")[3], 0.);
+}
+#[test]
+fn disclosure_chevron_paints_the_settings_icon_and_changes_orientation() {
+    let h = |open| {
+        crate::components::Disclosure {
+            label: String::new(),
+            expanded: open,
+        }
+        .header("header", "toggle")
+    };
+    let (_, closed) = painted(&h(false), 120, 48);
+    let (_, open) = painted(&h(true), 120, 48);
+    assert_ne!(closed, open);
+    // nd-pan-end's tip is (15,12) at 16/24, centred at (100,24).
+    assert!(bgra(&closed, 120, (98., 20.))[3] > 0);
+    assert_eq!(bgra(&open, 120, (98., 20.))[3], 0);
+    assert!(bgra(&open, 120, (96., 22.))[3] > 0);
+    assert_eq!(bgra(&closed, 120, (96., 22.))[3], 0);
+    let (_, hovered) = painted(&h(false).shown(Shown::Hover), 120, 48);
+    assert!(bgra(&hovered, 120, (2., 2.))[3] > 0);
+    assert_eq!(bgra(&closed, 120, (2., 2.))[3], 0);
+}
+#[test]
+fn disclosure_tokens_are_shared_settings_exports_without_fallbacks() {
+    let rows: serde_json::Value =
+        serde_json::from_str(include_str!("../../../tokens/rows.json")).unwrap();
+    let mut c = json!({"rows":rows["default"], "common":{"padding":12}, "list":{"highlight":{"hoverOpacity":0.08}, "focus":{"width":2}}});
+    let statics = json!({"ts":{"ROW_HEIGHT":{"single":48}}});
+    let t = disclosure_from(&c, &statics).unwrap();
+    assert_eq!(
+        (t.padding, t.height, t.icon_size, t.stroke, t.view_box),
+        (12., 48., 16., 2., 24.)
+    );
+    assert_eq!(t.points, [(9., 18.), (15., 12.), (9., 6.)]);
+    c["rows"]["disclosure"]["iconSize"] = json!(0);
+    assert!(disclosure_from(&c, &statics).is_err());
+    c["rows"]["disclosure"]["iconSize"] = json!(16);
+    c["rows"]["disclosure"]["chevron"]["closedPoints"][0] = json!([999, 6]);
+    assert!(disclosure_from(&c, &statics).is_err());
+}
+
+#[test]
+fn disclosure_endpoints_match_settings_chevron_vectors_at_both_scales() {
+    for scale in [1., 1.25] {
+        for (open, svg) in [
+            (
+                false,
+                include_bytes!("../../../../ui/lib/nidara-kit/assets/nd-pan-end-symbolic.svg")
+                    .as_slice(),
+            ),
+            (
+                true,
+                include_bytes!("../../../../ui/lib/nidara-kit/assets/nd-pan-down-symbolic.svg")
+                    .as_slice(),
+            ),
+        ] {
+            let t = tokens();
+            let header = crate::components::Disclosure {
+                label: String::new(),
+                expanded: open,
+            }
+            .header("header", "toggle");
+            let s = laid(&header, (120., 48.), scale);
+            let (w, h) = ((120. * scale) as u16, (48. * scale) as u16);
+            let mut actual = nk_render::Canvas::new(w, h, scale);
+            s.paint(
+                &mut actual,
+                t.with_types(&types()),
+                &mut |_: &str, _: f64| None,
+                None,
+            )
+            .unwrap();
+            let mut reference = nk_render::Canvas::new(w, h, scale);
+            let icon = nk_icons::Icon::parse(svg).unwrap();
+            reference.icon(
+                &icon,
+                nk_text::Rect {
+                    x: 92.,
+                    y: 16.,
+                    width: 16.,
+                    height: 16.,
+                },
+                t.look.primary,
+            );
+            assert_eq!(
+                actual.finish(),
+                reference.finish(),
+                "Settings endpoint: scale={scale}, expanded={open}"
+            );
+        }
+    }
 }

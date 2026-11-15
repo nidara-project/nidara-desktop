@@ -7,6 +7,8 @@ use std::{
     any::{Any, TypeId},
     collections::{HashMap, HashSet},
 };
+mod disclosure;
+pub use disclosure::Disclosure;
 mod slider_end;
 pub use slider_end::SliderRow;
 mod slider;
@@ -245,6 +247,7 @@ pub enum Part {
     Field(DisplayField),
     Dropdown(Dropdown),
     MenuRow(MenuRow),
+    Disclosure(Disclosure),
 }
 impl Part {
     pub fn configured(&self, property: Configure) -> Self {
@@ -268,6 +271,7 @@ impl Part {
             Self::Field(c) => c,
             Self::Dropdown(c) => c,
             Self::MenuRow(c) => c,
+            Self::Disclosure(c) => c,
         }
     }
 }

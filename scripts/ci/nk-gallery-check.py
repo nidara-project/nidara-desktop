@@ -29,7 +29,7 @@ PAGES = [('status', 'Status'), ('button', 'Button'), ('switch', 'Switch'),
          ('segmented', 'Segmented choice'), ('swatches', 'Swatches'), ('row', 'Setting row'), ('slider', 'Slider'),
          ('field', 'Text field'), ('glass', 'Glass card'), ('text', 'Text'), ('icons', 'Icons'),
          ('layout', 'Layout'), ('scroll', 'Scroll'), ('overlay', 'Overlay'), ('grid', 'Grid'),
-         ('reveal', 'Reveal')]
+         ('reveal', 'Reveal'), ('disclosure', 'Disclosure')]
 if Path(os.environ['XDG_RUNTIME_DIR']).resolve() != Path(os.environ['NK_WIDGETS_RUN']).resolve() / 'runtime':
     raise RuntimeError('use toolkit/gallery/check-headless.sh')
 if LOG == Path('/tmp') or Path('/tmp') in LOG.parents:
@@ -301,6 +301,30 @@ def run(directory, fault=None, shots=True):
                     check('slider/row', find(root, '25 %') is not None
                           and find(root, 'Plain', Atspi.Role.PUSH_BUTTON) is None,
                           'a slider row did not show its value, or its row became a control')
+                elif page == 'disclosure':
+                    header = find(root, 'Advanced', Atspi.Role.TOGGLE_BUTTON)
+                    check('disclosure/role', header is not None
+                          and has_state(header, Atspi.StateType.EXPANDABLE),
+                          'the header is not an expandable toggle button')
+                    check('disclosure/closed', not has_state(header, Atspi.StateType.EXPANDED)
+                          and find(root, 'Revealed action', Atspi.Role.PUSH_BUTTON) is None,
+                          'collapsed content remained in the reader tree')
+                    activate('Advanced', Atspi.Role.TOGGLE_BUTTON)
+                    barrier(lambda: find(root, 'Revealed action', Atspi.Role.PUSH_BUTTON),
+                            'disclosure content in the reader tree')
+                    header = find(root, 'Advanced', Atspi.Role.TOGGLE_BUTTON)
+                    check('disclosure/open', has_state(header, Atspi.StateType.EXPANDED),
+                          'expansion did not reach the model')
+                    disabled = find(root, 'Disabled', Atspi.Role.TOGGLE_BUTTON)
+                    check('disclosure/disabled', disabled is not None
+                          and not has_state(disabled, Atspi.StateType.ENABLED),
+                          'the disabled header became enabled')
+                    activate('Advanced', Atspi.Role.TOGGLE_BUTTON)
+                    barrier(lambda: find(root, 'Revealed action', Atspi.Role.PUSH_BUTTON) is None,
+                            'collapsed disclosure content removed')
+                    check('disclosure/close', not has_state(
+                        find(root, 'Advanced', Atspi.Role.TOGGLE_BUTTON), Atspi.StateType.EXPANDED),
+                          'collapse did not reach the model')
                 elif page == 'reveal':
                     activate('Open', Atspi.Role.PUSH_BUTTON)
                     check('reveal/open', find(root, 'Revealed') is not None, 'the reveal did not open')
