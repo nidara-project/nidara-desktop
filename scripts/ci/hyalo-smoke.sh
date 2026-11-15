@@ -297,7 +297,8 @@ phase_run() {
     export HYALO_DRM_DEVICE="$dev"
     log "HYALO_DRM_DEVICE=$dev"
 
-    # ── 1. Hyalo on the hardware path, with the SHIPPED config (no autostart: no --session).
+    # ── 1. Hyalo on the hardware path, with the SHIPPED config (no autostart: no --session;
+    #       no per-output tables: see below).
     log "booting Hyalo (tty backend on vkms)…"
     # HYALO_CONFIG replaces the layers; HYALO_SETTINGS gives it a settings layer of its own,
     # so the `settings` request has somewhere to write that is not a real ~/.config.
@@ -315,7 +316,15 @@ phase_run() {
     # denied so the public CLI cannot silently bypass the session IPC policy.
     export GSETTINGS_BACKEND=dconf
     gsettings set org.nidara.ai allow-computer-control false
-    HYALO_A11Y_MANAGER=1 HYALO_CONFIG=/usr/share/nidara/hyalo/hyalo.toml RUST_LOG=info nidara-hyalo --tty >"$hyalo_log" 2>&1 &
+    # The shipped config, minus its per-output tables (#1116). vkms comes up as Virtual-1 or
+    # Virtual-2 as the runner's cards are numbered, and the shipped `[outputs.Virtual-1]` (a
+    # mode for virtual machines) made the two differ: another mode, and a scale the checks
+    # below may not change (an explicit output refuses `msg output … scale=`).
+    local config=/tmp/hyalo/hyalo.toml
+    awk '/^\[/ { skip = /^\[outputs\./ } !skip' /usr/share/nidara/hyalo/hyalo.toml >"$config"
+    grep -q '^\[input' "$config" && ! grep -q '^\[outputs\.' "$config" \
+        || { log "FAIL: the smoke's copy of the shipped config is not the config without its outputs"; exit 1; }
+    HYALO_A11Y_MANAGER=1 HYALO_CONFIG="$config" RUST_LOG=info nidara-hyalo --tty >"$hyalo_log" 2>&1 &
     hyalo_pid=$!
     local sock="" i
     for i in $(seq 1 30); do
