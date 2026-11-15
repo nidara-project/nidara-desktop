@@ -2556,22 +2556,20 @@ every merge instead of a review. **CI is the automated gate; the human gate is t
 reading the PR**, and nothing in this repository enforces the second one. Write access is what
 keeps `main` safe from outside: opening a PR is open to anyone, merging one is not.
 
-The **smoke job** (`scripts/ci/headless-smoke.sh`, `smoke` in ci.yml) is the only gate that
-actually RUNS the shell: the runner loads the kernel's **vkms** module (virtual KMS — needed
-because Hyprland cannot boot with zero DRM devices: aquamarine's GBM allocator wants a node,
-and `HYPRLAND_HEADLESS_ONLY` is set by hyprtester but read by NOTHING, verified on v0.55.2
-and main), then a privileged `archlinux:latest` container installs the dependencies from
-official Arch repos, builds **both in-repo C libraries** (so a broken `build.sh` fails CI
-instead of a user's clean install), bundles the shell with `scripts/bundle.sh`, boots Hyprland with the SHIPPED
-`config/hypr/hyprland.lua` on the vkms display (seatd session + systemd-udevd for device
-enumeration; rendering is kms_swrast/llvmpipe), runs the bundle exactly as production does
-(`NIDARA_SHELL_ROOT` + cwd = shell root), and FAILS if the process dies, `nidara-ipc
-listActions`/`dumpState` don't answer with valid JSON, or the boot log contains `JS ERROR`.
-It then grims a desktop + Control Center screenshot into the `smoke-artifacts` artifact for
-HUMAN review — deliberately not a pixel diff (rejected as fragile).
+The **smoke job** (`scripts/ci/headless-smoke.sh`, `smoke` in ci.yml, shown as "Headless boot
+smoke") boots NOTHING since 2026-11-16 (owner's decision: nothing has to run on Hyprland, and
+no session starts the TS shell). A plain `archlinux:latest` container installs the dependencies
+from official Arch repos, compiles the gsettings schemas strictly, builds **the in-repo C
+libraries** (so a broken `build.sh` fails CI instead of a user's clean install) and bundles the
+shell and Settings with `scripts/bundle.sh`. The gate that RUNS a desktop is the Hyalo job
+(`references/hyalo.md`). 🔴 The job keeps its old name because it is one of the four required
+checks: renaming or deleting it without changing the branch protection in the same move leaves
+every PR waiting for a check that never reports. What went with the boot: Hyprland parsing the
+shipped `config/hypr/hyprland.lua`, the TS shell's IPC answering, the config store's
+assertions (`scripts/dev/define-config-probe.ts`) and the GTK CRITICAL scan of its boot log.
 
-⚠️ **`libnidara-auth` is built here for a reason that has nothing to do with this boot.** The
-shell never loads it — the LOCKSCREEN does, and the lockscreen is not part of the smoke. Until
+⚠️ **`libnidara-auth` is built here because nothing else compiles it.** The
+shell never loads it — the LOCKSCREEN does. Until
 2026-08-23 it was the only C library in the repo that **no job compiled**, and it is the one
 that authenticates: a C error, or a `build.sh` that stopped producing a typelib, reached people
 at `install.sh` time. The job also asserts the **eight signals** the GIR must expose, because
@@ -2579,8 +2577,7 @@ GJS resolves a signal name at `connect()` time — a renamed or dropped signal i
 error anywhere, it is an exception thrown the first time someone locks their screen, on a
 surface no automated boot visits. The built dependency
 stack is cached as a tarball keyed on `install.sh`'s hash **+ `headless-smoke.sh`'s** + a month
-stamp (bounds soname drift against the moving `archlinux:latest`); Hyprland refuses root, so the boot phase
-re-runs the script as an unprivileged `ci` user (`run` subcommand). Note the smoke job
+stamp (bounds soname drift against the moving `archlinux:latest`) — historical, see below. Note the smoke job
 builds the COMMITTED tree (it does not re-run the widget codegen — staleness is the
 `widgets-gen` job's gate).
 

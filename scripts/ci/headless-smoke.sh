@@ -3,42 +3,28 @@
 # headless-smoke.sh — CI boot smoke test for the Nidara UI.
 #
 # What this proves on every PR, with no GPU and no display:
-#   1. scripts/bundle.sh still produces a shell bundle from PLAIN ARCH PACKAGES
-#      (CI's other jobs don't bundle).
-#   2. The shipped config/hypr/hyprland.lua still parses and boots Hyprland.
-#   3. The shell bundle BOOTS on that Hyprland and stays alive.
-#   4. The IPC door responds (`org.nidara.Shell`; AGS's `io.Astal.ags`
-#      compatibility door was closed on 2026-09-23, tech-debt #76).
-#   5. Screenshots (grim) are captured for HUMAN review — deliberately NOT a
-#      pixel diff (fragile, rejected); a person glances at the artifact.
+#   1. The desktop's gsettings schemas compile, strictly.
+#   2. The in-repo C libraries build from PLAIN ARCH PACKAGES: libnidara-wl,
+#      libnidara-auth (and the eight signals the lockscreen connects to are in
+#      its GIR), and the native hosts.
+#   3. scripts/bundle.sh still produces the shell and Settings bundles, and the
+#      SCSS compiles (CI's other jobs don't bundle).
 #
-# ⚠️ WHAT IT NO LONGER PROVES (2026-08-18). It used to build the pinned
-# Astal/AGS stack from source, which doubled as proof that install.sh's source
-# path still worked. That stack is gone — the shell hosts itself (ui/lib/nidara-kit/platform/host.ts)
-# and bundles itself (scripts/bundle.sh) — and the ONE package left,
-# libastal-auth, is the lockscreen's PAM wrapper, which this smoke does not
-# bundle or boot. So install.sh's from-source fallback is covered by the VM
-# sweep now, not here. That is also why the dependency-cache tarball and its
-# cache key are gone from ci.yml: there is nothing left to cache.
+# ⚠️ WHAT IT NO LONGER PROVES (2026-11-16, owner's decision). It used to boot
+# Hyprland on vkms with the shipped config/hypr/hyprland.lua, boot the TS shell
+# on it, ask its IPC door, run the config store's assertions and fail on a GTK
+# CRITICAL in the boot log. Nothing has to boot on Hyprland any more, and no
+# session starts the TS shell: the boot that counts is hyalo-smoke.sh's. The
+# job keeps its name ("Headless boot smoke") because it is a REQUIRED check:
+# renaming it means changing the branch protection in the same move.
 #
-# How "headless" actually works — vkms, not a headless backend: Hyprland cannot
-# run with zero DRM devices (aquamarine's GBM allocator needs a node; its
-# headless backend alone fails with "no allocator available", and
-# HYPRLAND_HEADLESS_ONLY is set by hyprtester but read by nothing — verified
-# against Hyprland v0.55.2 AND main). So the CI job loads the kernel's vkms
-# (virtual KMS) module on the runner VM and hands /dev/dri to this container;
-# mesa renders on it with kms_swrast/llvmpipe (software GL). seatd provides the
-# seat session, systemd-udevd lets aquamarine enumerate the device.
-#
-# Runs INSIDE a privileged archlinux:latest container (docker run, see the
-# `smoke` job in ci.yml). Hyprland refuses to run as root, so the boot phase
-# runs as an unprivileged `ci` user (`run` subcommand, re-invoked via runuser).
+# Runs INSIDE an archlinux:latest container (docker run, see the `smoke` job in
+# ci.yml), as root.
 #
 # ─────────────────────────────────────────────────────────────────────────────
 set -euo pipefail
 
 REPO="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
-OUT="${OUT:-${GITHUB_WORKSPACE:-$REPO}/smoke-out}"   # uploaded as artifact (always())
 
 log() { echo "[smoke] $*"; }
 
@@ -56,9 +42,9 @@ phase_deps() {
         libpulse networkmanager libnma-gtk4 bluez-libs upower libnotify \
         pipewire wireplumber libwireplumber \
         nodejs npm gjs python \
-        hyprland mesa dbus seatd systemd \
+        mesa dbus systemd \
         wayland-protocols hyprland-protocols wlr-protocols \
-        grim jq librsvg dconf \
+        jq librsvg dconf \
         ttf-jetbrains-mono ttf-nerd-fonts-symbols-mono inter-font noto-fonts-emoji
 
     ldconfig
@@ -69,8 +55,7 @@ phase_deps() {
 # ─────────────────────────────────────────────────────────────────────────────
 phase_bundle() {
     # The desktop's settings schemas (#573), where the package puts them. Without
-    # them every settings store falls back to memory and says so in the log,
-    # which step 7b below turns into a failure.
+    # them every settings store falls back to memory.
     install -Dm644 -t /usr/share/glib-2.0/schemas "$REPO"/config/gsettings/*.gschema.xml
     glib-compile-schemas --strict /usr/share/glib-2.0/schemas
     log "gsettings schemas OK"
@@ -90,8 +75,7 @@ phase_bundle() {
     ldconfig
     log "libnidara-wl OK"
 
-    # libnidara-auth. NOT for this boot — the shell never loads it, the
-    # LOCKSCREEN does, and the lockscreen is not part of the smoke. It is here
+    # libnidara-auth. The shell never loads it, the LOCKSCREEN does. It is here
     # because until 2026-08-23 it was the ONLY C library in the repo that no CI
     # job compiled, and it is the one that authenticates: a C error or a broken
     # build.sh reached people at `install.sh` time instead of failing here.
@@ -138,256 +122,7 @@ phase_bundle() {
     log "bundle OK: $(du -h build/nidara | cut -f1)"
 }
 
-# ─────────────────────────────────────────────────────────────────────────────
-# Phase: boot — run Hyprland + shell as the unprivileged `ci` user
-# ─────────────────────────────────────────────────────────────────────────────
-phase_boot() {
-    id ci &>/dev/null || useradd -m -s /bin/bash ci
-    # The boot phase only WRITES to /tmp — but it must read the whole repo,
-    # and the workspace arrives owned by another uid.
-    chmod -R a+rX "$REPO"
-
-    export XDG_RUNTIME_DIR=/run/smoke
-    mkdir -p "$XDG_RUNTIME_DIR" && chown ci "$XDG_RUNTIME_DIR" && chmod 700 "$XDG_RUNTIME_DIR"
-
-    # A system bus keeps libnm/bluez/upower clients from erroring at connect
-    # (the services themselves are absent; the shell must tolerate that — a
-    # desktop without BT/battery is a supported install).
-    dbus-uuidgen --ensure
-    mkdir -p /run/dbus && dbus-daemon --system --fork
-
-    # aquamarine discovers DRM devices through libudev — run udevd and replay
-    # device events so the vkms node handed in by the runner is enumerable.
-    /usr/lib/systemd/systemd-udevd --daemon
-    udevadm trigger --action=add || true
-    udevadm settle || true
-
-    # Seat session: aquamarine's DRM backend needs libseat; seatd is the
-    # daemonless-friendly provider. `ci` must be in its group to connect.
-    seatd -g seat >/tmp/seatd.log 2>&1 &
-    usermod -aG seat,video ci
-    sleep 1
-
-    mkdir -p "$OUT" /tmp/smoke && chown ci /tmp/smoke "$OUT"
-
-    # Everything below runs unprivileged, with a private session bus.
-    runuser -u ci -- env XDG_RUNTIME_DIR="$XDG_RUNTIME_DIR" REPO="$REPO" OUT="$OUT" \
-        dbus-run-session -- bash "$REPO/scripts/ci/headless-smoke.sh" run
-}
-
-# ─────────────────────────────────────────────────────────────────────────────
-# Subcommand: run — the actual boot + checks (executed as `ci`)
-# ─────────────────────────────────────────────────────────────────────────────
-phase_run() {
-    export LIBGL_ALWAYS_SOFTWARE=1       # mesa llvmpipe/kms_swrast on the vkms node
-    export LANG=C.UTF-8
-    mkdir -p "$HOME/.cache"              # Hyprland's crash-report dir lives under it
-
-    # NOT local: the EXIT trap below outlives this function on the success
-    # path (locals are gone by then, and set -u would abort the trap).
-    hypr_log=/tmp/smoke/hyprland-stdout.log
-    shell_log=/tmp/smoke/shell.log
-    hypr_pid=""
-    shell_pid=""
-
-    # Always ship the logs + screenshots as artifacts, pass or fail.
-    finish() {
-        local rc=$?
-        [ -n "$shell_pid" ] && kill "$shell_pid" 2>/dev/null || true
-        [ -n "$hypr_pid" ]  && kill "$hypr_pid"  2>/dev/null || true
-        # Hyprland switches its detailed log to disk early ("Disabling stdout
-        # logs!") — that file has the real backend errors; ship it too.
-        cp -f "$XDG_RUNTIME_DIR"/hypr/*/hyprland*.log /tmp/smoke/ 2>/dev/null || true
-        cp -f /tmp/smoke/*.png /tmp/smoke/*.log /tmp/smoke/*.json "$OUT"/ 2>/dev/null || true
-        if [ $rc -ne 0 ]; then
-            echo "─── shell.log (tail) ───────────────────────────────"; tail -n 80 "$shell_log" 2>/dev/null || true
-            echo "─── hyprland stdout (tail) ─────────────────────────"; tail -n 40 "$hypr_log" 2>/dev/null || true
-            echo "─── hyprland disk log (tail) ───────────────────────"; tail -n 60 /tmp/smoke/hyprland.log 2>/dev/null || true
-        fi
-        return $rc
-    }
-    trap finish EXIT
-
-    # Pin aquamarine to the vkms node ONLY. The Azure runner also exposes a
-    # hyperv_drm card; with two GPUs aquamarine takes the multi-GPU path, whose
-    # CDRMRenderer needs a real EGL DRM device and has no software fallback
-    # ("initMgpu: no renderer" every frame). One device = single-GPU path.
-    local c
-    for c in /sys/class/drm/card*; do
-        if [[ "$(readlink -f "$c")" == *vkms* ]]; then
-            export AQ_DRM_DEVICES="/dev/dri/$(basename "$c")"
-            break
-        fi
-    done
-    log "AQ_DRM_DEVICES=${AQ_DRM_DEVICES:-<unset — vkms not found, using all>}"
-
-    # ── 1. Hyprland, with the SHIPPED config (that's part of the test) ────────
-    log "booting Hyprland (headless)…"
-    Hyprland -c "$REPO/config/hypr/hyprland.lua" >"$hypr_log" 2>&1 &
-    hypr_pid=$!
-
-    local sig="" i
-    for i in $(seq 1 30); do
-        sig="$(ls "$XDG_RUNTIME_DIR/hypr" 2>/dev/null | head -1 || true)"
-        [ -n "$sig" ] && [ -S "$XDG_RUNTIME_DIR/hypr/$sig/.socket.sock" ] && break
-        kill -0 "$hypr_pid" 2>/dev/null || { log "FAIL: Hyprland died during boot"; exit 1; }
-        sleep 1
-    done
-    [ -n "$sig" ] || { log "FAIL: Hyprland socket never appeared"; exit 1; }
-    export HYPRLAND_INSTANCE_SIGNATURE="$sig"
-    log "Hyprland up (instance $sig)"
-
-    # ── 2. Ensure a virtual output exists ─────────────────────────────────────
-    if [ "$(hyprctl monitors -j | jq 'length')" = "0" ]; then
-        hyprctl output create headless SMOKE-1
-        sleep 1
-    fi
-    hyprctl monitors -j > /tmp/smoke/monitors.json
-    [ "$(jq 'length' /tmp/smoke/monitors.json)" != "0" ] || { log "FAIL: no output after 'output create headless'"; exit 1; }
-    log "monitors: $(jq -r '.[].name' /tmp/smoke/monitors.json | tr '\n' ' ')"
-
-    # Hyprland names its Wayland socket itself; discover it instead of guessing.
-    local wl
-    wl="$(basename "$(ls "$XDG_RUNTIME_DIR"/wayland-* 2>/dev/null | grep -v '\.lock$' | head -1)")"
-    [ -n "$wl" ] || { log "FAIL: no Wayland socket in XDG_RUNTIME_DIR"; exit 1; }
-    export WAYLAND_DISPLAY="$wl"
-
-    # ── 3. The shell bundle, exactly as production runs it ────────────────────
-    log "booting nidara bundle…"
-    export GDK_BACKEND=wayland
-    export NIDARA_SETTINGS_ROOT="$REPO/ui/settings" NIDARA_SETTINGS_EXECUTABLE="$REPO/ui/settings/build/nidara-settings"
-    export NIDARA_SHELL_ROOT="$REPO/ui/shell"
-    cd "$REPO/ui/shell"
-    ./build/nidara >"$shell_log" 2>&1 &
-    shell_pid=$!
-
-    # ── 4. Gate: stays alive + IPC answers ────────────────────────────────────
-    # Compiled from THIS tree rather than assumed on PATH: the smoke builds from
-    # source, and a binary an earlier install left on the box would let a broken
-    # client pass.
-    cc -O2 "$REPO/bin/nidara-ipc.c" $(pkg-config --cflags --libs gio-2.0) -o /tmp/smoke/nidara-ipc \
-        || { log "FAIL: nidara-ipc.c does not compile"; exit 1; }
-
-    local ok=""
-    for i in $(seq 1 40); do
-        kill -0 "$shell_pid" 2>/dev/null || { log "FAIL: shell process died"; exit 1; }
-        if /tmp/smoke/nidara-ipc listActions >/tmp/smoke/listActions.json 2>/dev/null; then ok=1; break; fi
-        sleep 1
-    done
-    [ -n "$ok" ] || { log "FAIL: shell never answered 'nidara-ipc listActions'"; exit 1; }
-    jq -e . /tmp/smoke/listActions.json >/dev/null || { log "FAIL: listActions is not valid JSON"; exit 1; }
-
-    /tmp/smoke/nidara-ipc dumpState >/tmp/smoke/dumpState.json
-    jq -e '.shell.version' /tmp/smoke/dumpState.json >/dev/null || { log "FAIL: dumpState has no .shell.version"; exit 1; }
-    log "IPC OK — shell version $(jq -r '.shell.version' /tmp/smoke/dumpState.json)"
-
-    # Pin the name itself, with gdbus naming the destination. (`nidara-ipc` used to
-    # fall back to AGS's name, so this was the only check that the shell published
-    # its own; the fallback is gone, and the pin stays as the direct statement.) (gdbus, not busctl: glib2 is
-    # already a hard dependency here, systemd's CLI is not guaranteed in a minimal
-    # container.)
-    gdbus call --session --dest org.nidara.Shell --object-path /org/nidara/Shell \
-        --method org.nidara.Shell.Request '["listActions"]' >/dev/null 2>&1 \
-        || { log "FAIL: shell never published org.nidara.Shell"; exit 1; }
-
-    log "IPC OK — org.nidara.Shell answers"
-    NIDARA_SETTINGS_CHECK_ISOLATED=1 "$REPO/scripts/ci/settings-process-check.sh" /tmp/smoke/nidara-ipc /tmp/smoke
-
-
-    # ── 5. Screenshots for human review (NOT a gate beyond grim succeeding) ───
-    sleep 4                                   # let the first frames render
-    grim /tmp/smoke/desktop.png
-    log "captured desktop.png"
-    # Control Center open — best-effort: a CC regression shouldn't mask the
-    # boot gate, but the picture is valuable to reviewers.
-    if /tmp/smoke/nidara-ipc toggleControlCenter >/dev/null 2>&1; then
-        sleep 2
-        grim /tmp/smoke/control-center.png || true
-        log "captured control-center.png"
-    fi
-
-    # ── 6. Do the shipped locales still FIT? ─────────────────────────────────
-    # scripts/dev/text-budget.js measures every string of THREE fixed-width boxes in
-    # all 12 locales — the Settings sidebar, the CC's 2×1 tile title and the CC's
-    # status pill — against each box's real budget, with the shipped font pinned. It
-    # runs HERE rather than in its own job for one reason: it needs a GDK display and
-    # the `inter-font` package, and this is the only job that has both. It exits 2 (not
-    # 1) if the font is missing, so a container that stops shipping Inter reports
-    # that instead of silently measuring a substitute and passing.
-    #
-    # ⚠️ It reads ui/shell/style.css, which step 1 of this script has already built —
-    # the CC slots are scoped to the bar's window, so an unbuilt sheet would measure
-    # unstyled labels and pass on numbers nobody ships.
-    if NIDARA_REPO=/repo gjs -m /repo/scripts/dev/text-budget.js >/tmp/smoke/text-budget.txt 2>&1; then
-        log "text budget OK — $(grep -c '^   scale' /tmp/smoke/text-budget.txt) scale rows checked"
-    else
-        rc=$?
-        log "FAIL: text budget (exit $rc)"
-        cat /tmp/smoke/text-budget.txt
-        exit 1
-    fi
-
-    # ── 6b. The config store's invariants, exercised ─────────────────────────
-    # `scripts/dev/define-config-probe.ts` asserts what `defineSettings` promises and
-    # what a reader cannot see by looking: that a subscriber to one key is NOT woken
-    # by another, that writing an identical value neither notifies nor touches the
-    # file (checked by mtime), and that the two migrated modules kept their public
-    # API. It runs HERE for the same reason the text budget does — this is the job
-    # that has a gjs with a display.
-    #
-    # ⚠️ It is wired in rather than left as a file someone might remember to run: a
-    # committed instrument nothing executes is one that rots, and this whole issue
-    # is about invariants that hold silently until they do not.
-    #
-    # Through its launcher: the probe writes settings, and the launcher is what
-    # gives it a scratch config dir and the keyfile GSettings backend.
-    if /repo/scripts/dev/define-config-probe.sh /tmp/smoke/dcp > /tmp/smoke/define-config.txt 2>&1; then
-        log "config store OK — $(grep -c '^  PASS' /tmp/smoke/define-config.txt) assertions"
-    else
-        log "FAIL: config store probe"
-        tail -25 /tmp/smoke/define-config.txt
-        exit 1
-    fi
-
-    # ── 7. JS errors are a hard failure (boot must be clean) ──────────────────
-    if grep -nE "JS ERROR|Unhandled promise rejection" "$shell_log" > /tmp/smoke/js-errors.txt; then
-        log "FAIL: JS errors during boot:"
-        cat /tmp/smoke/js-errors.txt
-        exit 1
-    fi
-
-    # ── 7a. A toolkit CRITICAL is a hard failure too ──────────────────────────
-    # GTK/GDK/GSK/GLib/GJS CRITICALs are failed assertions: our code handed the
-    # toolkit something invalid, and the toolkit skipped the call and carried on.
-    # Nothing breaks visibly at the moment it happens — which is how 2821 texture
-    # CRITICALs a day (dropdown chevrons broken since #636) went unread until
-    # 2026-09-27. The whole summary is printed either way, so a WARNING that is
-    # new here is at least on the page. Only an absent accessibility bus is
-    # exempt: that is the container, not the shell.
-    "$REPO/bin/nidara-doctor" --log "$shell_log" > /tmp/smoke/log-summary.txt || true
-    cat /tmp/smoke/log-summary.txt
-    if grep -nE "(Gtk|Gdk|Gsk|GLib|GLib-GObject|GLib-GIO|Gjs|Pango)-CRITICAL" "$shell_log" \
-        | grep -v "Unable to connect to the accessibility bus" > /tmp/smoke/toolkit-criticals.txt; then
-        log "FAIL: toolkit CRITICALs during boot:"
-        cat /tmp/smoke/toolkit-criticals.txt
-        exit 1
-    fi
-
-    # ── 7b. Every settings store agrees with its installed schema ─────────────
-    # `defineSettings` never throws on a missing schema, a missing key or a default
-    # that differs from the code — the desktop has to start — so it only logs.
-    # This is where that log line stops being ignorable.
-    if grep -n "\[defineSettings\]" "$shell_log" > /tmp/smoke/settings-schema.txt; then
-        log "FAIL: settings stores disagree with their schemas:"
-        cat /tmp/smoke/settings-schema.txt
-        exit 1
-    fi
-
-    log "SMOKE PASSED"
-}
-
 case "${1:-all}" in
-    run) phase_run ;;
-    all) phase_deps; phase_bundle; phase_boot ;;
-    *)   echo "usage: $0 [all|run]" >&2; exit 2 ;;
+    all) phase_deps; phase_bundle; log "SMOKE PASSED" ;;
+    *)   echo "usage: $0 [all]" >&2; exit 2 ;;
 esac

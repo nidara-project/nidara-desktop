@@ -15,8 +15,14 @@ Nidara is a **full Wayland desktop environment** for Arch Linux — not a theme,
 Nidara's own Wayland compositor, on Smithay (Rust), in `hyalo/`. The plan, with the parity table,
 is issue #680; the evidence, #679. 🔑 **Since 2026-10-02 Hyprland is FROZEN and Hyalo is the only
 target** (owner's decision): no new work on Hyprland, fixes included, and a change no longer has to
-work on both compositors — the one floor until the switch (#685) is that the shell still BOOTS on
-Hyprland, because that is what 0.13 ships. Work follows #680's WAVES (safe and usable daily →
+work on both compositors. 🔑 **Since 2026-11-16 there is no floor on Hyprland either** (owner's
+decision): a change need not keep the shell booting there, and the next release (Rust, Hyalo
+only) is a CLEAN INSTALL — no upgrade path from the TS release is built; the new installer only
+has to recognise an old install and say so, and old personal config it does not understand is
+ignored, never fatal. What still holds Hyprland in the package is the LOGIN, which starts on it
+(`config/greetd/hyprland-greeter.lua`) until Hyalo has its login mode. CI no longer boots
+anything on Hyprland: the "Headless boot smoke" job builds the C libraries and bundles, and
+keeps its name only because it is a required check (`dev-workflow.md`). Work follows #680's WAVES (safe and usable daily →
 what the switch lost → the system → the switch), and Hyalo is built for this desktop alone: where
 the desktop was shaped around a Hyprland limit, #708 decides the structural change. Anything that
 talks to the compositor still goes through `CompositorState`. Released packages run Hyprland until
