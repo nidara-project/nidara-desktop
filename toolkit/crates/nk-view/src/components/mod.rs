@@ -7,15 +7,33 @@ use std::{
     any::{Any, TypeId},
     collections::{HashMap, HashSet},
 };
+mod slider_end;
+pub use slider_end::SliderRow;
+mod slider;
+pub use slider::SliderControl;
+mod field;
+pub use field::DisplayField;
+mod dropdown;
+pub use dropdown::Dropdown;
+mod menu_row;
+pub use menu_row::MenuRow;
+mod surface;
+pub use surface::Surface;
+mod context;
+pub use context::*;
 mod button;
 mod check;
+mod segmented;
+pub use segmented::SegmentedRow;
+mod swatches;
+pub use swatches::SwatchRow;
 mod segment;
 mod swatch;
 mod switch;
 pub use button::Button;
 pub use check::Check;
 pub use segment::Segment;
-pub use swatch::{Swatch, SwatchGap};
+pub use swatch::Swatch;
 pub use switch::Switch;
 
 /// Tokens and type scale belong to the same window appearance. Never infer a font scale
@@ -46,6 +64,7 @@ pub enum BodyPlacement {
     #[default]
     Fill,
     NaturalCentered,
+    FillWidth,
 }
 #[derive(Clone, Copy, Debug, Default, PartialEq)]
 pub struct FrameSpec {
@@ -56,6 +75,7 @@ pub struct FrameSpec {
 pub struct Build<'a> {
     pub key: &'a Key,
     pub look: ComponentLook<'a>,
+    pub child: &'a Node,
 }
 impl Build<'_> {
     pub fn key(&self, suffix: &str) -> Key {
@@ -77,6 +97,8 @@ pub struct Paint<'a> {
     pub progress: Option<f64>,
     pub corner: Corner,
     pub state: Option<&'a dyn Any>,
+    pub read: Read<'a>,
+    pub wash: Option<(Rect, f64, [f64; 4])>,
 }
 impl Paint<'_> {
     pub fn ink(&self, c: Color) -> Color {
@@ -93,7 +115,7 @@ pub enum Membership {
 /// another selected wash or draw the focus ring through the mark.
 #[derive(Clone, Copy, Debug, Default)]
 pub struct Glass {
-    pub owns_mark: bool,
+    pub lit: Option<(u8, [f64; 4])>,
 }
 /// Effects compose: a later host component can change a value, redraw and capture in one
 /// event. Input borrows only its own state and effects, never the whole ViewState.
@@ -103,10 +125,16 @@ pub struct Outcome {
     pub redraw: bool,
     pub arm: bool,
     pub activate: bool,
+    pub value: Option<Value>,
+    pub capture: Capture,
+    pub focus: bool,
+    pub keyboard_focus: bool,
+    pub host: Vec<HostRequest>,
 }
 pub struct Input<'a> {
     pub state: Option<&'a mut (dyn Any + 'static)>,
     pub effects: &'a mut Outcome,
+    pub context: Option<Read<'a>>,
 }
 pub trait Component: Any {
     fn body(&self, cx: &Build<'_>) -> Node;
@@ -122,11 +150,11 @@ pub trait Component: Any {
     ) -> Option<Color> {
         None
     }
-    fn glass(&self) -> Glass {
+    fn glass(&self, _cx: &Read<'_>) -> Glass {
         Glass::default()
     }
-    fn silhouette(&self, rect: Rect) -> Rect {
-        rect
+    fn silhouette(&self, cx: &Read<'_>) -> Rect {
+        cx.rect
     }
     fn target(&self) -> Option<f64> {
         None
@@ -145,16 +173,59 @@ pub trait Component: Any {
         }
     }
     fn text(&self, _cx: &mut Input<'_>, _text: &str) {}
-    fn request(&self, cx: &mut Input<'_>, activate: bool) {
-        if activate {
-            cx.effects.handled = true;
-            cx.effects.activate = true;
+    fn request(&self, cx: &mut Input<'_>, request: Request) {
+        if matches!(request, Request::Activate) {
+            self.key(cx, crate::KeyInput::Activate);
         }
     }
-    fn group(&self, _interaction: Interaction) -> Membership {
+    fn owns_mark(&self) -> bool {
+        false
+    }
+    fn contains_controls(&self) -> bool {
+        false
+    }
+    fn selected(&self) -> bool {
+        false
+    }
+    fn configure(&self, _property: Configure) -> Option<Part> {
+        None
+    }
+    fn corner(&self) -> Corner {
+        Corner::Pill
+    }
+    fn content_ink(&self, _cx: &Read<'_>, _at: Rect, ink: Color) -> Color {
+        ink
+    }
+    fn owner_edits(&self) -> bool {
+        false
+    }
+    fn caret(&self, _cx: &Read<'_>) -> Option<Rect> {
+        None
+    }
+    fn selection(&self, _cx: &Read<'_>) -> Vec<Rect> {
+        Vec::new()
+    }
+    fn value(&self, _state: Option<&dyn Any>) -> Option<Value> {
+        None
+    }
+    fn take_changed(&self, _state: Option<&mut dyn Any>) -> Option<Value> {
+        None
+    }
+    fn list(&self, _cx: &Read<'_>) -> Option<ListSpec> {
+        None
+    }
+    fn reconcile(&self, _state: Option<&mut dyn Any>) {}
+    fn cancel(&self, _state: Option<&mut dyn Any>) {}
+    fn group(&self, _cx: &Read<'_>) -> Membership {
         Membership::None
     }
-    fn semantics(&self, _interaction: Interaction, _node: &mut nk_a11y::Node) {}
+    fn semantics(
+        &self,
+        _cx: &Read<'_>,
+        _node: &mut nk_a11y::Node,
+        _children: &mut Vec<SemanticChild>,
+    ) {
+    }
     fn state(&self) -> Option<Box<dyn Any>> {
         None
     }
@@ -166,9 +237,21 @@ pub enum Part {
     Swatch(Swatch),
     Switch(Switch),
     Check(Check),
-    SwatchGap(SwatchGap),
+    Segmented(SegmentedRow),
+    Swatches(SwatchRow),
+    Surface(Surface),
+    Slider(SliderControl),
+    SliderRow(SliderRow),
+    Field(DisplayField),
+    Dropdown(Dropdown),
+    MenuRow(MenuRow),
 }
 impl Part {
+    pub fn configured(&self, property: Configure) -> Self {
+        self.component()
+            .configure(property)
+            .unwrap_or_else(|| self.clone())
+    }
     /// The only dispatch that names concrete components.
     pub fn component(&self) -> &dyn Component {
         match self {
@@ -177,7 +260,14 @@ impl Part {
             Self::Swatch(c) => c,
             Self::Switch(c) => c,
             Self::Check(c) => c,
-            Self::SwatchGap(c) => c,
+            Self::Segmented(c) => c,
+            Self::Swatches(c) => c,
+            Self::Surface(c) => c,
+            Self::Slider(c) => c,
+            Self::SliderRow(c) => c,
+            Self::Field(c) => c,
+            Self::Dropdown(c) => c,
+            Self::MenuRow(c) => c,
         }
     }
 }
@@ -185,10 +275,11 @@ impl Part {
 /// target, Tab stop or semantic node of its own.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub struct Drawing {
-    pub part: Part,
+    pub part: Box<Part>,
     pub child: Box<Node>,
 }
 struct Entry {
+    part: Option<Part>,
     kind: TypeId,
     value: Option<Box<dyn Any>>,
 }
@@ -201,11 +292,16 @@ impl StateStore {
         let kind = c.type_id();
         let entry = self.entries.entry(key.clone()).or_insert_with(|| Entry {
             kind,
+            part: None,
             value: c.state(),
         });
         if entry.kind != kind {
+            if let Some(part) = &entry.part {
+                part.component().cancel(entry.value.as_deref_mut());
+            }
             *entry = Entry {
                 kind,
+                part: None,
                 value: c.state(),
             };
         }
@@ -213,12 +309,48 @@ impl StateStore {
     pub fn get(&self, key: &Key) -> Option<&dyn Any> {
         self.entries.get(key)?.value.as_deref()
     }
+    #[cfg(test)]
     pub fn input(&mut self, key: &Key, effects: &mut Outcome, f: impl FnOnce(&mut Input<'_>)) {
         let state = self
             .entries
             .get_mut(key)
             .and_then(|e| e.value.as_deref_mut());
-        f(&mut Input { state, effects });
+        f(&mut Input {
+            state,
+            effects,
+            context: None,
+        });
+    }
+    pub fn input_context(
+        &mut self,
+        key: &Key,
+        effects: &mut Outcome,
+        context: Read<'_>,
+        f: impl FnOnce(&mut Input<'_>),
+    ) {
+        let state = self
+            .entries
+            .get_mut(key)
+            .and_then(|e| e.value.as_deref_mut());
+        f(&mut Input {
+            state,
+            effects,
+            context: Some(context),
+        });
+    }
+    pub fn cancel(&mut self, key: &Key) {
+        if let Some(e) = self.entries.get_mut(key)
+            && let Some(part) = &e.part
+        {
+            part.component().cancel(e.value.as_deref_mut());
+        }
+    }
+    pub fn take_changed(&mut self, key: &Key) -> Option<Value> {
+        let e = self.entries.get_mut(key)?;
+        e.part
+            .as_ref()?
+            .component()
+            .take_changed(e.value.as_deref_mut())
     }
     pub fn expand(&mut self, tree: &Node, look: ComponentLook<'_>) -> Node {
         let mut tree = tree.clone();
@@ -231,14 +363,30 @@ impl StateStore {
         ) {
             let part = match &n.kind {
                 Kind::Control(c) => c.part.as_deref(),
-                Kind::Drawing(d) => Some(&d.part),
+                Kind::Drawing(d) => Some(d.part.as_ref()),
                 _ => None,
             };
             if let Some(part) = part {
                 let component = part.component();
                 store.see(&n.key, component);
+                store.entries.get_mut(&n.key).unwrap().part = Some(part.clone());
                 live.insert(n.key.clone());
-                let body = component.body(&Build { key: &n.key, look });
+                let child = match &n.kind {
+                    Kind::Control(c) => &*c.child,
+                    Kind::Drawing(d) => &*d.child,
+                    _ => unreachable!(),
+                };
+                component.reconcile(
+                    store
+                        .entries
+                        .get_mut(&n.key)
+                        .and_then(|e| e.value.as_deref_mut()),
+                );
+                let body = component.body(&Build {
+                    key: &n.key,
+                    look,
+                    child,
+                });
                 match &mut n.kind {
                     Kind::Control(c) => *c.child = body,
                     Kind::Drawing(d) => *d.child = body,
@@ -272,14 +420,23 @@ impl StateStore {
             }
         }
         walk(&mut tree, look, self, &mut live);
-        self.entries.retain(|k, _| live.contains(k));
+        self.entries.retain(|k, e| {
+            if !live.contains(k) {
+                if let Some(part) = &e.part {
+                    part.component().cancel(e.value.as_deref_mut());
+                }
+                false
+            } else {
+                true
+            }
+        });
         tree
     }
 }
 pub(crate) fn part(n: &Node) -> Option<&Part> {
     match &n.kind {
         Kind::Control(c) => c.part.as_deref(),
-        Kind::Drawing(d) => Some(&d.part),
+        Kind::Drawing(d) => Some(d.part.as_ref()),
         _ => None,
     }
 }

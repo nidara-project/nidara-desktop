@@ -38,7 +38,6 @@ impl Gallery {
             &self.catalogue,
             &look.types,
             &pages::Measures {
-                slider: &look.tokens.slider,
                 dropdown: &look.tokens.dropdown,
                 colors: &self.colors,
                 glyph: look.frame.icon,
@@ -79,17 +78,19 @@ impl Gallery {
             eprintln!("CONTROL_APPLIED inert");
             return;
         }
-        if let Some(i) = action.strip_prefix("accent:").and_then(|i| i.parse().ok()) {
-            self.model.accent = i;
-            return self.rebuild();
-        }
-        if let Some(i) = action.strip_prefix("size:").and_then(|i| i.parse().ok()) {
-            self.model.size = i;
-            return self.rebuild();
-        }
-        if let Some(i) = action.strip_prefix("choice:").and_then(|i| i.parse().ok()) {
-            self.model.choice = i;
-            return self.rebuild();
+        if let Some(nk_view::Value::Index(i)) = &a.value {
+            if action.starts_with("accent:") {
+                self.model.accent = *i;
+                return self.rebuild();
+            }
+            if action.starts_with("size:") {
+                self.model.size = *i;
+                return self.rebuild();
+            }
+            if action.starts_with("choice:") {
+                self.model.choice = *i;
+                return self.rebuild();
+            }
         }
         match action {
             "press" => self.model.presses += 1,
@@ -100,22 +101,22 @@ impl Gallery {
             "switch" => self.model.switch = !self.model.switch,
             "reveal" => self.model.open = !self.model.open,
             "slider" => {
-                if let Some(v) = self.window.value(&a.key) {
+                if let Some(v) = a.value.as_ref().and_then(nk_view::Value::number) {
                     self.model.slider = v;
                 }
             }
             "speed" => {
-                if let Some(v) = self.window.value(&a.key) {
+                if let Some(v) = a.value.as_ref().and_then(nk_view::Value::number) {
                     self.model.speed = v as usize;
                 }
             }
             "bright" => {
-                if let Some(v) = self.window.value(&a.key) {
+                if let Some(v) = a.value.as_ref().and_then(nk_view::Value::number) {
                     self.model.bright = v;
                 }
             }
             "tile" => {
-                if let Some(v) = self.window.value(&a.key) {
+                if let Some(v) = a.value.as_ref().and_then(nk_view::Value::number) {
                     self.model.tile = v;
                 }
             }

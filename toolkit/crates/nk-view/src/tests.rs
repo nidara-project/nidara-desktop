@@ -427,7 +427,8 @@ fn hover_is_the_innermost_control_and_a_release_outside_cancels() {
         s.button(false, Instant::now()),
         Some(Activated {
             key: Key::from("n/close"),
-            action: "close".into()
+            action: "close".into(),
+            value: None,
         })
     );
     s.button(true, Instant::now());
@@ -1168,7 +1169,8 @@ fn a_card_swiped_past_the_threshold_leaves_and_is_reported_when_gone() {
         end.activated,
         vec![Activated {
             key: Key::from("a/card"),
-            action: "dismiss".into()
+            action: "dismiss".into(),
+            value: None,
         }]
     );
     assert_eq!(
@@ -1236,7 +1238,8 @@ fn a_drag_more_down_than_across_stays_a_press() {
         s.button(false, Instant::now()),
         Some(Activated {
             key: Key::from("a/card"),
-            action: "open".into()
+            action: "open".into(),
+            value: None,
         })
     );
 }
@@ -1294,7 +1297,8 @@ fn with_reduced_motion_a_fling_is_reported_on_release() {
         s.button(false, t0),
         Some(Activated {
             key: Key::from("a/card"),
-            action: "dismiss".into()
+            action: "dismiss".into(),
+            value: None,
         })
     );
     assert!(!s.animating());
@@ -2031,7 +2035,8 @@ fn a_readers_request_finds_its_control_by_semantic_id() {
         s.request(&keys[&close], true),
         Some(Activated {
             key: Key::from("b/close"),
-            action: "close".into()
+            action: "close".into(),
+            value: None,
         })
     );
     assert_eq!(s.request(&Key::from("b/close"), false), None);
@@ -2161,7 +2166,8 @@ fn a_cascade_flings_the_shown_cards_top_to_bottom_and_reports_once_when_the_last
         end.activated,
         vec![Activated {
             key: Key::from("c/card"),
-            action: "clear-all".into()
+            action: "clear-all".into(),
+            value: None,
         }]
     );
     for k in ["a", "b", "c"] {
@@ -2193,7 +2199,8 @@ fn a_cascade_with_nothing_shown_or_reduced_motion_reports_at_once() {
         at_once,
         Some(Activated {
             key: Key::from("a/card"),
-            action: "clear-all".into()
+            action: "clear-all".into(),
+            value: None,
         })
     );
     assert!(!s.animating());
@@ -2765,7 +2772,7 @@ fn switch_row(on: bool, enabled: bool) -> Node {
 fn switch_progress(s: &ViewState) -> f64 {
     let p = placed(s, "sw");
     match &p.what {
-        What::Drawing(Part::Switch(_)) => p.progress.unwrap(),
+        What::Drawing(part) if matches!(part.as_ref(), Part::Switch(_)) => p.progress.unwrap(),
         w => panic!("not a switch: {w:?}"),
     }
 }
@@ -2792,7 +2799,7 @@ fn a_switch_is_the_tokens_size_and_its_row_is_what_is_pressed() {
     assert_eq!(placed(&s, "sw").control, Some(row), "the row holds it");
     assert!(matches!(
         placed(&s, "sw").what,
-        What::Drawing(Part::Switch(Switch { on: true }))
+        What::Drawing(ref part) if matches!(part.as_ref(),Part::Switch(Switch {on:true}))
     ));
     assert_eq!(switch_progress(&s), 1., "seen first, it is at its state");
     assert!(!s.animating());
@@ -3780,7 +3787,6 @@ fn an_activatable_row_never_holds_a_control_of_its_own() {
 }
 
 fn slider_row(value: f64, icons: bool, disabled: bool) -> Node {
-    let t = tokens();
     let end = SliderEnd {
         name: "Brightness".into(),
         action: "bright".into(),
@@ -3799,7 +3805,7 @@ fn slider_row(value: f64, icons: bool, disabled: bool) -> Node {
         vec![Node::setting_row(
             "r",
             SettingRow {
-                trailing: Some(Node::slider_end("r/slider", end, &t.slider)),
+                trailing: Some(Node::slider_end("r/slider", end)),
                 disabled,
                 ..setting("Brightness", None, None, None)
             },
@@ -4258,8 +4264,6 @@ fn speed(options: &[&str], chosen: usize, disabled: bool) -> Node {
             action: "speed".into(),
             disabled,
         },
-        &tokens().dropdown,
-        &types(),
     );
     // At its own width, as it sits at the end of a row.
     Node::column(
@@ -4449,8 +4453,6 @@ fn a_dropdowns_trigger_is_painted_off_glass_and_rings_inside_its_border() {
                 action: "speed".into(),
                 disabled: false,
             },
-            &t.dropdown,
-            &types(),
         );
         if let Some(sh) = shown {
             d = d.shown(sh);
@@ -4479,9 +4481,8 @@ fn a_dropdowns_trigger_is_painted_off_glass_and_rings_inside_its_border() {
 
 #[test]
 fn a_menu_row_is_lit_in_the_accent_and_the_chosen_one_ticked() {
-    let t = tokens();
     let row = |chosen: bool, shown: Option<Shown>| {
-        let mut r = Node::menu_row("m", "Fast", "choose", chosen, &t.dropdown.menu, &types());
+        let mut r = Node::menu_row("m", "Fast", "choose", chosen);
         if let Some(sh) = shown {
             r = r.shown(sh);
         }
@@ -4764,10 +4765,8 @@ fn swatches_readers_and_pointer_report_named_radio_choices() {
 }
 fn sample_picture(chosen: usize, disabled: bool, shown: Option<Shown>) -> Node {
     let mut n = samples("sw", chosen, disabled);
-    if let Kind::Stack(st) = &mut n.kind
-        && let Kind::Control(c) = &mut st.children[0].kind
-    {
-        c.shown = shown;
+    if let Some(shown) = shown {
+        n = n.sample_state(0, shown);
     }
     Node::row("picture", vec![n]).padding(Padding::all(Space::S3))
 }
@@ -4928,10 +4927,8 @@ fn a_segmented_choice_is_painted_off_glass_the_chosen_one_in_the_accent() {
                 disabled: false,
             },
         );
-        if let Kind::Stack(st) = &mut n.kind {
-            for (i, sh) in shown {
-                st.children[*i] = st.children[*i].clone().shown(*sh);
-            }
+        for (index, shown) in shown {
+            n = n.sample_state(*index, *shown);
         }
         Node::row("r", vec![n]).padding(Padding::all(Space::S2))
     };
@@ -5126,5 +5123,467 @@ fn a_component_rebuild_uses_the_new_type_scale_with_the_same_tokens() {
     assert!(
         next[2] > first[2] && next[3] > first[3],
         "body text must use the rebuilt type scale"
+    );
+}
+
+#[test]
+fn a_press_composes_typed_value_capture_and_redraw_and_a_hold_survives_rebuild() {
+    let n = || Node::slider("capture", "Volume", "volume", Slider::new(0., 100., 1., 0.));
+    let mut s = laid(&n(), (120., 32.), 1.);
+    let now = Instant::now();
+    s.pointer_motion(90., 16.);
+    let pressed = s.button(true, now).expect("the press changes the value");
+    assert_eq!(s.captured(), Some(&Key::from("capture")));
+    assert_eq!(
+        pressed.value.as_ref().and_then(Value::number),
+        s.value(&"capture".into())
+    );
+    assert!(
+        s.animating(),
+        "the value change schedules its redraw as well as capture"
+    );
+    let held = s.value(&"capture".into());
+    s.layout(
+        &n(),
+        (120., 32.),
+        1.,
+        tokens().with_types(&types()),
+        &mut backend(),
+        now,
+    );
+    assert_eq!(
+        s.value(&"capture".into()),
+        held,
+        "a model echo must not end the hold"
+    );
+    assert!(s.pointer_motion(1000., 16.));
+    assert_eq!(s.slid().unwrap().value, Some(Value::Number(100.)));
+    let released = s
+        .button(false, now)
+        .expect("capture releases even beyond the control");
+    assert_eq!(released.value, Some(Value::Number(100.)));
+    assert!(s.captured().is_none());
+}
+
+#[test]
+fn capture_is_cancelled_on_disable_disappearance_and_component_type_change() {
+    for change in 0..3 {
+        let control = |value| {
+            Node::slider(
+                "owner",
+                "Volume",
+                "volume",
+                Slider::new(0., 100., 1., value),
+            )
+        };
+        let mut s = laid(&control(0.), (120., 32.), 1.);
+        let now = Instant::now();
+        s.pointer_motion(90., 16.);
+        s.button(true, now);
+        s.pointer_motion(100., 16.);
+        assert!(s.captured().is_some());
+        let replacement = match change {
+            0 => control(12.).enabled(false),
+            1 => Node::spacer("empty"),
+            _ => Node::button("owner", "Other", "other", style(14.)),
+        };
+        s.layout(
+            &replacement,
+            (120., 32.),
+            1.,
+            tokens().with_types(&types()),
+            &mut backend(),
+            now,
+        );
+        assert!(s.captured().is_none(), "stale capture: case {change}");
+        assert!(s.slid().is_none(), "cancel drops the pending drag report");
+        if change == 0 {
+            assert_eq!(
+                s.value(&"owner".into()),
+                Some(12.),
+                "cancel tells the component to drop its hold"
+            );
+        }
+        assert!(
+            s.button(false, now).is_none(),
+            "a stale release must not activate the replacement"
+        );
+        s.layout(
+            &control(7.),
+            (120., 32.),
+            1.,
+            tokens().with_types(&types()),
+            &mut backend(),
+            now,
+        );
+        assert_eq!(s.value(&"owner".into()), Some(7.));
+    }
+}
+
+#[test]
+fn a_list_request_is_generic_and_revalidated_at_the_host_boundary() {
+    #[derive(Default)]
+    struct TestHost {
+        requests: Vec<HostRequest>,
+    }
+    impl Host for TestHost {
+        fn request(&mut self, request: HostRequest) {
+            self.requests.push(request);
+        }
+    }
+    let view = || {
+        Node::dropdown(
+            "list",
+            Dropdown {
+                name: "Speed".into(),
+                options: vec!["Slow".into(), "Fast".into()],
+                chosen: 1,
+                action: "speed".into(),
+                disabled: false,
+            },
+        )
+    };
+    let mut s = laid(&view(), (240., 64.), 1.);
+    let owner = Key::from("list");
+    let now = Instant::now();
+    let activated = s.request(&owner, true).unwrap();
+    assert_eq!(activated.value, Some(Value::Index(1)));
+    let mut host = TestHost::default();
+    for request in s.take_host_requests() {
+        host.request(request);
+    }
+    assert_eq!(host.requests.len(), 1);
+    let HostRequest::OpenList {
+        owner: receiver,
+        list,
+    } = host.requests.pop().unwrap();
+    assert_eq!(receiver, owner);
+    assert_eq!(
+        list.items
+            .iter()
+            .map(|i| (&*i.name, &i.value))
+            .collect::<Vec<_>>(),
+        [("Slow", &Value::Index(0)), ("Fast", &Value::Index(1))]
+    );
+    assert_eq!(list.selected, 1);
+    assert!(s.resolve_list(&owner, &list).is_some());
+    let mut t = tokens();
+    t.dropdown.menu.radius += 3.;
+    s.layout(
+        &view(),
+        (240., 64.),
+        1.,
+        t.with_types(&types()),
+        &mut backend(),
+        now,
+    );
+    assert_eq!(
+        s.resolve_list(&owner, &list).unwrap().radius,
+        t.dropdown.menu.radius,
+        "the host receives current presentation"
+    );
+    s.layout(
+        &view().enabled(false),
+        (240., 64.),
+        1.,
+        t.with_types(&types()),
+        &mut backend(),
+        now,
+    );
+    assert!(s.resolve_list(&owner, &list).is_none(), "disabled owner");
+    s.layout(
+        &Node::spacer("empty"),
+        (240., 64.),
+        1.,
+        t.with_types(&types()),
+        &mut backend(),
+        now,
+    );
+    assert!(s.resolve_list(&owner, &list).is_none(), "absent owner");
+    let changed = Node::dropdown(
+        "list",
+        Dropdown {
+            name: "New".into(),
+            options: vec!["Other".into()],
+            chosen: 0,
+            action: "other".into(),
+            disabled: false,
+        },
+    );
+    s.layout(
+        &changed,
+        (240., 64.),
+        1.,
+        t.with_types(&types()),
+        &mut backend(),
+        now,
+    );
+    assert!(
+        s.resolve_list(&owner, &list).is_none(),
+        "the list data changed before the host answered"
+    );
+}
+
+#[test]
+fn stale_semantic_items_cannot_target_a_new_component_at_the_same_key() {
+    let view = Node::dropdown(
+        "owner",
+        Dropdown {
+            name: "Speed".into(),
+            options: vec!["Slow".into(), "Fast".into()],
+            chosen: 0,
+            action: "speed".into(),
+            disabled: false,
+        },
+    );
+    let mut s = laid(&view, (200., 50.), 1.);
+    s.semantics(nk_a11y::Node::new(1, nk_a11y::Role::Window, "W"), 2);
+    let id = s.option_id(&"owner".into(), 1).unwrap();
+    assert!(s.option(id).is_some());
+    let replacement = Node::button("owner", "Other", "other", style(14.));
+    s.layout(
+        &replacement,
+        (200., 50.),
+        1.,
+        tokens().with_types(&types()),
+        &mut backend(),
+        Instant::now(),
+    );
+    assert!(s.option(id).is_none());
+    assert!(
+        s.semantic_value_id(&"owner".into(), &Value::Index(1))
+            .is_none()
+    );
+}
+
+#[test]
+fn an_application_payload_and_pending_reader_values_are_reported_without_action_parsing() {
+    let control = Node::radio_control("radio", "Large", "size:2", true).value(Value::Index(2));
+    let mut s = laid(&control, (40., 40.), 1.);
+    s.key(KeyInput::Tab);
+    assert_eq!(
+        s.key(KeyInput::Activate).unwrap().value,
+        Some(Value::Index(2))
+    );
+    let n = Node::slider("range", "Volume", "volume", Slider::new(0., 100., 5., 10.));
+    s.layout(
+        &n,
+        (160., 40.),
+        1.,
+        tokens().with_types(&types()),
+        &mut backend(),
+        Instant::now(),
+    );
+    assert_eq!(
+        s.request_value(&"range".into(), 73.).unwrap().value,
+        Some(Value::Number(75.))
+    );
+    assert_eq!(s.value(&"range".into()), Some(75.));
+    s.layout(
+        &n,
+        (160., 40.),
+        1.,
+        tokens().with_types(&types()),
+        &mut backend(),
+        Instant::now(),
+    );
+    assert_eq!(
+        s.value(&"range".into()),
+        Some(10.),
+        "pending input resets on the model rebuild, as before"
+    );
+}
+
+#[test]
+#[should_panic(expected = "an activatable row is the control")]
+fn an_activatable_setting_row_still_refuses_a_composed_child_with_controls() {
+    Node::setting_row(
+        "row",
+        SettingRow {
+            title: "Size".into(),
+            action: Some("open".into()),
+            trailing: Some(Node::segmented(
+                "groups",
+                Segmented {
+                    name: "Size".into(),
+                    options: vec!["Small".into()],
+                    chosen: 0,
+                    action: "size".into(),
+                    disabled: false,
+                },
+            )),
+            ..SettingRow::default()
+        },
+    );
+}
+
+#[test]
+fn a_slider_minimum_height_rounds_up_before_its_column_is_placed() {
+    let view = Node::column(
+        "stack",
+        vec![
+            Node::slider("first", "First", "first", Slider::new(0., 100., 1., 0.)),
+            Node::slider("second", "Second", "second", Slider::new(0., 100., 1., 0.)),
+        ],
+    );
+    let s = laid(&view, (200., 100.), 1.25);
+    assert_eq!(
+        rect(&s, "first")[3],
+        18.4,
+        "23 device pixels, the legacy slider minimum"
+    );
+    assert_eq!(
+        rect(&s, "second")[1],
+        18.4,
+        "minimums round before siblings accumulate their positions"
+    );
+    assert_eq!(
+        rect(&s, "second")[3],
+        18.4,
+        "both siblings keep the full 23 device pixels"
+    );
+}
+
+#[test]
+fn marks_do_not_request_a_second_surface_wash() {
+    for mark in [
+        Node::check_control("mark", "Check", "check", false),
+        Node::radio_control("mark", "Radio", "radio", false),
+    ] {
+        let view = Node::pane("pane", Corner::Token(Radius::Lg), mark.shown(Shown::Hover));
+        let mut s = laid(&view, (100., 40.), 1.);
+        assert!(
+            s.frame(&tokens(), Instant::now()).states.is_empty(),
+            "the mark paints its hover; no underlying surface wash"
+        );
+    }
+}
+
+#[test]
+fn a_display_field_paints_the_owner_selection_and_caret_without_editing_its_text() {
+    let mut s = laid(&field_view("  ", 2, 0, false), (360., 100.), 1.);
+    let key = Key::from("pw");
+    s.request(&key, false);
+    s.hide_ring();
+    let caret = s.caret(&key).unwrap();
+    let selection = s.selection(&key)[0];
+    let mut c = nk_render::Canvas::new(360, 100, 1.);
+    s.frame(&tokens(), Instant::now());
+    s.paint(
+        &mut c,
+        tokens().with_types(&types()),
+        &mut |_, _| None,
+        None,
+    )
+    .unwrap();
+    let pixels = c.finish();
+    let at = (
+        selection[0] + selection[2] / 2.,
+        selection[1] + selection[3] / 2.,
+    );
+    let selected = bgra(&pixels, 360, at);
+    assert!(
+        (65..85).contains(&selected[3]) && selected[0] > selected[2],
+        "selection is the translucent accent: {selected:?}"
+    );
+    let y = caret[1] + caret[3] / 2.;
+    let alpha = [caret[0].floor(), caret[0].ceil()]
+        .into_iter()
+        .map(|x| bgra(&pixels, 360, (x, y))[3])
+        .max()
+        .unwrap();
+    assert!(alpha > 100, "the owner caret is painted: {alpha}");
+    assert_eq!(s.text().get(&Key::from("pw/text")).unwrap().shown, "  ");
+}
+
+#[test]
+fn row_and_tile_sliders_paint_their_track_thumb_and_fill() {
+    let (_, row) = painted(
+        &Node::slider("slider", "Volume", "volume", Slider::new(0., 100., 1., 50.)),
+        200,
+        40,
+    );
+    assert_eq!(
+        bgra(&row, 200, (100., 20.)),
+        [255, 255, 255, 255],
+        "the native thumb"
+    );
+    let filled = bgra(&row, 200, (50., 20.));
+    let rest = bgra(&row, 200, (180., 20.));
+    assert!(
+        filled[3] > 200 && rest[3] < 60,
+        "filled track versus rest: {filled:?} {rest:?}"
+    );
+    let (_, tile) = painted(
+        &Node::slider(
+            "tile",
+            "Volume",
+            "volume",
+            Slider::new(0., 100., 1., 50.).fill(),
+        ),
+        100,
+        100,
+    );
+    assert!(
+        bgra(&tile, 100, (50., 75.))[3] > 200,
+        "the tile fills upwards"
+    );
+    assert_eq!(
+        bgra(&tile, 100, (50., 25.))[3],
+        0,
+        "the unfilled tile stays clear"
+    );
+}
+
+#[test]
+fn semantic_keys_bind_the_actual_component_role_and_retire_old_bindings() {
+    let owner = Key::from("pw");
+    let root = || nk_a11y::Node::new(1, nk_a11y::Role::Window, "W");
+    let mut s = laid(&field_view("•••", 9, 9, true), (360., 100.), 1.);
+    let tree = s.semantics(root(), 2);
+    let password = tree
+        .nodes
+        .values()
+        .find(|n| n.role == nk_a11y::Role::Password)
+        .unwrap()
+        .id;
+    assert_eq!(
+        s.semantic_keys().get(&password),
+        Some(&owner),
+        "requests use the actual role published by the component"
+    );
+    s.layout(
+        &field_view("abc", 3, 3, false),
+        (360., 100.),
+        1.,
+        tokens().with_types(&types()),
+        &mut backend(),
+        Instant::now(),
+    );
+    let tree = s.semantics(root(), 2);
+    let text = tree
+        .nodes
+        .values()
+        .find(|n| n.role == nk_a11y::Role::TextInput)
+        .unwrap()
+        .id;
+    assert_ne!(text, password);
+    assert_eq!(s.semantic_keys().get(&text), Some(&owner));
+    assert!(
+        !s.semantic_keys().contains_key(&password),
+        "only the current publication binds requests"
+    );
+    let replacement = Node::button("pw", "Other", "other", style(14.));
+    s.layout(
+        &replacement,
+        (360., 100.),
+        1.,
+        tokens().with_types(&types()),
+        &mut backend(),
+        Instant::now(),
+    );
+    assert!(
+        !s.semantic_keys().contains_key(&text),
+        "a queued request cannot bind a new component before publication"
     );
 }

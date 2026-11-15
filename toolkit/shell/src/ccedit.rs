@@ -1087,7 +1087,7 @@ impl Editor {
                     && let Some(t) = target_of(&n.key, menu, self.menu)
                     && !matches!(t, Target::Tile(_))
                 {
-                    controls.push((t, c.enabled, c.marked));
+                    controls.push((t, c.enabled, c.selected()));
                 }
             }
         };

@@ -3,12 +3,13 @@
 //! across rebuilds; the panes and state regions a frame declares to Hyalo, within its budget;
 //! the semantics; and the content paint (texts, icons, the focus ring, and the D5 washes).
 use crate::components::{
-    ComponentLook, Input, Interaction, Membership, Outcome, Paint, PaintPhase, StateStore,
+    Capture, ComponentLook, HostRequest, Input, Interaction, ListSpec, Membership, Outcome, Paint,
+    PaintPhase, Read, Request, SemanticChild, StateStore, Value,
 };
-use crate::layout::{Faces, Layouter, Placed, Rect, TextCache, What};
+use crate::layout::{Layouter, Placed, Rect, TextCache, What};
 use crate::motion::{MotionState, SWIPE_CLAIM};
 use crate::tokens::Tokens;
-use crate::view::{Key, Node, Role, Shown, Wash};
+use crate::view::{Key, Node, Role, Shown};
 use nk_a11y::{Action, Bounds, NodeId, Tree};
 use nk_render::Canvas;
 use nk_wayland::{Group, MaterialRect, Pane, Shadow, StateRegion, Tone};
@@ -20,10 +21,11 @@ use std::time::{Duration, Instant};
 pub const BUDGET: usize = 8;
 
 /// What the surface receives when a control is activated, by pointer or keyboard.
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq)]
 pub struct Activated {
     pub key: Key,
     pub action: String,
+    pub value: Option<Value>,
 }
 
 /// The keys that move focus, activate or scroll.
@@ -167,6 +169,8 @@ pub struct ViewState {
     /// across updates, and nk-a11y refuses an id that comes back as another role.
     semantic_ids: HashMap<(Key, nk_a11y::Role), NodeId>,
     next_semantic: NodeId,
+    /// The bindings actually published by semantics, after a component resolves its role.
+    published_controls: HashMap<NodeId, (Key, std::any::TypeId)>,
     /// The regions that showed a wash in the last frame.
     lit: HashSet<Key>,
     /// The washes of controls that are not on glass, by placed index: Hyalo draws a wash
@@ -176,13 +180,6 @@ pub struct ViewState {
     /// Regions fading out, until when (they still take a place in Hyalo's eight).
     fading: HashMap<Key, Instant>,
     overflow_logged: bool,
-    /// The slider the pointer holds, and the value it holds it at: drawn and said instead of
-    /// the view's until release.
-    held: Option<(Key, f64)>,
-    /// A change the pointer made to the held slider since `slid` was last asked.
-    slid: Option<Activated>,
-    /// A slider value a key or a reader set, until the surface rebuilds with its model.
-    set: Option<(Key, f64)>,
     /// Off: a rebuild lays panes where they are, for a surface whose glass is placed by
     /// something else (the CC's grid, under its editor's glass and scroll).
     slides: bool,
@@ -191,10 +188,11 @@ pub struct ViewState {
     /// A pane drawn on a layer of its own over the surface (`lift`): a window's sidebar,
     /// whose glass must show the page under it.
     lifted: Option<Key>,
-    /// The dropdown whose list is open (`set_expanded`): a reader hears it expanded.
-    expanded: Option<Key>,
-    /// Each option's semantic id, by its dropdown and its place (`semantics`).
-    options: HashMap<NodeId, (Key, usize)>,
+    /// Pointer sequence owner and component identity, independent of hover.
+    capture: Option<(Key, std::any::TypeId)>,
+    host_requests: Vec<HostRequest>,
+    /// Semantic item targets retain their owner key, component identity and value.
+    options: HashMap<NodeId, (Key, std::any::TypeId, Value)>,
 }
 
 impl ViewState {
@@ -227,17 +225,16 @@ impl ViewState {
             id_base,
             semantic_ids: HashMap::new(),
             next_semantic: 0,
+            published_controls: HashMap::new(),
             lit: HashSet::new(),
             painted: HashMap::new(),
             fading: HashMap::new(),
             overflow_logged: false,
-            held: None,
-            slid: None,
-            set: None,
             slides: true,
             whole: false,
             lifted: None,
-            expanded: None,
+            capture: None,
+            host_requests: Vec::new(),
             options: HashMap::new(),
         }
     }
@@ -368,7 +365,6 @@ impl ViewState {
             .collect();
         let expanded = self.components.expand(view, look);
         self.motion.view(&expanded, now, &tokens.motion);
-        self.set = None;
         self.tokens = Some(tokens.clone());
         self.types = Some(look.types.clone());
         self.view = Some(expanded);
@@ -390,8 +386,18 @@ impl ViewState {
         if self.drag.as_ref().is_some_and(|d| !live.contains(&d.key)) {
             self.drag = None;
         }
-        if self.held.as_ref().is_some_and(|(k, _)| !live.contains(k)) {
-            self.held = None;
+        if let Some((key, kind)) = &self.capture {
+            let valid = self.index(key).is_some_and(|i| {
+                self.enabled(i)
+                    && self.placed[i]
+                        .part()
+                        .is_some_and(|p| p.component().type_id() == *kind)
+            });
+            if !valid {
+                self.components.cancel(key);
+                self.press = None;
+                self.capture = None;
+            }
         }
         self.rehover();
     }
@@ -415,7 +421,11 @@ impl ViewState {
             .motion
             .finished(now)
             .into_iter()
-            .map(|(key, action)| Activated { key, action })
+            .map(|(key, action)| Activated {
+                key,
+                action,
+                value: None,
+            })
             .collect();
         if moving {
             self.relayout(tokens, text, now, None);
@@ -470,10 +480,8 @@ impl ViewState {
             text: &mut *text,
             cache: &mut self.text,
             scale: self.scale,
-            slider: 2. * tokens.slider.thumb_radius,
             look: tokens.with_types(self.types.as_ref().expect("layout supplies types")),
             row: tokens.row_height,
-            faces: Faces::of(tokens),
         }
         .run(view, self.bounds);
         // A rebuild keeps what the reader was looking at in place: each scrolled region's
@@ -497,10 +505,8 @@ impl ViewState {
                 text,
                 cache: &mut self.text,
                 scale: self.scale,
-                slider: 2. * tokens.slider.thumb_radius,
                 look: tokens.with_types(self.types.as_ref().expect("layout supplies types")),
                 row: tokens.row_height,
-                faces: Faces::of(tokens),
             }
             .run(view, self.bounds);
         }
@@ -591,116 +597,67 @@ impl ViewState {
         self.control(i).enabled
     }
 
-    /// The field being typed into: the focused one (VIEW.md §12.2). Its owner routes keys
-    /// to its editor while this is Some, and rebuilds the view with what the editor shows.
+    /// A focused display component whose owner handles its editor.
     pub fn editing(&self) -> Option<&Key> {
-        let f = self.focus.as_ref()?;
-        self.index(f)
-            .filter(|&i| self.control(i).field.is_some())
-            .map(|_| f)
+        let key = self.focus.as_ref()?;
+        self.index(key)
+            .filter(|&i| {
+                self.placed[i]
+                    .part()
+                    .is_some_and(|p| p.component().owner_edits())
+            })
+            .map(|_| key)
     }
-    /// Where a field's caret is drawn, in surface coordinates: for an input method's
-    /// cursor rectangle.
     pub fn caret(&self, key: &Key) -> Option<Rect> {
         let i = self.index(key)?;
-        let f = self.control(i).field.as_ref()?;
-        let text = format!("{}/text", key.0);
-        let p = self.placed.iter().find(|p| p.key.0 == text)?;
-        let r = self
-            .text
-            .get(&p.key)?
-            .layout
-            .caret_rect(f.caret, nk_text::Affinity::Downstream)
-            .ok()?;
-        Some([
-            p.rect[0] + r.x as f64,
-            p.rect[1] + r.y as f64,
-            1.,
-            r.height as f64,
-        ])
+        self.placed[i].part()?.component().caret(&self.context(i))
     }
-    /// A field's selection, in surface coordinates.
+    #[cfg(test)]
     pub(crate) fn selection(&self, key: &Key) -> Vec<Rect> {
-        let Some(f) = self.index(key).and_then(|i| self.control(i).field.as_ref()) else {
-            return Vec::new();
-        };
-        let text = format!("{}/text", key.0);
-        let Some(p) = self.placed.iter().find(|p| p.key.0 == text) else {
-            return Vec::new();
-        };
-        let range = f.caret.min(f.anchor)..f.caret.max(f.anchor);
-        if range.is_empty() {
-            return Vec::new();
-        }
-        self.text
-            .get(&p.key)
-            .and_then(|t| t.layout.selection_rects(range).ok())
-            .unwrap_or_default()
-            .into_iter()
-            .map(|r| {
-                [
-                    p.rect[0] + r.x as f64,
-                    p.rect[1] + r.y as f64,
-                    r.width as f64,
-                    r.height as f64,
-                ]
+        self.index(key)
+            .and_then(|i| {
+                self.placed[i]
+                    .part()
+                    .map(|p| p.component().selection(&self.context(i)))
             })
-            .collect()
+            .unwrap_or_default()
     }
-
-    /// A slider's value: the one the pointer holds it at, else one a key or a reader set
-    /// since the last rebuild, else the view's, on a step.
-    pub fn value(&self, key: &Key) -> Option<f64> {
+    pub fn typed_value(&self, key: &Key) -> Option<Value> {
         let i = self.index(key)?;
-        let mine = |v: &Option<(Key, f64)>| v.as_ref().filter(|(k, _)| k == key).map(|v| v.1);
-        if let Some(c) = &self.control(i).choice {
-            // A dropdown's: the option chosen since the last rebuild, else the view's.
-            return Some(mine(&self.set).unwrap_or(c.chosen as f64));
+        self.placed[i]
+            .part()?
+            .component()
+            .value(self.components.get(key))
+    }
+    /// The control holding the current pointer sequence, including outside its bounds.
+    pub fn captured(&self) -> Option<&Key> {
+        self.capture.as_ref().map(|(key, _)| key)
+    }
+    pub fn value(&self, key: &Key) -> Option<f64> {
+        self.typed_value(key)?.number()
+    }
+    fn context(&self, i: usize) -> Read<'_> {
+        let p = &self.placed[i];
+        Read {
+            key: &p.key,
+            look: self
+                .tokens
+                .as_ref()
+                .expect("laid view")
+                .with_types(self.types.as_ref().expect("laid type scale")),
+            rect: p.rect,
+            visible: p.visible().unwrap_or(p.rect),
+            interaction: self.interaction(i),
+            role: p.control.map(|o| self.control(o).role),
+            focused: self.focus.as_ref() == Some(&p.key),
+            owns_mark: self.holds_mark(i),
+            fading: self.fading.contains_key(&p.key),
+            state: self.components.get(&p.key),
+            placed: &self.placed,
+            text: &self.text,
         }
-        let s = self.control(i).slider.as_ref()?;
-        Some(
-            mine(&self.held)
-                .or_else(|| mine(&self.set))
-                .unwrap_or_else(|| s.shown(s.value)),
-        )
     }
-    /// The value of a slider under `pt`: along the track, whose ends are where the thumb's
-    /// centre stops; up a tile slider, from its bottom to its top.
-    fn value_at(&self, i: usize, (x, y): (f64, f64)) -> Option<f64> {
-        let s = self.control(i).slider.as_ref()?;
-        let r = self.placed[i].rect;
-        if s.fill {
-            return Some(f64::from(
-                s.range().at((1. - (y - r[1]) / r[3].max(1.)) as f32),
-            ));
-        }
-        let thumb = self.tokens.as_ref()?.slider.thumb_radius;
-        let span = (r[2] - 2. * thumb).max(1.);
-        Some(f64::from(s.range().at(((x - r[0] - thumb) / span) as f32)))
-    }
-    /// How far up a tile slider is filled: the fill's top edge.
-    fn fill_top(&self, i: usize) -> Option<f64> {
-        let s = self.control(i).slider.as_ref().filter(|s| s.fill)?;
-        let value = self.value(&self.placed[i].key)?;
-        let f = ((value - s.min) / (s.max - s.min).max(f64::EPSILON)).clamp(0., 1.);
-        let r = self.placed[i].rect;
-        Some(r[1] + r[3] * (1. - f))
-    }
-    /// A slider's thumb, where its value puts it.
-    fn thumb(&self, i: usize) -> Option<Rect> {
-        let s = self.control(i).slider.as_ref().filter(|s| !s.fill)?;
-        let radius = self.tokens.as_ref()?.slider.thumb_radius;
-        let value = self.value(&self.placed[i].key)?;
-        let r = self.placed[i].rect;
-        let f = ((value - s.min) / (s.max - s.min).max(f64::EPSILON)).clamp(0., 1.);
-        let x = r[0] + radius + f * (r[2] - 2. * radius).max(0.);
-        let y = r[1] + r[3] / 2.;
-        Some([x - radius, y - radius, 2. * radius, 2. * radius])
-    }
-    /// What a control's hover, press and focus ring outline: its thumb for a slider, else
-    /// what of it shows.
-    /// Whether control `i` holds a switch or a checkbox's or radio's mark, which shows its
-    /// state itself.
+    /// Resolve the enclosing control state once, including the gallery fixture.
     fn interaction(&self, i: usize) -> Interaction {
         let Some(owner) = self.placed[i].control else {
             return Interaction {
@@ -717,7 +674,7 @@ impl ViewState {
             focus_ring: (self.focus_visible && self.focus.as_ref() == key)
                 || c.shown == Some(Shown::Focus),
             enabled: self.enabled(owner),
-            marked: c.marked,
+            marked: c.selected(),
         }
     }
     fn component_input(
@@ -728,108 +685,142 @@ impl ViewState {
         if !self.enabled(i) {
             return None;
         }
-        let part = self.placed[i].part()?.clone();
+        let part = self.placed[i].part()?;
         let key = self.placed[i].key.clone();
+        let interaction = self.interaction(i);
+        let owns_mark = self.holds_mark(i);
+        let p = &self.placed[i];
+        let read = Read {
+            key: &p.key,
+            look: self.tokens.as_ref()?.with_types(self.types.as_ref()?),
+            rect: p.rect,
+            visible: p.visible().unwrap_or(p.rect),
+            interaction,
+            role: Some(self.control(i).role),
+            focused: self.focus.as_ref() == Some(&key),
+            owns_mark,
+            fading: self.fading.contains_key(&key),
+            state: None,
+            placed: &self.placed,
+            text: &self.text,
+        };
         let mut effects = Outcome::default();
         self.components
-            .input(&key, &mut effects, |cx| event(part.component(), cx));
+            .input_context(&key, &mut effects, read, |cx| event(part.component(), cx));
         self.pending |= effects.redraw;
+        match effects.capture {
+            Capture::Take => self.capture = Some((key.clone(), part.component().type_id())),
+            Capture::Release => self.capture = None,
+            Capture::Keep => {}
+        }
+        if effects.focus {
+            self.focus = Some(key);
+            self.focus_visible = false;
+        }
+        self.host_requests.append(&mut effects.host);
         Some(effects)
     }
+    fn activated(&self, i: usize, effects: Outcome) -> Option<Activated> {
+        effects.activate.then(|| Activated {
+            key: self.placed[i].key.clone(),
+            action: self.control(i).action.clone(),
+            value: effects
+                .value
+                .or_else(|| self.typed_value(&self.placed[i].key)),
+        })
+    }
     fn membership(&self, i: usize) -> Membership {
-        let c = self.control(i);
-        c.part
-            .as_ref()
-            .map(|p| p.component().group(self.interaction(i)))
-            .unwrap_or_else(|| {
-                if c.role == Role::Radio {
-                    Membership::Adjacent { selected: c.marked }
-                } else {
-                    Membership::None
-                }
-            })
+        self.placed[i]
+            .part()
+            .map(|p| p.component().group(&self.context(i)))
+            .unwrap_or(Membership::None)
+    }
+    pub fn take_host_requests(&mut self) -> Vec<HostRequest> {
+        std::mem::take(&mut self.host_requests)
     }
     fn holds_mark(&self, i: usize) -> bool {
         self.placed.iter().any(|p| {
-            p.control == Some(i)
-                && p.part()
-                    .is_some_and(|part| part.component().glass().owns_mark)
+            p.control == Some(i) && p.part().is_some_and(|part| part.component().owns_mark())
         })
     }
     fn silhouette(&self, i: usize) -> Option<Rect> {
-        let visible = self.placed[i].visible()?;
-        match self.thumb(i) {
-            Some(t) => crate::layout::intersect(t, visible),
-            None => self.placed[i].part().map_or(Some(visible), |p| {
-                crate::layout::intersect(p.component().silhouette(visible), visible)
-            }),
-        }
-    }
-    /// A change of a slider to `value`: None when it is the value it has.
-    fn slide_to(&mut self, i: usize, value: f64, hold: bool) -> Option<Activated> {
-        let key = self.placed[i].key.clone();
-        let before = self.value(&key)?;
-        if hold {
-            self.held = Some((key.clone(), value));
-        } else {
-            self.set = Some((key.clone(), value));
-        }
-        ((value - before).abs() > f64::EPSILON).then(|| Activated {
-            key,
-            action: self.control(i).action.clone(),
+        let p = &self.placed[i];
+        let visible = p.visible()?;
+        p.part().map_or(Some(visible), |p| {
+            crate::layout::intersect(p.component().silhouette(&self.context(i)), visible)
         })
     }
-    /// What the pointer changed of the slider it holds since this was last asked: the
-    /// surface asks after each `pointer_motion`, and reads the value with `value`.
     pub fn slid(&mut self) -> Option<Activated> {
-        self.slid.take()
-    }
-    /// A reader set a slider's value (AT-SPI `SetValue`).
-    pub fn request_value(&mut self, key: &Key, value: f64) -> Option<Activated> {
-        let i = self
-            .index(key)
-            .filter(|&i| matches!(self.placed[i].what, What::Control(_)) && self.enabled(i))?;
-        let s = self.control(i).slider.as_ref()?;
-        let value = s.shown(value).clamp(s.min, s.max);
-        let a = self.slide_to(i, value, false)?;
-        Some(a)
-    }
-    /// Option `n` of the dropdown `key` was chosen (from its list, or by a reader): its action
-    /// when that is another option than the one it holds; read which with `value`. The
-    /// dropdown shows it until the surface rebuilds with its model.
-    pub fn choose(&mut self, key: &Key, n: usize) -> Option<Activated> {
-        let i = self
-            .index(key)
-            .filter(|&i| matches!(self.placed[i].what, What::Control(_)) && self.enabled(i))?;
-        let c = self.control(i).choice.as_ref()?;
-        if n >= c.options.len() {
-            return None;
+        for i in self.controls().collect::<Vec<_>>() {
+            let key = self.placed[i].key.clone();
+            if let Some(value) = self.components.take_changed(&key) {
+                return Some(Activated {
+                    key,
+                    action: self.control(i).action.clone(),
+                    value: Some(value),
+                });
+            }
         }
-        let before = self.value(key)?;
-        self.set = Some((key.clone(), n as f64));
-        (before != n as f64).then(|| Activated {
-            key: key.clone(),
-            action: self.control(i).action.clone(),
-        })
+        None
     }
-    /// A dropdown's options and the one it shows chosen; None for any other control.
+    pub fn respond(&mut self, key: &Key, request: Request) -> Option<Activated> {
+        let i = self
+            .index(key)
+            .filter(|&i| matches!(self.placed[i].what, What::Control(_)))?;
+        let effects = self.component_input(i, |c, cx| c.request(cx, request))?;
+        self.activated(i, effects)
+    }
+    pub fn request_value(&mut self, key: &Key, value: f64) -> Option<Activated> {
+        self.respond(key, Request::Set(Value::Number(value)))
+    }
+    pub fn choose(&mut self, key: &Key, n: usize) -> Option<Activated> {
+        self.respond(key, Request::Set(Value::Index(n)))
+    }
+    pub fn list(&self, key: &Key) -> Option<ListSpec> {
+        let i = self
+            .index(key)
+            .filter(|&i| matches!(self.placed[i].what, What::Control(_)) && self.enabled(i))?;
+        self.placed[i].part()?.component().list(&self.context(i))
+    }
+    /// Revalidate a queued list at the host boundary. Missing, disabled or changed owners
+    /// cannot open an old proposal; presentation comes from the current appearance.
+    pub fn resolve_list(&self, owner: &Key, proposal: &ListSpec) -> Option<ListSpec> {
+        let current = self.list(owner)?;
+        (current.items == proposal.items).then_some(current)
+    }
     pub fn choice(&self, key: &Key) -> Option<(Vec<String>, usize)> {
-        let c = self.control(self.index(key)?).choice.as_ref()?;
-        Some((c.options.clone(), self.value(key)? as usize))
+        let list = self.list(key)?;
+        Some((
+            list.items.into_iter().map(|i| i.name).collect(),
+            list.selected,
+        ))
     }
-    /// The dropdown whose list is open, which a reader hears expanded.
     pub fn set_expanded(&mut self, key: Option<Key>) {
-        self.expanded = key;
+        for i in self.controls().collect::<Vec<_>>() {
+            let expanded = key.as_ref() == Some(&self.placed[i].key);
+            self.component_input(i, |c, cx| c.request(cx, Request::Expanded(expanded)));
+        }
     }
     /// Which dropdown, and which of its options, a semantic id is.
     pub fn option(&self, id: NodeId) -> Option<(Key, usize)> {
-        self.options.get(&id).cloned()
+        let (key, kind, value) = self.options.get(&id)?;
+        if self.placed[self.index(key)?].part()?.component().type_id() != *kind {
+            return None;
+        }
+        if let Value::Index(n) = value {
+            Some((key.clone(), *n))
+        } else {
+            None
+        }
     }
-    /// The semantic id of option `n` of the dropdown `key`, once `semantics` gave it one.
     pub fn option_id(&self, key: &Key, n: usize) -> Option<NodeId> {
+        self.semantic_value_id(key, &Value::Index(n))
+    }
+    pub fn semantic_value_id(&self, key: &Key, value: &Value) -> Option<NodeId> {
+        let kind = self.placed[self.index(key)?].part()?.component().type_id();
         self.options
             .iter()
-            .find(|(_, (k, m))| k == key && *m == n)
+            .find(|(_, (k, t, v))| k == key && *t == kind && v == value)
             .map(|(id, _)| *id)
     }
     fn index(&self, key: &Key) -> Option<usize> {
@@ -906,15 +897,11 @@ impl ViewState {
         if self.bar_motion((x, y)) {
             return true;
         }
-        if let Some((key, _)) = self.held.clone()
+        if let Some((key, _)) = self.capture.clone()
             && let Some(i) = self.index(&key)
-            && let Some(v) = self.value_at(i, (x, y))
         {
-            if let Some(a) = self.slide_to(i, v, true) {
-                self.slid = Some(a);
-            }
-            self.rehover();
-            return true;
+            let effects = self.component_input(i, |c, cx| c.drag(cx, (x, y)));
+            return self.rehover() | effects.is_some_and(|e| e.redraw);
         }
         if let Some(i) = self.press.as_ref().and_then(|k| self.index(k)) {
             self.component_input(i, |c, cx| c.drag(cx, (x, y)));
@@ -968,7 +955,11 @@ impl ViewState {
             &motion,
         );
         self.reswipe();
-        Some(out.map(|action| Activated { key: d.key, action }))
+        Some(out.map(|action| Activated {
+            key: d.key,
+            action,
+            value: None,
+        }))
     }
     /// Flings the cards of these swipeable controls off the surface top to bottom, `stagger`
     /// apart, as a clear-all does (VIEW.md §7); controls that do not show, or are already
@@ -1013,6 +1004,7 @@ impl ViewState {
         out.map(|action| Activated {
             key: shown.last().cloned().unwrap_or_else(|| Key::from("")),
             action,
+            value: None,
         })
     }
     /// A modal menu closed: hover is recomputed from where the pointer was sampled before
@@ -1065,74 +1057,36 @@ impl ViewState {
             self.bars_busy = true;
             return None;
         }
-        if pressed
-            && let Some(i) = self.hover.as_ref().and_then(|k| self.index(k))
-            && self.control(i).slider.is_some()
-        {
-            // A slider's: the value under the pointer, held until release (VIEW.md §12.1).
-            self.press = self.hover.clone();
-            self.focus = self.hover.clone();
-            self.focus_visible = false;
-            self.drag = None;
-            let v = self.value_at(i, self.pointer.unwrap_or_default())?;
-            let key = self.placed[i].key.clone();
-            let changed = self.slide_to(i, v, true);
-            self.held = Some((key, v));
-            return changed;
-        }
-        if pressed
-            && let Some(i) = self.hover.as_ref().and_then(|k| self.index(k))
-            && self.control(i).field.is_some()
-        {
-            // A field's: focus, never activation; Enter is its action (VIEW.md §12.2).
+        if !pressed && let Some((key, _)) = self.capture.clone() {
             self.press = None;
-            self.focus = self.hover.clone();
-            self.focus_visible = false;
             self.drag = None;
-            return None;
-        }
-        if !pressed && let Some((key, value)) = self.held.take() {
-            // The release reports the final value; a change not yet asked for is in it. The
-            // thumb stays there until the surface rebuilds with its model.
-            self.press = None;
-            self.slid = None;
-            self.set = Some((key.clone(), value));
             let i = self.index(&key)?;
-            return Some(Activated {
-                key,
-                action: self.control(i).action.clone(),
-            });
-        }
-        if pressed && let Some(i) = self.hover.as_ref().and_then(|k| self.index(k)) {
             let at = self.pointer.unwrap_or_default();
-            if let Some(effects) = self.component_input(i, |c, cx| c.press(cx, at))
-                && !effects.arm
-            {
-                return None;
-            }
+            let effects = self.component_input(i, |c, cx| c.release(cx, at))?;
+            return self.activated(i, effects);
         }
         if pressed {
-            if self.editing().is_some() {
-                // A press anywhere else ends the typing.
-                self.focus = self.hover.clone();
-            }
-            self.press = self.hover.clone();
+            let i = self.hover.as_ref().and_then(|k| self.index(k))?;
+            let at = self.pointer.unwrap_or_default();
+            let key = self.placed[i].key.clone();
+            let effects = self.component_input(i, |c, cx| c.press(cx, at))?;
+            self.press = effects.arm.then_some(key.clone());
             self.focus_visible = false;
+            if self.editing().is_some() {
+                self.focus = Some(key.clone());
+            }
             self.drag = self
-                .hover
+                .press
                 .as_ref()
                 .zip(self.pointer)
-                .filter(|(k, _)| {
-                    self.index(k)
-                        .is_some_and(|i| self.control(i).swipe.is_some())
-                })
-                .map(|(k, origin)| Drag {
-                    key: k.clone(),
+                .filter(|_| self.control(i).swipe.is_some())
+                .map(|(key, origin)| Drag {
+                    key: key.clone(),
                     origin,
                     dx: 0.,
                     claimed: false,
                 });
-            return None;
+            return self.activated(i, effects);
         }
         let dx = self.drag.as_ref().map_or(0., |d| d.dx);
         if let Some(flung) = self.end_swipe(dx, now) {
@@ -1141,66 +1095,24 @@ impl ViewState {
         self.drag = None;
         let pressed = self.press.take()?;
         let i = self.pointer.and_then(|pt| self.hit(pt))?;
-        if self.placed[i].key == pressed {
-            let at = self.pointer.unwrap_or_default();
-            if let Some(effects) = self.component_input(i, |c, cx| c.release(cx, at))
-                && !effects.activate
-            {
-                return None;
-            }
+        if self.placed[i].key != pressed {
+            return None;
         }
-        (self.placed[i].key == pressed).then(|| Activated {
-            key: pressed,
-            action: self.control(i).action.clone(),
-        })
+        let at = self.pointer.unwrap_or_default();
+        let effects = self.component_input(i, |c, cx| c.release(cx, at))?;
+        self.activated(i, effects)
     }
 
     /// Tab and Shift+Tab move focus through every enabled control in tree order, revealed or
     /// not, a radio group being one stop; Enter or Space activates the focused one; on a radio
     /// the arrows choose the group's next or previous one.
     pub fn key(&mut self, k: KeyInput) -> Option<Activated> {
-        if let Some(i) = self.focus.as_ref().and_then(|k| self.index(k))
+        if let Some(i) = self.focus.as_ref().and_then(|key| self.index(key))
             && let Some(effects) = self.component_input(i, |c, cx| c.key(cx, k))
             && effects.handled
         {
-            return effects.activate.then(|| Activated {
-                key: self.placed[i].key.clone(),
-                action: self.control(i).action.clone(),
-            });
-        }
-        if let Some(i) = self.focus.as_ref().and_then(|f| self.index(f))
-            && let Some(s) = self.control(i).slider.clone()
-            && let Some(page) = self.tokens.as_ref().map(|t| t.slider.page_steps)
-        {
-            let sym = match k {
-                KeyInput::Left => Some(0xff51),
-                KeyInput::Up => Some(0xff52),
-                KeyInput::Right => Some(0xff53),
-                KeyInput::Down => Some(0xff54),
-                KeyInput::PageUp => Some(0xff55),
-                KeyInput::PageDown => Some(0xff56),
-                KeyInput::LineStart => Some(0xff50),
-                KeyInput::LineEnd => Some(0xff57),
-                _ => None,
-            };
-            if let Some(sym) = sym {
-                let value = self.value(&self.placed[i].key)?;
-                let next = s.range().key(value as f32, sym, true, page as f32)?;
-                self.focus_visible = true;
-                return self.slide_to(i, f64::from(next), false);
-            }
-        }
-        if let Some(i) = self.focus.as_ref().and_then(|f| self.index(f))
-            && self.control(i).choice.is_some()
-            && self.enabled(i)
-            && matches!(k, KeyInput::Up | KeyInput::Down)
-        {
-            // The arrows open a dropdown's list, as Enter and Space do.
-            self.focus_visible = true;
-            return Some(Activated {
-                key: self.placed[i].key.clone(),
-                action: self.control(i).action.clone(),
-            });
+            self.focus_visible |= effects.keyboard_focus;
+            return self.activated(i, effects);
         }
         if matches!(
             k,
@@ -1261,6 +1173,7 @@ impl ViewState {
                 Some(Activated {
                     key: self.placed[i].key.clone(),
                     action: self.control(i).action.clone(),
+                    value: self.typed_value(&self.placed[i].key),
                 })
             }
             KeyInput::Tab | KeyInput::ShiftTab => {
@@ -1305,6 +1218,7 @@ impl ViewState {
                 Some(Activated {
                     key: self.placed[i].key.clone(),
                     action: self.control(i).action.clone(),
+                    value: self.typed_value(&self.placed[i].key),
                 })
             }
             _ => None,
@@ -1547,50 +1461,23 @@ impl ViewState {
         // (priority, pane, control, wash); priority 4 is rest.
         let mut regions: Vec<(u8, Option<usize>, usize, [f64; 4])> = vec![];
         for i in self.controls().collect::<Vec<_>>() {
-            let c = self.control(i);
-            if c.wash == Wash::None
-                || !self.shown(i)
+            if !self.shown(i)
                 || !self.placed[i]
                     .visible()
                     .is_some_and(|r| overlaps(r, viewport))
             {
                 continue;
             }
-            let key = &self.placed[i].key;
-            let destructive = c.wash == Wash::Destructive;
-            let (hover, press) = if destructive {
-                (washes.destructive_hover, washes.destructive_press)
-            } else {
-                (washes.hover, washes.press)
-            };
-            let rest = [hover[0], hover[1], hover[2], 0.];
-            let well = c.surface.then(|| wash_of(tokens.look.surface));
-            // A wash laid over the well, as one region: the two composited.
-            let on_well = |w: [f64; 4]| match well {
-                Some(s) => over(w, s),
-                None => w,
-            };
-            let (priority, wash) = if c.on {
-                (0, wash_of(tokens.look.on))
-            } else if c.marked && c.accent {
-                // The selection in the accent (D1): it stays as it is under the pointer.
-                (0, wash_of(tokens.look.accent))
-            } else if (self.press.as_ref() == Some(key) && self.hover.as_ref() == Some(key))
-                || c.shown == Some(Shown::Press)
-            {
-                (0, on_well(press))
-            } else if self.hover.as_ref() == Some(key) || c.shown == Some(Shown::Hover) {
-                (1, on_well(hover))
-            } else if let Some(well) = well {
-                (3, well)
-            } else if self.fading.contains_key(key) {
-                (2, rest)
-            } else if c.marked && !self.holds_mark(i) {
-                // Selected (a sidebar's page, a list's choice). A row with a switch shows
-                // its on and off in the switch, so it is never also lit as selected.
-                (3, washes.hover)
-            } else {
-                (4, rest)
+            let Some((priority, wash)) = self.placed[i].part().and_then(|p| {
+                let read = self.context(i);
+                p.component()
+                    .glass(&Read {
+                        look: tokens.with_types(read.look.types),
+                        ..read
+                    })
+                    .lit
+            }) else {
+                continue;
             };
             regions.push((priority, self.placed[i].pane, i, wash));
         }
@@ -1626,7 +1513,10 @@ impl ViewState {
             let Some(r) = self.silhouette(i) else {
                 continue;
             };
-            let corner = self.control(i).corner;
+            let corner = self.placed[i]
+                .part()
+                .map(|p| p.component().corner())
+                .unwrap_or(crate::Corner::Pill);
             if pane.is_none() {
                 if wash[3] > 0. {
                     self.painted
@@ -1661,12 +1551,14 @@ impl ViewState {
         nodes.insert(root_id, root);
         let mut ids: HashMap<usize, NodeId> = HashMap::new();
         let mut options = HashMap::new();
+        let mut published_controls = HashMap::new();
         self.next_semantic = self.next_semantic.max(first_id);
         for i in 0..self.placed.len() {
             if !self.in_semantics(i) {
                 continue;
             }
             let p = &self.placed[i];
+            let mut children = Vec::<SemanticChild>::new();
             let mut node = match &p.what {
                 What::Pane(_) => nk_a11y::Node::new(0, nk_a11y::Role::Panel, ""),
                 What::Scroll { .. } => nk_a11y::Node::new(0, nk_a11y::Role::ScrollPane, ""),
@@ -1674,50 +1566,11 @@ impl ViewState {
                     let mut n = nk_a11y::Node::new(0, a11y_role(c.role), c.name.clone());
                     n.description = c.description.clone();
                     n.states.disabled = !c.enabled;
-                    n.states.checked =
-                        matches!(c.role, Role::Toggle | Role::Check | Role::Radio) && c.marked;
                     n.states.focused = self.focus.as_ref() == Some(&p.key);
                     n.actions = vec![Action::Focus, Action::Activate];
-                    if c.choice.is_some() {
-                        n.states.expandable = true;
-                        n.states.expanded = self.expanded.as_ref() == Some(&p.key);
-                    }
-                    if let Some(s) = &c.slider {
-                        let current = self.value(&p.key).unwrap_or(s.value);
-                        n.value = Some(nk_a11y::ValueInfo {
-                            min: s.min,
-                            max: s.max,
-                            current,
-                            step: s.step,
-                            text: s.range().text(current as f32),
-                        });
-                        n.actions = vec![Action::Focus, Action::SetValue];
-                    }
-                    if let Some(f) = &c.field {
-                        // A secret is said as nothing: its bullets are not its text.
-                        let text = if f.secret {
-                            String::new()
-                        } else {
-                            f.shown.clone()
-                        };
-                        let end = text.len();
-                        n.text = Some(nk_a11y::TextInfo {
-                            caret: f.caret.min(end),
-                            anchor: f.anchor.min(end),
-                            words: Vec::new(),
-                            lines: std::iter::once(0..end).collect(),
-                            geometry: None,
-                            text,
-                        });
-                        n.role = if f.secret {
-                            nk_a11y::Role::Password
-                        } else {
-                            nk_a11y::Role::TextInput
-                        };
-                        n.actions = vec![Action::Focus, Action::Activate, Action::SetText];
-                    }
                     if let Some(part) = &c.part {
-                        part.component().semantics(self.interaction(i), &mut n);
+                        part.component()
+                            .semantics(&self.context(i), &mut n, &mut children);
                     }
                     n
                 }
@@ -1752,35 +1605,41 @@ impl ViewState {
                 .push(id);
             nodes.insert(id, node);
             ids.insert(i, id);
-            if let What::Control(c) = &p.what
-                && let Some(choice) = &c.choice
+            if matches!(p.what, What::Control(_))
+                && let Some(part) = p.part()
             {
-                // Its options, each said by its name, the chosen one selected; activating one
-                // chooses it, closed or open. Their places are the open list's (`AppWindow`).
-                let chosen = self.value(&p.key).map(|v| v as usize);
-                let key = p.key.clone();
-                for (n, name) in choice.options.iter().enumerate() {
-                    let option = Key(format!("{}/option/{n}", key.0));
-                    let next_semantic = &mut self.next_semantic;
-                    let oid = *self
-                        .semantic_ids
-                        .entry((option, nk_a11y::Role::Option))
-                        .or_insert_with(|| {
-                            *next_semantic += 1;
-                            *next_semantic - 1
-                        });
-                    let mut o = nk_a11y::Node::new(oid, nk_a11y::Role::Option, name.clone());
-                    o.states.selected = chosen == Some(n);
-                    o.states.disabled = !c.enabled;
-                    o.states.offscreen = true;
-                    o.actions = vec![Action::Activate];
-                    nodes.get_mut(&id).expect("just placed").children.push(oid);
-                    nodes.insert(oid, o);
-                    options.insert(oid, (key.clone(), n));
+                published_controls.insert(id, (p.key.clone(), part.component().type_id()));
+            }
+            for child in children {
+                let next_semantic = &mut self.next_semantic;
+                let oid = *self
+                    .semantic_ids
+                    .entry((child.key, child.node.role))
+                    .or_insert_with(|| {
+                        *next_semantic += 1;
+                        *next_semantic - 1
+                    });
+                let mut node = child.node;
+                node.id = oid;
+                nodes.get_mut(&id).expect("just placed").children.push(oid);
+                nodes.insert(oid, node);
+                if let Some(value) = child.value {
+                    options.insert(
+                        oid,
+                        (
+                            p.key.clone(),
+                            p.part()
+                                .expect("semantic children belong to a component")
+                                .component()
+                                .type_id(),
+                            value,
+                        ),
+                    );
                 }
             }
         }
         self.options = options;
+        self.published_controls = published_controls;
         Tree {
             root: root_id,
             nodes,
@@ -1802,16 +1661,17 @@ impl ViewState {
     /// Which control each id `semantics` gave is, for the controls placed now: what a
     /// reader's request names.
     pub fn semantic_keys(&self) -> HashMap<NodeId, Key> {
-        (0..self.placed.len())
-            .filter(|&i| self.in_semantics(i))
-            .map(|i| &self.placed[i])
-            .filter_map(|p| match &p.what {
-                What::Control(c) => {
-                    let id = self.semantic_ids.get(&(p.key.clone(), a11y_role(c.role)))?;
-                    Some((*id, p.key.clone()))
-                }
-                _ => None,
-            })
+        let live: HashMap<&Key, std::any::TypeId> = self
+            .placed
+            .iter()
+            .enumerate()
+            .filter(|(i, p)| matches!(p.what, What::Control(_)) && self.in_semantics(*i))
+            .filter_map(|(_, p)| p.part().map(|part| (&p.key, part.component().type_id())))
+            .collect();
+        self.published_controls
+            .iter()
+            .filter(|(_, (key, kind))| live.get(key) == Some(kind))
+            .map(|(id, (key, _))| (*id, key.clone()))
             .collect()
     }
 
@@ -1835,19 +1695,9 @@ impl ViewState {
         let i = self
             .index(key)
             .filter(|&i| matches!(self.placed[i].what, What::Control(_)) && self.enabled(i))?;
-        if let Some(effects) = self.component_input(i, |c, cx| c.request(cx, activate))
-            && effects.handled
-        {
-            return effects.activate.then(|| Activated {
-                key: key.clone(),
-                action: self.control(i).action.clone(),
-            });
-        }
         if activate {
-            return Some(Activated {
-                key: key.clone(),
-                action: self.control(i).action.clone(),
-            });
+            let effects = self.component_input(i, |c, cx| c.request(cx, Request::Activate))?;
+            return self.activated(i, effects);
         }
         self.focus = Some(key.clone());
         self.focus_visible = true;
@@ -1940,20 +1790,27 @@ impl ViewState {
                 if !o.enabled && !o.action.is_empty() {
                     return ink(tokens.look.disabled);
                 }
-                if self.control(owner).on {
-                    return ink(tokens.look.focus);
-                }
-                if o.marked && o.accent {
-                    return ink(tokens.look.accent_fg);
-                }
-                match self.fill_top(owner) {
-                    Some(top) if p.rect[1] + p.rect[3] / 2. >= top => ink(FILL_INK),
-                    _ => ink(c),
-                }
+                let c = self.placed[owner]
+                    .part()
+                    .map(|part| {
+                        part.component().content_ink(
+                            &Read {
+                                look,
+                                ..self.context(owner)
+                            },
+                            p.rect,
+                            c,
+                        )
+                    })
+                    .unwrap_or(c);
+                ink(c)
             };
             if let Some(component) = p.part() {
                 let corner = match &p.what {
-                    What::Control(c) => c.corner,
+                    What::Control(_) => p
+                        .part()
+                        .map(|part| part.component().corner())
+                        .unwrap_or(crate::Corner::Pill),
                     _ => crate::Corner::Fixed(0),
                 };
                 component.component().paint(
@@ -1967,6 +1824,11 @@ impl ViewState {
                         progress: p.progress,
                         corner,
                         state: self.components.get(&p.key),
+                        read: Read {
+                            look,
+                            ..self.context(i)
+                        },
+                        wash: self.painted.get(&i).copied(),
                     },
                     PaintPhase::Under,
                 );
@@ -1987,7 +1849,7 @@ impl ViewState {
                     if let Some(f) = self.text.get(&p.key) {
                         canvas.clip(rect(&visible));
                         let base = self
-                            .face_ink(i, look, interaction(p), false)
+                            .component_ink(i, look, interaction(p), false)
                             .unwrap_or_else(|| tokens.look.ink(*tier));
                         let r = canvas.layout(
                             &f.layout,
@@ -2002,166 +1864,11 @@ impl ViewState {
                     if let Some(glyph) = icons(&icon.name, icon.size) {
                         canvas.clip(rect(&visible));
                         let c = self
-                            .face_ink(i, look, interaction(p), true)
+                            .component_ink(i, look, interaction(p), true)
                             .unwrap_or_else(|| tokens.look.ink(icon.ink));
                         let c = c.with_alpha(c.components[3] * icon.alpha as f32);
                         canvas.icon(&glyph, rect(&p.rect), content(c));
                         canvas.pop_clip();
-                    }
-                }
-                What::Control(c) if c.face == crate::view::Face::Dropdown => {
-                    // A dropdown's trigger (VIEW.md §13.9): its tone inside its border, which is
-                    // the room its focus ring is drawn in; no glass, nothing for Hyalo.
-                    let t = &tokens.dropdown.trigger;
-                    let key = Some(&p.key);
-                    let fill = if c.enabled
-                        && ((self.press.as_ref() == key && self.hover.as_ref() == key)
-                            || c.shown == Some(Shown::Press))
-                    {
-                        t.pressed
-                    } else if c.enabled
-                        && (self.hover.as_ref() == key || c.shown == Some(Shown::Hover))
-                    {
-                        t.hover
-                    } else {
-                        t.background
-                    };
-                    let a = if c.enabled {
-                        1.
-                    } else {
-                        t.disabled_opacity as f32
-                    };
-                    let (r, b) = (p.rect, t.border);
-                    let inner = [
-                        r[0] + b,
-                        r[1] + b,
-                        (r[2] - 2. * b).max(0.),
-                        (r[3] - 2. * b).max(0.),
-                    ];
-                    canvas.clip(rect(&visible));
-                    canvas.rounded_rect(
-                        rect(&inner),
-                        (t.radius - b).max(0.),
-                        ink(fill.with_alpha(fill.components[3] * a)),
-                    );
-                    canvas.pop_clip();
-                    if c.enabled
-                        && ((self.focus_visible && self.focus.as_ref() == key)
-                            || c.shown == Some(Shown::Focus))
-                    {
-                        canvas.rounded_ring(rect(&r), t.radius, b, ink(t.focus));
-                    }
-                }
-                What::Control(c) if c.face == crate::view::Face::MenuRow => {
-                    // A row of a dropdown's list: the accent under the pointer or the
-                    // keyboard, darker while pressed; the chosen one ticked.
-                    let m = &tokens.dropdown.menu;
-                    let lit = self.lit_row(i);
-                    if lit {
-                        let mut bg = m.accent;
-                        let key = Some(&p.key);
-                        if (self.press.as_ref() == key && self.hover.as_ref() == key)
-                            || c.shown == Some(Shown::Press)
-                        {
-                            for v in &mut bg.components[..3] {
-                                *v *= 1. - m.pressed_black as f32;
-                            }
-                        }
-                        canvas.clip(rect(&visible));
-                        canvas.rounded_rect(rect(&p.rect), m.row_radius, ink(bg));
-                        canvas.pop_clip();
-                    }
-                    if c.marked
-                        && let Some(t) = self.rect(&Key(format!("{}/tick", p.key.0)))
-                    {
-                        // The single-choice tick, `check.ts`'s path in its 24-unit box.
-                        let side = t[2].min(t[3]);
-                        let (x, y) = (t[0] + (t[2] - side) / 2., t[1] + (t[3] - side) / 2.);
-                        let at = |u: f64, v: f64| (x + u * side / 24., y + v * side / 24.);
-                        let tick = if lit { m.accent_text } else { m.text };
-                        canvas.clip(rect(&visible));
-                        canvas.polyline(
-                            &[at(4., 12.), at(9., 17.), at(20., 6.)],
-                            m.check_stroke * side / 24.,
-                            ink(tick),
-                        );
-                        canvas.pop_clip();
-                    }
-                }
-                What::Control(c) => {
-                    if let Some((r, radius, w)) = self.painted.get(&i) {
-                        canvas.clip(rect(&visible));
-                        canvas.rounded_rect(
-                            rect(r),
-                            *radius,
-                            ink(nk_render::Color::new(w.map(|v| v as f32))),
-                        );
-                        canvas.pop_clip();
-                    }
-                    if let Some(top) = self.fill_top(i) {
-                        // The tile slider: the control filled from its bottom to its value.
-                        let r = p.rect;
-                        let primary = tokens.look.ink(crate::view::Ink::Primary);
-                        let fill = primary
-                            .with_alpha(primary.components[3] * tokens.slider.fill_opacity as f32);
-                        canvas.clip(rect(&visible));
-                        canvas.clip_rounded_rect(rect(&r), c.corner.of(r[2], r[3], &tokens.radii));
-                        canvas.rect(rect(&[r[0], top, r[2], r[1] + r[3] - top]), ink(fill));
-                        canvas.pop_clip();
-                        canvas.pop_clip();
-                    }
-                    if c.slider.is_some()
-                        && let Some(thumb) = self.thumb(i)
-                    {
-                        // The row slider (VIEW.md §12.1): a track, filled up to the thumb.
-                        let s = &tokens.slider;
-                        let y = p.rect[1] + (p.rect[3] - s.track) / 2.;
-                        let track = [p.rect[0], y, p.rect[2], s.track];
-                        let centre = thumb[0] + thumb[2] / 2.;
-                        let ink_of = |a: f64| {
-                            let c = tokens.look.ink(crate::view::Ink::Primary);
-                            ink(c.with_alpha(c.components[3] * a as f32))
-                        };
-                        canvas.clip(rect(&visible));
-                        canvas.rounded_rect(rect(&track), s.track / 2., ink_of(0.18));
-                        let fill = [p.rect[0], y, centre - p.rect[0], s.track];
-                        canvas.rounded_rect(rect(&fill), s.track / 2., ink_of(s.fill_opacity));
-                        let inner = [thumb[0] + 1., thumb[1] + 1., thumb[2] - 2., thumb[3] - 2.];
-                        canvas.rounded_rect(rect(&inner), inner[2] / 2., ink_of(1.));
-                        canvas.pop_clip();
-                    }
-                    if c.field.is_some() && self.focus.as_ref() == Some(&p.key) {
-                        // The field being typed into: its selection, then its caret.
-                        canvas.clip(rect(&visible));
-                        let sel = tokens.look.focus;
-                        for r in self.selection(&p.key) {
-                            canvas.rounded_rect(
-                                rect(&r),
-                                0.,
-                                ink(sel.with_alpha(sel.components[3] * 0.3)),
-                            );
-                        }
-                        if let Some(r) = self.caret(&p.key) {
-                            let primary = tokens.look.ink(crate::view::Ink::Primary);
-                            canvas.rounded_rect(rect(&r), 0., ink(primary));
-                        }
-                        canvas.pop_clip();
-                    }
-                    if ((self.focus_visible && self.focus.as_ref() == Some(&p.key))
-                        || c.shown == Some(Shown::Focus))
-                        && let Some(r) = self.silhouette(i)
-                    {
-                        let w = tokens.look.focus_width;
-                        // A switch's track or a mark's border is its edge and paints over
-                        // anything inside it: its ring stands outside, a ring's width away.
-                        let out = if self.holds_mark(i) { 2. * w } else { 0. };
-                        let r = [r[0] - out, r[1] - out, r[2] + 2. * out, r[3] + 2. * out];
-                        canvas.rounded_ring(
-                            rect(&r),
-                            c.corner.of(r[2], r[3], &tokens.radii),
-                            w,
-                            ink(tokens.look.focus),
-                        );
                     }
                 }
                 _ => {}
@@ -2175,7 +1882,10 @@ impl ViewState {
                 (p.part(), p.visible().filter(|_| p.alpha > 0.))
             {
                 let corner = match &p.what {
-                    What::Control(c) => c.corner,
+                    What::Control(_) => p
+                        .part()
+                        .map(|part| part.component().corner())
+                        .unwrap_or(crate::Corner::Pill),
                     _ => crate::Corner::Fixed(0),
                 };
                 component.component().paint(
@@ -2189,6 +1899,11 @@ impl ViewState {
                         progress: p.progress,
                         corner,
                         state: self.components.get(&p.key),
+                        read: Read {
+                            look,
+                            ..self.context(i)
+                        },
+                        wash: self.painted.get(&i).copied(),
                     },
                     PaintPhase::Over,
                 );
@@ -2209,20 +1924,8 @@ impl ViewState {
     }
 }
 
-/// `a` blended towards `b` by `t`, each channel straight.
 impl ViewState {
-    /// Whether menu row `i` shows the accent: the pointer is on it, or the keyboard is.
-    fn lit_row(&self, i: usize) -> bool {
-        let c = self.control(i);
-        let key = Some(&self.placed[i].key);
-        c.enabled
-            && (self.hover.as_ref() == key
-                || (self.focus_visible && self.focus.as_ref() == key)
-                || matches!(c.shown, Some(Shown::Hover | Shown::Focus | Shown::Press)))
-    }
-    /// The ink a dropdown's trigger or a menu row gives what it holds (`glyph`: an icon, else
-    /// a text); None inside any other control.
-    fn face_ink(
+    fn component_ink(
         &self,
         i: usize,
         look: ComponentLook<'_>,
@@ -2230,43 +1933,11 @@ impl ViewState {
         glyph: bool,
     ) -> Option<nk_render::Color> {
         let owner = self.placed[i].control.filter(|&o| o != i)?;
-        let tokens = look.tokens;
-        if let Some(part) = &self.control(owner).part {
-            return part.component().ink(look, interaction, glyph);
-        }
-        match self.control(owner).face {
-            crate::view::Face::Dropdown => {
-                let t = &tokens.dropdown.trigger;
-                Some(if glyph { t.arrow_color } else { t.text })
-            }
-            crate::view::Face::MenuRow => {
-                let m = &tokens.dropdown.menu;
-                Some(if self.lit_row(owner) {
-                    m.accent_text
-                } else {
-                    m.text
-                })
-            }
-            _ => None,
-        }
+        self.placed[owner]
+            .part()?
+            .component()
+            .ink(look, interaction, glyph)
     }
-}
-
-/// What a tile slider's fill holds is drawn in where the fill has reached it: the dark
-/// skin's text on white, as the TS gauge had it.
-const FILL_INK: nk_render::Color = nk_render::Color::new([0., 0., 0., 0.85]);
-/// A colour as a wash Hyalo lays.
-fn wash_of(c: nk_render::Color) -> [f64; 4] {
-    c.components.map(f64::from)
-}
-/// `top` laid over `under`, as one wash (source over).
-fn over(top: [f64; 4], under: [f64; 4]) -> [f64; 4] {
-    let a = top[3] + under[3] * (1. - top[3]);
-    if a <= 0. {
-        return [top[0], top[1], top[2], 0.];
-    }
-    let mix = |i: usize| (top[i] * top[3] + under[i] * under[3] * (1. - top[3])) / a;
-    [mix(0), mix(1), mix(2), a]
 }
 fn rect(r: &Rect) -> nk_text::Rect {
     nk_text::Rect {

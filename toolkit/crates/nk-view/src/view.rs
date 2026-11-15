@@ -1,7 +1,6 @@
 // SPDX-License-Identifier: LGPL-3.0-or-later
 //! The view: a value a surface builds from its model on each change (VIEW.md §2).
-use crate::host::TypeScale;
-use crate::tokens::{DropdownStyle, MenuStyle, Radii, Radius, SliderStyle, Space};
+use crate::tokens::{Radii, Radius, Space};
 use nk_text::TextStyle;
 use serde::{Deserialize, Serialize};
 
@@ -79,7 +78,7 @@ pub struct SettingRow {
 
 /// What a setting row ends with when its control is a slider (VIEW.md §13.7): Settings' slider
 /// row.
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub struct SliderEnd {
     /// What a reader calls the slider: its row's title.
     pub name: String,
@@ -350,35 +349,13 @@ pub struct Control {
     pub description: String,
     /// What the surface receives in `Activated` (a name, never code).
     pub action: String,
-    pub wash: Wash,
-    pub corner: Corner,
     pub enabled: bool,
-    /// A persistent marker on the glass (today in a calendar, a selected item), shown with
-    /// the hover wash and counted last in the budget.
-    pub marked: bool,
     /// Drawn only while the pointer is over this pane, or focus is inside it. Always in the
     /// semantic tree and the Tab order.
     pub revealed_with: Option<Key>,
     /// Swiped across, its card (the nearest pane) follows the pointer; released far enough,
     /// it leaves the surface and the surface receives this action (VIEW.md §7).
     pub swipe: Option<String>,
-    /// A slider's value and range (VIEW.md §12.1); its role is `Slider`.
-    #[serde(default)]
-    pub slider: Option<Slider>,
-    /// A text field's text, caret and selection (VIEW.md §12.2); its role is `Field`.
-    #[serde(default)]
-    pub field: Option<Field>,
-    /// A dropdown's options and the one chosen (VIEW.md §13.9); its role is `Dropdown`.
-    #[serde(default)]
-    pub choice: Option<Choice>,
-    /// On (VIEW.md §12.4): the glass under it is white, the primary ink at full, and what it
-    /// holds is drawn in the accent. Hover and press do not show over it.
-    #[serde(default)]
-    pub on: bool,
-    /// At rest it shows the surface wash (`--nidara-surface`), a well in the glass: the CC's
-    /// badges. Hover and press lie over it.
-    #[serde(default)]
-    pub surface: bool,
     /// False: the pointer passes through it to what lies under. Keys and readers still reach
     /// it (a tile's second way in, its detail, under the tile's own control).
     #[serde(default = "yes")]
@@ -387,33 +364,20 @@ pub struct Control {
     /// gallery sets it, to show a component's states side by side; a live control has none.
     #[serde(default)]
     pub shown: Option<Shown>,
-    /// How it is drawn: on glass, by Hyalo's washes, or as a button in a page's content.
-    #[serde(default)]
-    pub face: Face,
-    #[serde(default)]
     pub part: Option<Box<crate::components::Part>>,
-    /// Marked, it is filled with the accent and what it holds is drawn in the accent's
-    /// foreground: a sidebar's selected entry (owner, 2026-11-12, D1). Else marked is the
-    /// neutral selection wash.
-    #[serde(default)]
-    pub accent: bool,
     pub child: Box<Node>,
 }
 
-/// How a control is drawn (VIEW.md §13.2).
-#[derive(Clone, Copy, Debug, Default, PartialEq, Serialize, Deserialize)]
-pub enum Face {
-    /// What it holds, with the washes of its state: Hyalo's on glass, the view's off it.
-    #[default]
-    Plain,
-    /// A dropdown's closed trigger (`components.json` `dropdown.trigger`, VIEW.md §13.9): the
-    /// view fills it with the trigger's tones, its label and arrow inside its padding.
-    Dropdown,
-    /// A row of a dropdown's open list (`dropdown.menu`): filled with the accent while the
-    /// pointer or the keyboard is on it, ticked while it is the one chosen.
-    MenuRow,
+impl Control {
+    pub fn selected(&self) -> bool {
+        self.part.as_ref().is_some_and(|p| p.component().selected())
+    }
+    fn configure(&mut self, property: crate::components::Configure) {
+        if let Some(part) = &self.part {
+            self.part = Some(Box::new(part.configured(property)));
+        }
+    }
 }
-
 /// Colour samples: one radio group, each choice reports `"{action}:{n}"`.
 #[derive(Clone, Debug)]
 pub struct Swatches {
@@ -434,13 +398,6 @@ pub struct Segmented {
     pub chosen: usize,
     pub action: String,
     pub disabled: bool,
-}
-
-/// A dropdown's options and which is chosen (VIEW.md §13.9).
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
-pub struct Choice {
-    pub options: Vec<String>,
-    pub chosen: usize,
 }
 
 /// A dropdown (VIEW.md §13.9, GTK's `DropDown`): one choice of several, shown closed as the
@@ -765,47 +722,12 @@ impl Node {
     /// kit's width, its glyphs either side of it when it has them, and its value after it in
     /// room for its widest text, so the slider never moves as the value changes. Measures are
     /// `style`'s, the exported `range.slider`.
-    pub fn slider_end(key: impl Into<Key>, end: SliderEnd, style: &SliderStyle) -> Self {
-        let key = key.into();
-        let k = |part: &str| format!("{}/{part}", key.0);
-        let range = end.slider.range();
-        let shown = range.text(end.slider.shown(end.slider.value) as f32);
-        let room = vec![
-            range.text(end.slider.min as f32),
-            range.text(end.slider.max as f32),
-        ];
-        let ink = if end.disabled {
-            Ink::Disabled
-        } else {
-            Ink::Primary
-        };
-        let glyph = |part: &str, name: &str| {
-            Self::icon(k(part), name, style.icon_size)
-                .ink(ink)
-                .alpha(style.icon_opacity)
-        };
-        let gap = |part: &str, w: f64| Self::spacer(k(part)).width(w);
-        let mut parts = vec![];
-        if let Some([lesser, _]) = &end.icons {
-            parts.push(glyph("lesser", lesser));
-            parts.push(gap("lesser-gap", style.icon_gap));
-        }
-        parts.push(
-            Self::slider(key.clone(), end.name, end.action, end.slider)
-                .width(style.width)
-                .enabled(!end.disabled),
-        );
-        if let Some([_, greater]) = &end.icons {
-            parts.push(gap("greater-gap", style.icon_gap));
-            parts.push(glyph("greater", greater));
-        }
-        parts.push(gap("value-gap", style.value_gap));
-        parts.push(
-            Self::text(k("value"), shown, end.value_style)
-                .ink(ink)
-                .room(room),
-        );
-        Self::row(k("end"), parts).align(Align::Center)
+    pub fn slider_end(key: impl Into<Key>, end: SliderEnd) -> Self {
+        let owner = key.into();
+        Self::drawing(
+            format!("{}/end", owner.0),
+            crate::Part::SliderRow(crate::components::SliderRow { owner, end }),
+        )
     }
     /// An entry of a window's sidebar (VIEW.md §13.8, GTK's `StackSidebar` row): its glyph at
     /// `glyph_size` (the frame's, `FrameStyle::icon`) and its title, in the kit's padding. The
@@ -829,7 +751,7 @@ impl Node {
             .marked(entry.selected)
             .corner(Corner::Token(Radius::Sm));
         if let Kind::Control(c) = &mut n.kind {
-            c.accent = true;
+            c.configure(crate::components::Configure::Accent(true));
         }
         n
     }
@@ -837,6 +759,7 @@ impl Node {
     fn holds_control(&self) -> bool {
         match &self.kind {
             Kind::Control(_) => true,
+            Kind::Drawing(d) => d.part.component().contains_controls(),
             Kind::Stack(s) => s.children.iter().any(Self::holds_control),
             Kind::Pane(p) => p.child.holds_control(),
             Kind::Group(g) => g.child.holds_control(),
@@ -901,14 +824,11 @@ impl Node {
         } else {
             Corner::Token(Radius::Xs)
         };
-        let mut n = Self::control(key, name, action, drawn)
+        Self::control(key, name, action, drawn)
             .corner(corner)
             .role(role)
-            .marked(on);
-        if let Kind::Control(c) = &mut n.kind {
-            c.wash = Wash::None;
-        }
-        n
+            .marked(on)
+            .wash(Wash::None)
     }
     /// Stands in for a row the surface leaves unbuilt, outside a scroll region's window:
     /// `height` is what `ViewState::rect` gave for the row when it was built.
@@ -931,22 +851,14 @@ impl Node {
                 name: name.into(),
                 description: String::new(),
                 action: action.into(),
-                wash: Wash::Glass,
-                corner: Corner::Pill,
                 enabled: true,
-                marked: false,
                 revealed_with: None,
                 swipe: None,
-                slider: None,
-                field: None,
-                choice: None,
-                on: false,
-                accent: false,
-                surface: false,
                 pointer: true,
                 shown: None,
-                face: Face::Plain,
-                part: None,
+                part: Some(Box::new(crate::Part::Surface(
+                    crate::components::Surface::default(),
+                ))),
                 child: Box::new(child),
             }),
         )
@@ -955,7 +867,13 @@ impl Node {
     pub fn drawing(key: impl Into<Key>, part: crate::Part) -> Self {
         let key = key.into();
         let child = Box::new(Self::spacer(format!("{}/body", key.0)));
-        Self::new(key, Kind::Drawing(crate::Drawing { part, child }))
+        Self::new(
+            key,
+            Kind::Drawing(crate::Drawing {
+                part: Box::new(part),
+                child,
+            }),
+        )
     }
     /// A button in a page's content (`Part::Button`): `label` centred in `style`, in the
     /// button's padding and corner. Not glass: for one over content, put a control in a pane.
@@ -975,10 +893,11 @@ impl Node {
         )
         .corner(Corner::Token(Radius::Sm));
         if let Kind::Control(c) = &mut n.kind {
-            c.wash = Wash::None;
             c.part = Some(Box::new(crate::Part::Button(crate::components::Button {
                 label,
                 style,
+                selected: false,
+                corner: Corner::Token(Radius::Sm),
             })));
         }
         n
@@ -987,40 +906,23 @@ impl Node {
     /// as wide as its widest option so that a choice never moves what lies beside it. Its
     /// measures, tones and fonts are `style`'s (the exported `dropdown`), the font a step of
     /// `types`. Activated, the window it is in opens its list (`AppWindow`).
-    pub fn dropdown(
-        key: impl Into<Key>,
-        d: Dropdown,
-        style: &DropdownStyle,
-        types: &TypeScale,
-    ) -> Self {
+    pub fn dropdown(key: impl Into<Key>, d: Dropdown) -> Self {
         let key = key.into();
-        let k = |part: &str| format!("{}/{part}", key.0);
-        let t = &style.trigger;
-        let chosen = d.chosen.min(d.options.len().saturating_sub(1));
-        let label = d.options.get(chosen).cloned().unwrap_or_default();
-        let drawn = Self::row(
-            k("row"),
-            vec![
-                Self::spacer(k("margin")).width(t.label_margin),
-                Self::text(k("label"), label, types.style(t.font.0, t.font.1))
-                    .room(d.options.clone())
-                    .grow(),
-                Self::spacer(k("gap")).width(t.arrow_gap),
-                Self::icon(k("arrow"), t.arrow.clone(), t.arrow_size).ink(Ink::Dim),
-            ],
+        let mut n = Self::control(
+            key.clone(),
+            d.name,
+            d.action,
+            Self::spacer(format!("{}/body", key.0)),
         )
-        .align(Align::Center);
-        let mut n = Self::control(key, d.name, d.action, drawn)
-            .corner(Corner::Fixed(t.radius.round() as u32))
-            .enabled(!d.disabled);
+        .role(Role::Dropdown)
+        .enabled(!d.disabled);
         if let Kind::Control(c) = &mut n.kind {
-            c.role = Role::Dropdown;
-            c.wash = Wash::None;
-            c.face = Face::Dropdown;
-            c.choice = Some(Choice {
-                options: d.options,
-                chosen,
-            });
+            c.part = Some(Box::new(crate::Part::Dropdown(
+                crate::components::Dropdown {
+                    chosen: d.chosen.min(d.options.len().saturating_sub(1)),
+                    options: d.options,
+                },
+            )));
         }
         n
     }
@@ -1029,70 +931,35 @@ impl Node {
     /// `"{key}/{n}"` and reports `"{action}:{n}"` when it is chosen; its measures, tones and
     /// font arrive with the layout look (the exported `choices.segmented` and type scale).
     pub fn segmented(key: impl Into<Key>, s: Segmented) -> Self {
-        let key = key.into();
-        let count = s.options.len();
-        let segments = s
-            .options
-            .iter()
-            .enumerate()
-            .map(|(n, label)| {
-                let k = format!("{}/{n}", key.0);
-                let mut c = Self::control(
-                    k.clone(),
-                    label.clone(),
-                    format!("{}:{n}", s.action),
-                    Self::spacer(format!("{k}/label")),
-                )
-                .role(Role::Radio)
-                .marked(n == s.chosen)
-                .enabled(!s.disabled)
-                .description(s.name.clone());
-                if let Kind::Control(c) = &mut c.kind {
-                    c.wash = Wash::None;
-                    c.part = Some(Box::new(crate::Part::Segment(crate::components::Segment {
-                        label: label.clone(),
-                        group: key.clone(),
-                        index: n,
-                        count,
-                    })));
-                }
-                c
-            })
-            .collect();
-        Self::row(key, segments)
+        Self::drawing(
+            key,
+            crate::Part::Segmented(crate::components::SegmentedRow {
+                name: s.name,
+                options: s.options,
+                chosen: s.chosen,
+                action: s.action,
+                disabled: s.disabled,
+                shown: Vec::new(),
+            }),
+        )
     }
     /// A row of colour samples, with the exported swatch geometry and independent radio membership.
     pub fn swatches(key: impl Into<Key>, s: Swatches) -> Self {
-        let key = key.into();
-        let mut children = Vec::new();
-        for (n, (name, color)) in s.colors.iter().enumerate() {
-            if n > 0 {
-                children.push(Self::drawing(
-                    format!("{}/gap/{n}", key.0),
-                    crate::Part::SwatchGap(crate::components::SwatchGap),
-                ));
-            }
-            let k = format!("{}/{n}", key.0);
-            let mut node = Self::control(
-                k.clone(),
-                name.clone(),
-                format!("{}:{n}", s.action),
-                Self::spacer(format!("{k}/circle")),
-            )
-            .role(Role::Radio)
-            .marked(n == s.chosen)
-            .enabled(!s.disabled)
-            .description(s.name.clone());
-            if let Kind::Control(c) = &mut node.kind {
-                c.part = Some(Box::new(crate::Part::Swatch(crate::components::Swatch {
-                    color: color.components,
-                    group: key.clone(),
-                })));
-                c.wash = Wash::None;
-            }
-            children.push(node);
-        }
-        Self::row(key, children).align(Align::Center)
+        Self::drawing(
+            key,
+            crate::Part::Swatches(crate::components::SwatchRow {
+                name: s.name,
+                colors: s
+                    .colors
+                    .into_iter()
+                    .map(|(name, color)| (name, color.components))
+                    .collect(),
+                chosen: s.chosen,
+                action: s.action,
+                disabled: s.disabled,
+                shown: Vec::new(),
+            }),
+        )
     }
     /// A row of a dropdown's open list: `label` and room for the tick after it, in the row's
     /// padding (`style`, the exported `dropdown.menu`). `chosen` ticks it.
@@ -1101,33 +968,21 @@ impl Node {
         label: impl Into<String>,
         action: impl Into<String>,
         chosen: bool,
-        style: &MenuStyle,
-        types: &TypeScale,
     ) -> Self {
         let key = key.into();
-        let k = |part: &str| format!("{}/{part}", key.0);
         let label = label.into();
-        let drawn = Self::row(
-            k("row"),
-            vec![
-                Self::text(
-                    k("label"),
-                    label.clone(),
-                    types.style(style.font.0, style.font.1),
-                )
-                .grow(),
-                Self::spacer(k("gap")).width(style.check_gap),
-                Self::slot(k("tick"), style.check_size),
-            ],
+        let mut n = Self::control(
+            key.clone(),
+            label.clone(),
+            action,
+            Self::spacer(format!("{}/body", key.0)),
         )
-        .align(Align::Center);
-        let mut n = Self::control(key, label, action, drawn)
-            .corner(Corner::Fixed(style.row_radius.round() as u32))
-            .role(Role::Option)
-            .marked(chosen);
+        .role(Role::Option);
         if let Kind::Control(c) = &mut n.kind {
-            c.wash = Wash::None;
-            c.face = Face::MenuRow;
+            c.part = Some(Box::new(crate::Part::MenuRow(crate::components::MenuRow {
+                label,
+                selected: chosen,
+            })));
         }
         n
     }
@@ -1145,7 +1000,12 @@ impl Node {
         let mut n = Self::control(key, name, action, Self::spacer(track));
         if let Kind::Control(c) = &mut n.kind {
             c.role = Role::Slider;
-            c.slider = Some(slider);
+            c.part = Some(Box::new(crate::Part::Slider(
+                crate::components::SliderControl {
+                    range: slider,
+                    surface: crate::components::Surface::default(),
+                },
+            )));
         }
         n
     }
@@ -1159,15 +1019,42 @@ impl Node {
         style: TextStyle,
     ) -> Self {
         let key = key.into();
-        let text = Self::text(format!("{}/text", key.0), field.shown.clone(), style);
+        let text = Self::text(
+            format!("{}/text", key.0),
+            field.shown.clone(),
+            style.clone(),
+        );
         let mut n = Self::control(key, name, action, text);
         if let Kind::Control(c) = &mut n.kind {
             c.role = Role::Field;
-            c.field = Some(field);
+            c.part = Some(Box::new(crate::Part::Field(
+                crate::components::DisplayField {
+                    field,
+                    style: style.clone(),
+                    surface: crate::components::Surface::default(),
+                },
+            )));
         }
         n
     }
 
+    /// An application payload for a plain/surface control; intrinsic component values
+    /// (a range or selection) remain owned by that component.
+    pub fn value(mut self, value: crate::Value) -> Self {
+        if let Kind::Control(c) = &mut self.kind {
+            c.configure(crate::components::Configure::Value(value));
+        }
+        self
+    }
+    /// Gallery fixture: show a child of a composed choice row in a stable state.
+    pub fn sample_state(mut self, index: usize, shown: Shown) -> Self {
+        if let Kind::Drawing(d) = &mut self.kind {
+            *d.part = d
+                .part
+                .configured(crate::components::Configure::Sample(index, shown));
+        }
+        self
+    }
     // Modifiers. Each applies to the kind it names and is a no-op on any other.
     pub fn gap(mut self, s: Space) -> Self {
         if let Kind::Stack(st) = &mut self.kind {
@@ -1290,13 +1177,13 @@ impl Node {
     }
     pub fn wash(mut self, w: Wash) -> Self {
         if let Kind::Control(c) = &mut self.kind {
-            c.wash = w;
+            c.configure(crate::components::Configure::Wash(w));
         }
         self
     }
     pub fn corner(mut self, corner: Corner) -> Self {
         match &mut self.kind {
-            Kind::Control(c) => c.corner = corner,
+            Kind::Control(c) => c.configure(crate::components::Configure::Corner(corner)),
             Kind::Pane(p) => p.corner = corner,
             _ => {}
         }
@@ -1316,7 +1203,7 @@ impl Node {
     }
     pub fn marked(mut self, on: bool) -> Self {
         if let Kind::Control(c) = &mut self.kind {
-            c.marked = on;
+            c.configure(crate::components::Configure::Marked(on));
         }
         self
     }
@@ -1329,13 +1216,13 @@ impl Node {
     }
     pub fn on(mut self, on: bool) -> Self {
         if let Kind::Control(c) = &mut self.kind {
-            c.on = on;
+            c.configure(crate::components::Configure::On(on));
         }
         self
     }
     pub fn surface(mut self) -> Self {
         if let Kind::Control(c) = &mut self.kind {
-            c.surface = true;
+            c.configure(crate::components::Configure::Surface);
         }
         self
     }

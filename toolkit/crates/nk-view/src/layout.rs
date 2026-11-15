@@ -4,7 +4,7 @@
 //! hit-testing, semantics and the material, so nothing computes a position twice.
 use crate::components::{BodyPlacement, ComponentLook, FrameSpec, Part};
 use crate::tokens::Spacing;
-use crate::view::{Align, Axis, Control, Corner, Face, Icon, Ink, Justify, Key, Kind, Node, Stack};
+use crate::view::{Align, Axis, Control, Corner, Icon, Ink, Justify, Key, Kind, Node, Stack};
 use nk_text::{Layout, TextBackend, TextStyle};
 use std::collections::HashMap as Map;
 use std::collections::HashMap;
@@ -245,7 +245,7 @@ pub enum What {
     Reveal {
         progress: f64,
     },
-    Drawing(Part),
+    Drawing(Box<Part>),
     /// A scroll region: how far it is scrolled, and its content's height.
     Scroll {
         offset: f64,
@@ -269,7 +269,7 @@ impl Placed {
     pub fn part(&self) -> Option<&Part> {
         match &self.what {
             What::Control(c) => c.part.as_deref(),
-            What::Drawing(p) => Some(p),
+            What::Drawing(p) => Some(p.as_ref()),
             _ => None,
         }
     }
@@ -283,37 +283,9 @@ pub struct Layouter<'a> {
     pub text: &'a mut dyn TextBackend,
     pub cache: &'a mut TextCache,
     pub scale: f64,
-    /// A slider's height: its thumb's diameter.
-    pub slider: f64,
     pub look: ComponentLook<'a>,
     /// The kit's row height (`row_floor`).
     pub row: f64,
-    /// The inset on each side (padding and border) across and down, and the least height, of
-    /// each face that pads what it holds: a content button, a dropdown, a menu row.
-    pub faces: Faces,
-}
-
-/// What `Layouter::faces` holds: `(across, down, least height)` per padded face.
-#[derive(Clone, Copy, Debug)]
-pub struct Faces {
-    pub dropdown: (f64, f64, f64),
-    pub menu_row: (f64, f64, f64),
-}
-impl Faces {
-    pub fn of(tokens: &crate::tokens::Tokens) -> Self {
-        Self {
-            dropdown: tokens.dropdown.trigger.inset(),
-            menu_row: tokens.dropdown.menu.row_inset(),
-        }
-    }
-    /// A face's inset, None for a face that pads nothing.
-    fn inset(&self, face: Face) -> Option<(f64, f64, f64)> {
-        match face {
-            Face::Plain => None,
-            Face::Dropdown => Some(self.dropdown),
-            Face::MenuRow => Some(self.menu_row),
-        }
-    }
 }
 
 impl Layouter<'_> {
@@ -321,14 +293,7 @@ impl Layouter<'_> {
         c.part
             .as_ref()
             .map(|p| p.component().frame(self.look))
-            .unwrap_or_else(|| {
-                let (x, y, h) = self.faces.inset(c.face).unwrap_or_default();
-                FrameSpec {
-                    inset: (x, y),
-                    least: (0., h),
-                    body: BodyPlacement::Fill,
-                }
-            })
+            .unwrap_or_default()
     }
     /// Lays the view out in a `size` box at the origin; returns every node placed, in tree
     /// order. Texts whose key left the view are dropped from the cache.
@@ -352,12 +317,16 @@ impl Layouter<'_> {
     fn measure_frame(&mut self, body: &Node, width: f64, f: FrameSpec) -> Measure {
         let (x, y) = f.inset;
         let c = self.measure(body, (width - 2. * x).max(0.));
-        let h = (c.h + 2. * y).max(f.least.1);
+        let h = (c.h + 2. * y).max(self.up(f.least.1));
         Measure {
-            w: (c.w + 2. * x).max(f.least.0),
+            w: (c.w + 2. * x).max(self.up(f.least.0)),
             h,
             first_line: c.first_line.map(|v| v + (h - c.h) / 2.),
-            give: 0.,
+            give: if f.inset == (0., 0.) && f.least == (0., 0.) {
+                c.give
+            } else {
+                0.
+            },
             children: vec![c],
             cross: vec![],
         }
@@ -375,11 +344,8 @@ impl Layouter<'_> {
             Kind::Icon(i) => i.size,
             Kind::Spacer => 0.,
             Kind::Pane(p) => self.natural(&p.child),
-            Kind::Control(c) if c.part.is_some() || c.face != Face::Plain => {
-                (self.natural(&c.child) + 2. * self.control_frame(c).inset.0)
-                    .max(self.control_frame(c).least.0)
-            }
-            Kind::Control(c) => self.natural(&c.child),
+            Kind::Control(c) => (self.natural(&c.child) + 2. * self.control_frame(c).inset.0)
+                .max(self.control_frame(c).least.0),
             Kind::Reveal(r) => self.natural(&r.child),
             Kind::Scroll(sc) => self.natural(&sc.child),
             Kind::Overlay(o) => self.natural(&o.base),
@@ -418,10 +384,8 @@ impl Layouter<'_> {
                 (self.min(&d.child) + 2. * f.inset.0).max(f.least.0)
             }
             Kind::Pane(p) => self.min(&p.child),
-            Kind::Control(c) if c.part.is_some() || c.face != Face::Plain => (self.min(&c.child)
-                + 2. * self.control_frame(c).inset.0)
+            Kind::Control(c) => (self.min(&c.child) + 2. * self.control_frame(c).inset.0)
                 .max(self.control_frame(c).least.0),
-            Kind::Control(c) => self.min(&c.child),
             Kind::Reveal(r) => self.min(&r.child),
             Kind::Scroll(sc) => self.min(&sc.child),
             Kind::Overlay(o) => self.min(&o.base),
@@ -573,26 +537,8 @@ impl Layouter<'_> {
                     give: 0.,
                 }
             }
-            Kind::Control(ctl) if ctl.part.is_some() || ctl.face != Face::Plain => {
-                self.measure_frame(&ctl.child, width, self.control_frame(ctl))
-            }
+            Kind::Control(ctl) => self.measure_frame(&ctl.child, width, self.control_frame(ctl)),
 
-            Kind::Control(ctl) => {
-                let c = self.measure(&ctl.child, width);
-                let h = if ctl.slider.is_some() {
-                    c.h.max(self.up(self.slider))
-                } else {
-                    c.h
-                };
-                Measure {
-                    w: c.w,
-                    h,
-                    first_line: c.first_line,
-                    give: c.give,
-                    children: vec![c],
-                    cross: vec![],
-                }
-            }
             Kind::Grid(g) => {
                 // Its size is its cells'; each tile is measured at the width it spans.
                 let children = g
@@ -819,11 +765,15 @@ impl Layouter<'_> {
                 self.place(&p.child, &m.children[0], r, inner, out)
             }
             Kind::Group(g) => self.place(&g.child, &m.children[0], r, inner, out),
-            Kind::Control(c) if c.part.is_some() || c.face != Face::Plain => {
+            Kind::Control(c) => {
                 // A button's or a segment's label centred in it, inside its padding and border; what a
                 // dropdown or a menu row holds fills it across, inside theirs.
                 inner.control = Some(index);
                 let child = &m.children[0];
+                if self.control_frame(c).body == BodyPlacement::Fill {
+                    self.place(&c.child, child, r, inner, out);
+                    return;
+                }
                 let x = self.control_frame(c).inset.0;
                 let room = (r[2] - 2. * x).max(0.);
                 let w = if self.control_frame(c).body == BodyPlacement::NaturalCentered {
@@ -842,6 +792,10 @@ impl Layouter<'_> {
             Kind::Drawing(d) => {
                 let f = d.part.component().frame(self.look);
                 let child = &m.children[0];
+                if f.body == BodyPlacement::Fill {
+                    self.place(&d.child, child, r, inner, out);
+                    return;
+                }
                 let room = (r[2] - 2. * f.inset.0).max(0.);
                 let w = if f.body == BodyPlacement::NaturalCentered {
                     room.min(child.w)
@@ -855,10 +809,6 @@ impl Layouter<'_> {
                     child.h,
                 ];
                 self.place(&d.child, child, at, inner, out)
-            }
-            Kind::Control(c) => {
-                inner.control = Some(index);
-                self.place(&c.child, &m.children[0], r, inner, out)
             }
             Kind::Reveal(rv) => {
                 // The child at its full height, top-anchored, clipped to the reveal.

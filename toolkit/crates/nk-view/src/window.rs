@@ -9,8 +9,9 @@
 //! lead anywhere) each time its model changes, and acts on the activations it gives back. It
 //! calls `commit` at the end of each turn, after acting on them.
 //!
-//! A dropdown in the page is the window's to open (VIEW.md §13.9): its list is a popup over the
-//! window, and the app hears only the choice.
+//! A owner in the page is the window's to open (VIEW.md §13.9): its list is a popup over the
+//! window, and the app hears only the selection.
+use crate::components::{Host, HostRequest, ListSpec, Request as ComponentRequest};
 use crate::frame::{BACK, Band, FORWARD, FrameStyle, SIDEBAR, Sidebar};
 use crate::host::{Glyphs, Type, TypeScale, Weight};
 use crate::state::{Activated, Frame as ViewFrame, KeyInput, ScrollBy, ViewState};
@@ -33,21 +34,15 @@ const SIDE: &str = "frame/side";
 const ROOT: u64 = 1;
 /// Where the band's semantic ids start, clear of the view's.
 const BAND_ROOT: u64 = 1_000_000;
-/// Where a dropdown's list's region ids start (it declares none, but its view needs a base).
+/// Where a owner's list's region ids start (it declares none, but its view needs a base).
 const MENU_ROOT: u32 = 2_000_000;
 /// The list's scroll region and the key of its row `n`.
-const MENU_SCROLL: &str = "menu/scroll";
-fn menu_row(n: usize) -> Key {
-    Key(format!("menu/row/{n}"))
-}
-
-/// A dropdown's list, open in a popup over the window (VIEW.md §13.9).
+/// A owner's list, open in a popup over the window (VIEW.md §13.9).
 struct Menu {
     id: PopupId,
-    /// The dropdown it is the list of, its options and the one chosen when it opened.
+    /// The owner it is the list of, its options and the one chosen when it opened.
     owner: Key,
-    options: Vec<String>,
-    chosen: usize,
+    list: ListSpec,
     /// Its rows, laid out in the popup's own coordinates.
     view: ViewState,
     /// The size its rows were last laid out in.
@@ -60,7 +55,11 @@ struct Menu {
 
 /// What `commit` does about the list, which needs the window: open one, or close it.
 enum MenuRequest {
-    Open { owner: Key, keys: bool },
+    Open {
+        owner: Key,
+        list: Box<ListSpec>,
+        keys: bool,
+    },
     Close,
 }
 
@@ -187,26 +186,26 @@ pub struct AppWindow {
     keys: bool,
 }
 
-/// A dropdown's list: its rows, in a scroll region for a list taller than the window.
-fn menu_node(
-    options: &[String],
-    chosen: usize,
-    style: &crate::tokens::MenuStyle,
-    types: &crate::host::TypeScale,
-) -> Node {
-    let rows = options
-        .iter()
-        .enumerate()
-        .map(|(n, o)| Node::menu_row(menu_row(n), o.clone(), "choose", n == chosen, style, types))
-        .collect();
-    Node::scroll(MENU_SCROLL, Node::column("menu/rows", rows))
+fn row_of(list: &ListSpec, key: &Key) -> Option<usize> {
+    list.items.iter().position(|item| &item.key == key)
 }
-
-/// Which row of the list a key is.
-fn row_of(key: &Key) -> Option<usize> {
-    key.0.strip_prefix("menu/row/")?.parse().ok()
+impl Host for AppWindow {
+    fn request(&mut self, request: HostRequest) {
+        match request {
+            HostRequest::OpenList { owner, list } => {
+                self.menu_request = Some(if self.menu.as_ref().is_some_and(|m| m.owner == owner) {
+                    MenuRequest::Close
+                } else {
+                    MenuRequest::Open {
+                        owner,
+                        list: Box::new(list),
+                        keys: self.keys,
+                    }
+                });
+            }
+        }
+    }
 }
-
 impl AppWindow {
     /// `name` is the window's for readers.
     pub fn new(
@@ -270,6 +269,11 @@ impl AppWindow {
         self.state.set_reduced_motion(reduced);
         self.band.set_reduced_motion(reduced);
         self.lay(Instant::now());
+        if let Some(m) = &mut self.menu {
+            m.view.set_reduced_motion(reduced);
+            m.size = (0., 0.);
+            m.dirty = true;
+        }
     }
     /// The app's model changed: the page it shows now.
     pub fn show(&mut self, page: Page) {
@@ -347,12 +351,12 @@ impl AppWindow {
         );
         self.band_dirty = true;
         self.changed = true;
-        // A list whose dropdown is gone, or holds other options now, is closed.
+        // A list whose owner is gone, or holds other options now, is closed.
         if let Some(m) = &self.menu
             && self
                 .state
-                .choice(&m.owner)
-                .is_none_or(|(options, _)| options != m.options)
+                .list(&m.owner)
+                .is_none_or(|list| list.items != m.list.items)
         {
             self.menu_request = Some(MenuRequest::Close);
         }
@@ -366,22 +370,20 @@ impl AppWindow {
         self.lay(now);
     }
 
-    /// The frame's own actions are the window's; the rest go to the app. A choice in a
+    /// The frame's own actions are the window's; the rest go to the app. A selection in a
     /// sidebar open over the page closes it.
     fn route(&mut self, a: Activated, out: &mut Vec<Activated>) {
         if a.action == SIDEBAR {
             return self.toggle_sidebar(!self.sidebar.open());
         }
-        if self.state.choice(&a.key).is_some() {
-            // A dropdown: its list opens, or closes when it is the one open. The app hears
-            // only the choice.
-            self.menu_request = Some(match &self.menu {
-                Some(m) if m.owner == a.key => MenuRequest::Close,
-                _ => MenuRequest::Open {
-                    owner: a.key,
-                    keys: self.keys,
-                },
-            });
+        let requests = self.state.take_host_requests();
+        let hosted = requests.iter().any(|r| match r {
+            HostRequest::OpenList { owner, .. } => owner == &a.key,
+        });
+        for request in requests {
+            Host::request(self, request);
+        }
+        if hosted {
             return;
         }
         if self.sidebar.over_content() && self.state.lifts(&a.key) {
@@ -424,9 +426,9 @@ impl AppWindow {
             if let Some((owner, n)) = self.state.option(id) {
                 // An option: chosen when activated, closed or open; focused in the open list.
                 match (activate, &mut self.menu) {
-                    (true, _) => self.choose(&owner, n, &mut out),
+                    (true, _) => self.select(&owner, n, &mut out),
                     (false, Some(m)) if m.owner == owner => {
-                        m.view.request(&menu_row(n), false);
+                        m.view.request(&m.list.items[n].key, false);
                         m.dirty = true;
                     }
                     _ => {}
@@ -599,6 +601,7 @@ impl AppWindow {
                 out.push(Activated {
                     key: "band".into(),
                     action: action.into(),
+                    value: None,
                 });
                 true
             }
@@ -626,8 +629,13 @@ impl AppWindow {
     /// placed, the reader's tree published, the layers painted and the window redrawn as far
     /// as anything changed.
     pub fn commit(&mut self, window: &mut Window) -> Result<()> {
+        for request in self.state.take_host_requests() {
+            Host::request(self, request);
+        }
         match self.menu_request.take() {
-            Some(MenuRequest::Open { owner, keys }) => self.open_menu(owner, keys, window)?,
+            Some(MenuRequest::Open { owner, list, keys }) => {
+                self.open_menu(owner, *list, keys, window)?
+            }
             Some(MenuRequest::Close) => self.close_menu(window),
             None => {}
         }
@@ -797,22 +805,31 @@ impl AppWindow {
         Ok(())
     }
 
-    /// The dropdown `owner`'s list, opened below it in a popup as wide as it and as tall as
+    /// The owner `owner`'s list, opened below it in a popup as wide as it and as tall as
     /// its rows (never past the window), each option a row, the chosen one ticked and, opened
     /// from the keyboard, lit.
-    fn open_menu(&mut self, owner: Key, keys: bool, window: &mut Window) -> Result<()> {
+    fn open_menu(
+        &mut self,
+        owner: Key,
+        list: ListSpec,
+        keys: bool,
+        window: &mut Window,
+    ) -> Result<()> {
+        let Some(list) = self.state.resolve_list(&owner, &list) else {
+            return Ok(());
+        };
         if let Some(m) = self.menu.take() {
             window.close_menu_popup(m.id);
         }
-        let (Some((options, chosen)), Some(r)) =
-            (self.state.choice(&owner), self.state.rect(&owner))
-        else {
+        let Some(r) = self.state.rect(&owner) else {
             return Ok(());
         };
-        let menu = &self.look.tokens.dropdown.menu;
-        let edge = menu.edge();
+        if list.items.is_empty() {
+            return Ok(());
+        }
+        let edge = list.edge;
         let width = r[2].max(2. * edge + 1.);
-        let node = menu_node(&options, chosen, menu, &self.look.types);
+        let node = list.node.clone();
         let mut view = ViewState::new(MENU_ROOT);
         view.set_reduced_motion(self.reduced);
         // Laid out first as tall as the window, to learn how tall its rows are.
@@ -828,7 +845,7 @@ impl AppWindow {
             .placed()
             .iter()
             .find_map(|p| match p.what {
-                crate::layout::What::Scroll { content, .. } if p.key.0 == MENU_SCROLL => {
+                crate::layout::What::Scroll { content, .. } if p.key == list.scroll => {
                     Some(content)
                 }
                 _ => None,
@@ -850,7 +867,7 @@ impl AppWindow {
             parent: None,
             grab_serial: self.grab,
         })?;
-        let row = menu_row(chosen);
+        let row = list.items[list.selected].key.clone();
         view.request(&row, false);
         if !keys {
             view.hide_ring();
@@ -859,8 +876,7 @@ impl AppWindow {
         self.menu = Some(Menu {
             id,
             owner,
-            options,
-            chosen,
+            list,
             view,
             size: (0., 0.),
             material: None,
@@ -871,7 +887,7 @@ impl AppWindow {
         Ok(())
     }
 
-    /// Closes the list, the focus back on its dropdown, its ring shown when the list was
+    /// Closes the list, the focus back on its owner, its ring shown when the list was
     /// worked from the keyboard.
     fn close_menu(&mut self, window: &mut Window) {
         let Some(m) = self.menu.take() else {
@@ -886,10 +902,15 @@ impl AppWindow {
         self.changed = true;
     }
 
-    /// Option `n` of the dropdown `owner` was chosen: the app hears it when it is another
+    /// Option `n` of the owner `owner` was chosen: the app hears it when it is another
     /// option, and the list closes.
-    fn choose(&mut self, owner: &Key, n: usize, out: &mut Vec<Activated>) {
-        if let Some(a) = self.state.choose(owner, n) {
+    fn select(&mut self, owner: &Key, n: usize, out: &mut Vec<Activated>) {
+        if let Some(value) = self
+            .state
+            .list(owner)
+            .and_then(|list| list.items.get(n).map(|item| item.value.clone()))
+            && let Some(a) = self.state.respond(owner, ComponentRequest::Set(value))
+        {
             out.push(a);
         }
         if self.menu.as_ref().is_some_and(|m| &m.owner == owner) {
@@ -918,9 +939,9 @@ impl AppWindow {
                 self.keys = false;
                 let a = m.view.button(pressed, Instant::now());
                 m.dirty = true;
-                if let Some(n) = a.and_then(|a| row_of(&a.key)) {
+                if let Some(n) = a.and_then(|a| row_of(&m.list, &a.key)) {
                     let owner = m.owner.clone();
-                    self.choose(&owner, n, out);
+                    self.select(&owner, n, out);
                 }
             }
             PopupEvent::Input(LayerEvent::Scroll(amount)) => {
@@ -936,12 +957,12 @@ impl AppWindow {
         let Some(m) = &mut self.menu else {
             return;
         };
-        let n = m.options.len();
+        let n = m.list.items.len();
         let at = m
             .view
             .focus()
-            .and_then(row_of)
-            .unwrap_or(m.chosen)
+            .and_then(|key| row_of(&m.list, key))
+            .unwrap_or(m.list.selected)
             .min(n.saturating_sub(1));
         let to = match sym {
             0xff52 => Some((at + n - 1) % n),
@@ -953,7 +974,7 @@ impl AppWindow {
         if let Some(to) = to {
             // The keyboard takes over from the pointer: only its row is lit.
             m.view.pointer_leave();
-            m.view.request(&menu_row(to), false);
+            m.view.request(&m.list.items[to].key, false);
             m.dirty = true;
             self.changed = true;
             return;
@@ -961,7 +982,7 @@ impl AppWindow {
         match sym {
             0xff0d | 0xff8d | 0x20 => {
                 let owner = m.owner.clone();
-                self.choose(&owner, at, out);
+                self.select(&owner, at, out);
             }
             0xff1b => self.menu_request = Some(MenuRequest::Close),
             0xff09 | 0xfe20 => {
@@ -989,11 +1010,11 @@ impl AppWindow {
             return Ok(());
         };
         let size = (f64::from(w.max(1)), f64::from(h.max(1)));
-        let style = &self.look.tokens.dropdown.menu;
+        let style = self.state.list(&m.owner).unwrap_or_else(|| m.list.clone());
         if size != m.size {
             m.size = size;
-            let node = menu_node(&m.options, m.chosen, style, &self.look.types);
-            let edge = style.edge();
+            let node = m.list.node.clone();
+            let edge = style.edge;
             m.view.layout_in(
                 &node,
                 [
@@ -1063,7 +1084,7 @@ impl AppWindow {
     }
 
     /// The open list's options where a reader finds them: at their rows in the popup, in
-    /// window coordinates, the row the keyboard is on focused in place of the dropdown.
+    /// window coordinates, the row the keyboard is on focused in place of the owner.
     fn place_options(&self, tree: &mut nk_a11y::Tree, window: &Window) {
         let Some(m) = &self.menu else {
             return;
@@ -1071,12 +1092,14 @@ impl AppWindow {
         let Some((ox, oy)) = window.menu_popup_origin(m.id) else {
             return;
         };
-        let focus = m.view.focus().and_then(row_of);
-        let viewport = m.view.rect(&MENU_SCROLL.into());
-        for n in 0..m.options.len() {
-            let (Some(id), Some(r)) =
-                (self.state.option_id(&m.owner, n), m.view.rect(&menu_row(n)))
-            else {
+        let focus = m.view.focus().and_then(|key| row_of(&m.list, key));
+        let viewport = m.view.rect(&m.list.scroll);
+        for n in 0..m.list.items.len() {
+            let (Some(id), Some(r)) = (
+                self.state
+                    .semantic_value_id(&m.owner, &m.list.items[n].value),
+                m.view.rect(&m.list.items[n].key),
+            ) else {
                 continue;
             };
             let Some(o) = tree.nodes.get_mut(&id) else {
