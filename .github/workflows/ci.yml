@@ -56,14 +56,11 @@
 #     them: typing, focus, a11y, layers, the toolkit), and `full`: their controls and
 #     scale 1.25 only when the checks or their faults change. The nightly run has all.
 #     Logic and its self-test in scripts/ci/ci-scope.sh.
-#   - smoke: the REAL thing — load the kernel's vkms (virtual KMS) on the
-#     runner, then in a privileged Arch container install ONLY official Arch
-#     packages, bundle the shell with scripts/bundle.sh (esbuild), boot Hyprland
-#     on the virtual display (llvmpipe software GL), boot
-#     the bundle on it, and require: process stays alive, IPC answers
-#     (listActions/dumpState), no JS errors in the boot log. Screenshots are
-#     uploaded as artifacts for HUMAN review — deliberately not a pixel diff.
-#     All logic lives in scripts/ci/headless-smoke.sh.
+#   - smoke: in an Arch container with ONLY official Arch packages, compile the
+#     gsettings schemas, build the in-repo C libraries (and check the signals the
+#     lockscreen connects to), and bundle the shell with scripts/bundle.sh. It no
+#     longer boots Hyprland or the TS shell (owner, 2026-11-16); the boot that
+#     counts is the hyalo job's. All logic lives in scripts/ci/headless-smoke.sh.
 #   - hyalo: Hyalo, the compositor of our own (#681) — cargo build --locked, clippy -D
 #     warnings, unit tests, then a boot on vkms through its tty backend with the real
 #     shell on it; screenshots via Hyalo's IPC. Not required while Hyalo is a preview.
@@ -559,35 +556,17 @@ jobs:
     timeout-minutes: 45
     steps:
       - uses: actions/checkout@v4
-      # Hyprland cannot boot with zero DRM devices (aquamarine's allocator
-      # needs a node — see the header of headless-smoke.sh), so give the
-      # runner a VIRTUAL one: the kernel's vkms module. The Arch container
-      # then gets /dev/dri via --privileged.
-      - name: Load vkms (virtual KMS device)
-        run: scripts/ci/load-vkms.sh
-      # No dependency cache any more (2026-08-18): the smoke used to build the
-      # pinned Astal/AGS stack from source and cache the result as a tarball.
-      # Nothing is built from source here now — every package comes from Arch's
-      # own repos — so the cache, its month stamp and its two-file hash key are
-      # gone with it. (That key was itself a trap worth remembering: it hashed
-      # BOTH install.sh and headless-smoke.sh because the pins live in one and
-      # the library list in the other, and keying on just one would have restored
-      # a tarball proving a removal that never happened.)
-      - name: Bundle + headless boot (Arch container on vkms)
+      # No Hyprland and no shell boot since 2026-11-16 (owner's decision): the job builds
+      # the C libraries, checks the lockscreen's signals and bundles. It keeps its name
+      # because it is a required check. See the header of headless-smoke.sh.
+      - name: Libraries + bundle (Arch container)
         run: |
-          docker run --rm --privileged \
+          docker run --rm \
             -v "$PWD:/repo" \
             archlinux:latest bash /repo/scripts/ci/headless-smoke.sh
-      - name: Upload screenshots + logs
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: smoke-artifacts
-          path: smoke-out/
-          if-no-files-found: ignore
 
   # Hyalo, the compositor of our own (hyalo/, #681): build with the committed lock file,
-  # clippy with warnings as errors, unit tests, and a boot on the SAME vkms the smoke uses —
+  # clippy with warnings as errors, unit tests, and a boot on vkms —
   # through the tty backend a real session takes (libseat, udev, DRM/KMS), with the real
   # shell on it. Screenshots come from Hyalo's own IPC; grim, the clipboard and wf-recorder are
   # tested by scripts/ci/hyalo-screen-capture-check.sh inside the smoke.

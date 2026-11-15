@@ -20,9 +20,9 @@ decision): a change need not keep the shell booting there, and the next release 
 only) is a CLEAN INSTALL — no upgrade path from the TS release is built; the new installer only
 has to recognise an old install and say so, and old personal config it does not understand is
 ignored, never fatal. What still holds Hyprland in the package is the LOGIN, which starts on it
-(`config/greetd/hyprland-greeter.lua`) until Hyalo has its login mode. CI's "Headless boot
-smoke" still boots the TS shell on Hyprland: if a change breaks it, say so and ask the owner —
-do not bend the change to keep it green, and do not edit the job on your own. Work follows #680's WAVES (safe and usable daily →
+(`config/greetd/hyprland-greeter.lua`) until Hyalo has its login mode. CI no longer boots
+anything on Hyprland: the "Headless boot smoke" job builds the C libraries and bundles, and
+keeps its name only because it is a required check (`dev-workflow.md`). Work follows #680's WAVES (safe and usable daily →
 what the switch lost → the system → the switch), and Hyalo is built for this desktop alone: where
 the desktop was shaped around a Hyprland limit, #708 decides the structural change. Anything that
 talks to the compositor still goes through `CompositorState`. Released packages run Hyprland until
