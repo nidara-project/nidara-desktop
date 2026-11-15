@@ -2,6 +2,9 @@
 //! The interaction state the toolkit derives (VIEW.md §4): hover, press and focus, kept by key
 //! across rebuilds; the panes and state regions a frame declares to Hyalo, within its budget;
 //! the semantics; and the content paint (texts, icons, the focus ring, and the D5 washes).
+use crate::components::{
+    ComponentLook, Input, Interaction, Membership, Outcome, Paint, PaintPhase, StateStore,
+};
 use crate::layout::{Faces, Layouter, Placed, Rect, TextCache, What};
 use crate::motion::{MotionState, SWIPE_CLAIM};
 use crate::tokens::Tokens;
@@ -138,6 +141,8 @@ pub struct ViewState {
     drag: Option<Drag>,
     /// The tokens of the last layout, for input between frames.
     tokens: Option<Tokens>,
+    types: Option<crate::TypeScale>,
+    components: StateStore,
     /// Each scroll region's offset by key, as last clamped, or as input asked since.
     offsets: HashMap<Key, f64>,
     /// An offset changed since the last layout; the next `tick` lays the view out.
@@ -202,6 +207,8 @@ impl ViewState {
             now: Instant::now(),
             drag: None,
             tokens: None,
+            types: None,
+            components: StateStore::default(),
             offsets: HashMap::new(),
             pending: false,
             bars: HashMap::new(),
@@ -332,11 +339,11 @@ impl ViewState {
         view: &Node,
         size: (f64, f64),
         scale: f64,
-        tokens: &Tokens,
+        look: ComponentLook<'_>,
         text: &mut dyn nk_text::TextBackend,
         now: Instant,
     ) {
-        self.layout_in(view, [0., 0., size.0, size.1], scale, tokens, text, now);
+        self.layout_in(view, [0., 0., size.0, size.1], scale, look, text, now);
         self.whole = true;
     }
 
@@ -347,10 +354,11 @@ impl ViewState {
         view: &Node,
         bounds: Rect,
         scale: f64,
-        tokens: &Tokens,
+        look: ComponentLook<'_>,
         text: &mut dyn nk_text::TextBackend,
         now: Instant,
     ) {
+        let tokens = look.tokens;
         self.whole = false;
         let before: HashMap<Key, Rect> = self
             .laid
@@ -358,10 +366,12 @@ impl ViewState {
             .filter(|p| matches!(p.what, What::Pane(_)))
             .map(|p| (p.key.clone(), p.rect))
             .collect();
-        self.motion.view(view, now, &tokens.motion);
+        let expanded = self.components.expand(view, look);
+        self.motion.view(&expanded, now, &tokens.motion);
         self.set = None;
         self.tokens = Some(tokens.clone());
-        self.view = Some(view.clone());
+        self.types = Some(look.types.clone());
+        self.view = Some(expanded);
         self.bounds = bounds;
         self.scale = scale;
         let before = self.slides.then_some(&before);
@@ -392,10 +402,11 @@ impl ViewState {
     /// its model, and the panes below slide up.
     pub fn tick(
         &mut self,
-        tokens: &Tokens,
+        look: ComponentLook<'_>,
         text: &mut dyn nk_text::TextBackend,
         now: Instant,
     ) -> Ticked {
+        let tokens = look.tokens;
         if !self.animating() {
             return Ticked::default();
         }
@@ -460,8 +471,7 @@ impl ViewState {
             cache: &mut self.text,
             scale: self.scale,
             slider: 2. * tokens.slider.thumb_radius,
-            switch: (tokens.switch.width, tokens.switch.height),
-            check: tokens.check.size,
+            look: tokens.with_types(self.types.as_ref().expect("layout supplies types")),
             row: tokens.row_height,
             faces: Faces::of(tokens),
         }
@@ -488,8 +498,7 @@ impl ViewState {
                 cache: &mut self.text,
                 scale: self.scale,
                 slider: 2. * tokens.slider.thumb_radius,
-                switch: (tokens.switch.width, tokens.switch.height),
-                check: tokens.check.size,
+                look: tokens.with_types(self.types.as_ref().expect("layout supplies types")),
                 row: tokens.row_height,
                 faces: Faces::of(tokens),
             }
@@ -692,16 +701,68 @@ impl ViewState {
     /// what of it shows.
     /// Whether control `i` holds a switch or a checkbox's or radio's mark, which shows its
     /// state itself.
+    fn interaction(&self, i: usize) -> Interaction {
+        let Some(owner) = self.placed[i].control else {
+            return Interaction {
+                enabled: true,
+                ..Interaction::default()
+            };
+        };
+        let c = self.control(owner);
+        let key = Some(&self.placed[owner].key);
+        Interaction {
+            hover: self.hover.as_ref() == key || c.shown == Some(Shown::Hover),
+            pressed: (self.press.as_ref() == key && self.hover.as_ref() == key)
+                || c.shown == Some(Shown::Press),
+            focus_ring: (self.focus_visible && self.focus.as_ref() == key)
+                || c.shown == Some(Shown::Focus),
+            enabled: self.enabled(owner),
+            marked: c.marked,
+        }
+    }
+    fn component_input(
+        &mut self,
+        i: usize,
+        event: impl FnOnce(&dyn crate::components::Component, &mut Input<'_>),
+    ) -> Option<Outcome> {
+        if !self.enabled(i) {
+            return None;
+        }
+        let part = self.placed[i].part()?.clone();
+        let key = self.placed[i].key.clone();
+        let mut effects = Outcome::default();
+        self.components
+            .input(&key, &mut effects, |cx| event(part.component(), cx));
+        self.pending |= effects.redraw;
+        Some(effects)
+    }
+    fn membership(&self, i: usize) -> Membership {
+        let c = self.control(i);
+        c.part
+            .as_ref()
+            .map(|p| p.component().group(self.interaction(i)))
+            .unwrap_or_else(|| {
+                if c.role == Role::Radio {
+                    Membership::Adjacent { selected: c.marked }
+                } else {
+                    Membership::None
+                }
+            })
+    }
     fn holds_mark(&self, i: usize) -> bool {
         self.placed.iter().any(|p| {
-            p.control == Some(i) && matches!(p.what, What::Switch { .. } | What::Check { .. })
+            p.control == Some(i)
+                && p.part()
+                    .is_some_and(|part| part.component().glass().owns_mark)
         })
     }
     fn silhouette(&self, i: usize) -> Option<Rect> {
         let visible = self.placed[i].visible()?;
         match self.thumb(i) {
             Some(t) => crate::layout::intersect(t, visible),
-            None => Some(visible),
+            None => self.placed[i].part().map_or(Some(visible), |p| {
+                crate::layout::intersect(p.component().silhouette(visible), visible)
+            }),
         }
     }
     /// A change of a slider to `value`: None when it is the value it has.
@@ -854,6 +915,9 @@ impl ViewState {
             }
             self.rehover();
             return true;
+        }
+        if let Some(i) = self.press.as_ref().and_then(|k| self.index(k)) {
+            self.component_input(i, |c, cx| c.drag(cx, (x, y)));
         }
         let mut swiped = false;
         if let Some(d) = &mut self.drag {
@@ -1039,6 +1103,14 @@ impl ViewState {
                 action: self.control(i).action.clone(),
             });
         }
+        if pressed && let Some(i) = self.hover.as_ref().and_then(|k| self.index(k)) {
+            let at = self.pointer.unwrap_or_default();
+            if let Some(effects) = self.component_input(i, |c, cx| c.press(cx, at))
+                && !effects.arm
+            {
+                return None;
+            }
+        }
         if pressed {
             if self.editing().is_some() {
                 // A press anywhere else ends the typing.
@@ -1069,6 +1141,14 @@ impl ViewState {
         self.drag = None;
         let pressed = self.press.take()?;
         let i = self.pointer.and_then(|pt| self.hit(pt))?;
+        if self.placed[i].key == pressed {
+            let at = self.pointer.unwrap_or_default();
+            if let Some(effects) = self.component_input(i, |c, cx| c.release(cx, at))
+                && !effects.activate
+            {
+                return None;
+            }
+        }
         (self.placed[i].key == pressed).then(|| Activated {
             key: pressed,
             action: self.control(i).action.clone(),
@@ -1079,6 +1159,15 @@ impl ViewState {
     /// not, a radio group being one stop; Enter or Space activates the focused one; on a radio
     /// the arrows choose the group's next or previous one.
     pub fn key(&mut self, k: KeyInput) -> Option<Activated> {
+        if let Some(i) = self.focus.as_ref().and_then(|k| self.index(k))
+            && let Some(effects) = self.component_input(i, |c, cx| c.key(cx, k))
+            && effects.handled
+        {
+            return effects.activate.then(|| Activated {
+                key: self.placed[i].key.clone(),
+                action: self.control(i).action.clone(),
+            });
+        }
         if let Some(i) = self.focus.as_ref().and_then(|f| self.index(f))
             && let Some(s) = self.control(i).slider.clone()
             && let Some(page) = self.tokens.as_ref().map(|t| t.slider.page_steps)
@@ -1138,17 +1227,11 @@ impl ViewState {
             .and_then(|f| order.iter().position(|&i| &self.placed[i].key == f));
         // A radio group: plain radios join their neighbours in `order`; each segmented
         // choice or swatch row is a group of its own.
-        let radio = |j: usize| self.control(order[j]).role == Role::Radio;
-        let joined = |j: usize| {
-            // Whether radio `j` and radio `j + 1` are one group.
-            let seg = |k: usize| self.control(order[k]).choice_part;
-            match (seg(j), seg(j + 1)) {
-                (None, None) => true,
-                (Some(a), Some(b)) => {
-                    a.index + 1 < a.count && b.index == a.index + 1 && b.count == a.count
-                }
-                _ => false,
-            }
+        let radio = |j: usize| !matches!(self.membership(order[j]), Membership::None);
+        let joined = |j: usize| match (self.membership(order[j]), self.membership(order[j + 1])) {
+            (Membership::Adjacent { .. }, Membership::Adjacent { .. }) => true,
+            (Membership::Named { key: a, .. }, Membership::Named { key: b, .. }) => a == b,
+            _ => false,
         };
         let run = |j: usize| {
             let (mut a, mut b) = (j, j);
@@ -1188,7 +1271,13 @@ impl ViewState {
                             return true;
                         }
                         let g = run(j);
-                        match g.clone().find(|&r| self.control(order[r]).marked) {
+                        match g.clone().find(|&r| {
+                            matches!(
+                                self.membership(order[r]),
+                                Membership::Adjacent { selected: true }
+                                    | Membership::Named { selected: true, .. }
+                            )
+                        }) {
                             Some(chosen) => chosen == j,
                             None => *g.start() == j,
                         }
@@ -1627,6 +1716,9 @@ impl ViewState {
                         };
                         n.actions = vec![Action::Focus, Action::Activate, Action::SetText];
                     }
+                    if let Some(part) = &c.part {
+                        part.component().semantics(self.interaction(i), &mut n);
+                    }
                     n
                 }
                 What::Text { full, .. } if p.control.is_none() => {
@@ -1743,6 +1835,14 @@ impl ViewState {
         let i = self
             .index(key)
             .filter(|&i| matches!(self.placed[i].what, What::Control(_)) && self.enabled(i))?;
+        if let Some(effects) = self.component_input(i, |c, cx| c.request(cx, activate))
+            && effects.handled
+        {
+            return effects.activate.then(|| Activated {
+                key: key.clone(),
+                action: self.control(i).action.clone(),
+            });
+        }
         if activate {
             return Some(Activated {
                 key: key.clone(),
@@ -1761,30 +1861,31 @@ impl ViewState {
     pub fn paint(
         &self,
         canvas: &mut Canvas,
-        tokens: &Tokens,
+        look: ComponentLook<'_>,
         icons: &mut dyn FnMut(&str, f64) -> Option<std::sync::Arc<nk_icons::Icon>>,
         fallback: Option<&Frame>,
     ) -> Result<(), String> {
-        self.paint_part(canvas, tokens, icons, fallback, false)
+        self.paint_part(canvas, look, icons, fallback, false)
     }
     /// What `paint` leaves out: the lifted pane and what it holds, in window coordinates, for
     /// a canvas whose origin is the layer's (`Canvas::at` with `lifted_rect`).
     pub fn paint_lifted(
         &self,
         canvas: &mut Canvas,
-        tokens: &Tokens,
+        look: ComponentLook<'_>,
         icons: &mut dyn FnMut(&str, f64) -> Option<std::sync::Arc<nk_icons::Icon>>,
     ) -> Result<(), String> {
-        self.paint_part(canvas, tokens, icons, None, true)
+        self.paint_part(canvas, look, icons, None, true)
     }
     fn paint_part(
         &self,
         canvas: &mut Canvas,
-        tokens: &Tokens,
+        look: ComponentLook<'_>,
         icons: &mut dyn FnMut(&str, f64) -> Option<std::sync::Arc<nk_icons::Icon>>,
         fallback: Option<&Frame>,
         lifted: bool,
     ) -> Result<(), String> {
+        let tokens = look.tokens;
         let root = self.lifted_root();
         let part = |i: usize| match root {
             Some(r) => self.under(i, r) == lifted,
@@ -1805,6 +1906,20 @@ impl ViewState {
                 );
             }
         }
+        let interactions: Vec<Option<Interaction>> = self
+            .placed
+            .iter()
+            .enumerate()
+            .map(|(i, p)| matches!(p.what, What::Control(_)).then(|| self.interaction(i)))
+            .collect();
+        let interaction = |p: &Placed| {
+            p.control
+                .and_then(|o| interactions[o])
+                .unwrap_or(Interaction {
+                    enabled: true,
+                    ..Interaction::default()
+                })
+        };
         for (i, p) in self.placed.iter().enumerate() {
             if !part(i) || p.control.is_some_and(|c| !self.shown(c)) || !self.shown(i) {
                 continue;
@@ -1836,6 +1951,27 @@ impl ViewState {
                     _ => ink(c),
                 }
             };
+            if let Some(component) = p.part() {
+                let corner = match &p.what {
+                    What::Control(c) => c.corner,
+                    _ => crate::Corner::Fixed(0),
+                };
+                component.component().paint(
+                    &mut Paint {
+                        canvas,
+                        look,
+                        rect: p.rect,
+                        visible,
+                        alpha: p.alpha,
+                        interaction: interaction(p),
+                        progress: p.progress,
+                        corner,
+                        state: self.components.get(&p.key),
+                    },
+                    PaintPhase::Under,
+                );
+                continue;
+            }
             match &p.what {
                 What::Group => {
                     // Not glass: the view paints the card itself, under what it holds.
@@ -1851,7 +1987,7 @@ impl ViewState {
                     if let Some(f) = self.text.get(&p.key) {
                         canvas.clip(rect(&visible));
                         let base = self
-                            .face_ink(i, tokens, false)
+                            .face_ink(i, look, interaction(p), false)
                             .unwrap_or_else(|| tokens.look.ink(*tier));
                         let r = canvas.layout(
                             &f.layout,
@@ -1866,120 +2002,12 @@ impl ViewState {
                     if let Some(glyph) = icons(&icon.name, icon.size) {
                         canvas.clip(rect(&visible));
                         let c = self
-                            .face_ink(i, tokens, true)
+                            .face_ink(i, look, interaction(p), true)
                             .unwrap_or_else(|| tokens.look.ink(icon.ink));
                         let c = c.with_alpha(c.components[3] * icon.alpha as f32);
                         canvas.icon(&glyph, rect(&p.rect), content(c));
                         canvas.pop_clip();
                     }
-                }
-                What::Switch { progress, .. } => {
-                    // VIEW.md §12.6: the native switch's track, border and thumb, blended from
-                    // off to on as the thumb slides; faded while its row is disabled.
-                    let s = &tokens.switch;
-                    let t = progress.clamp(0., 1.) as f32;
-                    let enabled = p.control.is_none_or(|o| self.enabled(o));
-                    let fade = |c: nk_render::Color| {
-                        let a = if enabled {
-                            1.
-                        } else {
-                            s.disabled_opacity as f32
-                        };
-                        ink(c.with_alpha(c.components[3] * a))
-                    };
-                    // At its own size, centred in what a stretching stack gave it.
-                    let (w, h) = (s.width.min(p.rect[2]), s.height.min(p.rect[3]));
-                    let r = [
-                        p.rect[0] + (p.rect[2] - w) / 2.,
-                        p.rect[1] + (p.rect[3] - h) / 2.,
-                        w,
-                        h,
-                    ];
-                    let radius = r[3] / 2.;
-                    canvas.clip(rect(&visible));
-                    canvas.rounded_rect(rect(&r), radius, fade(mix(s.track, s.checked, t)));
-                    if s.border > 0. {
-                        let edge = mix(s.border_color, s.checked_border_color, t);
-                        canvas.rounded_ring(rect(&r), radius, s.border, fade(edge));
-                    }
-                    let d = r[3] - 2. * s.thumb_margin;
-                    let travel = r[2] - 2. * s.thumb_margin - d;
-                    let x = r[0] + s.thumb_margin + travel * t as f64;
-                    let thumb = [x, r[1] + s.thumb_margin, d, d];
-                    canvas.rounded_rect(rect(&thumb), d / 2., fade(s.thumb));
-                    canvas.pop_clip();
-                }
-                What::Check {
-                    radio, progress, ..
-                } => {
-                    // VIEW.md §13.5: a CheckButton's mark, off glass, every state the view's:
-                    // the surface and its border, lifted under the pointer and darker pressed;
-                    // checked, the accent, with a tick or the radio's band around its dot.
-                    let s = &tokens.check;
-                    let t = progress.clamp(0., 1.) as f32;
-                    let (enabled, hover, press) = match p.control {
-                        Some(o) => {
-                            let key = Some(&self.placed[o].key);
-                            let shown = self.control(o).shown;
-                            let hover = self.hover.as_ref() == key || shown == Some(Shown::Hover);
-                            let press = (self.press.as_ref() == key && self.hover.as_ref() == key)
-                                || shown == Some(Shown::Press);
-                            (
-                                self.enabled(o),
-                                hover && self.enabled(o),
-                                press && self.enabled(o),
-                            )
-                        }
-                        None => (true, false, false),
-                    };
-                    let fade = |c: nk_render::Color| {
-                        let a = if enabled {
-                            1.
-                        } else {
-                            s.disabled_opacity as f32
-                        };
-                        ink(c.with_alpha(c.components[3] * a))
-                    };
-                    let side = s.size.min(p.rect[2]).min(p.rect[3]);
-                    let r = [
-                        p.rect[0] + (p.rect[2] - side) / 2.,
-                        p.rect[1] + (p.rect[3] - side) / 2.,
-                        side,
-                        side,
-                    ];
-                    let radius = if *radio { side / 2. } else { s.radius };
-                    let (fill, edge) = if press {
-                        (s.pressed, s.hover_border)
-                    } else if hover {
-                        (s.hover, s.hover_border)
-                    } else {
-                        (s.background, s.border_color)
-                    };
-                    canvas.clip(rect(&visible));
-                    canvas.rounded_rect(rect(&r), radius, fade(mix(fill, s.checked, t)));
-                    canvas.rounded_ring(rect(&r), radius, s.border, fade(mix(edge, s.checked, t)));
-                    if t > 0. {
-                        let on = |c: nk_render::Color| fade(c.with_alpha(c.components[3] * t));
-                        if *radio {
-                            // The band inside the border, the accent left as the dot.
-                            let b = s.border;
-                            let inner = [r[0] + b, r[1] + b, side - 2. * b, side - 2. * b];
-                            canvas.rounded_ring(
-                                rect(&inner),
-                                inner[2] / 2.,
-                                s.dot_band,
-                                on(s.dot_band_color),
-                            );
-                        } else {
-                            let at = |x: f64, y: f64| (r[0] + x * side, r[1] + y * side);
-                            canvas.polyline(
-                                &[at(0.27, 0.52), at(0.44, 0.68), at(0.74, 0.34)],
-                                s.tick_width,
-                                on(s.tick),
-                            );
-                        }
-                    }
-                    canvas.pop_clip();
                 }
                 What::Control(c) if c.face == crate::view::Face::Dropdown => {
                     // A dropdown's trigger (VIEW.md §13.9): its tone inside its border, which is
@@ -2058,147 +2086,6 @@ impl ViewState {
                             ink(tick),
                         );
                         canvas.pop_clip();
-                    }
-                }
-                What::Control(c) if matches!(c.face, crate::view::Face::Swatch(_)) => {
-                    let crate::view::Face::Swatch(color) = c.face else {
-                        unreachable!()
-                    };
-                    let s = &tokens.swatch;
-                    let alpha = if c.enabled {
-                        1.
-                    } else {
-                        s.disabled_opacity as f32
-                    };
-                    let fade = |color: nk_render::Color| {
-                        ink(color.with_alpha(color.components[3] * alpha))
-                    };
-                    canvas.clip(rect(&visible));
-                    let d = s.diameter;
-                    let b = s.border;
-                    let circle = [
-                        p.rect[0] + (p.rect[2] - d) / 2.,
-                        p.rect[1] + (p.rect[3] - d) / 2.,
-                        d,
-                        d,
-                    ];
-                    let inside = [circle[0] + b, circle[1] + b, d - 2. * b, d - 2. * b];
-                    canvas.rounded_rect(
-                        rect(&inside),
-                        (d - 2. * b) / 2.,
-                        fade(nk_render::Color::new(color)),
-                    );
-                    if c.marked {
-                        let r = s.ring;
-                        let outside = [circle[0] - r, circle[1] - r, d + 2. * r, d + 2. * r];
-                        canvas.rounded_ring(
-                            rect(&outside),
-                            (d + 2. * r) / 2.,
-                            b + r,
-                            fade(s.selected),
-                        );
-                    } else if c.enabled
-                        && (self.hover.as_ref() == Some(&p.key)
-                            || matches!(c.shown, Some(Shown::Hover | Shown::Press)))
-                    {
-                        canvas.rounded_ring(rect(&circle), d / 2., b, fade(s.hover));
-                    }
-                    canvas.pop_clip();
-                }
-                What::Control(c) if c.face == crate::view::Face::Segment => {
-                    // A segment (VIEW.md §13.10): its tone inside the group's outline, cut to
-                    // it, so only the group's two ends are rounded. The chosen one is the accent
-                    // to its edges; another draws the outline's border and the line before it.
-                    // Its ring is drawn after every segment (below), so a neighbour never covers it.
-                    let s = &tokens.segmented;
-                    let key = Some(&p.key);
-                    let pressed = c.enabled
-                        && ((self.press.as_ref() == key && self.hover.as_ref() == key)
-                            || c.shown == Some(Shown::Press));
-                    let hovered =
-                        c.enabled && (self.hover.as_ref() == key || c.shown == Some(Shown::Hover));
-                    let white = nk_render::Color::new([1., 1., 1., 1.]);
-                    let black = nk_render::Color::new([0., 0., 0., 1.]);
-                    let fill = match (c.marked, pressed, hovered) {
-                        (true, true, _) => mix(s.selected, black, s.selected_pressed_black as f32),
-                        (true, false, true) => {
-                            mix(s.selected, white, s.selected_hover_white as f32)
-                        }
-                        (true, ..) => s.selected,
-                        (false, true, _) => s.pressed,
-                        (false, false, true) => s.hover,
-                        (false, ..) => s.background,
-                    };
-                    let a = if c.enabled {
-                        1.
-                    } else {
-                        s.disabled_opacity as f32
-                    };
-                    let faded =
-                        |colour: nk_render::Color| ink(colour.with_alpha(colour.components[3] * a));
-                    let (index, count) = c.choice_part.map_or((0, 1), |g| (g.index, g.count));
-                    let (r, round) = (p.rect, s.radius);
-                    // A join's corner lies a corner's width past the segment's clip, and
-                    // another, since the canvas's corner curves on beyond its radius.
-                    let before = if index > 0 { 2. * round } else { 0. };
-                    let after = if index + 1 < count { 2. * round } else { 0. };
-                    let outline = [r[0] - before, r[1], r[2] + before + after, r[3]];
-                    canvas.clip(rect(&visible));
-                    canvas.clip(rect(&r));
-                    canvas.rounded_rect(rect(&outline), round, faded(fill));
-                    if !c.marked && s.border > 0. {
-                        canvas.rounded_ring(rect(&outline), round, s.border, faded(s.border_color));
-                        if index > 0 {
-                            canvas.rounded_rect(
-                                rect(&[r[0], r[1], s.border, r[3]]),
-                                0.,
-                                faded(s.border_color),
-                            );
-                        }
-                    }
-                    canvas.pop_clip();
-                    canvas.pop_clip();
-                }
-                What::Control(c) if c.face == crate::view::Face::Button => {
-                    // A content button (VIEW.md §13.2): the surface, its border, and the
-                    // surface's own hover and pressed tones; no glass, nothing for Hyalo.
-                    let b = &tokens.button;
-                    let key = Some(&p.key);
-                    let fill = if (self.press.as_ref() == key && self.hover.as_ref() == key)
-                        || c.shown == Some(Shown::Press)
-                    {
-                        b.pressed
-                    } else if self.hover.as_ref() == key || c.shown == Some(Shown::Hover) {
-                        b.hover
-                    } else {
-                        b.background
-                    };
-                    let faded = |colour: nk_render::Color| {
-                        let a = if c.enabled {
-                            1.
-                        } else {
-                            b.disabled_opacity as f32
-                        };
-                        ink(colour.with_alpha(colour.components[3] * a))
-                    };
-                    let r = p.rect;
-                    let radius = c.corner.of(r[2], r[3], &tokens.radii);
-                    canvas.clip(rect(&visible));
-                    // Each tone replaces the rest one, as the stylesheet's do.
-                    canvas.rounded_rect(rect(&r), radius, faded(fill));
-                    if b.border > 0. {
-                        canvas.rounded_ring(rect(&r), radius, b.border, faded(b.border_color));
-                    }
-                    canvas.pop_clip();
-                    if (self.focus_visible && self.focus.as_ref() == key)
-                        || c.shown == Some(Shown::Focus)
-                    {
-                        canvas.rounded_ring(
-                            rect(&r),
-                            radius,
-                            tokens.look.focus_width,
-                            ink(tokens.look.focus),
-                        );
                     }
                 }
                 What::Control(c) => {
@@ -2281,33 +2168,29 @@ impl ViewState {
             }
         }
         for (i, p) in self.placed.iter().enumerate() {
-            // A choice's focus ring clears its selected band, above its neighbours.
-            if let What::Control(c) = &p.what
-                && matches!(
-                    c.face,
-                    crate::view::Face::Segment | crate::view::Face::Swatch(_)
-                )
-                && c.enabled
-                && part(i)
-                && self.shown(i)
-                && p.visible().is_some()
-                && ((self.focus_visible && self.focus.as_ref() == Some(&p.key))
-                    || c.shown == Some(Shown::Focus))
+            if !part(i) || !self.shown(i) || p.control.is_some_and(|c| !self.shown(c)) {
+                continue;
+            }
+            if let (Some(component), Some(visible)) =
+                (p.part(), p.visible().filter(|_| p.alpha > 0.))
             {
-                let w = tokens.look.focus_width;
-                let (radius, color) = if matches!(c.face, crate::view::Face::Swatch(_)) {
-                    (p.rect[2] / 2., tokens.swatch.focus)
-                } else {
-                    (tokens.segmented.radius, tokens.segmented.focus)
+                let corner = match &p.what {
+                    What::Control(c) => c.corner,
+                    _ => crate::Corner::Fixed(0),
                 };
-                let out = 2. * w;
-                let r = p.rect;
-                let r = [r[0] - out, r[1] - out, r[2] + 2. * out, r[3] + 2. * out];
-                canvas.rounded_ring(
-                    rect(&r),
-                    radius + out,
-                    w,
-                    color.with_alpha(color.components[3] * p.alpha as f32),
+                component.component().paint(
+                    &mut Paint {
+                        canvas,
+                        look,
+                        rect: p.rect,
+                        visible,
+                        alpha: p.alpha,
+                        interaction: interaction(p),
+                        progress: p.progress,
+                        corner,
+                        state: self.components.get(&p.key),
+                    },
+                    PaintPhase::Over,
                 );
             }
         }
@@ -2339,22 +2222,22 @@ impl ViewState {
     }
     /// The ink a dropdown's trigger or a menu row gives what it holds (`glyph`: an icon, else
     /// a text); None inside any other control.
-    fn face_ink(&self, i: usize, tokens: &Tokens, glyph: bool) -> Option<nk_render::Color> {
+    fn face_ink(
+        &self,
+        i: usize,
+        look: ComponentLook<'_>,
+        interaction: Interaction,
+        glyph: bool,
+    ) -> Option<nk_render::Color> {
         let owner = self.placed[i].control.filter(|&o| o != i)?;
+        let tokens = look.tokens;
+        if let Some(part) = &self.control(owner).part {
+            return part.component().ink(look, interaction, glyph);
+        }
         match self.control(owner).face {
             crate::view::Face::Dropdown => {
                 let t = &tokens.dropdown.trigger;
                 Some(if glyph { t.arrow_color } else { t.text })
-            }
-            crate::view::Face::Segment => {
-                let (c, s) = (self.control(owner), &tokens.segmented);
-                let ink = if c.marked { s.selected_text } else { s.text };
-                let a = if c.enabled {
-                    1.
-                } else {
-                    s.disabled_opacity as f32
-                };
-                Some(ink.with_alpha(ink.components[3] * a))
             }
             crate::view::Face::MenuRow => {
                 let m = &tokens.dropdown.menu;
@@ -2367,18 +2250,6 @@ impl ViewState {
             _ => None,
         }
     }
-}
-
-fn mix(a: nk_render::Color, b: nk_render::Color, t: f32) -> nk_render::Color {
-    let mut c = a;
-    for (o, (x, y)) in c
-        .components
-        .iter_mut()
-        .zip(a.components.iter().zip(b.components.iter()))
-    {
-        *o = x + (y - x) * t;
-    }
-    c
 }
 
 /// What a tile slider's fill holds is drawn in where the fill has reached it: the dark

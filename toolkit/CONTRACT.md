@@ -717,11 +717,21 @@ it means for the toolkit:
 - No widget paints a blur, tone, rim or shadow imitating glass while the protocol is offered. A
   state Hyalo cannot express is a request added to the protocol (v1), not a client painting.
 
-## nk-view — shell layout and interaction (#1048)
+## nk-view — shared views and components (#1048, #1079, #1103)
 
-The shell's own view vocabulary (stack, pane, text, icon, spacer, control), its layout from
-spacing tokens and the hover/press/focus state it declares to Hyalo per pane: `VIEW.md`.
-Built in `crates/nk-view` (its README); no surface uses it yet.
+Apps and shell surfaces share the view vocabulary, layout, interaction, semantics and paint:
+`VIEW.md`. `AppWindow` hosts application views; the notification centre and Control Center
+host `ViewState` on shell surfaces. Built in `crates/nk-view` (its README).
+
+Step 1 of #1103 moves the content button, segment, swatch and drawn switch/check/radio marks
+behind `Component` and the single `Part::component` dispatch (`VIEW.md` §14). A view retains
+its declarative data and stable keys. `ComponentLook` borrows matching tokens + TypeScale at
+layout/tick/paint; rebuild on a look change. Bodies expand once per rebuild and are reused
+for ticks and anchor relayout. A drawn component inherits its control's interaction and has
+no hit target, Tab stop or semantic node. Per-key state resets on component type change and
+drops on disappearance, while disabled keys remain live. Component paint keeps the existing
+normal/lifted passes and exact pixels. Slider/dropdown/field/glass conversion, Host and value
+outcomes remain later steps; current activation strings and transport are unchanged.
 
 ## Floating control capsule — proposal for #889
 

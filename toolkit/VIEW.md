@@ -691,7 +691,7 @@ reference. What it does:
   A row of a group has no glass, and the view paints its states (§4, "Off glass").
 - **Two kinds of button, by where they lie.** Over content (a window's band, a toolbar over a
   page) a button is glass: a control in a pane, whose hover and press Hyalo draws. In a page's
-  content it is `Node::button` (`Face::Button`), Settings' row button from `components.json`
+  content it is `Node::button` (`Part::Button`), Settings' row button from `components.json`
   `button` (`toolkit/tokens/button.json`): the surface fill, a 1 px border, the `sm` corner, the
   label in 14 × 5 of padding and at least 32 tall, hover and pressed in the surface's own tones
   (each replaces the rest one), faded to `disabledOpacity` while disabled, and the accent ring
@@ -845,8 +845,7 @@ for neither.
 
 ### 13.10 Segmented choice
 
-`Node::segmented(key, Segmented { name, options, chosen, action, disabled },
-&tokens.segmented, &types)`: one choice of a few, all shown side by side, the chosen one in the
+`Node::segmented(key, Segmented { name, options, chosen, action, disabled })`: one choice of a few, all shown side by side, the chosen one in the
 accent (GTK's linked toggle buttons, `NSSegmentedControl`); a setting row ends with it (§13.6).
 Settings' dock size and gaming mode presets are this.
 
@@ -857,7 +856,7 @@ Settings' dock size and gaming mode presets are this.
   while they are next to each other, a segmented choice is always a group of its own, so rows of
   them may follow one another. Choosing segment `n` reports
   `"{action}:{n}"`; the app rebuilds with its model.
-- **Off glass** (`Face::Segment`): each segment is as wide as its label in the padding, as tall
+- **Off glass** (`Part::Segment`): each segment is as wide as its label in the padding, as tall
   as a button, with no gap between. The view paints each one's tone inside the group's outline
   cut to it, so only the group's two ends are rounded (`radius`) and the joins are square. An
   unchosen segment is `background`, `hover` under the pointer, `pressed` while pressed, with the
@@ -874,7 +873,7 @@ Not carried yet: segments with icons, and a segment disabled alone; Settings ask
 
 ### 13.11 Colour swatches
 
-`Node::swatches(key, Swatches { name, colors, chosen, action, disabled }, &tokens.swatch)`
+`Node::swatches(key, Swatches { name, colors, chosen, action, disabled })`
 shows named `(String, Color)` samples as circles. The application supplies the palette and
 rebuilds with the chosen index; the gallery reads its palette and names from exported
 `colors.json` (`accentOrder`, `accents` and `accentNames`), retaining the product order.
@@ -882,9 +881,10 @@ rebuilds with the chosen index; the gallery reads its palette and names from exp
 - Each sample is a `Role::Radio` keyed `"{key}/{n}"`, named by its colour and described by
   the group's `name`. Choosing it reports `"{action}:{n}"`. One Tab stop enters on the chosen
   sample; arrows wrap within the group. Disabled samples cannot be focused or activated.
-- Swatches and segmented choices share `Control::choice_part` (`ChoicePart`). Every row starts
-  a new group even beside another choice row or plain radios.
-- `Face::Swatch` paints off glass, with no compositor state region: the colour inside the border,
+- Swatches and segmented choices return named `Membership` from their component, using the
+  row key. Every row starts a new group even beside another choice row or plain radios.
+  A segment keeps its index/count only for painting its joined ends.
+- `Part::Swatch` paints off glass, with no compositor state region: the colour inside the border,
   the hover border on unchosen samples, and the chosen border plus outer ring in `selectedColor`.
   Disabled fill and band use `disabledOpacity`; the keyboard focus ring stands outside the chosen
   band and disappears when disabled.
@@ -894,3 +894,59 @@ rebuilds with the chosen index; the gallery reads its palette and names from exp
 
 The Swatches gallery page shows rest, selected, hover, pressed, focus and disabled states plus
 a live Accent colour choice. These checks do not replace owner review in the installed session.
+
+
+## 14. Components (#1103, step 1)
+
+The content button, segment, swatch, switch and check/radio mark each implement `Component`
+in `src/components/<name>.rs`. `Part::component` is the single dispatch from the serializable
+closed `Part` enum to `&dyn Component`. Layout, paint, input and motion ask the trait; they do
+not match these concrete types. The public segmented and swatch constructors still compose a
+row of controls, retaining its stable keys; the token-sized swatch gap is a drawn helper in
+`components/swatch.rs`.
+
+- **Look:** `ComponentLook { tokens, types }` borrows a matching `Tokens` + `TypeScale` pair.
+  Pass `tokens.with_types(&types)` to `ViewState::layout`, `layout_in`, `tick`, `paint` and
+  `paint_lifted`. A look change requires a rebuild, even if the model stayed the same.
+  `AppWindow` already owns both; shell surfaces load both from the same exports/appearance.
+  `Node::segmented` and `Node::swatches` take data only. `Node::button` retains its app text's
+  `TextStyle` (the button token table contains no font); padding and paint still arrive at layout.
+- **Expansion:** on a rebuild, `body(Build)` runs once per component, before measurement. The
+  expanded tree is retained for ticks and scroll-anchor relayout; the declaration is never
+  mutated. `Build::key(suffix)` derives child keys from the component's stable parent key.
+  `FrameSpec` supplies inset, least width/height and natural-centred or filling body placement.
+  Structure (`Stack`, `Pane`, `Text`, `Reveal`, etc.) stays in layout.
+- **Control or drawing:** a control carries `part`; `Drawing` carries the same `Part` without
+  hit testing, Tab or a semantic node. A drawing inherits its enclosing control's `Interaction`.
+  Hover, press, focus ring, enabled and marked are resolved by the view, with gallery `shown`
+  folded in. Components never compare keys. The marks' `glass().owns_mark` prevents a second
+  selected wash and lets the enclosing control put its focus ring outside the mark.
+- **Paint:** `paint(Paint, PaintPhase::Under)` precedes the component's body. `Over` follows all
+  content in the current normal or lifted pass, so adjacent segments cannot cover the focus
+  ring. Both passes carry the inherited opacity, visibility, interaction and optional motion
+  progress. Component ink is applied to its text/glyph content by the view's existing content
+  rules (including disabled and accent ink).
+- **Motion and state:** `target()` supplies an optional scalar in 0..1 to the common keyed
+  motion engine. It retargets from the current position and honours reduced motion; Reveal
+  remains structural with its existing opening curve. A key changing component type starts
+  fresh. `StateStore` owns optional `Any` state under key + concrete component `TypeId`,
+  retains disabled and drawn components, and drops absent keys once per rebuild. `Input`
+  borrows just that entry and an `Outcome` collector, never `&mut ViewState`.
+- **Routing:** press/drag/release, keys and reader activation enter the component callbacks;
+  defaults arm on press and activate on release or Activate. Effects compose through flags;
+  `redraw` schedules a frame. Generic view code still owns hit testing, swipe cancellation,
+  focus movement and scrolling. `Membership` is none, adjacent, or named, with selected state;
+  the view owns the one Tab stop and wrapping arrows. Index/count do not define membership.
+  Semantics are asked only of controls; a drawing remains part of its enclosing control.
+
+Step 1 deliberately leaves the existing slider, field, dropdown/menu-row and glass-control
+fields in place. Their input state and host requests are step 2 or later: no Host, clipboard,
+IME implementation or `Activated.value` is introduced here. The text callback is reserved
+for that later input conversion. Existing activation strings remain unchanged.
+
+For a conversion, first capture main against main with the same saved binary and exported
+look. Name any unstable whole captures and their regions before comparing the branch. Compare
+all stable captures exactly, retain stable component regions from excluded captures, run the
+unchanged assertions (only API/introspection/late-style fixture migration), and prove a broken
+component callback is detected while an unrelated component's isolated check still passes.
+These private headless checks do not replace physical-session or Orca acceptance.

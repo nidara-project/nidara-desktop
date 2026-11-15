@@ -1,9 +1,7 @@
 // SPDX-License-Identifier: LGPL-3.0-or-later
 //! The view: a value a surface builds from its model on each change (VIEW.md §2).
 use crate::host::TypeScale;
-use crate::tokens::{
-    DropdownStyle, MenuStyle, Radii, Radius, SegmentStyle, SliderStyle, Space, SwatchStyle,
-};
+use crate::tokens::{DropdownStyle, MenuStyle, Radii, Radius, SliderStyle, Space};
 use nk_text::TextStyle;
 use serde::{Deserialize, Serialize};
 
@@ -55,29 +53,10 @@ pub enum Kind {
     Scroll(Scroll),
     Overlay(Overlay),
     Grid(Grid),
-    /// An on/off switch, drawn only: the control around it is what is pressed (VIEW.md §12.6).
-    Switch(Switch),
-    /// A checkbox's or a radio's mark, drawn only: the control around it is what is pressed
-    /// (VIEW.md §13.5).
-    Check(Check),
+    /// A component drawn inside a control, inheriting its interaction.
+    Drawing(crate::components::Drawing),
     /// A row the surface did not build, at the height it had when it was (VIEW.md §8).
     Placeholder(f64),
-}
-
-/// An on/off switch (VIEW.md §12.6): its size and colours are the tokens'; a change of `on`
-/// slides it as a reveal opens (§6).
-#[derive(Clone, Copy, Debug, PartialEq, Serialize, Deserialize)]
-pub struct Switch {
-    pub on: bool,
-}
-
-/// A checkbox's or a radio's mark (VIEW.md §13.5): its size and colours are the tokens'
-/// (`check`); a change of `on` fades it as a switch slides.
-#[derive(Clone, Copy, Debug, PartialEq, Serialize, Deserialize)]
-pub struct Check {
-    pub on: bool,
-    /// Round, one choice of several; else the square checkbox.
-    pub radio: bool,
 }
 
 /// A setting row (VIEW.md §13.6), Settings' row: its title, a second line under it, and what
@@ -392,10 +371,6 @@ pub struct Control {
     /// A dropdown's options and the one chosen (VIEW.md §13.9); its role is `Dropdown`.
     #[serde(default)]
     pub choice: Option<Choice>,
-    /// Membership in an independent choice row (segmented or swatches). Its index/count
-    /// also decide a segment's rounded ends.
-    #[serde(default)]
-    pub choice_part: Option<ChoicePart>,
     /// On (VIEW.md §12.4): the glass under it is white, the primary ink at full, and what it
     /// holds is drawn in the accent. Hover and press do not show over it.
     #[serde(default)]
@@ -415,6 +390,8 @@ pub struct Control {
     /// How it is drawn: on glass, by Hyalo's washes, or as a button in a page's content.
     #[serde(default)]
     pub face: Face,
+    #[serde(default)]
+    pub part: Option<Box<crate::components::Part>>,
     /// Marked, it is filled with the accent and what it holds is drawn in the accent's
     /// foreground: a sidebar's selected entry (owner, 2026-11-12, D1). Else marked is the
     /// neutral selection wash.
@@ -429,29 +406,12 @@ pub enum Face {
     /// What it holds, with the washes of its state: Hyalo's on glass, the view's off it.
     #[default]
     Plain,
-    /// A button in a page's content, where no glass lies under it (`components.json`
-    /// `button`): the view fills it with the surface, its border and the surface's hover and
-    /// pressed tones, padded to the button's height. Over content (a window's band, a
-    /// toolbar over a page) a button is glass instead: a `Plain` control in a pane.
-    Button,
     /// A dropdown's closed trigger (`components.json` `dropdown.trigger`, VIEW.md §13.9): the
     /// view fills it with the trigger's tones, its label and arrow inside its padding.
     Dropdown,
     /// A row of a dropdown's open list (`dropdown.menu`): filled with the accent while the
     /// pointer or the keyboard is on it, ticked while it is the one chosen.
     MenuRow,
-    /// One segment of a segmented choice (`components.json` `choices.segmented`, VIEW.md
-    /// §13.10): its label centred in its padding; the chosen one is the accent.
-    Segment,
-    /// One colour sample, with its border/selection band outside glass (VIEW.md §13.11).
-    Swatch([f32; 4]),
-}
-
-/// A radio's place in an independent choice row (segments or swatches): `index` of `count`.
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
-pub struct ChoicePart {
-    pub index: usize,
-    pub count: usize,
 }
 
 /// Colour samples: one radio group, each choice reports `"{action}:{n}"`.
@@ -726,7 +686,7 @@ impl Node {
     /// A switch as drawn, for a control that holds one (`switch_control`, or a row an app
     /// makes activatable as a whole).
     pub fn switch(key: impl Into<Key>, on: bool) -> Self {
-        Self::new(key, Kind::Switch(Switch { on }))
+        Self::drawing(key, crate::Part::Switch(crate::Switch { on }))
     }
     /// A switch (VIEW.md §12.6): only the switch responds, never the row it sits in. `name`
     /// is what its row says, so a reader calls the switch by it; `action` is reported on each
@@ -891,13 +851,13 @@ impl Node {
     }
     /// A checkbox's mark as drawn, for a control that holds one (`check_control`).
     pub fn check(key: impl Into<Key>, on: bool) -> Self {
-        Self::new(key, Kind::Check(Check { on, radio: false }))
+        Self::drawing(key, crate::Part::Check(crate::Check { on, radio: false }))
     }
     /// A radio's mark as drawn, for a control that holds one (`radio_control`).
     pub fn radio(key: impl Into<Key>, chosen: bool) -> Self {
-        Self::new(
+        Self::drawing(
             key,
-            Kind::Check(Check {
+            crate::Part::Check(crate::Check {
                 on: chosen,
                 radio: true,
             }),
@@ -980,18 +940,24 @@ impl Node {
                 slider: None,
                 field: None,
                 choice: None,
-                choice_part: None,
                 on: false,
                 accent: false,
                 surface: false,
                 pointer: true,
                 shown: None,
                 face: Face::Plain,
+                part: None,
                 child: Box::new(child),
             }),
         )
     }
-    /// A button in a page's content (`Face::Button`): `label` centred in `style`, in the
+    /// A component without its own input or semantic node.
+    pub fn drawing(key: impl Into<Key>, part: crate::Part) -> Self {
+        let key = key.into();
+        let child = Box::new(Self::spacer(format!("{}/body", key.0)));
+        Self::new(key, Kind::Drawing(crate::Drawing { part, child }))
+    }
+    /// A button in a page's content (`Part::Button`): `label` centred in `style`, in the
     /// button's padding and corner. Not glass: for one over content, put a control in a pane.
     pub fn button(
         key: impl Into<Key>,
@@ -1001,11 +967,19 @@ impl Node {
     ) -> Self {
         let key = key.into();
         let label = label.into();
-        let text = Self::text(format!("{}/label", key.0), label.clone(), style).lines(1);
-        let mut n = Self::control(key, label, action, text).corner(Corner::Token(Radius::Sm));
+        let mut n = Self::control(
+            key.clone(),
+            label.clone(),
+            action,
+            Self::spacer(format!("{}/label", key.0)),
+        )
+        .corner(Corner::Token(Radius::Sm));
         if let Kind::Control(c) = &mut n.kind {
             c.wash = Wash::None;
-            c.face = Face::Button;
+            c.part = Some(Box::new(crate::Part::Button(crate::components::Button {
+                label,
+                style,
+            })));
         }
         n
     }
@@ -1053,13 +1027,8 @@ impl Node {
     /// A segmented choice (VIEW.md §13.10): a row of segments, each a radio of one group, so
     /// that the arrows move the choice and Tab stops at it once. Segment `n` is keyed
     /// `"{key}/{n}"` and reports `"{action}:{n}"` when it is chosen; its measures, tones and
-    /// font are `style`'s (the exported `choices.segmented`), the font a step of `types`.
-    pub fn segmented(
-        key: impl Into<Key>,
-        s: Segmented,
-        style: &SegmentStyle,
-        types: &TypeScale,
-    ) -> Self {
+    /// font arrive with the layout look (the exported `choices.segmented` and type scale).
+    pub fn segmented(key: impl Into<Key>, s: Segmented) -> Self {
         let key = key.into();
         let count = s.options.len();
         let segments = s
@@ -1068,21 +1037,24 @@ impl Node {
             .enumerate()
             .map(|(n, label)| {
                 let k = format!("{}/{n}", key.0);
-                let text = Self::text(
-                    format!("{k}/label"),
+                let mut c = Self::control(
+                    k.clone(),
                     label.clone(),
-                    types.style(style.font.0, style.font.1),
-                );
-                let mut c = Self::control(k, label.clone(), format!("{}:{n}", s.action), text)
-                    .corner(Corner::Fixed(style.radius.round() as u32))
-                    .role(Role::Radio)
-                    .marked(n == s.chosen)
-                    .enabled(!s.disabled)
-                    .description(s.name.clone());
+                    format!("{}:{n}", s.action),
+                    Self::spacer(format!("{k}/label")),
+                )
+                .role(Role::Radio)
+                .marked(n == s.chosen)
+                .enabled(!s.disabled)
+                .description(s.name.clone());
                 if let Kind::Control(c) = &mut c.kind {
                     c.wash = Wash::None;
-                    c.face = Face::Segment;
-                    c.choice_part = Some(ChoicePart { index: n, count });
+                    c.part = Some(Box::new(crate::Part::Segment(crate::components::Segment {
+                        label: label.clone(),
+                        group: key.clone(),
+                        index: n,
+                        count,
+                    })));
                 }
                 c
             })
@@ -1090,31 +1062,33 @@ impl Node {
         Self::row(key, segments)
     }
     /// A row of colour samples, with the exported swatch geometry and independent radio membership.
-    pub fn swatches(key: impl Into<Key>, s: Swatches, style: &SwatchStyle) -> Self {
+    pub fn swatches(key: impl Into<Key>, s: Swatches) -> Self {
         let key = key.into();
-        let count = s.colors.len();
-        let side = style.diameter + 2. * style.ring;
         let mut children = Vec::new();
         for (n, (name, color)) in s.colors.iter().enumerate() {
             if n > 0 {
-                children.push(Self::row(format!("{}/gap/{n}", key.0), vec![]).width(style.gap));
+                children.push(Self::drawing(
+                    format!("{}/gap/{n}", key.0),
+                    crate::Part::SwatchGap(crate::components::SwatchGap),
+                ));
             }
             let k = format!("{}/{n}", key.0);
             let mut node = Self::control(
                 k.clone(),
                 name.clone(),
                 format!("{}:{n}", s.action),
-                Self::spacer(format!("{k}/circle")).width(side).height(side),
+                Self::spacer(format!("{k}/circle")),
             )
             .role(Role::Radio)
             .marked(n == s.chosen)
             .enabled(!s.disabled)
-            .description(s.name.clone())
-            .height(side);
+            .description(s.name.clone());
             if let Kind::Control(c) = &mut node.kind {
-                c.face = Face::Swatch(color.components);
+                c.part = Some(Box::new(crate::Part::Swatch(crate::components::Swatch {
+                    color: color.components,
+                    group: key.clone(),
+                })));
                 c.wash = Wash::None;
-                c.choice_part = Some(ChoicePart { index: n, count });
             }
             children.push(node);
         }

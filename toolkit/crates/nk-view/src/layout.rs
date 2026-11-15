@@ -2,6 +2,7 @@
 //! Two passes, as in `nk-widgets` (VIEW.md §3): each node is measured under a width, keeping
 //! the text layout paint will use; then it is placed. The placed rectangles feed paint,
 //! hit-testing, semantics and the material, so nothing computes a position twice.
+use crate::components::{BodyPlacement, ComponentLook, FrameSpec, Part};
 use crate::tokens::Spacing;
 use crate::view::{Align, Axis, Control, Corner, Face, Icon, Ink, Justify, Key, Kind, Node, Stack};
 use nk_text::{Layout, TextBackend, TextStyle};
@@ -197,6 +198,7 @@ pub struct Placed {
     pub key: Key,
     pub rect: Rect,
     pub what: What,
+    pub progress: Option<f64>,
     pub parent: Option<usize>,
     /// The nearest pane this node lies in.
     pub pane: Option<usize>,
@@ -243,18 +245,7 @@ pub enum What {
     Reveal {
         progress: f64,
     },
-    /// A switch: whether it is on, and how far its thumb is from off (0) to on (1).
-    Switch {
-        on: bool,
-        progress: f64,
-    },
-    /// A checkbox's or a radio's mark: whether it is on, and how far it is from off (0) to
-    /// on (1).
-    Check {
-        on: bool,
-        radio: bool,
-        progress: f64,
-    },
+    Drawing(Part),
     /// A scroll region: how far it is scrolled, and its content's height.
     Scroll {
         offset: f64,
@@ -274,6 +265,15 @@ struct Ctx {
     scroll: Option<usize>,
 }
 
+impl Placed {
+    pub fn part(&self) -> Option<&Part> {
+        match &self.what {
+            What::Control(c) => c.part.as_deref(),
+            What::Drawing(p) => Some(p),
+            _ => None,
+        }
+    }
+}
 pub struct Layouter<'a> {
     pub spacing: &'a Spacing,
     /// Each reveal's progress by key; a reveal not in it is at its `open` state.
@@ -285,10 +285,7 @@ pub struct Layouter<'a> {
     pub scale: f64,
     /// A slider's height: its thumb's diameter.
     pub slider: f64,
-    /// A switch's width and height.
-    pub switch: (f64, f64),
-    /// A checkbox's or a radio's side.
-    pub check: f64,
+    pub look: ComponentLook<'a>,
     /// The kit's row height (`row_floor`).
     pub row: f64,
     /// The inset on each side (padding and border) across and down, and the least height, of
@@ -299,38 +296,40 @@ pub struct Layouter<'a> {
 /// What `Layouter::faces` holds: `(across, down, least height)` per padded face.
 #[derive(Clone, Copy, Debug)]
 pub struct Faces {
-    pub button: (f64, f64, f64),
     pub dropdown: (f64, f64, f64),
     pub menu_row: (f64, f64, f64),
-    pub segment: (f64, f64, f64),
 }
 impl Faces {
     pub fn of(tokens: &crate::tokens::Tokens) -> Self {
-        let b = &tokens.button;
         Self {
-            button: (
-                b.padding_x + b.border,
-                b.padding_y + b.border,
-                b.min_height(),
-            ),
             dropdown: tokens.dropdown.trigger.inset(),
             menu_row: tokens.dropdown.menu.row_inset(),
-            segment: tokens.segmented.inset(),
         }
     }
     /// A face's inset, None for a face that pads nothing.
     fn inset(&self, face: Face) -> Option<(f64, f64, f64)> {
         match face {
-            Face::Plain | Face::Swatch(_) => None,
-            Face::Button => Some(self.button),
+            Face::Plain => None,
             Face::Dropdown => Some(self.dropdown),
             Face::MenuRow => Some(self.menu_row),
-            Face::Segment => Some(self.segment),
         }
     }
 }
 
 impl Layouter<'_> {
+    fn control_frame(&self, c: &Control) -> FrameSpec {
+        c.part
+            .as_ref()
+            .map(|p| p.component().frame(self.look))
+            .unwrap_or_else(|| {
+                let (x, y, h) = self.faces.inset(c.face).unwrap_or_default();
+                FrameSpec {
+                    inset: (x, y),
+                    least: (0., h),
+                    body: BodyPlacement::Fill,
+                }
+            })
+    }
     /// Lays the view out in a `size` box at the origin; returns every node placed, in tree
     /// order. Texts whose key left the view are dropped from the cache.
     pub fn run(&mut self, root: &Node, bounds: Rect) -> Vec<Placed> {
@@ -350,6 +349,19 @@ impl Layouter<'_> {
         out
     }
 
+    fn measure_frame(&mut self, body: &Node, width: f64, f: FrameSpec) -> Measure {
+        let (x, y) = f.inset;
+        let c = self.measure(body, (width - 2. * x).max(0.));
+        let h = (c.h + 2. * y).max(f.least.1);
+        Measure {
+            w: (c.w + 2. * x).max(f.least.0),
+            h,
+            first_line: c.first_line.map(|v| v + (h - c.h) / 2.),
+            give: 0.,
+            children: vec![c],
+            cross: vec![],
+        }
+    }
     fn natural(&mut self, n: &Node) -> f64 {
         if let Some(w) = n.width {
             return w;
@@ -363,16 +375,19 @@ impl Layouter<'_> {
             Kind::Icon(i) => i.size,
             Kind::Spacer => 0.,
             Kind::Pane(p) => self.natural(&p.child),
-            Kind::Control(c) if c.face != Face::Plain => {
-                self.natural(&c.child) + 2. * self.faces.inset(c.face).map_or(0., |i| i.0)
+            Kind::Control(c) if c.part.is_some() || c.face != Face::Plain => {
+                (self.natural(&c.child) + 2. * self.control_frame(c).inset.0)
+                    .max(self.control_frame(c).least.0)
             }
             Kind::Control(c) => self.natural(&c.child),
             Kind::Reveal(r) => self.natural(&r.child),
             Kind::Scroll(sc) => self.natural(&sc.child),
             Kind::Overlay(o) => self.natural(&o.base),
             Kind::Grid(g) => g.span(g.columns),
-            Kind::Switch(_) => self.switch.0,
-            Kind::Check(_) => self.check,
+            Kind::Drawing(d) => {
+                let f = d.part.component().frame(self.look);
+                (self.natural(&d.child) + 2. * f.inset.0).max(f.least.0)
+            }
             Kind::Placeholder(_) => 0.,
             Kind::Stack(s) => {
                 let pad = self.spacing.of(s.padding.left) + self.spacing.of(s.padding.right);
@@ -396,12 +411,16 @@ impl Layouter<'_> {
         match &n.kind {
             Kind::Group(g) => self.min(&g.child),
             Kind::Text(t) if t.lines.is_some() => 0.,
-            Kind::Text(_) | Kind::Icon(_) | Kind::Switch(_) | Kind::Check(_) => self.natural(n),
+            Kind::Text(_) | Kind::Icon(_) => self.natural(n),
             Kind::Spacer => 0.,
-            Kind::Pane(p) => self.min(&p.child),
-            Kind::Control(c) if c.face != Face::Plain => {
-                self.min(&c.child) + 2. * self.faces.inset(c.face).map_or(0., |i| i.0)
+            Kind::Drawing(d) => {
+                let f = d.part.component().frame(self.look);
+                (self.min(&d.child) + 2. * f.inset.0).max(f.least.0)
             }
+            Kind::Pane(p) => self.min(&p.child),
+            Kind::Control(c) if c.part.is_some() || c.face != Face::Plain => (self.min(&c.child)
+                + 2. * self.control_frame(c).inset.0)
+                .max(self.control_frame(c).least.0),
             Kind::Control(c) => self.min(&c.child),
             Kind::Reveal(r) => self.min(&r.child),
             Kind::Scroll(sc) => self.min(&sc.child),
@@ -451,8 +470,9 @@ impl Layouter<'_> {
         match &n.kind {
             Kind::Spacer => leaf(0., 0., None),
             Kind::Icon(i) => leaf(self.up(i.size), self.up(i.size), None),
-            Kind::Switch(_) => leaf(self.up(self.switch.0), self.up(self.switch.1), None),
-            Kind::Check(_) => leaf(self.up(self.check), self.up(self.check), None),
+            Kind::Drawing(d) => {
+                self.measure_frame(&d.child, width, d.part.component().frame(self.look))
+            }
             Kind::Text(t) => {
                 let (w, h, first) = match self.cache.fit(
                     self.text,
@@ -553,19 +573,10 @@ impl Layouter<'_> {
                     give: 0.,
                 }
             }
-            Kind::Control(ctl) if ctl.face != Face::Plain => {
-                let (x, y, least) = self.faces.inset(ctl.face).unwrap_or_default();
-                let c = self.measure(&ctl.child, (width - 2. * x).max(0.));
-                let h = (c.h + 2. * y).max(least);
-                Measure {
-                    w: c.w + 2. * x,
-                    h,
-                    first_line: c.first_line.map(|f| f + (h - c.h) / 2.),
-                    give: 0.,
-                    children: vec![c],
-                    cross: vec![],
-                }
+            Kind::Control(ctl) if ctl.part.is_some() || ctl.face != Face::Plain => {
+                self.measure_frame(&ctl.child, width, self.control_frame(ctl))
             }
+
             Kind::Control(ctl) => {
                 let c = self.measure(&ctl.child, width);
                 let h = if ctl.slider.is_some() {
@@ -769,15 +780,7 @@ impl Layouter<'_> {
             Kind::Reveal(rv) => What::Reveal {
                 progress: self.progress(&n.key, rv.open),
             },
-            Kind::Switch(sw) => What::Switch {
-                on: sw.on,
-                progress: self.progress(&n.key, sw.on),
-            },
-            Kind::Check(c) => What::Check {
-                on: c.on,
-                radio: c.radio,
-                progress: self.progress(&n.key, c.on),
-            },
+            Kind::Drawing(d) => What::Drawing(d.part.clone()),
             Kind::Placeholder(_) => What::Spacer,
             Kind::Overlay(_) | Kind::Grid(_) => What::Stack,
             Kind::Scroll(_) => What::Scroll {
@@ -789,6 +792,9 @@ impl Layouter<'_> {
         out.push(Placed {
             key: n.key.clone(),
             rect,
+            progress: crate::components::part(n)
+                .and_then(|p| p.component().target())
+                .map(|t| self.reveals.get(&n.key).copied().unwrap_or(t)),
             what,
             parent: ctx.parent,
             pane: ctx.pane,
@@ -813,14 +819,14 @@ impl Layouter<'_> {
                 self.place(&p.child, &m.children[0], r, inner, out)
             }
             Kind::Group(g) => self.place(&g.child, &m.children[0], r, inner, out),
-            Kind::Control(c) if c.face != Face::Plain => {
+            Kind::Control(c) if c.part.is_some() || c.face != Face::Plain => {
                 // A button's or a segment's label centred in it, inside its padding and border; what a
                 // dropdown or a menu row holds fills it across, inside theirs.
                 inner.control = Some(index);
                 let child = &m.children[0];
-                let x = self.faces.inset(c.face).map_or(0., |i| i.0);
+                let x = self.control_frame(c).inset.0;
                 let room = (r[2] - 2. * x).max(0.);
-                let w = if matches!(c.face, Face::Button | Face::Segment) {
+                let w = if self.control_frame(c).body == BodyPlacement::NaturalCentered {
                     room.min(child.w)
                 } else {
                     room
@@ -832,6 +838,23 @@ impl Layouter<'_> {
                     child.h,
                 ];
                 self.place(&c.child, child, at, inner, out)
+            }
+            Kind::Drawing(d) => {
+                let f = d.part.component().frame(self.look);
+                let child = &m.children[0];
+                let room = (r[2] - 2. * f.inset.0).max(0.);
+                let w = if f.body == BodyPlacement::NaturalCentered {
+                    room.min(child.w)
+                } else {
+                    room
+                };
+                let at = [
+                    self.round(r[0] + (r[2] - w) / 2.),
+                    self.round(r[1] + (r[3] - child.h) / 2.),
+                    w,
+                    child.h,
+                ];
+                self.place(&d.child, child, at, inner, out)
             }
             Kind::Control(c) => {
                 inner.control = Some(index);
