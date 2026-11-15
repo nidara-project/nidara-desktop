@@ -183,7 +183,7 @@ fn decode(path: &Path, default: &Path, (w, h): (i32, i32)) -> Option<Vec<u8>> {
     };
     let mut bytes = picture.into_raw();
     // RGBA in the file's order to little-endian ARGB, and opaque whatever the file says.
-    for px in bytes.chunks_exact_mut(4) {
+    for px in bytes.as_chunks_mut::<4>().0 {
         px.swap(0, 2);
         px[3] = 255;
     }
