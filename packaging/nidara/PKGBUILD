@@ -82,7 +82,7 @@ depends=(
   # nidara-agent import (gi://Secret)
   gnome-keyring libsecret
   # GTK/GJS runtime
-  gjs gtk3 gtk4 gtk-layer-shell gtk4-layer-shell libpeas-2 wayland
+  gjs gtk3 gtk4 gtk4-layer-shell wayland
   # Native projection selector: keyboard mapping, required font discovery and
   # the native image decoder linked by the Settings crate.
   libxkbcommon fontconfig dav1d
@@ -112,9 +112,9 @@ depends=(
   # The screen shared in a call, in the Nidara session (Hyalo): config/portal/nidara-portals.conf.
   xdg-desktop-portal-wlr
   # tools the shell/keybinds shell out to
-  brightnessctl ddcutil pamixer playerctl jq curl slurp grim wf-recorder
+  brightnessctl ddcutil playerctl jq curl slurp grim wf-recorder
   wl-clipboard cliphist wtype at-spi2-core python-gobject libnotify
-  xdg-utils gsettings-desktop-schemas awww lz4 mesa pam
+  xdg-utils gsettings-desktop-schemas awww mesa pam
   # `dconf` — the BINARY, not the library. nidara-setup reads through it and the
   # pacman hook below execs /usr/bin/dconf; it had been arriving as a transitive
   # dependency of the GTK stack, which is the same shape of latent bug as the
