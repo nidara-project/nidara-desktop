@@ -3,9 +3,9 @@
 //! of it a kit node. A page shows one component in each of its states side by side, with
 //! the catalogue entries it answers and their GTK and AppKit equivalents.
 use nk_view::{
-    Align, Cell, Corner, Dropdown, DropdownStyle, Field, Ink, Justify, Kind, Node, Padding, Radius,
-    Role, Segmented, SettingRow, Shown, SidebarEntry, Slider, SliderEnd, SliderStyle, Space,
-    Swatches, Type, TypeScale, Wash, Weight,
+    Align, Cell, Corner, Dropdown, DropdownStyle, Field, Ink, Justify, Node, Padding, Radius, Role,
+    Segmented, SettingRow, Shown, SidebarEntry, Slider, SliderEnd, Space, Swatches, Type,
+    TypeScale, Wash, Weight,
 };
 use serde::Deserialize;
 
@@ -123,14 +123,12 @@ impl Default for Model {
 
 /// The kit's measures a page needs besides its type: the slider's, and the frame's glyph size.
 pub struct Measures<'a> {
-    pub slider: &'a SliderStyle,
     pub dropdown: &'a DropdownStyle,
     pub colors: &'a [(String, nk_render::Color)],
     pub glyph: f64,
 }
 
 pub fn view(m: &Model, cat: &Catalogue, t: &TypeScale, k: &Measures) -> View {
-    let sl = k.slider;
     let nav = PAGES
         .iter()
         .enumerate()
@@ -157,7 +155,7 @@ pub fn view(m: &Model, cat: &Catalogue, t: &TypeScale, k: &Measures) -> View {
     );
     let (id, title, _) = PAGES[m.page.min(PAGES.len() - 1)];
     let mut body = vec![header(id, cat, t)];
-    body.extend(page(id, m, cat, t, sl, k));
+    body.extend(page(id, m, cat, t, k));
     let content = Node::column(format!("page/{id}"), body)
         .gap(Space::S5)
         .padding(Padding {
@@ -286,14 +284,7 @@ fn button(key: &str, text: &str, action: &str, t: &TypeScale) -> Node {
     )
 }
 
-fn page(
-    id: &str,
-    m: &Model,
-    cat: &Catalogue,
-    t: &TypeScale,
-    sl: &SliderStyle,
-    k: &Measures,
-) -> Vec<Node> {
+fn page(id: &str, m: &Model, cat: &Catalogue, t: &TypeScale, k: &Measures) -> Vec<Node> {
     match id {
         "status" => status(cat, t),
         "button" => buttons(m, t),
@@ -303,7 +294,7 @@ fn page(
         "segmented" => segmenteds(m, t),
         "swatches" => swatches(m, t, k.colors),
         "row" => rows(m, t),
-        "slider" => sliders(m, t, sl),
+        "slider" => sliders(m, t),
         "field" => fields(t),
         "glass" => glass(t),
         "text" => text(t),
@@ -746,7 +737,8 @@ fn checks(m: &Model, t: &TypeScale) -> Vec<Node> {
                     *label,
                     format!("choice:{i}"),
                     m.choice == i,
-                ),
+                )
+                .value(nk_view::Value::Index(i)),
                 t,
             )
         })
@@ -810,8 +802,6 @@ fn dropdowns(m: &Model, t: &TypeScale, dd: &DropdownStyle) -> Vec<Node> {
                         action: "noop".into(),
                         disabled,
                     },
-                    dd,
-                    t,
                 ))),
                 disabled,
                 ..setting(label, None, t)
@@ -830,14 +820,7 @@ fn dropdowns(m: &Model, t: &TypeScale, dd: &DropdownStyle) -> Vec<Node> {
     );
     // The open list's rows as its popup shows them, on the same panel glass.
     let row = |k: &str, label: &str, chosen: bool, f: &dyn Fn(Node) -> Node| {
-        f(Node::menu_row(
-            format!("dd/m/{k}"),
-            label,
-            "noop",
-            chosen,
-            &dd.menu,
-            t,
-        ))
+        f(Node::menu_row(format!("dd/m/{k}"), label, "noop", chosen))
     };
     let list = Node::pane(
         "dd/menu",
@@ -874,8 +857,6 @@ fn dropdowns(m: &Model, t: &TypeScale, dd: &DropdownStyle) -> Vec<Node> {
                             action: "speed".into(),
                             disabled: false,
                         },
-                        dd,
-                        t,
                     )),
                     ..setting(
                         "Animation speed",
@@ -915,10 +896,8 @@ pub const SIZES: [&str; 3] = ["Small", "Medium", "Large"];
 
 /// A segmented choice with `shown` forced on some of its segments, for the states page.
 fn segments_shown(mut n: Node, shown: &[(usize, Shown)]) -> Node {
-    if let Kind::Stack(s) = &mut n.kind {
-        for (i, sh) in shown {
-            s.children[*i] = s.children[*i].clone().shown(*sh);
-        }
+    for (index, shown) in shown {
+        n = n.sample_state(*index, *shown);
     }
     n
 }
@@ -1057,20 +1036,8 @@ fn swatches(m: &Model, t: &TypeScale, colors: &[(String, nk_render::Color)]) -> 
                 disabled,
             },
         );
-        if let Kind::Stack(st) = &mut samples.kind {
-            for (index, c) in st
-                .children
-                .iter_mut()
-                .filter_map(|node| match &mut node.kind {
-                    Kind::Control(c) => Some(c),
-                    _ => None,
-                })
-                .enumerate()
-            {
-                if let Some((_, state)) = shown.iter().find(|(i, _)| *i == index) {
-                    c.shown = Some(*state);
-                }
-            }
+        for (index, shown) in shown {
+            samples = samples.sample_state(*index, *shown);
         }
         Node::setting_row(
             format!("sw/{key}"),
@@ -1146,7 +1113,7 @@ fn swatches(m: &Model, t: &TypeScale, colors: &[(String, nk_render::Color)]) -> 
     ]
 }
 
-fn sliders(m: &Model, t: &TypeScale, sl: &SliderStyle) -> Vec<Node> {
+fn sliders(m: &Model, t: &TypeScale) -> Vec<Node> {
     let line = |k: &str, label: &str, s: Node| {
         Node::row(
             format!("sl/{k}/line"),
@@ -1227,7 +1194,7 @@ fn sliders(m: &Model, t: &TypeScale, sl: &SliderStyle) -> Vec<Node> {
             "sl-rows",
             "In a setting row (Settings')",
             t,
-            slider_rows(m, t, sl),
+            slider_rows(m, t),
         ),
         section("sl-tile", "Tile slider (the CC's)", t, tile),
     ]
@@ -1235,7 +1202,7 @@ fn sliders(m: &Model, t: &TypeScale, sl: &SliderStyle) -> Vec<Node> {
 
 /// Settings' slider rows (VIEW.md §13.7): the kit's slider and its value at a row's end,
 /// with its glyphs when it has them; the row itself does not respond.
-fn slider_rows(m: &Model, t: &TypeScale, sl: &SliderStyle) -> Node {
+fn slider_rows(m: &Model, t: &TypeScale) -> Node {
     let row = |k: &str, title: &str, action: &str, value: f64, icons: bool, disabled: bool| {
         let key = format!("sl/r/{k}");
         Node::setting_row(
@@ -1256,7 +1223,6 @@ fn slider_rows(m: &Model, t: &TypeScale, sl: &SliderStyle) -> Node {
                         }),
                         disabled,
                     },
-                    sl,
                 )),
                 disabled,
                 ..setting(title, None, t)
@@ -1844,16 +1810,11 @@ mod tests {
                 open: true,
                 ..Default::default()
             };
-            let sl = nk_view::slider_from(&serde_json::json!({"slider": {"width": 140, "track": 6,
-                "thumbRadius": 9, "valueGap": 12, "fillOpacity": 0.9, "pageSteps": 10,
-                "iconSize": 16, "iconOpacity": 0.5, "iconGap": 12}}))
-            .unwrap();
             let v = view(
                 &m,
                 &cat,
                 &t,
                 &Measures {
-                    slider: &sl,
                     dropdown: &dropdown(),
                     colors: &[
                         ("Blue".into(), nk_render::rgba(0, 128, 255, 255)),

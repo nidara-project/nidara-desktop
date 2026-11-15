@@ -12,8 +12,8 @@ impl Component for Switch {
     fn target(&self) -> Option<f64> {
         Some(f64::from(self.on))
     }
-    fn glass(&self) -> Glass {
-        Glass { owns_mark: true }
+    fn owns_mark(&self) -> bool {
+        true
     }
     fn paint(&self, cx: &mut Paint<'_>, phase: PaintPhase) {
         if phase != PaintPhase::Under {

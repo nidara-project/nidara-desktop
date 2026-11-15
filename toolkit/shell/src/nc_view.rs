@@ -1494,6 +1494,7 @@ mod tests {
         let a = Activated {
             key: Key::from("g:mail/toggle"),
             action: "group:mail".into(),
+            value: None,
         };
         assert_eq!(p.activated(&a), Some(Act::Rebuild));
         assert!(!p.groups_open.contains("mail"));
@@ -1639,6 +1640,7 @@ mod tests {
         let a = |action: &str| Activated {
             key: Key::from("k"),
             action: action.into(),
+            value: None,
         };
         use notification_card::Target as T;
         assert_eq!(p.activated(&a("open:7:2")), Some(Act::Card(7, 2, T::Body)));
@@ -1702,6 +1704,7 @@ mod tests {
         let clear = Activated {
             key: Key::from("clear-all"),
             action: "clear-all".into(),
+            value: None,
         };
         assert_eq!(p.activated(&clear), Some(Act::Motion));
         assert_eq!(p.activated(&clear), None, "a clear under way is let finish");
@@ -1723,6 +1726,7 @@ mod tests {
         let clear = Activated {
             key: Key::from("clear-all"),
             action: "clear-all".into(),
+            value: None,
         };
         assert_eq!(p.activated(&clear), Some(Act::Motion));
         assert_eq!(p.close(), Some(nc::Target::ClearAll));
@@ -1744,6 +1748,7 @@ mod tests {
         let a = Activated {
             key: Key::from("g:mail/clear"),
             action: "clear-group:mail".into(),
+            value: None,
         };
         assert_eq!(p.activated(&a), Some(Act::Motion));
         let base = p.tokens.as_ref().unwrap().motion.base;
@@ -1769,6 +1774,7 @@ mod tests {
         let fold = Activated {
             key: Key::from("g:mail/toggle"),
             action: "group:mail".into(),
+            value: None,
         };
         let t0 = Instant::now();
         assert_eq!(p.activated(&fold), Some(Act::Rebuild));
@@ -1815,6 +1821,7 @@ mod tests {
         let open = Activated {
             key: Key::from("f3/card"),
             action: "group:mail".into(),
+            value: None,
         };
         assert_eq!(p.activated(&open), Some(Act::Rebuild));
         relay(&mut p);

@@ -389,11 +389,11 @@ state; the radios next to each other are one group, one Tab stop, the arrows mov
 `Node::setting_row(key, SettingRow { .. })` is Settings' row (`VIEW.md` §13.6): at least
 `ROW_HEIGHT.single` (`row_floor`), NOT activatable unless the app gives it an `action` — then the
 whole row is the control and what it ends with must be drawn only (a chevron, `Node::switch`).
-A slider row is a setting row ending in `Node::slider_end(key, SliderEnd { .. }, &tokens.slider)`
+A slider row is a setting row ending in `Node::slider_end(key, SliderEnd { .. })`
 (§13.7): measures from `range.slider`, its value in room for its widest text (`Node::room`).
 A window's sidebar is built of `Node::sidebar_entry` (§13.8): the selected one in the ACCENT
 (D1, a control's `accent` flag), never the neutral grey wash.
-`Node::dropdown(key, Dropdown { .. }, &tokens.dropdown, &types)` (§13.9) is only the TRIGGER:
+`Node::dropdown(key, Dropdown { .. })` (§13.9) is only the TRIGGER:
 `AppWindow` opens its list as a popup and reports the dropdown's action only on a choice (read
 the index with `AppWindow::value`). Outside an `AppWindow` nothing opens it — a surface hosting a
 `ViewState` itself must open the list as `AppWindow::open_menu` does. It is a combo box with its
@@ -408,21 +408,27 @@ reporting `"{action}:{n}"`. It paints off glass; the selected band and outer key
 are separate. Read every measure, tone and disabled opacity from `choices.swatch`; the gallery
 reads its named palette from exported `colors.json` in `accentOrder` (required, complete and
 unique), never the object-map order or a second list of accent colours.
-**Components (#1103 step 1, `VIEW.md` §14):** content button, segment, swatch and drawn
-switch/check/radio marks live in `nk-view/src/components/`, each answering `Component` from its
-own file. `Part::component` is the one concrete dispatch. Do not add a component match to
-`state.rs`, `layout.rs` or `motion.rs`. `ComponentLook` borrows tokens + TypeScale together:
-pass `tokens.with_types(&types)` to layout/tick/paint; rebuild on a look change. `body` expands
-once per rebuild into the retained tree; tick/anchor relayout reuse it. `FrameSpec` gives inset,
-least size and body placement. `Drawing` is noninteractive, inherits its surrounding control's
-resolved `Interaction`, and has no own semantic node. State is keyed by key + component type,
-retained while disabled, removed when absent. Input borrows only its own state/effects.
-`PaintPhase::Over` follows the current normal/lifted content, never all popup layers. Optional
-0..1 targets use common reduced-motion handling. Choice groups use named/adjacent membership;
-segment index/count are geometry only. Slider/dropdown/field/glass input and Host remain on the
-old path until their scoped conversion; `Activated` is unchanged. A conversion requires
-main↔main capture stability first, named exclusions, exact stable pixel comparison and isolated
-mutation controls; do not change the CI harness to make a conversion pass.
+**Components (#1103 steps 1–2, `VIEW.md` §§14–15):** button, range, dropdown/menu row,
+display field, surface/glass and marks live in `nk-view/src/components/`; Part::component is
+the only concrete dispatch. State/layout/motion never name components; the AppWindow list host
+knows no dropdown. Control keeps only common attributes. Node constructors/modifiers configure
+component data; choice and slider-end rows expand as compositions, with no SwatchGap helper or
+segment index/count geometry. Segments retain only joins and their activation index value.
+Pass tokens.with_types(&types) to layout/tick/paint and rebuild on look changes, including open
+lists. Bodies expand once per rebuild and ticks/anchor relayout reuse them. FrameSpec gives
+inset/minimum/placement; round minimums to device pixels BEFORE accumulating sibling positions.
+Drawing inherits resolved Interaction without its own input/semantic node; compositions declare
+when their bodies contain controls. Marks own selection and check/radio request no extra wash.
+Read/Input lend context + typed keyed state and effects, never mutable ViewState. Reconcile runs
+once per rebuild; disabled keys survive, capture cancels when disabled/gone/retyped. Outcomes
+compose value/redraw/activation/capture/host effects. Activated carries an optional Value;
+compatibility accessors delegate and the gallery reads values. AppWindow implements Host for
+component-built ListSpec requests, with owner/data revalidation and generic popup/reader rules.
+PaintPhase::Over is over the current normal/lifted pass; 0..1 targets honour reduced motion.
+The display field still leaves editing to its owner, including the CC's secret rules. Layer
+hosts, editable fields, clipboard/IME remain later work. A conversion requires main↔main first,
+named unstable captures, exact stable pixels and isolated mutation controls; never change the
+CI harness to make a conversion pass.
 A new token file goes into `scripts/export-tokens.mjs` AND `scripts/ci/settings-tokens-check.py`;
 until the owner reinstalls, `/usr/share/nidara/settings-data` lacks it, so run tests and the
 headless gallery against a fresh export (`SASS=sass node --experimental-strip-types

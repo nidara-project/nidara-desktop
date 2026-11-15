@@ -770,7 +770,7 @@ in `Ink::Dim`, and what it ends with.
 ### 13.7 Slider row
 
 A setting row (§13.6) that ends in `Node::slider_end(key, SliderEnd { name, action, slider,
-value_style, icons, disabled }, &tokens.slider)`: Settings' slider row (`NidaraSliderRow`).
+value_style, icons, disabled })`: Settings' slider row (`NidaraSliderRow`).
 
 - **The slider at the kit's width** (`range.slider.width`), its value after it at `valueGap`,
   and, when it has them, a glyph either side of it (`icons`: the lesser end's, the greater
@@ -800,11 +800,10 @@ a page a window's sidebar offers (`Gtk.StackSidebar`'s row), its glyph at the fr
 
 ### 13.9 Dropdown
 
-`Node::dropdown(key, Dropdown { name, options, chosen, action, disabled }, &tokens.dropdown,
-&types)`: one choice of several (`Gtk.DropDown`, `NSPopUpButton`), shown closed as the chosen
+`Node::dropdown(key, Dropdown { name, options, chosen, action, disabled })`: one choice of several (`Gtk.DropDown`, `NSPopUpButton`), shown closed as the chosen
 option with an arrow; a setting row ends with it (§13.6).
 
-- **The trigger is off glass** (§13.2, `Face::Dropdown`): the view fills it with
+- **The trigger is off glass** (§13.2, `Part::Dropdown`): the view fills it with
   `dropdown.trigger`'s tone inside its border, lighter under the pointer and darker while
   pressed, and draws the focus ring in that border. Its label is the chosen option after the
   `labelMargin`, the arrow (`nd-pan-down`) at the end inside the padding. It is **as wide as its
@@ -816,7 +815,7 @@ option with an arrow; a setting row ends with it (§13.6).
   scrolling when it must; activated again, it closes. The list grabs with the serial of the
   press or key that opened it; a reader opens it with no grab, and the keys then still go to the
   list while it is open.
-- **The list's rows** (`Node::menu_row`, `Face::MenuRow`, `Role::Option`) are on Settings'
+- **The list's rows** (`Node::menu_row`, `Part::MenuRow`, `Role::Option`) are on Settings'
   panel glass by the popup's short side, with `dropdown.menu`'s border drawn round it and,
   without the compositor's glass (D5), `background` under it. The row under the pointer or the
   keyboard is filled with the accent and drawn in its foreground (the one place the accent marks
@@ -883,7 +882,7 @@ rebuilds with the chosen index; the gallery reads its palette and names from exp
   sample; arrows wrap within the group. Disabled samples cannot be focused or activated.
 - Swatches and segmented choices return named `Membership` from their component, using the
   row key. Every row starts a new group even beside another choice row or plain radios.
-  A segment keeps its index/count only for painting its joined ends.
+  A segment keeps explicit join flags for geometry and a separate activation index value.
 - `Part::Swatch` paints off glass, with no compositor state region: the colour inside the border,
   the hover border on unchosen samples, and the chosen border plus outer ring in `selectedColor`.
   Disabled fill and band use `disabledOpacity`; the keyboard focus ring stands outside the chosen
@@ -896,57 +895,94 @@ The Swatches gallery page shows rest, selected, hover, pressed, focus and disabl
 a live Accent colour choice. These checks do not replace owner review in the installed session.
 
 
-## 14. Components (#1103, step 1)
+## 14. Components (#1103)
 
-The content button, segment, swatch, switch and check/radio mark each implement `Component`
-in `src/components/<name>.rs`. `Part::component` is the single dispatch from the serializable
-closed `Part` enum to `&dyn Component`. Layout, paint, input and motion ask the trait; they do
-not match these concrete types. The public segmented and swatch constructors still compose a
-row of controls, retaining its stable keys; the token-sized swatch gap is a drawn helper in
-`components/swatch.rs`.
+A component owns its data and answers `Component` in `src/components/<name>.rs`.
+`Part::component` is the one dispatch from the serializable closed enum to the object-safe
+trait. The view asks the trait; layout, state and motion never match a concrete component.
+Control retains only role/name/description/action, enabled, shown, pointer, revealed_with,
+swipe, part and its body. Public Node constructors and modifiers keep their meaning by
+configuring component data (`Configure`), rather than fields in the view.
 
-- **Look:** `ComponentLook { tokens, types }` borrows a matching `Tokens` + `TypeScale` pair.
-  Pass `tokens.with_types(&types)` to `ViewState::layout`, `layout_in`, `tick`, `paint` and
-  `paint_lifted`. A look change requires a rebuild, even if the model stayed the same.
-  `AppWindow` already owns both; shell surfaces load both from the same exports/appearance.
-  `Node::segmented` and `Node::swatches` take data only. `Node::button` retains its app text's
-  `TextStyle` (the button token table contains no font); padding and paint still arrive at layout.
-- **Expansion:** on a rebuild, `body(Build)` runs once per component, before measurement. The
-  expanded tree is retained for ticks and scroll-anchor relayout; the declaration is never
-  mutated. `Build::key(suffix)` derives child keys from the component's stable parent key.
-  `FrameSpec` supplies inset, least width/height and natural-centred or filling body placement.
-  Structure (`Stack`, `Pane`, `Text`, `Reveal`, etc.) stays in layout.
-- **Control or drawing:** a control carries `part`; `Drawing` carries the same `Part` without
-  hit testing, Tab or a semantic node. A drawing inherits its enclosing control's `Interaction`.
-  Hover, press, focus ring, enabled and marked are resolved by the view, with gallery `shown`
-  folded in. Components never compare keys. The marks' `glass().owns_mark` prevents a second
-  selected wash and lets the enclosing control put its focus ring outside the mark.
-- **Paint:** `paint(Paint, PaintPhase::Under)` precedes the component's body. `Over` follows all
-  content in the current normal or lifted pass, so adjacent segments cannot cover the focus
-  ring. Both passes carry the inherited opacity, visibility, interaction and optional motion
-  progress. Component ink is applied to its text/glyph content by the view's existing content
-  rules (including disabled and accent ink).
-- **Motion and state:** `target()` supplies an optional scalar in 0..1 to the common keyed
-  motion engine. It retargets from the current position and honours reduced motion; Reveal
-  remains structural with its existing opening curve. A key changing component type starts
-  fresh. `StateStore` owns optional `Any` state under key + concrete component `TypeId`,
-  retains disabled and drawn components, and drops absent keys once per rebuild. `Input`
-  borrows just that entry and an `Outcome` collector, never `&mut ViewState`.
-- **Routing:** press/drag/release, keys and reader activation enter the component callbacks;
-  defaults arm on press and activate on release or Activate. Effects compose through flags;
-  `redraw` schedules a frame. Generic view code still owns hit testing, swipe cancellation,
-  focus movement and scrolling. `Membership` is none, adjacent, or named, with selected state;
-  the view owns the one Tab stop and wrapping arrows. Index/count do not define membership.
-  Semantics are asked only of controls; a drawing remains part of its enclosing control.
+- **Look and body:** `ComponentLook` borrows matching tokens + TypeScale. Pass
+  `tokens.with_types(&types)` to layout/tick/paint and rebuild on a look change. Bodies expand
+  once per rebuild into a retained tree; ticks and anchor relayout reuse it. `Build` lends
+  the stable parent key, look and declarative child; derived child keys stay stable.
+  `FrameSpec` supplies inset, least size and full filling, horizontal filling or natural
+  centred placement. Minimum sizes round up to device pixels before siblings accumulate
+  their positions. Structure remains in layout. Segmented/swatch/slider-end rows are body
+  compositions; gaps resolve from tokens there, and segment joins are geometric booleans,
+  independent of their selected index value.
+- **Interaction:** controls own input and semantics; `Drawing` has neither of its own and
+  inherits its enclosing control's resolved `Interaction`. Components never compare hover,
+  press or focus keys. A composition can declare that its body contains controls, so a
+  setting row still refuses to wrap those controls in another activatable row. The marks
+  declare `owns_mark`; the enclosing surface omits a duplicate selection wash and places
+  focus outside the mark. Check/radio controls request no surface wash under their own paint.
+- **Read and input:** `Read` lends geometry, look, interaction, focus, immutable text layouts
+  and the component's state. `Input` borrows that context, its mutable state entry and a
+  composable `Outcome`, never `&mut ViewState`. Configuration, body, frame, target, paint, ink,
+  content ink, glass contribution, silhouette, group, semantics, reader requests and input
+  responses belong in the component. The view keeps traversal, capture routing, focus,
+  scrolling, semantic identities and the per-pane glass budget.
+- **Lifetime:** state is keyed by key + concrete component type. Reconcile meets new data
+  once per rebuild; disabled keys remain live, absent or retyped entries cancel and retire.
+  Optional 0..1 targets use common easing and reduced motion; Reveal remains structural.
+- **Paint:** Under precedes the body; Over follows content of the current normal/lifted pass,
+  never popups. Both receive opacity, clip and motion progress. The view applies its common
+  disabled-content rule before component content ink. Surface controls contribute washes;
+  the view budgets them and returns opaque fallback paint to that same component.
 
-Step 1 deliberately leaves the existing slider, field, dropdown/menu-row and glass-control
-fields in place. Their input state and host requests are step 2 or later: no Host, clipboard,
-IME implementation or `Activated.value` is introduced here. The text callback is reserved
-for that later input conversion. Existing activation strings remain unchanged.
+For a conversion, establish main↔main stability with the same saved binary, tokens and scales
+before changing code. Name unstable captures and their regions, then require exact stable
+pixels and stable regions from excluded whole captures. Keep existing assertions except for
+mechanical API/introspection and late-style fixture migrations. A broken component must fail
+its assertion while an unrelated component's isolated check passes. Private headless checks
+and their AT-SPI fixture do not replace physical-session or Orca acceptance.
 
-For a conversion, first capture main against main with the same saved binary and exported
-look. Name any unstable whole captures and their regions before comparing the branch. Compare
-all stable captures exactly, retain stable component regions from excluded captures, run the
-unchanged assertions (only API/introspection/late-style fixture migration), and prove a broken
-component callback is detected while an unrelated component's isolated check still passes.
-These private headless checks do not replace physical-session or Orca acceptance.
+## 15. Component conversion and host lists (#1103, step 2)
+
+The second conversion removes the remaining component fields and Face from Control. Slider
+(row and tile), display field, dropdown trigger/menu row and surface/glass control answer the
+same Component questions. Segmented and swatch rows become compositions that resolve their
+children and token gaps in body; segment join geometry is explicit rather than index/count.
+Public Node constructors and builder methods retain their meaning. They configure component
+data; they do not grow new type branches in state/layout/motion.
+
+Read context carries geometry, the borrowed look, resolved interaction, immutable text layouts
+and component state. Input borrows that context, its own mutable state and effects. Reconcile
+meets new model data once per rebuild; slider holds survive a rebuild during a drag, pending
+key/reader values clear as before. Disabled/disappearing/retyped controls lose pointer capture
+and receive cancellation before their state is retired. Value, redraw, activation, capture and
+host requests compose in one Outcome. Activated carries the optional typed value; existing
+action strings remain compatible while the gallery reads the value instead of parsing it.
+
+A Host receives generic requests. The initial request opens a list under an owner key, carrying
+its component-built node, item identities/values, selected item and resolved edge/material
+geometry. AppWindow fulfils it using its existing popup placement, grab, keys, focus return and
+semantic bounds. No component or dropdown token knowledge belongs in that host. Selection is
+returned through a generic component request; stale/missing/disabled owners reject it. Layer
+hosts, clipboard, IME and editable text remain later work. The CC display/secret field keeps
+its owner-managed editing and current reader/selection/caret rules.
+
+Acceptance retains main↔main stability first, exact stable pixels at 1 and 1.25, existing
+assertions with mechanical API/internal introspection migrations only, a caught mutation for
+each converted component plus isolated unrelated checks, and the shell's existing behavior.
+No CI or harness edits are part of this conversion.
+
+
+`Activated { key, action, value }` carries `Value::{Bool, Number, Index, Text}` when present.
+Action strings stay compatible; the gallery reads values instead of parsing numeric suffixes
+or asking `window.value`. A plain/surface control can attach an application payload with
+`Node::value`; intrinsic range/selection values remain component-owned. Legacy `value`,
+`slid`, `choose`, `choice`, `set_expanded` and option-id accessors are thin trait-based adapters,
+without per-component state on ViewState. Semantic item targets also retain component type,
+so an old item ID cannot address a new component at the same key.
+
+`Host::request` currently receives `OpenList`, with a `ListSpec` built by the requester:
+node, item keys/values, selected item, scroll key and resolved frame presentation. AppWindow
+revalidates the owner and item identities before opening; disabled, missing or changed owners
+are rejected. A look change rebuilds the open list too. Reader selection and list response
+enter `respond(Request::Set(value))`. Clipboard/IME request identities and the editable field's
+model synchronisation remain step 4; this display field continues to show owner-supplied text,
+never exports a secret, and delegates all editing to its owner.

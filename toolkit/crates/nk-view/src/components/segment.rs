@@ -4,10 +4,30 @@ use super::*;
 pub struct Segment {
     pub label: String,
     pub group: Key,
-    pub index: usize,
-    pub count: usize,
+    pub join_before: bool,
+    pub join_after: bool,
+    pub selected: bool,
+    pub value: usize,
 }
 impl Component for Segment {
+    fn selected(&self) -> bool {
+        self.selected
+    }
+    fn value(&self, _state: Option<&dyn Any>) -> Option<Value> {
+        Some(Value::Index(self.value))
+    }
+    fn configure(&self, p: Configure) -> Option<Part> {
+        if let Configure::Marked(selected) = p {
+            let mut next = self.clone();
+            next.selected = selected;
+            Some(Part::Segment(next))
+        } else {
+            None
+        }
+    }
+    fn semantics(&self, _cx: &Read<'_>, n: &mut nk_a11y::Node, _: &mut Vec<SemanticChild>) {
+        n.states.checked = self.selected;
+    }
     fn body(&self, cx: &Build<'_>) -> Node {
         let s = &cx.look.tokens.segmented;
         Node::text(
@@ -24,10 +44,10 @@ impl Component for Segment {
             body: BodyPlacement::NaturalCentered,
         }
     }
-    fn group(&self, i: Interaction) -> Membership {
+    fn group(&self, cx: &Read<'_>) -> Membership {
         Membership::Named {
             key: self.group.clone(),
-            selected: i.marked,
+            selected: cx.interaction.marked,
         }
     }
     fn ink(&self, look: ComponentLook<'_>, i: Interaction, _glyph: bool) -> Option<Color> {
@@ -83,19 +103,18 @@ impl Component for Segment {
             s.disabled_opacity as f32
         };
         let faded = |colour: nk_render::Color| ink(colour.with_alpha(colour.components[3] * a));
-        let (index, count) = (self.index, self.count);
         let (r, round) = (r, s.radius);
         // A join's corner lies a corner's width past the segment's clip, and
         // another, since the canvas's corner curves on beyond its radius.
-        let before = if index > 0 { 2. * round } else { 0. };
-        let after = if index + 1 < count { 2. * round } else { 0. };
+        let before = if self.join_before { 2. * round } else { 0. };
+        let after = if self.join_after { 2. * round } else { 0. };
         let outline = [r[0] - before, r[1], r[2] + before + after, r[3]];
         canvas.clip(rect(&visible));
         canvas.clip(rect(&r));
         canvas.rounded_rect(rect(&outline), round, faded(fill));
         if !interaction.marked && s.border > 0. {
             canvas.rounded_ring(rect(&outline), round, s.border, faded(s.border_color));
-            if index > 0 {
+            if self.join_before {
                 canvas.rounded_rect(
                     rect(&[r[0], r[1], s.border, r[3]]),
                     0.,

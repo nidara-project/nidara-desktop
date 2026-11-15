@@ -4,8 +4,31 @@ use super::*;
 pub struct Button {
     pub label: String,
     pub style: nk_text::TextStyle,
+    pub selected: bool,
+    pub corner: Corner,
 }
 impl Component for Button {
+    fn selected(&self) -> bool {
+        self.selected
+    }
+    fn corner(&self) -> Corner {
+        self.corner
+    }
+    fn configure(&self, p: Configure) -> Option<Part> {
+        let mut next = self.clone();
+        match p {
+            Configure::Marked(v) => next.selected = v,
+            Configure::Corner(v) => next.corner = v,
+            _ => return None,
+        };
+        Some(Part::Button(next))
+    }
+    fn semantics(&self, cx: &Read<'_>, n: &mut nk_a11y::Node, _: &mut Vec<SemanticChild>) {
+        n.states.checked = matches!(
+            cx.role,
+            Some(crate::Role::Toggle | crate::Role::Check | crate::Role::Radio)
+        ) && self.selected;
+    }
     fn body(&self, cx: &Build<'_>) -> Node {
         Node::text(cx.key("label"), self.label.clone(), self.style.clone()).lines(1)
     }

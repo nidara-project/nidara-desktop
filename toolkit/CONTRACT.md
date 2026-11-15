@@ -723,15 +723,20 @@ Apps and shell surfaces share the view vocabulary, layout, interaction, semantic
 `VIEW.md`. `AppWindow` hosts application views; the notification centre and Control Center
 host `ViewState` on shell surfaces. Built in `crates/nk-view` (its README).
 
-Step 1 of #1103 moves the content button, segment, swatch and drawn switch/check/radio marks
-behind `Component` and the single `Part::component` dispatch (`VIEW.md` §14). A view retains
-its declarative data and stable keys. `ComponentLook` borrows matching tokens + TypeScale at
-layout/tick/paint; rebuild on a look change. Bodies expand once per rebuild and are reused
-for ticks and anchor relayout. A drawn component inherits its control's interaction and has
-no hit target, Tab stop or semantic node. Per-key state resets on component type change and
-drops on disappearance, while disabled keys remain live. Component paint keeps the existing
-normal/lifted passes and exact pixels. Slider/dropdown/field/glass conversion, Host and value
-outcomes remain later steps; current activation strings and transport are unchanged.
+Steps 1–2 of #1103 put content buttons, range controls, dropdown/menu rows, display fields,
+surface/glass controls and drawn marks behind Component and the one Part::component dispatch
+(`VIEW.md` §§14–15). Choice and slider rows compose their children at body expansion. A view
+retains declarative data and stable keys; ComponentLook borrows tokens + TypeScale together.
+Bodies expand once per rebuild, reused by ticks and anchor relayout. Per-key typed state is
+reconciled with new model data, retaining disabled keys and cancelling capture before retirement
+or when disabled. Pointer capture, value, activation, redraw and host effects compose.
+
+Activated carries an optional typed Value while action strings remain compatible. Host is a
+generic component-request interface: AppWindow fulfils component-built list requests with its
+existing popup grab, keys, material and reader behavior, revalidating the owner before opening.
+No concrete component knowledge belongs in state/layout/motion or this list host. Display-field
+editing remains owner-managed, including the CC secret rules. Layer hosts, clipboard/IME and
+the editable field are later steps. Transport and installed-session policy are unchanged.
 
 ## Floating control capsule — proposal for #889
 

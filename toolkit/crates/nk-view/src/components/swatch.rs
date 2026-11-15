@@ -4,17 +4,37 @@ use super::*;
 pub struct Swatch {
     pub color: [f32; 4],
     pub group: Key,
+    pub selected: bool,
+    pub value: usize,
 }
 impl Component for Swatch {
+    fn selected(&self) -> bool {
+        self.selected
+    }
+    fn value(&self, _state: Option<&dyn Any>) -> Option<Value> {
+        Some(Value::Index(self.value))
+    }
+    fn configure(&self, p: Configure) -> Option<Part> {
+        if let Configure::Marked(selected) = p {
+            let mut next = self.clone();
+            next.selected = selected;
+            Some(Part::Swatch(next))
+        } else {
+            None
+        }
+    }
+    fn semantics(&self, _cx: &Read<'_>, n: &mut nk_a11y::Node, _: &mut Vec<SemanticChild>) {
+        n.states.checked = self.selected;
+    }
     fn body(&self, cx: &Build<'_>) -> Node {
         let s = &cx.look.tokens.swatch;
         let side = s.diameter + 2. * s.ring;
         Node::spacer(cx.key("circle")).width(side).height(side)
     }
-    fn group(&self, i: Interaction) -> Membership {
+    fn group(&self, cx: &Read<'_>) -> Membership {
         Membership::Named {
             key: self.group.clone(),
-            selected: i.marked,
+            selected: cx.interaction.marked,
         }
     }
     fn paint(&self, cx: &mut Paint<'_>, phase: PaintPhase) {
@@ -56,14 +76,5 @@ impl Component for Swatch {
             canvas.rounded_ring(rect(&circle), d / 2., b, fade(s.hover));
         }
         canvas.pop_clip();
-    }
-}
-
-/// Token-sized spacing inside the public swatch row. Drawn, with no interaction of its own.
-#[derive(Clone, Copy, Debug, PartialEq, Serialize, Deserialize)]
-pub struct SwatchGap;
-impl Component for SwatchGap {
-    fn body(&self, cx: &Build<'_>) -> Node {
-        Node::row(cx.key("body"), vec![]).width(cx.look.tokens.swatch.gap)
     }
 }

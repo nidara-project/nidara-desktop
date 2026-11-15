@@ -1,10 +1,10 @@
 <!-- SPDX-License-Identifier: LGPL-3.0-or-later -->
 # nk-view
 
-The shell's own view vocabulary, as `toolkit/VIEW.md` contracts it (#1048). It holds pieces 1
+The shared view vocabulary for apps and shell surfaces, as `toolkit/VIEW.md` contracts it (#1048). It holds pieces 1
 to 6 and 8 of the 2026-11-10 shell inventory: the layout box, the shared interaction state, the
-pane, motion (reveals and slides), scrolling, the overlay and swipe to dismiss. No surface uses
-it yet. The notification centre is the first, behind a flag.
+pane, motion (reveals and slides), scrolling, the overlay and swipe to dismiss. AppWindow hosts the gallery and application views; the notification centre and Control Center
+use ViewState on shell surfaces.
 
 A surface builds a `Node` tree from its model on every change, with each node's `Key` taken
 from the model. `ViewState` keeps what lasts between rebuilds:
@@ -14,7 +14,7 @@ from the model. `ViewState` keeps what lasts between rebuilds:
 | `layout(view, size, scale, look, text, now)` | Measures, then places. Measured sizes are rounded up to whole device pixels and every edge is snapped to the device grid, so equal cards have equal sizes wherever they are. Texts are cached by key, string, style, line limit and width. A reveal whose `open` changed starts to ease, and a pane the rebuild moved slides from where it was drawn. |
 | `layout_in(view, bounds, scale, look, text, now)` | `layout` for a view that takes only `bounds` of its surface; everything it gives back is in surface coordinates. |
 | `tick(look, text, now)` | Advances reveals, slides, swipes, scrolls and scroll bars, and lays the view out again. It returns `Ticked`: whether anything still moves (while it does, the surface asks for frames), and the cards whose swipe just took them off the surface, as `Activated` with the swipe's action. |
-| `pointer_motion`, `pointer_leave`, `button(pressed, now)`, `key`, `reconcile_pointer` | Derive hover (the innermost shown, enabled control), press (cancelled by a release elsewhere), focus (Tab order), swipes, and the scroll bars' drags. The surface gets back only `Activated { key, action }`. |
+| `pointer_motion`, `pointer_leave`, `button(pressed, now)`, `key`, `reconcile_pointer` | Derive hover (the innermost shown, enabled control), press (cancelled by a release elsewhere), focus (Tab order), swipes, and the scroll bars' drags. The surface gets back only `Activated { key, action, value }`. |
 | `scroll(ScrollBy)`, `window(key)` | Scroll the region under the pointer, by pixels or wheel detents; and say what of a region's content shows, so the surface builds only those rows. |
 | `frame(tokens, now)` | Returns a `FramePane` per visible pane (its whole shape, its clip, and its glass opacity, which is its content's), plus the state regions (see below). `Frame::groups(tone, shadow)` turns the panes into material groups. |
 | `semantics(root, first_id)` | Builds the AT-SPI tree: a scroll pane per scroll region, a panel per pane, a button per control, a label per text outside a control (whole, never cut). |
@@ -77,12 +77,12 @@ text and focus colours from `tokens/colors.json`. The scroll bar's look is
 from its tokens.
 
 
-**Components (#1103 step 1).** `look` is `tokens.with_types(&types)`, a borrowed
-`ComponentLook` from the same appearance. Rebuild on look changes. Content buttons, segments,
-swatches and drawn switch/check/radio marks implement `components::Component`; only
-`Part::component` dispatches concrete types. Their bodies expand once at rebuild, their
-`FrameSpec` supplies measure/placement, and normal/lifted paint asks Under then Over. Drawings
-inherit resolved interaction without their own input or semantic node. State is reconciled
-by key + component type, retaining disabled keys. See `VIEW.md` §14 for the contract and
-remaining slider/dropdown/field/glass/Host work. Segmented and swatch constructors take data
-only; they read styles at expansion, rather than from constructor arguments.
+**Components (#1103 steps 1–2).** `look` is `tokens.with_types(&types)`, a borrowed
+ComponentLook from the same appearance; rebuild on look changes. The button, slider, dropdown,
+menu row, display field, surface and marks implement Component, with Part::component as the
+single concrete dispatch. Body compositions own choice/slider rows. State is reconciled by
+key + type, including disabled keys; capture is cancelled when disabled, gone or retyped.
+Read/Input lend only the component's context/state and effects. Activated carries the typed
+value; compatibility accessors delegate to the trait. AppWindow implements Host for generic
+component-built list requests with the existing popup and reader behavior. See VIEW.md
+§§14–15 for the full contract, evidence bar and deferred layer-host/editing/clipboard/IME work.

@@ -2032,7 +2032,7 @@ mod tests {
         let progress = |d: &Detail| {
             let key = format!("r{id}/track").into();
             match d.state.placed().iter().find(|p| p.key == key) {
-                Some(p) if matches!(p.what, nk_view::What::Drawing(nk_view::Part::Switch(_))) => {
+                Some(p) if matches!(&p.what, nk_view::What::Drawing(part) if matches!(part.as_ref(),nk_view::Part::Switch(_))) => {
                     p.progress.unwrap()
                 }
                 w => panic!("no switch: {w:?}"),
