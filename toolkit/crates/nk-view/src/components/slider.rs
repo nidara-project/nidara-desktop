@@ -1,5 +1,7 @@
 // SPDX-License-Identifier: LGPL-3.0-or-later
 use super::*;
+/// A tile slider keeps its content in the same ink as its fill.
+const FILL_INK: crate::Ink = crate::Ink::Primary;
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub struct SliderControl {
     pub range: crate::Slider,
@@ -234,7 +236,7 @@ impl Component for SliderControl {
         let alpha = cx.alpha;
         let ink = |c: Color| c.with_alpha(c.components[3] * alpha as f32);
         if let Some(top) = self.top(&cx.read) {
-            let primary = tokens.look.ink(crate::Ink::Primary);
+            let primary = tokens.look.ink(FILL_INK);
             let fill =
                 primary.with_alpha(primary.components[3] * tokens.slider.fill_opacity as f32);
             cx.canvas.clip(rect(&visible));
@@ -251,7 +253,7 @@ impl Component for SliderControl {
             let track = [r[0], y, r[2], s.track];
             let centre = thumb[0] + thumb[2] / 2.;
             let ink_of = |a: f64| {
-                let c = tokens.look.ink(crate::Ink::Primary);
+                let c = tokens.look.ink(FILL_INK);
                 ink(c.with_alpha(c.components[3] * a as f32))
             };
             cx.canvas.clip(rect(&visible));

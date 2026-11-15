@@ -19,7 +19,26 @@
       "iconSize": 16,
       "open": "nd-pan-down",
       "closed": "nd-pan-end",
-      "source": "PreferencePage.ts: Gtk.Image pixel_size 16, uiIcon nd-pan-down when revealed, nd-pan-end when not; revealed at first (reveal_child: true)."
+      "source": "PreferencePage.ts: Gtk.Image pixel_size 16, uiIcon nd-pan-down when revealed, nd-pan-end when not; revealed at first (reveal_child: true).",
+      "chevron": {
+        "viewBox": 24,
+        "strokeWidth": 2,
+        "closedPoints": [
+          [
+            9,
+            18
+          ],
+          [
+            15,
+            12
+          ],
+          [
+            9,
+            6
+          ]
+        ],
+        "source": "nd-pan-end-symbolic.svg: m9 18 6-6-6-6, round caps/join, stroke 2 in a 24x24 viewBox. Rotating 90 degrees gives nd-pan-down."
+      }
     }
   },
   "variants": []

@@ -1672,3 +1672,15 @@ or version gate: the toolkit and Hyalo must be updated together. A newer client
 on an older unpublished server may fail with an unknown-opcode protocol error.
 B2.3 uses the clip to animate a dragged tile back through the fixed grid viewport;
 no client paints replacement glass.
+
+
+### nk-view disclosure (#1103 step 3)
+
+`components::Disclosure` now provides the existing Settings disclosure through the common
+component interface, with its body, frame, target, keyed pending Bool, input and semantics in
+one file. The constructor builds a toggle header and ordinary Reveal. The app owns expansion;
+Settings itself has not migrated. Geometry and chevron data are exported from the existing
+Settings row tokens. New component data goes through its constructor, without extending
+Configure. The only generic motion change snaps existing eases when reduced motion is enabled
+midflight. See VIEW.md §16; physical-session and Orca acceptance remain separate from private
+headless fixtures.

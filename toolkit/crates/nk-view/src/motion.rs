@@ -159,6 +159,9 @@ impl MotionState {
         self.reveals
             .iter_mut()
             .map(|(k, s)| {
+                if self.reduced {
+                    s.ease = None;
+                }
                 let p = match s.ease {
                     Some(e) => {
                         let (v, done) = e.at(now);

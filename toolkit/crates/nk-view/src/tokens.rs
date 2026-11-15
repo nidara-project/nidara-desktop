@@ -962,6 +962,62 @@ pub fn dropdown_from(
     Ok(DropdownStyle { trigger, menu })
 }
 
+/// Settings' disclosure row, from rows/common/list and the shared row-height token.
+#[derive(Clone, Debug)]
+pub struct DisclosureStyle {
+    pub padding: f64,
+    pub height: f64,
+    pub icon_size: f64,
+    pub view_box: f64,
+    pub stroke: f64,
+    pub points: [(f64, f64); 3],
+    pub hover_opacity: f64,
+    pub focus_width: f64,
+}
+pub fn disclosure_from(components: &Value, statics: &Value) -> Result<DisclosureStyle, String> {
+    let n = |v: &Value, field: &str, positive: bool| {
+        v.as_f64()
+            .filter(|v| v.is_finite() && if positive { *v > 0. } else { *v >= 0. })
+            .ok_or_else(|| format!("disclosure: invalid {field}"))
+    };
+    let d = &components["rows"]["disclosure"];
+    let c = &d["chevron"];
+    let mut points = [(0., 0.); 3];
+    let raw = c["closedPoints"]
+        .as_array()
+        .filter(|v| v.len() == 3)
+        .ok_or("disclosure: invalid chevron points")?;
+    let view_box = n(&c["viewBox"], "viewBox", true)?;
+    for (out, point) in points.iter_mut().zip(raw) {
+        let p = point
+            .as_array()
+            .filter(|v| v.len() == 2)
+            .ok_or("disclosure: invalid point")?;
+        *out = (n(&p[0], "point x", false)?, n(&p[1], "point y", false)?);
+        if out.0 > view_box || out.1 > view_box {
+            return Err("disclosure: point outside viewBox".into());
+        }
+    }
+    let hover_opacity = n(
+        &components["list"]["highlight"]["hoverOpacity"],
+        "hoverOpacity",
+        false,
+    )?;
+    if hover_opacity > 1. {
+        return Err("disclosure: hoverOpacity exceeds one".into());
+    }
+    Ok(DisclosureStyle {
+        padding: n(&components["common"]["padding"], "padding", false)?,
+        height: n(&statics["ts"]["ROW_HEIGHT"]["single"], "height", true)?,
+        icon_size: n(&d["iconSize"], "iconSize", true)?,
+        view_box,
+        points,
+        stroke: n(&c["strokeWidth"], "strokeWidth", true)?,
+        hover_opacity,
+        focus_width: n(&components["list"]["focus"]["width"], "focusWidth", true)?,
+    })
+}
+
 /// Everything a view is laid out and drawn with.
 #[derive(Clone, Debug)]
 pub struct Tokens {
@@ -978,6 +1034,7 @@ pub struct Tokens {
     pub dropdown: DropdownStyle,
     pub segmented: SegmentStyle,
     pub swatch: SwatchStyle,
+    pub disclosure: DisclosureStyle,
     /// A setting row's least height (`static.json` `ts.ROW_HEIGHT.single`).
     pub row_height: f64,
     /// A group's corner (`components.json` `common.groupRadius`), as Settings' cards.

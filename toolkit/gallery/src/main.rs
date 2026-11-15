@@ -79,15 +79,15 @@ impl Gallery {
             return;
         }
         if let Some(nk_view::Value::Index(i)) = &a.value {
-            if action.starts_with("accent:") {
+            if a.key.0 == format!("sw/live/g/{i}") {
                 self.model.accent = *i;
                 return self.rebuild();
             }
-            if action.starts_with("size:") {
+            if a.key.0 == format!("sg/live/g/{i}") {
                 self.model.size = *i;
                 return self.rebuild();
             }
-            if action.starts_with("choice:") {
+            if a.key.0 == format!("ck/live/r{i}/mark") {
                 self.model.choice = *i;
                 return self.rebuild();
             }
@@ -100,6 +100,11 @@ impl Gallery {
             "toggle" => self.model.toggle = !self.model.toggle,
             "switch" => self.model.switch = !self.model.switch,
             "reveal" => self.model.open = !self.model.open,
+            "disclosure" => {
+                if let Some(nk_view::Value::Bool(expanded)) = a.value {
+                    self.model.expanded = expanded;
+                }
+            }
             "slider" => {
                 if let Some(v) = a.value.as_ref().and_then(nk_view::Value::number) {
                     self.model.slider = v;

@@ -9,7 +9,7 @@
 //! lead anywhere) each time its model changes, and acts on the activations it gives back. It
 //! calls `commit` at the end of each turn, after acting on them.
 //!
-//! A owner in the page is the window's to open (VIEW.md §13.9): its list is a popup over the
+//! An owner in the page is the window's to open (VIEW.md §13.9): its list is a popup over the
 //! window, and the app hears only the selection.
 use crate::components::{Host, HostRequest, ListSpec, Request as ComponentRequest};
 use crate::frame::{BACK, Band, FORWARD, FrameStyle, SIDEBAR, Sidebar};
@@ -34,10 +34,10 @@ const SIDE: &str = "frame/side";
 const ROOT: u64 = 1;
 /// Where the band's semantic ids start, clear of the view's.
 const BAND_ROOT: u64 = 1_000_000;
-/// Where a owner's list's region ids start (it declares none, but its view needs a base).
+/// Where an owner's list's region ids start (it declares none, but its view needs a base).
 const MENU_ROOT: u32 = 2_000_000;
 /// The list's scroll region and the key of its row `n`.
-/// A owner's list, open in a popup over the window (VIEW.md §13.9).
+/// An owner's list, open in a popup over the window (VIEW.md §13.9).
 struct Menu {
     id: PopupId,
     /// The owner it is the list of, its options and the one chosen when it opened.
