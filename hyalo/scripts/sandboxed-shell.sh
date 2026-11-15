@@ -43,10 +43,8 @@ wl_build=${NIDARA_WL_BUILD:-$repo/lib/nidara-wl/build}
 export GI_TYPELIB_PATH="$wl_build${GI_TYPELIB_PATH:+:$GI_TYPELIB_PATH}"
 export LD_LIBRARY_PATH="$wl_build${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
 
-# The wallpaper, so the glass has a backdrop to blur. awww restores from its own cache,
-# which the throwaway HOME does not have, so the user's wallpaper is set explicitly.
-awww-daemon >/dev/null 2>&1 &
-( for _ in 1 2 3 4 5 6 7 8 9 10; do sleep 0.5; awww img "$wp" --transition-type none 2>/dev/null && break; done ) &
+# The wallpaper, so the glass has a backdrop to blur: Hyalo draws it. It took the picture
+# from HYALO_WALLPAPER or the user's file when it started, before this script ran.
 
 # HYALO_DRIVER=script: a script run on the private bus beside the shell (nidara-ipc reaches
 # the sandboxed shell, nidara-hyalo msg the nested Hyalo); the shell stops when it ends.

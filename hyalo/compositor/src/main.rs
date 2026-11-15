@@ -157,6 +157,17 @@ fn start(state: &mut Hyalo, session: bool, command: Option<String>) {
     // Before the autostart: `uwsm finalize` exports DISPLAY to the session's services.
     xwayland::start(state);
     tracing::info!(socket = ?state.socket_name, "listening");
+    // The wallpaper (render/wallpaper.rs): the saved one from the first frame, and a frame
+    // asked for whenever a later one has been decoded.
+    match smithay::reexports::calloop::ping::make_ping() {
+        Ok((ping, source)) => {
+            if state.loop_handle.insert_source(source, |_, _, state| state.queue_redraw(None)).is_err() {
+                tracing::warn!("no wake for the wallpaper: a new one shows with the next frame");
+            }
+            render::wallpaper::init(ping);
+        }
+        Err(err) => tracing::warn!(%err, "wallpaper not started"),
+    }
     ipc::server::start(state);
     config::watch(state);
     // A real session listens to logind and serves org.freedesktop.ScreenSaver, and may suspend

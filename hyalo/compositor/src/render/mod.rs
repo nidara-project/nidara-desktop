@@ -19,6 +19,7 @@ pub mod snapshot;
 pub mod stats;
 pub mod timing;
 pub mod title_bar;
+pub mod wallpaper;
 pub mod window;
 
 use smithay::{
@@ -172,7 +173,7 @@ impl<R: HyaloRenderer> std::fmt::Debug for OutputElement<R> {
     }
 }
 
-/// Behind everything: shown only where nothing covers the output (no wallpaper yet).
+/// Behind everything: shown only where nothing covers the output (no wallpaper could be read).
 pub const CLEAR_COLOR: Color32F = Color32F::new(0.06, 0.06, 0.07, 1.0);
 
 /// A surface tree and its popups, front to back, each with its glass right below it, and the
@@ -416,6 +417,12 @@ fn scene_elements<R: HyaloRenderer>(
     };
     let scale = Scale::from(output.current_scale().fractional_scale());
     let output_size = output_geo.size.to_f64().to_physical_precise_round(scale);
+    // The wallpaper (render/wallpaper.rs): the last thing in the session's frame and in the
+    // locked one, under the `Background` layers a client may still put there.
+    let push_wallpaper = |out: &mut Vec<OutputElement<R>>, renderer: &mut R| {
+        let pixels = output_geo.size.to_f64().to_physical_precise_round(scale);
+        out.extend(wallpaper::elements(renderer, output, output_geo.size, pixels, state.when, state.reduce_motion).into_iter().map(OutputElement::Cursor));
+    };
     if state.dimmed {
         use smithay::backend::renderer::element::{Kind, solid::{SolidColorBuffer, SolidColorRenderElement}};
         struct DimBuffer(std::sync::Mutex<SolidColorBuffer>);
@@ -448,6 +455,7 @@ fn scene_elements<R: HyaloRenderer>(
         for l in map.layers_on(Layer::Background).rev() {
             push_surface(&mut out, renderer, l.wl_surface(), layer_loc(l), scale, output_size, false, state.when);
         }
+        push_wallpaper(&mut out, renderer);
         return with_overlay(out, output);
     }
     let (above, below) = windows_front_to_back(state.space, state.wm, output);
@@ -596,6 +604,7 @@ fn scene_elements<R: HyaloRenderer>(
             push_surface(&mut out, renderer, l.wl_surface(), layer_loc(l), scale, output_size, false, state.when);
         }
     }
+    push_wallpaper(&mut out, renderer);
     with_overlay(out, output)
 }
 

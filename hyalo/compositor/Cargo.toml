@@ -18,6 +18,9 @@ smithay.workspace = true
 smithay-drm-extras.workspace = true
 bitflags = "2.2.1"
 png = "0.18"
+# The wallpaper Hyalo draws (render/wallpaper.rs): the formats Config1 accepts that this
+# crate decodes, and the scaling to an output's size. The same set as nidara-sessiond.
+image = { version = "0.25.10", default-features = false, features = ["png", "jpeg", "gif", "webp"] }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 thiserror = "2"

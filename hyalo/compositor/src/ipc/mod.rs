@@ -279,6 +279,14 @@ pub enum Request {
     /// X11 apps: Xwayland's display, whether its window manager is up, the scale it draws at
     /// (xwayland.rs).
     Xwayland,
+    /// The wallpaper: the picture at `path` (absolute) on every output, from now on. Not saved:
+    /// the user's choice is Config1's, which sends this. `transition` is Config1's name for
+    /// how it replaces the one shown (render/wallpaper.rs).
+    Wallpaper {
+        path: String,
+        #[serde(default)]
+        transition: Option<String>,
+    },
     /// Night light: the screens warmed to `temperature` kelvin, or neutral with none.
     NightLight {
         #[serde(default)]

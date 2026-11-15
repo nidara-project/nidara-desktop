@@ -753,8 +753,9 @@ text keeps it white.
   never turned a page of text: its black letters are always the darkest point under the text),
   live in `glass-tuning.conf` (`inkDarkAbove`, `inkLightBelow`, `ink = off`).
   `NIDARA_MATERIAL_DEBUG=1` logs every ink decision.
-- To see it nested, `awww-daemon` crashes inside the headless cage (broken pipe), so give the
-  backdrop with a gtk4-layer-shell BACKGROUND surface of your own through `HYALO_EXTRA`.
+- To see it nested, name the backdrop with `HYALO_WALLPAPER` (Hyalo draws it, see "The
+  wallpaper is Hyalo's"), or put a gtk4-layer-shell BACKGROUND surface of your own over it
+  through `HYALO_EXTRA`.
 
 ### The tone: the reference's own filter, stage by stage (owner, 2026-10-11)
 
@@ -2893,3 +2894,27 @@ Both interfaces stay at v1, with existing request/event opcodes preserved and no
 since attribute, capability negotiation or version gate. Update Hyalo and its
 clients together; a newer client may be rejected by an older unpublished server.
 See toolkit/CONTRACT.md and toolkit/shell/CC.md.
+
+## The wallpaper is Hyalo's (#1044, step 1)
+
+On a Hyalo session no program draws the wallpaper: `render/wallpaper.rs` does, as the last
+element of the session's frame and of the locked one. A `Background` layer a client still
+maps is drawn over it.
+
+- **The choice** stays Config1's (`~/.config/nidara/wallpaper`). Hyalo reads that file once at
+  start, so the first frame has the picture, and `nidara-sessiond`'s follower sends each
+  change as the IPC request `wallpaper` (`path`, `transition`), guarded as `Configure`.
+  Hyalo never saves it. A file that cannot be read shows `/usr/share/nidara/wallpaper.jpg`.
+- **Per output:** one buffer at the output's size in pixels, scaled to cover it. The first is
+  decoded where it is first drawn; later ones on a thread, the one before shown meanwhile.
+  A change of mode or scale decodes again.
+- **Transitions:** `none` replaces at once; every other name cross-fades over
+  `[animations] fade`, until the owner chooses the set. Reduce motion shows it at once.
+- **Formats:** PNG, JPEG, WebP, and a GIF's first frame. AVIF is not decoded yet though
+  Config1 accepts it: such a file shows the default.
+- **`HYALO_WALLPAPER`** names the picture for a nested Hyalo (the harness).
+- **The same unchanged file is not decoded twice:** the follower restates its settings when
+  outputs change.
+- Hyprland (frozen) keeps `awww`; the follower uses it only when no Hyalo socket exists.
+- Not done yet: GNOME's `picture-uri` (W2), the portal with its consent (W3), game mode's
+  temporary wallpaper (W4), fit and centre.

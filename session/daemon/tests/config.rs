@@ -433,7 +433,7 @@ async fn a_key_its_schema_lacks_is_unavailable_not_fatal() {
 }
 
 /// Protocol peer, not an implementation of the effects: records requests and can refuse
-/// them. Real Hyalo + awww are checked separately in the nested session.
+/// them. Real Hyalo is checked separately in the nested session.
 struct HyaloPeer {
     path: PathBuf,
     requests: std::sync::mpsc::Receiver<serde_json::Value>,
@@ -615,11 +615,17 @@ if os.path.exists(os.path.join(os.environ['HOME'], 'awww-refuse')):
             .filter_map(|s| serde_json::from_str::<serde_json::Value>(s).ok())
             .collect::<Vec<_>>()
     };
-    let expected = json!(["img", image, "--transition-type", "fade"]);
-    eventually("initial wallpaper applied with literal argv", || {
-        calls().contains(&expected)
-    })
-    .await;
+    // On Hyalo the compositor draws the wallpaper: it is told, and no program is run.
+    peer.expect(json!({"request":"wallpaper","path":image,"transition":"fade"}))
+        .await;
+    let wallpapers = || {
+        let mut pending = peer.pending.lock().unwrap();
+        pending.extend(peer.requests.try_iter());
+        pending
+            .iter()
+            .filter(|value| value["request"] == "wallpaper")
+            .count()
+    };
     // Failed effects must retry without needing another Config1 change.
     peer.refuse
         .store(true, std::sync::atomic::Ordering::Relaxed);
@@ -724,20 +730,18 @@ if os.path.exists(os.path.join(os.environ['HOME'], 'awww-refuse')):
     peer.expect(json!({"request":"night_light","temperature":null}))
         .await;
     // A wallpaper refusal retries the current transition; writing the home externally is heard.
-    std::fs::write(env.dir.join("awww-refuse"), b"1").unwrap();
+    peer.refuse
+        .store(true, std::sync::atomic::Ordering::Relaxed);
     std::fs::write(
         env.dir.join("config/nidara/wallpaper"),
         json!({"path":image,"transition":"wipe"}).to_string(),
     )
     .unwrap();
-    let expected = json!(["img", image, "--transition-type", "wipe"]);
-    eventually("external wallpaper change attempted", || {
-        calls().contains(&expected)
-    })
-    .await;
-    let before = calls().len();
-    std::fs::remove_file(env.dir.join("awww-refuse")).unwrap();
-    eventually("failed wallpaper retried", || calls().len() > before).await;
+    let expected = json!({"request":"wallpaper","path":image,"transition":"wipe"});
+    peer.expect(expected.clone()).await;
+    peer.refuse
+        .store(false, std::sync::atomic::Ordering::Relaxed);
+    peer.expect(expected).await;
     // Hotplug restates output-dependent effects; reconnect also restores the cursor.
     let mut stream = peer.events.recv_timeout(Duration::from_secs(2)).unwrap();
     stream
@@ -754,7 +758,7 @@ if os.path.exists(os.path.join(os.environ['HOME'], 'awww-refuse')):
     tokio::time::sleep(Duration::from_millis(100)).await;
     let file = env.dir.join("config/gtk-4.0/settings.ini");
     let modified = std::fs::metadata(&file).unwrap().modified().unwrap();
-    let before = calls().len();
+    let before = wallpapers();
     let _: (u64, OwnedValue) = call(
         &conn,
         "Apply",
@@ -767,7 +771,11 @@ if os.path.exists(os.path.join(os.environ['HOME'], 'awww-refuse')):
         std::fs::metadata(file).unwrap().modified().unwrap(),
         modified
     );
-    assert_eq!(calls().len(), before);
+    assert_eq!(wallpapers(), before);
+    assert!(
+        calls().is_empty(),
+        "with Hyalo there, no wallpaper program is run"
+    );
 }
 
 #[tokio::test]
