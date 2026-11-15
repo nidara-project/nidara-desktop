@@ -161,9 +161,14 @@ impl Component for EditableField {
             )?);
         }
         let e = s.editor.as_mut().unwrap();
-        if e.text() != self.text && s.reported.as_deref() != Some(self.text.as_str()) {
+        if e.text() == self.text {
+            // The model has acknowledged the edit. A later occurrence of this value is
+            // a fresh model replacement, not an indefinitely replayable echo.
+            s.reported = None;
+        } else if s.reported.as_deref() != Some(self.text.as_str()) {
             e.cancel_preedit()?;
             e.replace_range(0..e.text().len(), &self.text)?;
+            s.reported = None;
             s.finished_composition = false;
             s.hide_preedit_caret = false;
             s.revision = s

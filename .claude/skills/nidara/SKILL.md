@@ -434,8 +434,9 @@ reader expansion last until reconciliation. Settings still uses nk-widgets. Its 
 measures and path come from rows/common/static exports, with the same neutral hover and
 focus. A fixed empty row reserves an icon slot; Spacer consumes spare space in a stack.
 Changing to reduced motion midflight must clear existing eases too, not just stop new ones.
-EditableField owns Editor by key/type. Echoes of the last reported/current text preserve it;
-other model text replaces and ends composition. Prepare receives look/backend; TextBackend.fork
+EditableField owns Editor by key/type. Echoing the current text acknowledges its pending report
+without resetting the editor. External replacements retire that report too: an old reported
+value must not shadow a later model replacement. Replacements end composition. Prepare receives look/backend; TextBackend.fork
 keeps the same font source/system-font policy. Check component_errors when hosting ViewState.
 Read.part and Inset frame placement use actual body geometry, not repeated position arithmetic.
 Raw key/IME/arrange/blur questions stay generic; blur must not cancel another control's pending

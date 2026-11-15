@@ -129,10 +129,22 @@ fn editor_ack_rebuild_preserves_selection_composition_and_undo_but_external_text
     lay(&mut s, &view("alpha"), 180.);
     assert_eq!(
         text(&s),
-        "external",
-        "an echo of the last reported value does not replace the held editor"
+        "alpha",
+        "a previously acknowledged value is a fresh external replacement"
     );
     key(&mut s, 0x7a, "", true, false);
+    assert_eq!(text(&s), "external");
+    key(&mut s, 0x7a, "", true, false);
+    assert_eq!(text(&s), "alpha");
+}
+#[test]
+fn editor_external_replacement_retires_an_unacknowledged_report() {
+    let mut s = fixture("");
+    key(&mut s, 0, "alpha", false, false);
+    // An app may replace the input without first echoing its reported value.
+    lay(&mut s, &view("external"), 180.);
+    assert_eq!(text(&s), "external");
+    lay(&mut s, &view("alpha"), 180.);
     assert_eq!(text(&s), "alpha");
 }
 #[test]

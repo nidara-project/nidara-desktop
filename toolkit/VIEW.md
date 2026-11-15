@@ -1038,9 +1038,11 @@ reports the submit action, while each committed text change reports changed_acti
 `Value::Text`. Selection, preedit, focus changes and no-op SetText do not activate the app.
 The application applies the new text and rebuilds before AppWindow commits.
 
-The component owns nk-text::Editor in keyed, typed state. A rebuild echoing the last text
-reported or the current text leaves the editor, selection, undo and composition alone.
-Other model text replaces the buffer and ends composition. Appearance changes reflow the
+The component owns nk-text::Editor in keyed, typed state. A rebuild echoing the current text
+acknowledges the pending report and leaves the editor, selection, undo and composition alone.
+A pending report is also retired on an external replacement: an old reported value must
+never shadow a later model replacement. Other model text replaces the buffer and ends
+composition. Appearance changes reflow the
 same editor. TextBackend::fork creates an independent engine with the same FontSet and
 system-font policy; the generic prepare question supplies look and backend. Unsupported
 backends/preparation failures are exposed through ViewState::component_errors and checked
