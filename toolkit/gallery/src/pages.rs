@@ -1824,7 +1824,7 @@ fn search_field(m: &Model, t: &TypeScale) -> Vec<Node> {
     let mut field = EditableField::new(m.search.clone());
     field.placeholder = "Search the catalogue".into();
     field.submit = Some("search-submit".into());
-    vec![section(
+    let mut out = vec![section(
         "search-live",
         "Try it: Escape clears before it leaves; the clear control returns focus",
         t,
@@ -1848,7 +1848,34 @@ fn search_field(m: &Model, t: &TypeScale) -> Vec<Node> {
             ],
         )
         .gap(Space::S3),
-    )]
+    )];
+    let specimen = |key: &str, name: &str, value: &str, disabled| {
+        let mut field = EditableField::new(value);
+        field.placeholder = "Search".into();
+        Search {
+            field,
+            name: name.into(),
+            changed: "noop".into(),
+            clear_label: format!("Clear {name}"),
+            disabled,
+        }
+        .node(key)
+    };
+    out.push(section(
+        "search-states",
+        "States",
+        t,
+        Node::column(
+            "q/states",
+            vec![
+                specimen("q/empty", "Empty search", "", false),
+                specimen("q/filled", "Filled search", "Nidara", false),
+                specimen("q/disabled", "Disabled search", "Nidara", true),
+            ],
+        )
+        .gap(Space::S3),
+    ));
+    out
 }
 
 #[cfg(test)]
