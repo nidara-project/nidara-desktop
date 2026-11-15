@@ -438,6 +438,10 @@ EditableField owns Editor by key/type. Echoing the current text acknowledges its
 without resetting the editor. External replacements retire that report too: an old reported
 value must not shadow a later model replacement. Replacements end composition. Prepare receives look/backend; TextBackend.fork
 keeps the same font source/system-font policy. Check component_errors when hosting ViewState.
+Model/placeholder, reader text, paste and IME commit share single-line normalization: remove
+one final logical break, map interior breaks/tabs to spaces, remove other controls. Never
+turn these external characters into a fatal preparation error. Preedit keeps its original
+offset validation; secrets keep their separate owner policy. See VIEW.md §17.
 Read.part and Inset frame placement use actual body geometry, not repeated position arithmetic.
 Raw key/IME/arrange/blur questions stay generic; blur must not cancel another control's pending
 input. Changes carry Text, Enter has an optional distinct action, and no-op requests do not activate.

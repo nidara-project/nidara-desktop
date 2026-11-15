@@ -1038,6 +1038,17 @@ reports the submit action, while each committed text change reports changed_acti
 `Value::Text`. Selection, preedit, focus changes and no-op SetText do not activate the app.
 The application applies the new text and rebuilds before AppWindow commits.
 
+External text (model, reader SetText/Set, paste and IME commit) shares one single-line
+normalization: remove exactly one final logical line break, map interior line breaks and
+tabs to spaces, and remove other control characters. CRLF counts as one break; CR, LF,
+NEL and Unicode line/paragraph separators are recognized. Ordinary spaces and Unicode
+content remain unchanged. Model and placeholder text are normalized before preparation,
+so these characters cannot terminate the window through a preparation error. Reconciliation,
+reader text and search's clear-control visibility use the normalized value. Model cleanup
+does not emit an edit; input actions report the normalized committed text. Preedit remains
+validated without rewriting its IME byte offsets, and an invalid preedit/delete batch is
+still rejected before changing committed text. Secrets retain their separate policy.
+
 The component owns nk-text::Editor in keyed, typed state. A rebuild echoing the current text
 acknowledges the pending report and leaves the editor, selection, undo and composition alone.
 A pending report is also retired on an external replacement: an old reported value must

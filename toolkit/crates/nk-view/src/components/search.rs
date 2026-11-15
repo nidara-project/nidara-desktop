@@ -35,7 +35,7 @@ impl Component for Search {
                 .enabled(!self.disabled)
                 .grow(),
         ];
-        if !self.field.text.is_empty() {
+        if !editable::normalize_single_line(&self.field.text).is_empty() {
             let mut clear = Node::control(
                 cx.key("clear"),
                 self.clear_label.clone(),

@@ -148,7 +148,7 @@ fn editor_external_replacement_retires_an_unacknowledged_report() {
     assert_eq!(text(&s), "alpha");
 }
 #[test]
-fn editor_noop_and_invalid_reader_requests_do_not_activate_or_mutate() {
+fn editor_noop_and_invalid_selections_do_not_activate_or_mutate() {
     let mut s = fixture("日本語");
     assert!(
         s.respond(&"edit".into(), Request::SetText("日本語".into()))
@@ -156,11 +156,6 @@ fn editor_noop_and_invalid_reader_requests_do_not_activate_or_mutate() {
     );
     assert!(
         s.respond(&"edit".into(), Request::SetSelection(1..3))
-            .is_none()
-    );
-    assert_eq!(text(&s), "日本語");
-    assert!(
-        s.respond(&"edit".into(), Request::SetText("invalid\ntext".into()))
             .is_none()
     );
     assert_eq!(text(&s), "日本語");
@@ -175,6 +170,102 @@ fn editor_noop_and_invalid_reader_requests_do_not_activate_or_mutate() {
         ),
         (0, 3)
     );
+}
+#[test]
+fn editor_normalizes_paste_without_losing_unicode_or_undo() {
+    for (raw, expected) in [
+        ("terminal\n", "terminal"),
+        ("日本\r\n語\t👩‍💻\r\n", "日本 語 👩‍💻"),
+        ("a\u{85}b\u{2028}c\u{2029}", "a b c"),
+        ("a\0b\u{7f}\u{1b}c", "abc"),
+        ("a\n\n", "a "),
+        (" a  \t", " a   "),
+    ] {
+        let mut s = fixture("kept");
+        s.respond(&"edit".into(), Request::SetSelection(0..4));
+        let target = paste_target(&mut s);
+        let a = s.reply(&target, Request::Paste(raw.into())).unwrap();
+        assert_eq!(a.value, Some(Value::Text(expected.into())), "{raw:?}");
+        assert_eq!(text(&s), expected);
+        key(&mut s, 0x7a, "", true, false);
+        assert_eq!(text(&s), "kept");
+    }
+}
+#[test]
+fn editor_normalizes_reader_text_and_reports_only_canonical_changes() {
+    let mut s = fixture("old");
+    let a = s
+        .respond(&"edit".into(), Request::SetText("日本\t語\r\n".into()))
+        .unwrap();
+    assert_eq!(a.value, Some(Value::Text("日本 語".into())));
+    assert!(
+        s.respond(
+            &"edit".into(),
+            Request::Set(Value::Text("日本\t語\n".into()))
+        )
+        .is_none()
+    );
+    assert_eq!(text(&s), "日本 語");
+    assert_eq!(editor_node(&mut s).text.unwrap().text, "日本 語");
+}
+#[test]
+fn editor_normalizes_model_and_placeholder_without_preparation_errors_or_echo_reset() {
+    let mut s = fixture("old");
+    let mut f = EditableField::new("日本\r\n語\0\n");
+    f.placeholder = "Find\ttext\n".into();
+    let node = f.node("edit", "Query", "changed");
+    lay(&mut s, &node, 180.);
+    assert_eq!(text(&s), "日本 語");
+    assert_eq!(editor_node(&mut s).description, "Find text");
+    s.respond(&"edit".into(), Request::SetSelection(0..3));
+    s.ime(&nk_wayland::ImeBatch {
+        preedit: Some(("語".into(), 3, 3)),
+        ..Default::default()
+    });
+    let before = s.text_input();
+    lay(&mut s, &node, 180.);
+    assert_eq!(s.text_input(), before);
+    assert!(editor_node(&mut s).text.unwrap().geometry.is_none());
+}
+#[test]
+fn editor_normalizes_ime_commit_without_changing_preedit_offset_validation() {
+    let mut s = fixture("日本");
+    key(&mut s, 0xff57, "", false, false);
+    s.ime(&nk_wayland::ImeBatch {
+        preedit: Some(("仮".into(), 3, 3)),
+        ..Default::default()
+    });
+    let a = s
+        .ime(&nk_wayland::ImeBatch {
+            commit: Some("語\t終\0\r\n".into()),
+            ..Default::default()
+        })
+        .unwrap();
+    assert_eq!(a.value, Some(Value::Text("日本語 終".into())));
+    assert!(editor_node(&mut s).text.unwrap().geometry.is_some());
+    key(&mut s, 0x7a, "", true, false);
+    assert_eq!(text(&s), "日本");
+}
+#[test]
+fn search_normalizes_its_clear_control_visibility_with_the_entry() {
+    let mut s = ViewState::new(100);
+    lay(
+        &mut s,
+        &Search {
+            field: EditableField::new("\n"),
+            name: "Search".into(),
+            changed: "search".into(),
+            clear_label: "Clear".into(),
+            disabled: false,
+        }
+        .node("search"),
+        180.,
+    );
+    assert_eq!(
+        s.typed_value(&"search/input".into()),
+        Some(Value::Text(String::new()))
+    );
+    assert!(s.rect(&"search/clear".into()).is_none());
 }
 #[test]
 fn editor_ime_preedit_cancel_commit_delete_and_invalid_batch_keep_committed_state_separate() {

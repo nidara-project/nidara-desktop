@@ -2,6 +2,7 @@
 //! The retained single-line editor. Secrets remain in their existing owner-edited field.
 use super::*;
 use nk_text::{Affinity, Caret, Editor, Layout, Movement, Point};
+use std::borrow::Cow;
 use unicode_segmentation::UnicodeSegmentation;
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
@@ -135,13 +136,40 @@ fn single_line(text: &str) -> Result<(), String> {
         Ok(())
     }
 }
+/// External single-line data keeps content, folding logical breaks rather than refusing it.
+/// CRLF is one break; remove exactly one final break, preserving ordinary whitespace.
+pub(super) fn normalize_single_line(text: &str) -> Cow<'_, str> {
+    if single_line(text).is_ok() {
+        return Cow::Borrowed(text);
+    }
+    let text = text
+        .strip_suffix("\r\n")
+        .or_else(|| text.strip_suffix(['\n', '\r', '\u{85}', '\u{2028}', '\u{2029}']))
+        .unwrap_or(text);
+    let mut out = String::with_capacity(text.len());
+    let mut chars = text.chars().peekable();
+    while let Some(c) = chars.next() {
+        match c {
+            '\r' => {
+                if chars.peek() == Some(&'\n') {
+                    chars.next();
+                }
+                out.push(' ');
+            }
+            '\n' | '\u{85}' | '\u{2028}' | '\u{2029}' | '\t' => out.push(' '),
+            c if c.is_control() => {}
+            c => out.push(c),
+        }
+    }
+    Cow::Owned(out)
+}
 impl Component for EditableField {
     fn state(&self) -> Option<Box<dyn Any>> {
         Some(Box::<State>::default())
     }
     fn prepare(&self, cx: &mut Prepare<'_>) -> Result<(), String> {
-        single_line(&self.text)?;
-        single_line(&self.placeholder)?;
+        let text = normalize_single_line(&self.text);
+        let placeholder = normalize_single_line(&self.placeholder);
         let s = cx
             .state
             .as_deref_mut()
@@ -155,19 +183,19 @@ impl Component for EditableField {
         if s.editor.is_none() {
             s.editor = Some(Editor::new(
                 cx.text.fork()?,
-                &self.text,
+                &text,
                 style.clone(),
                 f32::MAX,
             )?);
         }
         let e = s.editor.as_mut().unwrap();
-        if e.text() == self.text {
+        if e.text() == text {
             // The model has acknowledged the edit. A later occurrence of this value is
             // a fresh model replacement, not an indefinitely replayable echo.
             s.reported = None;
-        } else if s.reported.as_deref() != Some(self.text.as_str()) {
+        } else if s.reported.as_deref() != Some(text.as_ref()) {
             e.cancel_preedit()?;
-            e.replace_range(0..e.text().len(), &self.text)?;
+            e.replace_range(0..e.text().len(), &text)?;
             s.reported = None;
             s.finished_composition = false;
             s.hide_preedit_caret = false;
@@ -186,9 +214,9 @@ impl Component for EditableField {
         }
         if s.placeholder
             .as_ref()
-            .is_none_or(|p| p.text() != self.placeholder || p.style() != &style)
+            .is_none_or(|p| p.text() != placeholder || p.style() != &style)
         {
-            s.placeholder = Some(cx.text.layout(&self.placeholder, &style, f32::MAX)?);
+            s.placeholder = Some(cx.text.layout(&placeholder, &style, f32::MAX)?);
         }
         Ok(())
     }
@@ -469,11 +497,13 @@ impl Component for EditableField {
     fn request(&self, cx: &mut Input<'_>, request: Request) {
         match request {
             Request::Paste(text) => self.edit(cx, |s| {
-                single_line(&text)?;
-                s.editor.as_mut().unwrap().paste(&text)
+                s.editor
+                    .as_mut()
+                    .unwrap()
+                    .paste(&normalize_single_line(&text))
             }),
             Request::SetText(text) | Request::Set(Value::Text(text)) => self.edit(cx, |s| {
-                single_line(&text)?;
+                let text = normalize_single_line(&text);
                 let e = s.editor.as_mut().unwrap();
                 if e.text() == text {
                     return Ok(());
@@ -497,9 +527,7 @@ impl Component for EditableField {
     }
     fn ime(&self, cx: &mut Input<'_>, batch: &nk_wayland::ImeBatch) {
         self.edit(cx, |s| {
-            if let Some(text) = &batch.commit {
-                single_line(text)?;
-            }
+            let commit = batch.commit.as_deref().map(normalize_single_line);
             if let Some((text, _, _)) = &batch.preedit {
                 single_line(text)?;
             }
@@ -526,7 +554,7 @@ impl Component for EditableField {
             };
             let was = e.preedit().is_some();
             e.cancel_preedit()?;
-            if let Some(text) = &batch.commit {
+            if let Some(text) = commit.as_deref() {
                 e.replace_range(deletion.unwrap_or(selected), text)?;
             } else if let Some(range) = deletion {
                 let kept = e.selected_text().to_owned();
@@ -587,7 +615,7 @@ impl Component for EditableField {
         };
         let Some(e) = &s.editor else { return };
         n.role = nk_a11y::Role::TextInput;
-        n.description = self.placeholder.clone();
+        n.description = normalize_single_line(&self.placeholder).into_owned();
         n.actions = vec![
             nk_a11y::Action::Focus,
             nk_a11y::Action::SetText,
