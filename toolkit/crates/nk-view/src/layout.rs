@@ -774,6 +774,22 @@ impl Layouter<'_> {
                     self.place(&c.child, child, r, inner, out);
                     return;
                 }
+                if self.control_frame(c).body == BodyPlacement::Inset {
+                    let (x, y) = self.control_frame(c).inset;
+                    self.place(
+                        &c.child,
+                        child,
+                        [
+                            self.round(r[0] + x),
+                            self.round(r[1] + y),
+                            (r[2] - 2. * x).max(0.),
+                            (r[3] - 2. * y).max(0.),
+                        ],
+                        inner,
+                        out,
+                    );
+                    return;
+                }
                 let x = self.control_frame(c).inset.0;
                 let room = (r[2] - 2. * x).max(0.);
                 let w = if self.control_frame(c).body == BodyPlacement::NaturalCentered {

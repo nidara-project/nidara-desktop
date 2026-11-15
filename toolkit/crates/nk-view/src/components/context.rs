@@ -25,11 +25,14 @@ pub enum Capture {
     Take,
     Release,
 }
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq)]
 pub enum Request {
     Activate,
     Set(Value),
     Expanded(bool),
+    Paste(String),
+    SetText(String),
+    SetSelection(std::ops::Range<usize>),
 }
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub enum Configure {
@@ -51,6 +54,9 @@ pub struct Read<'a> {
     pub interaction: Interaction,
     pub role: Option<Role>,
     pub focused: bool,
+    pub focus: Option<&'a Key>,
+    pub instance: u64,
+    pub clicks: u8,
     pub owns_mark: bool,
     pub fading: bool,
     pub state: Option<&'a dyn Any>,
@@ -58,6 +64,23 @@ pub struct Read<'a> {
     pub text: &'a TextCache,
 }
 impl Read<'_> {
+    /// A node in this component's own expanded body, in surface coordinates.
+    pub fn part(&self, suffix: &str) -> Option<&Placed> {
+        let key = self.key(suffix);
+        self.placed.iter().find(|p| p.key == key)
+    }
+    pub fn focused_part(&self, suffix: &str) -> bool {
+        self.focus == Some(&self.key(suffix))
+    }
+    pub fn reply_target(&self, kind: std::any::TypeId, revision: u64) -> ReplyTarget {
+        ReplyTarget {
+            owner: self.key.clone(),
+            kind,
+            instance: self.instance,
+            revision,
+        }
+    }
+
     pub fn text(&self, suffix: &str) -> Option<(&Placed, &crate::Fitted)> {
         let key = Key(format!("{}/{suffix}", self.key.0));
         Some((
@@ -93,9 +116,21 @@ pub struct ListSpec {
     pub border_color: Color,
     pub background: Color,
 }
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct ReplyTarget {
+    pub owner: Key,
+    pub kind: std::any::TypeId,
+    pub instance: u64,
+    pub revision: u64,
+}
 #[derive(Clone, Debug, PartialEq)]
 pub enum HostRequest {
-    OpenList { owner: Key, list: ListSpec },
+    OpenList { owner: Key, list: Box<ListSpec> },
+    Copy { text: String },
+    Paste { target: ReplyTarget },
+    TextInput { input: nk_wayland::TextInput },
+    Respond { owner: Key, request: Request },
+    Focus { owner: Key },
 }
 pub trait Host {
     fn request(&mut self, request: HostRequest);

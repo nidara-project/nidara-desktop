@@ -347,3 +347,9 @@ Nidara existence claims come from repository sources rather than analogy with ei
 [NSViewController]: https://developer.apple.com/documentation/appkit/nsviewcontroller
 [NSVisualEffectView]: https://developer.apple.com/documentation/appkit/nsvisualeffectview
 [NSWindow]: https://developer.apple.com/documentation/appkit/nswindow
+
+Single-line editable input and search now have nk-view gallery pages (`entry`, `search`)
+as well as the existing nk-widgets implementation. They expose Text/EditableText and native
+selection/caret geometry. Secret fields retain their existing owner-managed policy; multiline
+and numeric fields are outside this migration. Search result relations and recent-query menus
+remain catalogue targets, not claims of this implementation.

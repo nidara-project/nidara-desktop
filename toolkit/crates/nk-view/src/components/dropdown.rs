@@ -28,7 +28,7 @@ impl Dropdown {
         if let Some(list) = self.list(&read) {
             cx.effects.host.push(HostRequest::OpenList {
                 owner: read.key.clone(),
-                list,
+                list: Box::new(list),
             });
             cx.effects.activate = true;
             cx.effects.handled = true;

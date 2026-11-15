@@ -55,7 +55,7 @@ fn status_text(s: &str) -> &'static str {
 }
 
 /// Each page: its id (what the check and `--page` name), its title and its glyph.
-pub const PAGES: [(&str, &str, &str); 19] = [
+pub const PAGES: [(&str, &str, &str); 21] = [
     ("status", "Status", "nd-emblem-default"),
     ("button", "Button", "nd-hand"),
     ("switch", "Switch", "nd-light-mode"),
@@ -75,6 +75,8 @@ pub const PAGES: [(&str, &str, &str); 19] = [
     ("grid", "Grid", "nd-control-center"),
     ("reveal", "Reveal", "nd-pan-end"),
     ("disclosure", "Disclosure", "nd-pan-end"),
+    ("entry", "Editable field", "nd-input-keyboard"),
+    ("search", "Search", "nd-system-search"),
 ];
 
 /// What the view is built from: the page, and what the live samples hold.
@@ -100,6 +102,9 @@ pub struct Model {
     pub tile: f64,
     pub open: bool,
     pub expanded: bool,
+    pub entry: String,
+    pub search: String,
+    pub submitted: u32,
 }
 impl Default for Model {
     fn default() -> Self {
@@ -120,6 +125,9 @@ impl Default for Model {
             tile: 60.,
             open: false,
             expanded: false,
+            entry: "Nidara".into(),
+            search: String::new(),
+            submitted: 0,
         }
     }
 }
@@ -308,6 +316,8 @@ fn page(id: &str, m: &Model, cat: &Catalogue, t: &TypeScale, k: &Measures) -> Ve
         "grid" => grid(t),
         "reveal" => reveal(m, t),
         "disclosure" => disclosures(m, t),
+        "entry" => entries(m, t),
+        "search" => search_field(m, t),
         _ => vec![],
     }
 }
@@ -1760,6 +1770,85 @@ fn disclosures(m: &Model, t: &TypeScale) -> Vec<Node> {
         ),
         section("d/state-section", "States", t, states),
     ]
+}
+
+fn entries(m: &Model, t: &TypeScale) -> Vec<Node> {
+    use nk_view::components::EditableField;
+    let field = |key: &str, text: &str| EditableField::new(text).node(key, "Sample text", "noop");
+    let mut live = EditableField::new(m.entry.clone());
+    live.placeholder = "Write here".into();
+    live.submit = Some("entry-submit".into());
+    vec![
+        section(
+            "entry-live",
+            "Try it: type, compose, select and paste",
+            t,
+            Node::column(
+                "e/live",
+                vec![
+                    live.node("e/input", "Editable text", "entry-edit"),
+                    Node::text(
+                        "e/value",
+                        format!("Value: {}", m.entry),
+                        t.style(Type::Body, Weight::Regular),
+                    )
+                    .lines(2),
+                    Node::text(
+                        "e/submitted",
+                        format!("Submitted: {}", m.submitted),
+                        t.style(Type::Body, Weight::Regular),
+                    ),
+                ],
+            )
+            .gap(Space::S3),
+        ),
+        section(
+            "entry-states",
+            "States",
+            t,
+            Node::column(
+                "e/states",
+                vec![
+                    field("e/empty", ""),
+                    field("e/text", "Nidara"),
+                    field("e/focus", "Keyboard focus").shown(Shown::Focus),
+                    field("e/disabled", "Disabled").enabled(false),
+                ],
+            )
+            .gap(Space::S3),
+        ),
+    ]
+}
+fn search_field(m: &Model, t: &TypeScale) -> Vec<Node> {
+    use nk_view::components::{EditableField, Search};
+    let mut field = EditableField::new(m.search.clone());
+    field.placeholder = "Search the catalogue".into();
+    field.submit = Some("search-submit".into());
+    vec![section(
+        "search-live",
+        "Try it: Escape clears before it leaves; the clear control returns focus",
+        t,
+        Node::column(
+            "q/live",
+            vec![
+                Search {
+                    field,
+                    name: "Search text".into(),
+                    changed: "search-edit".into(),
+                    clear_label: "Clear search".into(),
+                    disabled: false,
+                }
+                .node("q/search"),
+                Node::text(
+                    "q/value",
+                    format!("Query: {}", m.search),
+                    t.style(Type::Body, Weight::Regular),
+                )
+                .lines(2),
+            ],
+        )
+        .gap(Space::S3),
+    )]
 }
 
 #[cfg(test)]

@@ -408,7 +408,7 @@ reporting `"{action}:{n}"`. It paints off glass; the selected band and outer key
 are separate. Read every measure, tone and disabled opacity from `choices.swatch`; the gallery
 reads its named palette from exported `colors.json` in `accentOrder` (required, complete and
 unique), never the object-map order or a second list of accent colours.
-**Components (#1103 steps 1–3, `VIEW.md` §§14–16):** button, range, dropdown/menu row,
+**Components (#1103 steps 1–4, `VIEW.md` §§14–17):** button, range, dropdown/menu row,
 display field, surface/glass and marks live in `nk-view/src/components/`; Part::component is
 the only concrete dispatch. State/layout/motion never name components; the AppWindow list host
 knows no dropdown. Control keeps only common attributes. Node constructors/modifiers configure
@@ -434,6 +434,18 @@ reader expansion last until reconciliation. Settings still uses nk-widgets. Its 
 measures and path come from rows/common/static exports, with the same neutral hover and
 focus. A fixed empty row reserves an icon slot; Spacer consumes spare space in a stack.
 Changing to reduced motion midflight must clear existing eases too, not just stop new ones.
+EditableField owns Editor by key/type. Echoes of the last reported/current text preserve it;
+other model text replaces and ends composition. Prepare receives look/backend; TextBackend.fork
+keeps the same font source/system-font policy. Check component_errors when hosting ViewState.
+Read.part and Inset frame placement use actual body geometry, not repeated position arithmetic.
+Raw key/IME/arrange/blur questions stay generic; blur must not cancel another control's pending
+input. Changes carry Text, Enter has an optional distinct action, and no-op requests do not activate.
+The clipboard host uses key/type/process-unique instance/revision plus Window request IDs;
+a newer paste intent invalidates an older reply. Never reuse a wire ID after replacing a host.
+Search composes the same editor, glyph and clear control with one chrome, returning focus;
+Escape finishes composition, then clears, then leaves. Use freshly exported search.clearIcon.
+Display/secret fields keep their owner's editing, never this editor or its IME context.
+See VIEW.md §17 before extending the field; layer hosts/multiline/numeric remain later work.
 The display field still leaves editing to its owner, including the CC's secret rules. Layer
 hosts, editable fields, clipboard/IME remain later work. A conversion requires main↔main first,
 named unstable captures, exact stable pixels and isolated mutation controls; never change the

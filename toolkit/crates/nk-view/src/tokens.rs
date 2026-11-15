@@ -1018,6 +1018,75 @@ pub fn disclosure_from(components: &Value, statics: &Value) -> Result<Disclosure
     })
 }
 
+/// Single-line entry/search chrome, shared with Settings' existing search export.
+#[derive(Clone, Debug)]
+pub struct EntryStyle {
+    pub padding_x: f64,
+    pub border: f64,
+    pub min_height: f64,
+    pub radius: f64,
+    pub icon_size: f64,
+    pub icon_gap: f64,
+    pub icon: String,
+    pub clear_icon: String,
+    pub background: Color,
+    pub border_color: Color,
+    pub focus_border: Color,
+    pub text: Color,
+    pub dim: Color,
+    pub selection: Color,
+    pub selection_text: Color,
+}
+pub fn entry_from(component: &Value, set: &Value) -> Result<EntryStyle, String> {
+    let n = |k: &str| {
+        component[k]
+            .as_f64()
+            .filter(|v| v.is_finite() && *v >= 0.)
+            .ok_or_else(|| format!("entry: invalid {k}"))
+    };
+    let name = |k: &str| {
+        component[k]
+            .as_str()
+            .filter(|s| !s.is_empty())
+            .map(str::to_owned)
+            .ok_or_else(|| format!("entry: missing {k}"))
+    };
+    let color = |k: &str| -> Result<Color, String> {
+        let token = name(k)?;
+        set["tokens"][&token]
+            .as_str()
+            .ok_or_else(|| format!("entry: no {token}"))
+            .and_then(parse_color)
+    };
+    let radius = set["tokens"][name("radius")?]
+        .as_str()
+        .and_then(|s| s.strip_suffix("px"))
+        .and_then(|s| s.parse::<f64>().ok())
+        .filter(|v| v.is_finite() && *v >= 0.)
+        .ok_or("entry: invalid radius")?;
+    let style = EntryStyle {
+        padding_x: n("paddingX")?,
+        border: n("border")?,
+        min_height: n("minHeight")?,
+        radius,
+        icon_size: n("iconSize")?,
+        icon_gap: n("iconGap")?,
+        icon: name("icon")?,
+        clear_icon: name("clearIcon")?,
+        background: color("background")?,
+        border_color: color("borderColor")?,
+        focus_border: color("focusBorder")?,
+        text: color("text")?,
+        dim: color("dim")?,
+        selection: color("selection")?,
+        selection_text: color("selectionText")?,
+    };
+    if style.min_height <= 0. || style.icon_size <= 0. {
+        return Err("entry: empty control".into());
+    }
+    Ok(style)
+}
+
 /// Everything a view is laid out and drawn with.
 #[derive(Clone, Debug)]
 pub struct Tokens {
@@ -1035,6 +1104,7 @@ pub struct Tokens {
     pub segmented: SegmentStyle,
     pub swatch: SwatchStyle,
     pub disclosure: DisclosureStyle,
+    pub entry: EntryStyle,
     /// A setting row's least height (`static.json` `ts.ROW_HEIGHT.single`).
     pub row_height: f64,
     /// A group's corner (`components.json` `common.groupRadius`), as Settings' cards.

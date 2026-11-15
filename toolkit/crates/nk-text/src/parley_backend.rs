@@ -72,6 +72,12 @@ impl ParleyBackend {
     }
 }
 impl TextBackend for ParleyBackend {
+    fn fork(&self) -> Result<Box<dyn TextBackend>> {
+        Ok(Box::new(Self::create(
+            self.fonts.clone(),
+            self.system_fonts,
+        )?))
+    }
     fn name(&self) -> &'static str {
         "parley"
     }

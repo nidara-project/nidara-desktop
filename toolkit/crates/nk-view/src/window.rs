@@ -11,7 +11,7 @@
 //!
 //! An owner in the page is the window's to open (VIEW.md §13.9): its list is a popup over the
 //! window, and the app hears only the selection.
-use crate::components::{Host, HostRequest, ListSpec, Request as ComponentRequest};
+use crate::components::{Host, HostRequest, ListSpec, ReplyTarget, Request as ComponentRequest};
 use crate::frame::{BACK, Band, FORWARD, FrameStyle, SIDEBAR, Sidebar};
 use crate::host::{Glyphs, Type, TypeScale, Weight};
 use crate::state::{Activated, Frame as ViewFrame, KeyInput, ScrollBy, ViewState};
@@ -184,6 +184,8 @@ pub struct AppWindow {
     grab: Option<u32>,
     /// The last activation came from the keyboard or a reader, not the pointer.
     keys: bool,
+    host: Vec<HostRequest>,
+    paste_targets: std::collections::HashMap<u64, ReplyTarget>,
 }
 
 fn row_of(list: &ListSpec, key: &Key) -> Option<usize> {
@@ -198,11 +200,24 @@ impl Host for AppWindow {
                 } else {
                     MenuRequest::Open {
                         owner,
-                        list: Box::new(list),
+                        list,
                         keys: self.keys,
                     }
                 });
             }
+            HostRequest::Respond { owner, request } => {
+                if let Some(a) = self.state.respond(&owner, request) {
+                    self.pending.push(a);
+                }
+                self.changed = true;
+                self.paint_dirty = true;
+            }
+            HostRequest::Focus { owner } => {
+                self.state.request(&owner, false);
+                self.changed = true;
+                self.paint_dirty = true;
+            }
+            request => self.host.push(request),
         }
     }
 }
@@ -256,6 +271,8 @@ impl AppWindow {
             menu_request: None,
             grab: None,
             keys: false,
+            host: vec![],
+            paste_targets: std::collections::HashMap::new(),
         }
     }
 
@@ -310,6 +327,7 @@ impl AppWindow {
             || self.sidebar.animating(now, &self.look.tokens.motion)
             || self.size != self.laid_size;
         self.state.set_slides(!framed);
+        self.state.set_double_click_ms(f.double_click_ms);
         self.laid_size = self.size;
         let band = f.band(
             self.size,
@@ -379,6 +397,7 @@ impl AppWindow {
         let requests = self.state.take_host_requests();
         let hosted = requests.iter().any(|r| match r {
             HostRequest::OpenList { owner, .. } => owner == &a.key,
+            _ => false,
         });
         for request in requests {
             Host::request(self, request);
@@ -414,7 +433,28 @@ impl AppWindow {
         if let Some(a) = &self.a11y {
             a.check()?;
         }
-        while let Some((_, request)) = self.a11y.as_ref().and_then(|a| a.requests.try_recv().ok()) {
+        while let Some((revision, request)) =
+            self.a11y.as_ref().and_then(|a| a.requests.try_recv().ok())
+        {
+            if revision != self.revision {
+                continue;
+            }
+            if let Request::SetText(id, _) | Request::SetSelection(id, _) = &request {
+                let keys = self.state.semantic_keys();
+                if let Some(key) = keys.get(id) {
+                    let ask = match request {
+                        Request::SetText(_, text) => ComponentRequest::SetText(text),
+                        Request::SetSelection(_, range) => ComponentRequest::SetSelection(range),
+                        _ => unreachable!(),
+                    };
+                    if let Some(a) = self.state.respond(key, ask) {
+                        self.route(a, &mut out);
+                    }
+                    self.changed = true;
+                    self.paint_dirty = true;
+                }
+                continue;
+            }
             let (id, activate, value) = match request {
                 Request::Focus(id) => (id, false, None),
                 Request::Activate(id) => (id, true, None),
@@ -438,8 +478,15 @@ impl AppWindow {
             }
             let band = self.band.semantic_keys();
             let activated = if let Some(k) = band.get(&id) {
+                if !activate {
+                    self.state.blur();
+                }
                 self.band.request(k, activate)
             } else {
+                if !activate && value.is_none() {
+                    self.band.blur();
+                    self.band_dirty = true;
+                }
                 let keys = self.state.semantic_keys();
                 keys.get(&id).and_then(|k| match value {
                     Some(v) => self.state.request_value(k, v),
@@ -537,6 +584,19 @@ impl AppWindow {
                 _ => {}
             }
         }
+        if let Event::Key(key) = &event
+            && !(key.alt && matches!(key.sym, 0xff51 | 0xff53))
+        {
+            let (handled, activated) = self.state.key_event(key);
+            if handled {
+                if let Some(a) = activated {
+                    self.route(a, &mut out);
+                }
+                self.changed = true;
+                self.paint_dirty = true;
+                return Ok((true, out));
+            }
+        }
         let taken = match event {
             Event::Error(e) => return Err(e),
             Event::Configure | Event::PreferredScale(_) => {
@@ -580,6 +640,11 @@ impl AppWindow {
                 true
             }
             Event::Button { pressed, .. } => {
+                if pressed {
+                    self.band.blur();
+                    self.band_dirty = true;
+                }
+                self.changed = true;
                 if let Some(a) = self.state.button(pressed, now) {
                     self.route(a, &mut out);
                 }
@@ -605,16 +670,26 @@ impl AppWindow {
                 });
                 true
             }
-            Event::Key(key) => match KeyInput::from_key(&key) {
-                Some(k) => {
-                    if let Some(a) = self.state.key(k) {
-                        self.route(a, &mut out);
-                    }
-                    self.changed = true;
-                    true
+            Event::Key(_) => false,
+            Event::Ime(batch) => {
+                if let Some(a) = self.state.ime(&batch) {
+                    self.route(a, &mut out);
                 }
-                None => false,
-            },
+                self.changed = true;
+                self.paint_dirty = true;
+                true
+            }
+            Event::PasteReply { request, text } => {
+                if let Some(target) = self.paste_targets.remove(&request)
+                    && let Some(text) = text
+                    && let Some(a) = self.state.reply(&target, ComponentRequest::Paste(text))
+                {
+                    self.route(a, &mut out);
+                }
+                self.changed = true;
+                self.paint_dirty = true;
+                true
+            }
             Event::Focus(false) => {
                 self.state.blur();
                 self.changed = true;
@@ -631,6 +706,33 @@ impl AppWindow {
     pub fn commit(&mut self, window: &mut Window) -> Result<()> {
         for request in self.state.take_host_requests() {
             Host::request(self, request);
+        }
+        if let Some((key, error)) = self.state.component_errors().into_iter().next() {
+            return Err(format!("component {}: {error}", key.0));
+        }
+        for request in std::mem::take(&mut self.host) {
+            match request {
+                HostRequest::Copy { text } => window.copy(text),
+                HostRequest::Paste { target } => match window.request_paste() {
+                    Ok(id) => {
+                        self.paste_targets.insert(id, target);
+                    }
+                    Err(e) => eprintln!("clipboard request failed: {e}"),
+                },
+                HostRequest::TextInput { input } => window.set_text_input(input),
+                _ => unreachable!("host request already routed"),
+            }
+        }
+        let input = if self.menu.is_none() {
+            self.state.text_input()
+        } else {
+            Default::default()
+        };
+        Host::request(self, HostRequest::TextInput { input });
+        for request in std::mem::take(&mut self.host) {
+            if let HostRequest::TextInput { input } = request {
+                window.set_text_input(input);
+            }
         }
         match self.menu_request.take() {
             Some(MenuRequest::Open { owner, list, keys }) => {

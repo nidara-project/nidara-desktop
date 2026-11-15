@@ -51,7 +51,7 @@ use std::{
     fs::File,
     io::{Read, Write},
     os::{fd::AsFd, unix::fs::FileExt},
-    time::Instant,
+    time::{Duration, Instant},
 };
 use wayland_client::{
     Connection, Dispatch, Proxy, QueueHandle, WEnum, delegate_noop,
@@ -154,6 +154,11 @@ pub enum Event {
     HorizontalScroll(ScrollAmount),
     Ime(ImeBatch),
     Paste(String),
+    /// An identified clipboard read; None is cancellation, invalid data or timeout.
+    PasteReply {
+        request: u64,
+        text: Option<String>,
+    },
     /// A drag from any client came over the root surface, at (x, y) in its coordinates,
     /// offering these types. Nothing is accepted until the app says so (`accept_drop`).
     DragEnter {
@@ -382,6 +387,8 @@ pub struct Window {
     sources: Vec<(wl_data_source::WlDataSource, String)>,
     drag_out: Option<DragOut>,
     receive: Option<Transfer>,
+    paste_request: Option<(u64, Instant)>,
+    next_paste_request: u64,
     sends: Vec<Send>,
     drag: Option<Drag>,
     dropped: Option<Dropped>,
@@ -750,6 +757,39 @@ impl Window {
         }
     }
     pub fn paste(&mut self) -> Result<()> {
+        self.cancel_paste_request();
+        self.receive = None;
+        self.paste_inner()
+    }
+    fn cancel_paste_request(&mut self) {
+        if let Some((request, _)) = self.paste_request.take() {
+            self.events.push(Event::PasteReply {
+                request,
+                text: None,
+            });
+        }
+    }
+    /// Starts a bounded read whose answer retains this exact request identity.
+    pub fn request_paste(&mut self) -> Result<u64> {
+        let request = self
+            .next_paste_request
+            .checked_add(1)
+            .ok_or("clipboard request exhausted")?;
+        self.next_paste_request = request;
+        self.cancel_paste_request();
+        self.receive = None;
+        let result = self.paste_inner();
+        if self.receive.is_some() && result.is_ok() {
+            self.paste_request = Some((request, Instant::now()));
+        } else {
+            self.events.push(Event::PasteReply {
+                request,
+                text: None,
+            });
+        }
+        result.map(|_| request)
+    }
+    fn paste_inner(&mut self) -> Result<()> {
         let Some(selection) = self.selection.as_ref() else {
             return Ok(());
         };
@@ -822,25 +862,50 @@ impl Window {
                 }
             }
         }
+        if self
+            .paste_request
+            .is_some_and(|(_, start)| start.elapsed() >= Duration::from_secs(5))
+        {
+            self.receive = None;
+            self.cancel_paste_request();
+        }
         if let Some(t) = &mut self.receive {
             let mut buf = [0; 8192];
             loop {
                 match t.file.read(&mut buf) {
                     Ok(0) => {
                         let t = self.receive.take().unwrap();
-                        self.events
-                            .push(Event::Paste(String::from_utf8(t.bytes).map_err(err)?));
+                        let text = String::from_utf8(t.bytes);
+                        if let Some((request, _)) = self.paste_request.take() {
+                            self.events.push(Event::PasteReply {
+                                request,
+                                text: text.ok(),
+                            });
+                        } else {
+                            self.events.push(Event::Paste(text.map_err(err)?));
+                        }
                         break;
                     }
                     Ok(n) => {
                         t.bytes.extend_from_slice(&buf[..n]);
                         if t.bytes.len() > 16 * 1024 * 1024 {
                             self.receive = None;
+                            if self.paste_request.is_some() {
+                                self.cancel_paste_request();
+                                break;
+                            }
                             return Err("clipboard exceeds 16 MiB".into());
                         }
                     }
                     Err(e) if e.kind() == std::io::ErrorKind::WouldBlock => break,
-                    Err(e) => return Err(err(e)),
+                    Err(e) => {
+                        if self.paste_request.is_some() {
+                            self.receive = None;
+                            self.cancel_paste_request();
+                            break;
+                        }
+                        return Err(err(e));
+                    }
                 }
             }
         }
@@ -1250,6 +1315,8 @@ fn run_inner(
         selection: None,
         sources: Vec::new(),
         receive: None,
+        paste_request: None,
+        next_paste_request: 0,
         sends: Vec::new(),
         drag_out: None,
         drag: None,

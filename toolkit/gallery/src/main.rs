@@ -27,6 +27,8 @@ struct Gallery {
     /// A page change waiting for its first commit, which the check screenshots.
     announce: Option<&'static str>,
     inert: bool,
+    fault: Option<String>,
+    paste_replies: usize,
 }
 
 impl Gallery {
@@ -93,6 +95,17 @@ impl Gallery {
             }
         }
         match action {
+            "entry-edit" => {
+                if let Some(nk_view::Value::Text(text)) = a.value {
+                    self.model.entry = text;
+                }
+            }
+            "search-edit" => {
+                if let Some(nk_view::Value::Text(text)) = a.value {
+                    self.model.search = text;
+                }
+            }
+            "entry-submit" | "search-submit" => self.model.submitted += 1,
             "press" => self.model.presses += 1,
             "check" => self.model.check = !self.model.check,
             "row-open" => self.model.opened += 1,
@@ -170,6 +183,39 @@ impl Application for Gallery {
         self.window.commit(window)
     }
     fn event(&mut self, event: Event, window: &mut Window) -> Result<()> {
+        if pages::PAGES[self.model.page].0 == "entry" {
+            if matches!(&event, Event::PasteReply { .. }) {
+                self.paste_replies += 1;
+            }
+            let drop = match (&event, self.fault.as_deref()) {
+                (Event::Key(k), Some("editor-no-keyboard")) => !k.ctrl && !k.text.is_empty(),
+                (Event::Ime(_), Some("editor-no-ime")) => true,
+                (Event::Ime(b), Some("editor-no-replace")) => {
+                    b.preedit.as_ref().is_some_and(|p| p.0 == "日本語")
+                }
+                (Event::Ime(b), Some("editor-no-cancel")) => {
+                    b.commit.is_none()
+                        && b.delete.is_none()
+                        && b.preedit.as_ref().is_none_or(|p| p.0.is_empty())
+                }
+                (Event::Ime(b), Some("editor-no-commit")) => b.commit.is_some(),
+                (Event::Key(k), Some("editor-no-select")) => k.ctrl && matches!(k.sym, 0x61 | 0x41),
+                (Event::Key(k), Some("editor-no-copy")) => k.ctrl && matches!(k.sym, 0x63 | 0x43),
+                (Event::Key(k), Some("editor-no-cut")) => k.ctrl && matches!(k.sym, 0x78 | 0x58),
+                (Event::PasteReply { .. }, Some("editor-no-paste")) => self.paste_replies > 1,
+                (Event::Key(k), Some("editor-no-undo")) => {
+                    k.ctrl && !k.shift && matches!(k.sym, 0x7a | 0x5a)
+                }
+                (Event::Key(k), Some("editor-no-redo")) => {
+                    k.ctrl && k.shift && matches!(k.sym, 0x7a | 0x5a)
+                }
+                _ => false,
+            };
+            if drop {
+                eprintln!("CONTROL_APPLIED {}", self.fault.as_deref().unwrap_or(""));
+                return self.window.commit(window);
+            }
+        }
         // Ctrl+Page Down and Up: the pages in turn, as a notebook's tabs go.
         if let Event::Key(key) = &event
             && key.ctrl
@@ -267,6 +313,8 @@ fn run() -> Result<()> {
         ready: false,
         announce: Some(PAGES[page].0),
         inert: std::env::var("NK_GALLERY_FAULT").as_deref() == Ok("inert"),
+        fault: std::env::var("NK_GALLERY_FAULT").ok(),
+        paste_replies: 0,
     };
     gallery.rebuild();
     nk_wayland::run(
