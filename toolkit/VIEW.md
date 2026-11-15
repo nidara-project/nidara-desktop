@@ -986,3 +986,10 @@ are rejected. A look change rebuilds the open list too. Reader selection and lis
 enter `respond(Request::Set(value))`. Clipboard/IME request identities and the editable field's
 model synchronisation remain step 4; this display field continues to show owner-supplied text,
 never exports a secret, and delegates all editing to its owner.
+
+
+Semantic request bindings use the ID/role actually published after Component::semantics, not
+an ID guessed from Control's base role. This matters when a display field publishes Password.
+Only current published controls bind requests; disappearance or a component type change drops
+the binding before the next publication. The component's reader properties remain authoritative
+without adding a component/role special case to the view's input lookup.

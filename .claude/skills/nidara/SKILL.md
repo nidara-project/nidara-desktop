@@ -422,7 +422,9 @@ when their bodies contain controls. Marks own selection and check/radio request 
 Read/Input lend context + typed keyed state and effects, never mutable ViewState. Reconcile runs
 once per rebuild; disabled keys survive, capture cancels when disabled/gone/retyped. Outcomes
 compose value/redraw/activation/capture/host effects. Activated carries an optional Value;
-compatibility accessors delegate and the gallery reads values. AppWindow implements Host for
+compatibility accessors delegate and the gallery reads values. Semantic request bindings use
+the actual published IDs/roles plus component identity, never a role guessed from Control
+after the component changed it (e.g. Password). AppWindow implements Host for
 component-built ListSpec requests, with owner/data revalidation and generic popup/reader rules.
 PaintPhase::Over is over the current normal/lifted pass; 0..1 targets honour reduced motion.
 The display field still leaves editing to its owner, including the CC's secret rules. Layer

@@ -5534,3 +5534,56 @@ fn row_and_tile_sliders_paint_their_track_thumb_and_fill() {
         "the unfilled tile stays clear"
     );
 }
+
+#[test]
+fn semantic_keys_bind_the_actual_component_role_and_retire_old_bindings() {
+    let owner = Key::from("pw");
+    let root = || nk_a11y::Node::new(1, nk_a11y::Role::Window, "W");
+    let mut s = laid(&field_view("•••", 9, 9, true), (360., 100.), 1.);
+    let tree = s.semantics(root(), 2);
+    let password = tree
+        .nodes
+        .values()
+        .find(|n| n.role == nk_a11y::Role::Password)
+        .unwrap()
+        .id;
+    assert_eq!(
+        s.semantic_keys().get(&password),
+        Some(&owner),
+        "requests use the actual role published by the component"
+    );
+    s.layout(
+        &field_view("abc", 3, 3, false),
+        (360., 100.),
+        1.,
+        tokens().with_types(&types()),
+        &mut backend(),
+        Instant::now(),
+    );
+    let tree = s.semantics(root(), 2);
+    let text = tree
+        .nodes
+        .values()
+        .find(|n| n.role == nk_a11y::Role::TextInput)
+        .unwrap()
+        .id;
+    assert_ne!(text, password);
+    assert_eq!(s.semantic_keys().get(&text), Some(&owner));
+    assert!(
+        !s.semantic_keys().contains_key(&password),
+        "only the current publication binds requests"
+    );
+    let replacement = Node::button("pw", "Other", "other", style(14.));
+    s.layout(
+        &replacement,
+        (360., 100.),
+        1.,
+        tokens().with_types(&types()),
+        &mut backend(),
+        Instant::now(),
+    );
+    assert!(
+        !s.semantic_keys().contains_key(&text),
+        "a queued request cannot bind a new component before publication"
+    );
+}

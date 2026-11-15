@@ -169,6 +169,8 @@ pub struct ViewState {
     /// across updates, and nk-a11y refuses an id that comes back as another role.
     semantic_ids: HashMap<(Key, nk_a11y::Role), NodeId>,
     next_semantic: NodeId,
+    /// The bindings actually published by semantics, after a component resolves its role.
+    published_controls: HashMap<NodeId, (Key, std::any::TypeId)>,
     /// The regions that showed a wash in the last frame.
     lit: HashSet<Key>,
     /// The washes of controls that are not on glass, by placed index: Hyalo draws a wash
@@ -223,6 +225,7 @@ impl ViewState {
             id_base,
             semantic_ids: HashMap::new(),
             next_semantic: 0,
+            published_controls: HashMap::new(),
             lit: HashSet::new(),
             painted: HashMap::new(),
             fading: HashMap::new(),
@@ -1548,6 +1551,7 @@ impl ViewState {
         nodes.insert(root_id, root);
         let mut ids: HashMap<usize, NodeId> = HashMap::new();
         let mut options = HashMap::new();
+        let mut published_controls = HashMap::new();
         self.next_semantic = self.next_semantic.max(first_id);
         for i in 0..self.placed.len() {
             if !self.in_semantics(i) {
@@ -1601,6 +1605,11 @@ impl ViewState {
                 .push(id);
             nodes.insert(id, node);
             ids.insert(i, id);
+            if matches!(p.what, What::Control(_))
+                && let Some(part) = p.part()
+            {
+                published_controls.insert(id, (p.key.clone(), part.component().type_id()));
+            }
             for child in children {
                 let next_semantic = &mut self.next_semantic;
                 let oid = *self
@@ -1630,6 +1639,7 @@ impl ViewState {
             }
         }
         self.options = options;
+        self.published_controls = published_controls;
         Tree {
             root: root_id,
             nodes,
@@ -1651,16 +1661,17 @@ impl ViewState {
     /// Which control each id `semantics` gave is, for the controls placed now: what a
     /// reader's request names.
     pub fn semantic_keys(&self) -> HashMap<NodeId, Key> {
-        (0..self.placed.len())
-            .filter(|&i| self.in_semantics(i))
-            .map(|i| &self.placed[i])
-            .filter_map(|p| match &p.what {
-                What::Control(c) => {
-                    let id = self.semantic_ids.get(&(p.key.clone(), a11y_role(c.role)))?;
-                    Some((*id, p.key.clone()))
-                }
-                _ => None,
-            })
+        let live: HashMap<&Key, std::any::TypeId> = self
+            .placed
+            .iter()
+            .enumerate()
+            .filter(|(i, p)| matches!(p.what, What::Control(_)) && self.in_semantics(*i))
+            .filter_map(|(_, p)| p.part().map(|part| (&p.key, part.component().type_id())))
+            .collect();
+        self.published_controls
+            .iter()
+            .filter(|(_, (key, kind))| live.get(key) == Some(kind))
+            .map(|(id, (key, _))| (*id, key.clone()))
             .collect()
     }
 

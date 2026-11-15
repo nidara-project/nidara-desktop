@@ -86,3 +86,7 @@ Read/Input lend only the component's context/state and effects. Activated carrie
 value; compatibility accessors delegate to the trait. AppWindow implements Host for generic
 component-built list requests with the existing popup and reader behavior. See VIEW.md
 §§14–15 for the full contract, evidence bar and deferred layer-host/editing/clipboard/IME work.
+
+Reader request bindings follow the IDs/roles actually published by the component and are
+filtered to live controls of the same component type. A display field publishing Password
+therefore binds its real ID; old bindings retire on the next publication or type replacement.
