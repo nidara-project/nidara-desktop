@@ -5,6 +5,7 @@
 //! derives hover, press and focus, and gives back what Hyalo draws (a pane per card and its
 //! state regions), the semantics, and the content paint. The surface keeps only its model
 //! and what an `Activated` means.
+pub mod components;
 mod host;
 mod layout;
 mod motion;
@@ -25,12 +26,13 @@ pub use tokens::{
     slider_from, swatch_from, switch_from,
 };
 pub use view::{
-    Align, Axis, Cell, Check, Choice, ChoicePart, Control, Corner, Dropdown, Face, Field, Grid,
-    Group, Icon, Ink, Justify, Key, Kind, Layer, Node, Overlay, Padding, Pane, Reveal, Role,
-    Scroll, Segmented, SettingRow, Shown, SidebarEntry, Slider, SliderEnd, Stack, Swatches, Switch,
-    Text, Wash,
+    Align, Axis, Cell, Choice, Control, Corner, Dropdown, Face, Field, Grid, Group, Icon, Ink,
+    Justify, Key, Kind, Layer, Node, Overlay, Padding, Pane, Reveal, Role, Scroll, Segmented,
+    SettingRow, Shown, SidebarEntry, Slider, SliderEnd, Stack, Swatches, Text, Wash,
 };
 pub use window::{AppWindow, CONTENT, Labels, Page, WindowLook};
 
 #[cfg(test)]
 mod tests;
+
+pub use components::{Check, ComponentLook, Drawing, Part, Switch};

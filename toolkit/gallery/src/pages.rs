@@ -4,8 +4,8 @@
 //! the catalogue entries it answers and their GTK and AppKit equivalents.
 use nk_view::{
     Align, Cell, Corner, Dropdown, DropdownStyle, Field, Ink, Justify, Kind, Node, Padding, Radius,
-    Role, SegmentStyle, Segmented, SettingRow, Shown, SidebarEntry, Slider, SliderEnd, SliderStyle,
-    Space, SwatchStyle, Swatches, Type, TypeScale, Wash, Weight,
+    Role, Segmented, SettingRow, Shown, SidebarEntry, Slider, SliderEnd, SliderStyle, Space,
+    Swatches, Type, TypeScale, Wash, Weight,
 };
 use serde::Deserialize;
 
@@ -125,8 +125,6 @@ impl Default for Model {
 pub struct Measures<'a> {
     pub slider: &'a SliderStyle,
     pub dropdown: &'a DropdownStyle,
-    pub segmented: &'a SegmentStyle,
-    pub swatch: &'a SwatchStyle,
     pub colors: &'a [(String, nk_render::Color)],
     pub glyph: f64,
 }
@@ -302,8 +300,8 @@ fn page(
         "switch" => switches(m, t),
         "check" => checks(m, t),
         "dropdown" => dropdowns(m, t, k.dropdown),
-        "segmented" => segmenteds(m, t, k.segmented),
-        "swatches" => swatches(m, t, k.swatch, k.colors),
+        "segmented" => segmenteds(m, t),
+        "swatches" => swatches(m, t, k.colors),
         "row" => rows(m, t),
         "slider" => sliders(m, t, sl),
         "field" => fields(t),
@@ -925,7 +923,7 @@ fn segments_shown(mut n: Node, shown: &[(usize, Shown)]) -> Node {
     n
 }
 
-fn segmenteds(m: &Model, t: &TypeScale, seg: &SegmentStyle) -> Vec<Node> {
+fn segmenteds(m: &Model, t: &TypeScale) -> Vec<Node> {
     let sizes = || SIZES.map(String::from).to_vec();
     let one = |k: &str, label: &str, shown: &[(usize, Shown)], disabled: bool| {
         let key = format!("sg/s/{k}");
@@ -942,8 +940,6 @@ fn segmenteds(m: &Model, t: &TypeScale, seg: &SegmentStyle) -> Vec<Node> {
                             action: "noop".into(),
                             disabled,
                         },
-                        seg,
-                        t,
                     ),
                     shown,
                 )),
@@ -988,8 +984,6 @@ fn segmenteds(m: &Model, t: &TypeScale, seg: &SegmentStyle) -> Vec<Node> {
                             action: "size".into(),
                             disabled: false,
                         },
-                        seg,
-                        t,
                     )),
                     ..setting(
                         "Dock size",
@@ -1051,12 +1045,7 @@ pub fn colors_from(export: &serde_json::Value) -> Result<Vec<(String, nk_render:
         })
         .collect()
 }
-fn swatches(
-    m: &Model,
-    t: &TypeScale,
-    s: &SwatchStyle,
-    colors: &[(String, nk_render::Color)],
-) -> Vec<Node> {
+fn swatches(m: &Model, t: &TypeScale, colors: &[(String, nk_render::Color)]) -> Vec<Node> {
     let one = |key: &str, name: &str, disabled: bool, shown: &[(usize, Shown)]| {
         let mut samples = Node::swatches(
             format!("sw/{key}/g"),
@@ -1067,14 +1056,18 @@ fn swatches(
                 action: "noop".into(),
                 disabled,
             },
-            s,
         );
         if let Kind::Stack(st) = &mut samples.kind {
-            for node in &mut st.children {
-                if let Kind::Control(c) = &mut node.kind
-                    && let Some(part) = c.choice_part
-                    && let Some((_, state)) = shown.iter().find(|(index, _)| *index == part.index)
-                {
+            for (index, c) in st
+                .children
+                .iter_mut()
+                .filter_map(|node| match &mut node.kind {
+                    Kind::Control(c) => Some(c),
+                    _ => None,
+                })
+                .enumerate()
+            {
+                if let Some((_, state)) = shown.iter().find(|(i, _)| *i == index) {
                     c.shown = Some(*state);
                 }
             }
@@ -1124,7 +1117,6 @@ fn swatches(
                             action: "accent".into(),
                             disabled: false,
                         },
-                        s,
                     )),
                     ..setting(
                         "Accent colour",
@@ -1811,33 +1803,6 @@ mod tests {
         .unwrap()
     }
 
-    /// The segmented choice as `toolkit/tokens/choices.json` gives it, its colours any.
-    fn segmented() -> nk_view::SegmentStyle {
-        let file: serde_json::Value =
-            serde_json::from_str(include_str!("../../tokens/choices.json")).unwrap();
-        let names = [
-            "--nidara-surface",
-            "--nidara-surface-hover",
-            "--nidara-surface-active",
-            "--nidara-border",
-            "--nidara-text",
-            "--nidara-accent",
-            "--nidara-accent-fg",
-        ];
-        let set = serde_json::json!({ "tokens": names
-            .iter()
-            .map(|n| (n.to_string(), serde_json::json!("#808080")))
-            .collect::<serde_json::Map<_, _>>() });
-        let statics = serde_json::json!({
-            "ts": {"RADIUS": {"xs": 6, "sm": 10, "md": 16, "lg": 24, "xl": 32}}});
-        nk_view::segmented_from(
-            &file["default"]["segmented"],
-            &set,
-            &nk_view::Radii::from_static(&statics).unwrap(),
-        )
-        .unwrap()
-    }
-
     #[test]
     fn palette_requires_exported_colours_and_names() {
         let good = serde_json::json!({"accentOrder":["red","blue"],"accents":{"blue":"#0088ff","red":"#ff0000"},
@@ -1869,11 +1834,6 @@ mod tests {
         }
     }
 
-    fn swatch() -> nk_view::SwatchStyle {
-        let f: serde_json::Value =
-            serde_json::from_str(include_str!("../../tokens/choices.json")).unwrap();
-        nk_view::swatch_from(&f["default"]["swatch"],&serde_json::json!({"tokens":{"--nidara-text":"#ffffff","--nidara-text-dim":"#808080","--nidara-accent":"#0088ff"}})).unwrap()
-    }
     #[test]
     fn every_page_builds_with_unique_keys() {
         let cat = Catalogue::load().unwrap();
@@ -1895,8 +1855,6 @@ mod tests {
                 &Measures {
                     slider: &sl,
                     dropdown: &dropdown(),
-                    segmented: &segmented(),
-                    swatch: &swatch(),
                     colors: &[
                         ("Blue".into(), nk_render::rgba(0, 128, 255, 255)),
                         ("Red".into(), nk_render::rgba(255, 0, 0, 255)),

@@ -31,7 +31,8 @@ impl Ease {
 }
 
 struct RevealState {
-    open: bool,
+    kind: Option<std::any::TypeId>,
+    open: f64,
     ease: Option<Ease>,
 }
 
@@ -87,12 +88,16 @@ pub(crate) struct MotionState {
 
 /// Each reveal's, switch's and mark's key and state; `true` last for a switch or a mark, which
 /// eases the same both ways (VIEW.md §12.6).
-fn walk<'a>(n: &'a Node, out: &mut Vec<(&'a Key, bool, bool)>) {
+fn walk<'a>(n: &'a Node, out: &mut Vec<(&'a Key, f64, Option<std::any::TypeId>)>) {
+    if let Some(component) = crate::components::part(n).map(|p| p.component())
+        && let Some(target) = component.target()
+    {
+        out.push((&n.key, target.clamp(0., 1.), Some(component.type_id())));
+    }
     match &n.kind {
-        Kind::Switch(sw) => out.push((&n.key, sw.on, true)),
-        Kind::Check(c) => out.push((&n.key, c.on, true)),
+        Kind::Drawing(d) => walk(&d.child, out),
         Kind::Reveal(r) => {
-            out.push((&n.key, r.open, false));
+            out.push((&n.key, f64::from(r.open), None));
             walk(&r.child, out);
         }
         Kind::Stack(s) => s.children.iter().for_each(|c| walk(c, out)),
@@ -116,20 +121,21 @@ impl MotionState {
         let mut seen = vec![];
         walk(view, &mut seen);
         let mut next = HashMap::new();
-        for (key, open, switch) in seen {
-            let state = match self.reveals.remove(key) {
+        for (key, open, kind) in seen {
+            let state = match self.reveals.remove(key).filter(|s| s.kind == kind) {
                 Some(s) if s.open != open => {
-                    let from = s.ease.map_or(if s.open { 1. } else { 0. }, |e| e.at(now).0);
-                    let (duration, curve) = if switch || !open {
+                    let from = s.ease.map_or(s.open, |e| e.at(now).0);
+                    let (duration, curve) = if kind.is_some() || open == 0. {
                         (m.base, m.ease)
                     } else {
                         (m.slow, m.emphasized)
                     };
                     RevealState {
+                        kind,
                         open,
                         ease: (!self.reduced).then_some(Ease {
                             from,
-                            to: if open { 1. } else { 0. },
+                            to: open,
                             start: now,
                             duration,
                             curve,
@@ -137,7 +143,11 @@ impl MotionState {
                     }
                 }
                 Some(s) => s,
-                None => RevealState { open, ease: None },
+                None => RevealState {
+                    kind,
+                    open,
+                    ease: None,
+                },
             };
             next.insert(key.clone(), state);
         }
@@ -157,13 +167,7 @@ impl MotionState {
                         }
                         v
                     }
-                    None => {
-                        if s.open {
-                            1.
-                        } else {
-                            0.
-                        }
-                    }
+                    None => s.open,
                 };
                 (k.clone(), p)
             })

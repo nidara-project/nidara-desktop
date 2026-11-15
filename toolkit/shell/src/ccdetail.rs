@@ -207,6 +207,7 @@ pub struct Detail {
     /// The rows' layout, hover, press, focus, held slider and scroll: nk-view's (#1048).
     pub state: nk_view::ViewState,
     pub tokens: Option<nk_view::Tokens>,
+    types: Option<nk_view::TypeScale>,
     appearance: Option<nk_platform::portal::Appearance>,
     /// What the last painted frame declared: `states` reads it after `paint`.
     last: nk_view::Frame,
@@ -264,6 +265,7 @@ impl Detail {
             form: None,
             state: nk_view::ViewState::new(REGIONS),
             tokens: None,
+            types: None,
             appearance: None,
             last: nk_view::Frame::default(),
             pending: HashMap::new(),
@@ -279,9 +281,13 @@ impl Detail {
         };
         if self.appearance.as_ref() != Some(&look.appearance) {
             self.appearance = Some(look.appearance.clone());
+            self.types = nk_view::TypeScale::load(&look.exports, &look.appearance)
+                .map_err(|e| eprintln!("nidara-shell: the view has no type scale: {e}"))
+                .ok();
             self.tokens = crate::nc_view::tokens(&look.exports, &look.appearance)
                 .map_err(|e| eprintln!("nidara-shell: the CC detail has no tokens: {e}"))
-                .ok();
+                .ok()
+                .filter(|_| self.types.is_some());
             self.state
                 .set_reduced_motion(look.appearance.reduced_motion);
         }
@@ -568,13 +574,33 @@ impl Detail {
         let room = (self.max_height - panel[1]).max(ROW_MIN);
         let now = std::time::Instant::now();
         let mut bounds = [panel[0], panel[1], panel[2], room];
-        self.state
-            .layout_in(&view, bounds, self.scale, &tokens, text, now);
+        self.state.layout_in(
+            &view,
+            bounds,
+            self.scale,
+            tokens.with_types(
+                self.types
+                    .as_ref()
+                    .expect("tokens and type scale loaded together"),
+            ),
+            text,
+            now,
+        );
         let content = self.state.rect(&"rows".into()).map_or(room, |r| r[3]);
         if content < room {
             bounds[3] = content;
-            self.state
-                .layout_in(&view, bounds, self.scale, &tokens, text, now);
+            self.state.layout_in(
+                &view,
+                bounds,
+                self.scale,
+                tokens.with_types(
+                    self.types
+                        .as_ref()
+                        .expect("tokens and type scale loaded together"),
+                ),
+                text,
+                now,
+            );
         }
         self.panel = bounds;
         if self.form.is_some()
@@ -698,7 +724,15 @@ impl Detail {
         if !self.state.animating() {
             return false;
         }
-        self.state.tick(tokens, text, now);
+        self.state.tick(
+            tokens.with_types(
+                self.types
+                    .as_ref()
+                    .expect("tokens and type scale loaded together"),
+            ),
+            text,
+            now,
+        );
         true
     }
     pub fn scroll(&mut self, by: nk_view::ScrollBy) -> bool {
@@ -860,7 +894,11 @@ impl Detail {
         self.last = self.state.frame(tokens, std::time::Instant::now());
         if let Err(e) = self.state.paint(
             c,
-            tokens,
+            tokens.with_types(
+                self.types
+                    .as_ref()
+                    .expect("tokens and type scale loaded together"),
+            ),
             &mut |_, _| None,
             fallback.is_some().then_some(&self.last),
         ) {
@@ -1759,6 +1797,7 @@ mod tests {
             return false;
         };
         d.tokens = Some(tokens);
+        d.types = crate::nc_view::exported_types();
         d.refresh(s, panel, None);
         let labels: Vec<_> = d.rows.iter().map(|r| r.label(None)).collect();
         let mut text =
@@ -1992,14 +2031,10 @@ mod tests {
         let id = d.rows[1].id;
         let progress = |d: &Detail| {
             let key = format!("r{id}/track").into();
-            match d
-                .state
-                .placed()
-                .iter()
-                .find(|p| p.key == key)
-                .map(|p| &p.what)
-            {
-                Some(nk_view::What::Switch { progress, .. }) => *progress,
+            match d.state.placed().iter().find(|p| p.key == key) {
+                Some(p) if matches!(p.what, nk_view::What::Drawing(nk_view::Part::Switch(_))) => {
+                    p.progress.unwrap()
+                }
                 w => panic!("no switch: {w:?}"),
             }
         };

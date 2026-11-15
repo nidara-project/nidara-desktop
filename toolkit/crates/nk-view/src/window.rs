@@ -333,7 +333,7 @@ impl AppWindow {
             &main,
             self.size,
             self.scale,
-            &self.look.tokens,
+            self.look.tokens.with_types(&self.look.types),
             self.text.as_mut(),
             now,
         );
@@ -341,7 +341,7 @@ impl AppWindow {
             &band,
             (self.size.0, f.band),
             self.scale,
-            &self.look.tokens,
+            self.look.tokens.with_types(&self.look.types),
             self.text.as_mut(),
             now,
         );
@@ -457,9 +457,11 @@ impl AppWindow {
         self.sliding = sliding;
         if self.band.animating() {
             // A hover or press fading on the band's glass.
-            let ticked = self
-                .band
-                .tick(&self.look.tokens, self.text.as_mut(), Instant::now());
+            let ticked = self.band.tick(
+                self.look.tokens.with_types(&self.look.types),
+                self.text.as_mut(),
+                Instant::now(),
+            );
             for a in ticked.activated {
                 self.route(a, &mut out);
             }
@@ -469,14 +471,19 @@ impl AppWindow {
             && m.view.animating()
         {
             // The list's scroll bar fading.
-            m.view
-                .tick(&self.look.tokens, self.text.as_mut(), Instant::now());
+            m.view.tick(
+                self.look.tokens.with_types(&self.look.types),
+                self.text.as_mut(),
+                Instant::now(),
+            );
             m.dirty = true;
         }
         if self.state.animating() {
-            let ticked = self
-                .state
-                .tick(&self.look.tokens, self.text.as_mut(), Instant::now());
+            let ticked = self.state.tick(
+                self.look.tokens.with_types(&self.look.types),
+                self.text.as_mut(),
+                Instant::now(),
+            );
             for a in ticked.activated {
                 self.route(a, &mut out);
             }
@@ -631,9 +638,11 @@ impl AppWindow {
                 // What the app just laid out starts moving now, so the reader is told what
                 // it shows as it starts (a reveal opening), not at its first instant, when
                 // nothing of it shows yet. What that activates waits for the next turn.
-                let ticked = self
-                    .state
-                    .tick(&self.look.tokens, self.text.as_mut(), Instant::now());
+                let ticked = self.state.tick(
+                    self.look.tokens.with_types(&self.look.types),
+                    self.text.as_mut(),
+                    Instant::now(),
+                );
                 self.pending.extend(ticked.activated);
             }
             if let Some(c) = self.controls {
@@ -725,7 +734,9 @@ impl AppWindow {
                 frame.scale,
                 (r[0], r[1]),
             );
-            state.paint_lifted(&mut c, tokens, &mut |n, s| glyphs.get(n, s))?;
+            state.paint_lifted(&mut c, tokens.with_types(&self.look.types), &mut |n, s| {
+                glyphs.get(n, s)
+            })?;
             Ok(c.finish())
         })?;
         // A layer with both buffers busy: tried again on the next turn.
@@ -773,7 +784,12 @@ impl AppWindow {
         let (state, tokens, glyphs) = (&self.band, &self.look.tokens, &mut self.glyphs);
         let b = window.paint_layer(band, |frame| {
             let mut c = nk_render::Canvas::new(frame.pixel_width, frame.pixel_height, frame.scale);
-            state.paint(&mut c, tokens, &mut |n, s| glyphs.get(n, s), None)?;
+            state.paint(
+                &mut c,
+                tokens.with_types(&self.look.types),
+                &mut |n, s| glyphs.get(n, s),
+                None,
+            )?;
             Ok(c.finish())
         })?;
         // A layer with both buffers busy: tried again on the next turn.
@@ -804,7 +820,7 @@ impl AppWindow {
             &node,
             [edge, edge, width - 2. * edge, self.size.1.max(1.)],
             self.scale,
-            &self.look.tokens,
+            self.look.tokens.with_types(&self.look.types),
             self.text.as_mut(),
             Instant::now(),
         );
@@ -987,7 +1003,7 @@ impl AppWindow {
                     (size.1 - 2. * edge).max(0.),
                 ],
                 self.scale,
-                &self.look.tokens,
+                self.look.tokens.with_types(&self.look.types),
                 self.text.as_mut(),
                 Instant::now(),
             );
@@ -1034,7 +1050,7 @@ impl AppWindow {
         let glyphs = &mut self.glyphs;
         m.view.paint(
             &mut c,
-            &self.look.tokens,
+            self.look.tokens.with_types(&self.look.types),
             &mut |n, s| glyphs.get(n, s),
             None,
         )?;
@@ -1196,7 +1212,7 @@ impl AppWindow {
         let glyphs = &mut self.glyphs;
         self.state.paint(
             &mut c,
-            &self.look.tokens,
+            self.look.tokens.with_types(&self.look.types),
             &mut |name, size| glyphs.get(name, size),
             (!frame.material).then_some(&self.last),
         )?;
@@ -1211,7 +1227,7 @@ impl AppWindow {
             self.band_last = self.band.frame(&self.look.tokens, now);
             self.band.paint(
                 &mut c,
-                &self.look.tokens,
+                self.look.tokens.with_types(&self.look.types),
                 &mut |name, size| glyphs.get(name, size),
                 Some(&self.band_last),
             )?;

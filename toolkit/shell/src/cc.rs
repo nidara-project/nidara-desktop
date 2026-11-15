@@ -112,6 +112,7 @@ pub struct Cc {
     /// §12.4). The editor still places the tiles and scrolls them (edit mode is step 4).
     state: nk_view::ViewState,
     tokens: Option<nk_view::Tokens>,
+    types: Option<nk_view::TypeScale>,
     appearance: Option<nk_platform::portal::Appearance>,
     /// The frame last painted: the washes Hyalo is given.
     last: nk_view::Frame,
@@ -151,6 +152,7 @@ impl Cc {
             panel: [0.; 4],
             state,
             tokens: None,
+            types: None,
             appearance: None,
             last: Default::default(),
             refocus: None,
@@ -195,9 +197,13 @@ impl Cc {
     fn lay(&mut self, status: &Status, look: &mut Look) {
         if self.appearance.as_ref() != Some(&look.appearance) {
             self.appearance = Some(look.appearance.clone());
+            self.types = nk_view::TypeScale::load(&look.exports, &look.appearance)
+                .map_err(|e| eprintln!("nidara-shell: the view has no type scale: {e}"))
+                .ok();
             self.tokens = crate::nc_view::tokens(&look.exports, &look.appearance)
                 .map_err(|e| eprintln!("nidara-shell: the CC grid has no tokens: {e}"))
-                .ok();
+                .ok()
+                .filter(|_| self.types.is_some());
             self.state
                 .set_reduced_motion(look.appearance.reduced_motion);
         }
@@ -207,8 +213,12 @@ impl Cc {
         let base = look.styles.text.clone();
         // The editor's panel first: its scroll region places the grid (VIEW.md §12.7).
         let views = self.editor.build(status, Some(look), &base);
-        self.editor
-            .lay_out(views, &tokens, &mut look.text, self.detail_scale);
+        self.editor.lay_out(
+            views,
+            tokens.with_types(self.types.as_ref().expect("loaded look")),
+            &mut look.text,
+            self.detail_scale,
+        );
         self.tiles = self.editor.tiles.clone();
         let view = grid_view(&self.tiles, status, Some(look), &base);
         self.lay_view(&view, &tokens, &mut look.text);
@@ -236,7 +246,11 @@ impl Cc {
             view,
             bounds,
             self.detail_scale,
-            tokens,
+            tokens.with_types(
+                self.types
+                    .as_ref()
+                    .expect("tokens and type scale loaded together"),
+            ),
             text,
             std::time::Instant::now(),
         );
@@ -785,7 +799,11 @@ impl Cc {
             let mut glyph = |name: &str, size: f64| glyph(icons, glyphs, name, size);
             if let Err(e) = self.state.paint(
                 c,
-                &tokens,
+                tokens.with_types(
+                    self.types
+                        .as_ref()
+                        .expect("tokens and type scale loaded together"),
+                ),
                 &mut glyph,
                 fallback.is_some().then_some(&self.last),
             ) {
@@ -832,7 +850,11 @@ impl Cc {
             &view,
             placed.rect,
             self.detail_scale,
-            &tokens,
+            tokens.with_types(
+                self.types
+                    .as_ref()
+                    .expect("tokens and type scale loaded together"),
+            ),
             &mut look.text,
             std::time::Instant::now(),
         );
@@ -846,7 +868,16 @@ impl Cc {
         let state = &self.layers[id];
         let (icons, glyphs) = (&mut self.icons, &mut self.glyphs);
         let mut glyph = |name: &str, size: f64| glyph(icons, glyphs, name, size);
-        state.paint(c, &tokens, &mut glyph, None)?;
+        state.paint(
+            c,
+            tokens.with_types(
+                self.types
+                    .as_ref()
+                    .expect("tokens and type scale loaded together"),
+            ),
+            &mut glyph,
+            None,
+        )?;
         paint_slots(c, look, state, status, cover.as_deref(), &mut glyph)?;
         if !layout::meta_of(id).unwrap().fixed {
             crate::notification_card::text(
@@ -2482,6 +2513,7 @@ mod tests {
     fn relaid(cc: &mut Cc, s: &Status) -> Option<nk_view::Tokens> {
         let tokens = crate::nc_view::exported_tokens()?;
         cc.tokens = Some(tokens.clone());
+        cc.types = Some(crate::nc_view::exported_types()?);
         let view = grid_view(&cc.tiles, s, None, &TextStyle::default());
         let mut text =
             nk_text::ParleyBackend::new(Arc::new(nk_text::FontSet::discover_required().unwrap()))

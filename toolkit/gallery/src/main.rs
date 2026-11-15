@@ -40,8 +40,6 @@ impl Gallery {
             &pages::Measures {
                 slider: &look.tokens.slider,
                 dropdown: &look.tokens.dropdown,
-                segmented: &look.tokens.segmented,
-                swatch: &look.tokens.swatch,
                 colors: &self.colors,
                 glyph: look.frame.icon,
             },

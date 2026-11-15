@@ -28,7 +28,7 @@ fn glass() -> serde_json::Value {
         {"dark": false, "reduceTransparency": false, "pieces": {"control": [{"states": states(0.06)}]}},
     ]})
 }
-fn tokens() -> Tokens {
+pub(crate) fn tokens() -> Tokens {
     let set = json!({"tokens": {"--nidara-text": "#ffffff", "--nidara-text-secondary": "rgba(255, 255, 255, 0.8)",
         "--nidara-text-dim": "rgba(255, 255, 255, 0.6)", "--nidara-accent": "#0088FF",
         "--nidara-surface-raised": "rgba(255, 255, 255, 0.24)", "--nidara-on": "#ffffff",
@@ -135,7 +135,14 @@ fn style(size: f32) -> TextStyle {
 }
 fn laid(view: &Node, size: (f64, f64), scale: f64) -> ViewState {
     let mut s = ViewState::new(1000);
-    s.layout(view, size, scale, &tokens(), &mut backend(), Instant::now());
+    s.layout(
+        view,
+        size,
+        scale,
+        tokens().with_types(&types()),
+        &mut backend(),
+        Instant::now(),
+    );
     s
 }
 fn rect(s: &ViewState, k: &str) -> Rect {
@@ -375,7 +382,7 @@ fn a_text_keeps_its_layout_until_its_string_style_or_width_changes() {
         &card("n", LONG, Align::FirstLine),
         (360., 400.),
         1.,
-        &t,
+        t.with_types(&types()),
         &mut text,
         Instant::now(),
     );
@@ -384,7 +391,7 @@ fn a_text_keeps_its_layout_until_its_string_style_or_width_changes() {
         &card("n", LONG, Align::FirstLine),
         (360., 400.),
         1.,
-        &t,
+        t.with_types(&types()),
         &mut text,
         Instant::now(),
     );
@@ -397,7 +404,7 @@ fn a_text_keeps_its_layout_until_its_string_style_or_width_changes() {
         &card("n", "Short", Align::FirstLine),
         (360., 400.),
         1.,
-        &t,
+        t.with_types(&types()),
         &mut text,
         Instant::now(),
     );
@@ -615,7 +622,14 @@ fn region_ids_follow_keys_across_rebuilds_and_states_clear_when_the_control_goes
             ],
         ),
     );
-    s.layout(&two, (100., 20.), 1., &t, &mut text, Instant::now());
+    s.layout(
+        &two,
+        (100., 20.),
+        1.,
+        t.with_types(&types()),
+        &mut text,
+        Instant::now(),
+    );
     let ids = |s: &mut ViewState| {
         s.frame(&t, Instant::now())
             .states
@@ -639,7 +653,14 @@ fn region_ids_follow_keys_across_rebuilds_and_states_clear_when_the_control_goes
             ],
         ),
     );
-    s.layout(&swapped, (100., 20.), 1., &t, &mut text, Instant::now());
+    s.layout(
+        &swapped,
+        (100., 20.),
+        1.,
+        t.with_types(&types()),
+        &mut text,
+        Instant::now(),
+    );
     let after = ids(&mut s);
     assert_eq!(before, [after[1], after[0]], "each key kept its id");
     assert_eq!(s.focus(), Some(&Key::from("b")), "focus followed the key");
@@ -654,7 +675,7 @@ fn region_ids_follow_keys_across_rebuilds_and_states_clear_when_the_control_goes
         ),
         (100., 20.),
         1.,
-        &t,
+        t.with_types(&types()),
         &mut text,
         Instant::now(),
     );
@@ -701,7 +722,8 @@ fn the_focus_ring_is_painted_only_after_keyboard_focus_and_the_fallback_paints_w
                  fallback: Option<&Frame>,
                  none: &mut dyn FnMut(&str, f64) -> Option<Arc<nk_icons::Icon>>| {
         let mut c = nk_render::Canvas::new(40, 40, 1.);
-        s.paint(&mut c, &t, none, fallback).unwrap();
+        s.paint(&mut c, t.with_types(&types()), none, fallback)
+            .unwrap();
         c.finish().chunks(4).filter(|p| p[3] > 0).count()
     };
     assert_eq!(paint(&s, None, &mut none), 0);
@@ -763,7 +785,8 @@ fn a_shown_state_holds_whatever_the_pointer_and_the_focus_do() {
     assert_eq!(wash("n"), None, "a live control at rest shows nothing");
     // The ring of the one shown focused, with no keyboard focus anywhere.
     let mut c = nk_render::Canvas::new(200, 40, 1.);
-    s.paint(&mut c, &t, &mut |_, _| None, None).unwrap();
+    s.paint(&mut c, t.with_types(&types()), &mut |_, _| None, None)
+        .unwrap();
     let r = rect(&s, "f");
     let px = c.finish();
     let lit = (r[0] as usize..(r[0] + r[2]) as usize)
@@ -865,13 +888,27 @@ fn a_reveal_unrolls_with_the_tokens_and_what_is_below_follows_without_sliding() 
     let mut text = backend();
     let mut s = ViewState::new(0);
     let t0 = Instant::now();
-    s.layout(&group(false), (360., 800.), 1., &t, &mut text, t0);
+    s.layout(
+        &group(false),
+        (360., 800.),
+        1.,
+        t.with_types(&types()),
+        &mut text,
+        t0,
+    );
     let below0 = rect(&s, "below/pane")[1];
-    s.layout(&group(true), (360., 800.), 1., &t, &mut text, t0);
+    s.layout(
+        &group(true),
+        (360., 800.),
+        1.,
+        t.with_types(&types()),
+        &mut text,
+        t0,
+    );
     assert!(s.animating());
     assert_eq!(rect(&s, "cards")[3], 0., "it starts closed");
     let half = t0 + t.motion.slow / 2;
-    assert!(s.tick(&t, &mut text, half).animating);
+    assert!(s.tick(t.with_types(&types()), &mut text, half).animating);
     let mid = rect(&s, "cards")[3];
     let full = rect(&s, "cards/list")[3];
     assert!(mid > 0. && mid < full, "{mid} of {full}");
@@ -909,7 +946,10 @@ fn a_reveal_unrolls_with_the_tokens_and_what_is_below_follows_without_sliding() 
         .find(|p| p.key == Key::from("below/pane"))
         .unwrap();
     assert_eq!((below.clip, below.opacity), (None, 1.));
-    assert!(!s.tick(&t, &mut text, t0 + t.motion.slow).animating);
+    assert!(
+        !s.tick(t.with_types(&types()), &mut text, t0 + t.motion.slow)
+            .animating
+    );
     assert_eq!(rect(&s, "cards")[3], full);
     assert_eq!(placed(&s, "a/pane").alpha, 1.);
 }
@@ -920,17 +960,41 @@ fn a_reveal_turned_back_midway_eases_from_where_it_is() {
     let mut text = backend();
     let mut s = ViewState::new(0);
     let t0 = Instant::now();
-    s.layout(&group(false), (360., 800.), 1., &t, &mut text, t0);
-    s.layout(&group(true), (360., 800.), 1., &t, &mut text, t0);
+    s.layout(
+        &group(false),
+        (360., 800.),
+        1.,
+        t.with_types(&types()),
+        &mut text,
+        t0,
+    );
+    s.layout(
+        &group(true),
+        (360., 800.),
+        1.,
+        t.with_types(&types()),
+        &mut text,
+        t0,
+    );
     let t1 = t0 + t.motion.slow / 2;
-    s.tick(&t, &mut text, t1);
+    s.tick(t.with_types(&types()), &mut text, t1);
     let mid = rect(&s, "cards")[3];
-    s.layout(&group(false), (360., 800.), 1., &t, &mut text, t1);
+    s.layout(
+        &group(false),
+        (360., 800.),
+        1.,
+        t.with_types(&types()),
+        &mut text,
+        t1,
+    );
     assert_eq!(rect(&s, "cards")[3], mid, "no jump");
-    s.tick(&t, &mut text, t1 + t.motion.base / 2);
+    s.tick(t.with_types(&types()), &mut text, t1 + t.motion.base / 2);
     let closing = rect(&s, "cards")[3];
     assert!(closing < mid && closing > 0.);
-    assert!(!s.tick(&t, &mut text, t1 + t.motion.base).animating);
+    assert!(
+        !s.tick(t.with_types(&types()), &mut text, t1 + t.motion.base)
+            .animating
+    );
     assert_eq!(rect(&s, "cards")[3], 0.);
 }
 
@@ -949,16 +1013,33 @@ fn a_pane_the_model_moved_slides_from_where_it_was_drawn() {
         )
         .gap(Space::S2)
     };
-    s.layout(&list(&["a", "b"]), (360., 800.), 1., &t, &mut text, t0);
+    s.layout(
+        &list(&["a", "b"]),
+        (360., 800.),
+        1.,
+        t.with_types(&types()),
+        &mut text,
+        t0,
+    );
     let was = rect(&s, "b/pane");
     let close_was = rect(&s, "b/close");
-    s.layout(&list(&["b"]), (360., 800.), 1., &t, &mut text, t0);
+    s.layout(
+        &list(&["b"]),
+        (360., 800.),
+        1.,
+        t.with_types(&types()),
+        &mut text,
+        t0,
+    );
     assert_eq!(rect(&s, "b/pane"), was, "drawn where it was");
     assert_eq!(rect(&s, "b/close"), close_was, "with what is in it");
-    s.tick(&t, &mut text, t0 + t.motion.base / 2);
+    s.tick(t.with_types(&types()), &mut text, t0 + t.motion.base / 2);
     let mid = rect(&s, "b/pane")[1];
     assert!(mid > 0. && mid < was[1], "{mid}");
-    assert!(!s.tick(&t, &mut text, t0 + t.motion.base).animating);
+    assert!(
+        !s.tick(t.with_types(&types()), &mut text, t0 + t.motion.base)
+            .animating
+    );
     assert_eq!(rect(&s, "b/pane")[1], 0.);
 }
 
@@ -978,8 +1059,22 @@ fn without_slides_a_moved_pane_is_laid_where_it_is() {
         )
         .gap(Space::S2)
     };
-    s.layout(&list(&["a", "b"]), (360., 800.), 1., &t, &mut text, t0);
-    s.layout(&list(&["b"]), (360., 800.), 1., &t, &mut text, t0);
+    s.layout(
+        &list(&["a", "b"]),
+        (360., 800.),
+        1.,
+        t.with_types(&types()),
+        &mut text,
+        t0,
+    );
+    s.layout(
+        &list(&["b"]),
+        (360., 800.),
+        1.,
+        t.with_types(&types()),
+        &mut text,
+        t0,
+    );
     assert_eq!(rect(&s, "b/pane")[1], 0.);
     assert!(!s.animating());
 }
@@ -991,8 +1086,22 @@ fn with_reduced_motion_everything_lands_at_once() {
     let mut s = ViewState::new(0);
     s.set_reduced_motion(true);
     let t0 = Instant::now();
-    s.layout(&group(false), (360., 800.), 1., &t, &mut text, t0);
-    s.layout(&group(true), (360., 800.), 1., &t, &mut text, t0);
+    s.layout(
+        &group(false),
+        (360., 800.),
+        1.,
+        t.with_types(&types()),
+        &mut text,
+        t0,
+    );
+    s.layout(
+        &group(true),
+        (360., 800.),
+        1.,
+        t.with_types(&types()),
+        &mut text,
+        t0,
+    );
     assert!(!s.animating());
     assert!(rect(&s, "cards")[3] > 100.);
 }
@@ -1024,7 +1133,7 @@ fn a_card_swiped_past_the_threshold_leaves_and_is_reported_when_gone() {
         &swipe_list(&["a", "b"]),
         (360., 800.),
         1.,
-        &t,
+        t.with_types(&types()),
         &mut text,
         t0,
     );
@@ -1050,11 +1159,11 @@ fn a_card_swiped_past_the_threshold_leaves_and_is_reported_when_gone() {
     s.pointer_motion(x + 120., y);
     assert_eq!(s.button(false, t0), None, "the release opens nothing");
     assert!(s.animating());
-    let mid = s.tick(&t, &mut text, t0 + t.motion.base / 2);
+    let mid = s.tick(t.with_types(&types()), &mut text, t0 + t.motion.base / 2);
     assert!(mid.animating && mid.activated.is_empty());
     let xm = rect(&s, "a/pane")[0];
     assert!(xm > a0[0] + 120. && xm < 360., "{xm}");
-    let end = s.tick(&t, &mut text, t0 + t.motion.base);
+    let end = s.tick(t.with_types(&types()), &mut text, t0 + t.motion.base);
     assert_eq!(
         end.activated,
         vec![Activated {
@@ -1071,9 +1180,19 @@ fn a_card_swiped_past_the_threshold_leaves_and_is_reported_when_gone() {
     assert!(f.panes.iter().all(|p| p.key != Key::from("a/pane")));
     // The model drops it: the card below slides up from where it was drawn.
     let t1 = t0 + t.motion.base;
-    s.layout(&swipe_list(&["b"]), (360., 800.), 1., &t, &mut text, t1);
+    s.layout(
+        &swipe_list(&["b"]),
+        (360., 800.),
+        1.,
+        t.with_types(&types()),
+        &mut text,
+        t1,
+    );
     assert_eq!(rect(&s, "b/pane"), b0);
-    assert!(!s.tick(&t, &mut text, t1 + t.motion.base).animating);
+    assert!(
+        !s.tick(t.with_types(&types()), &mut text, t1 + t.motion.base)
+            .animating
+    );
     assert_eq!(rect(&s, "b/pane")[1], a0[1]);
 }
 
@@ -1083,7 +1202,14 @@ fn a_swipe_short_of_the_threshold_settles_back() {
     let mut text = backend();
     let mut s = ViewState::new(0);
     let t0 = Instant::now();
-    s.layout(&swipe_list(&["a"]), (360., 800.), 1., &t, &mut text, t0);
+    s.layout(
+        &swipe_list(&["a"]),
+        (360., 800.),
+        1.,
+        t.with_types(&types()),
+        &mut text,
+        t0,
+    );
     let a0 = rect(&s, "a/pane");
     let (x, y) = on_card(&s, "a");
     s.pointer_motion(x, y);
@@ -1091,7 +1217,7 @@ fn a_swipe_short_of_the_threshold_settles_back() {
     s.pointer_motion(x - 50., y);
     assert_eq!(rect(&s, "a/pane")[0], a0[0] - 50.);
     assert_eq!(s.button(false, t0), None);
-    let end = s.tick(&t, &mut text, t0 + t.motion.base);
+    let end = s.tick(t.with_types(&types()), &mut text, t0 + t.motion.base);
     assert!(!end.animating && end.activated.is_empty());
     assert_eq!(rect(&s, "a/pane"), a0);
     assert_eq!(placed(&s, "a/title").alpha, 1.);
@@ -1152,7 +1278,14 @@ fn with_reduced_motion_a_fling_is_reported_on_release() {
     let mut s = ViewState::new(0);
     s.set_reduced_motion(true);
     let t0 = Instant::now();
-    s.layout(&swipe_list(&["a"]), (360., 800.), 1., &t, &mut text, t0);
+    s.layout(
+        &swipe_list(&["a"]),
+        (360., 800.),
+        1.,
+        t.with_types(&types()),
+        &mut text,
+        t0,
+    );
     let (x, y) = on_card(&s, "a");
     s.pointer_motion(x, y);
     s.button(true, t0);
@@ -1218,7 +1351,7 @@ fn settle(s: &mut ViewState, t: &Tokens, text: &mut ParleyBackend, from: Instant
     let mut now = from;
     while s.animating() && now < from + Duration::from_secs(3) {
         now += Duration::from_millis(16);
-        s.tick(t, text, now);
+        s.tick(t.with_types(&types()), text, now);
     }
     now
 }
@@ -1263,7 +1396,14 @@ fn the_wheel_scrolls_the_region_under_the_pointer_within_its_content() {
     let mut text = backend();
     let mut s = ViewState::new(0);
     let t0 = Instant::now();
-    s.layout(&feed(10), (360., 400.), 1., &t, &mut text, t0);
+    s.layout(
+        &feed(10),
+        (360., 400.),
+        1.,
+        t.with_types(&types()),
+        &mut text,
+        t0,
+    );
     let (h, c0) = (rect(&s, "feed")[3], rect(&s, "c0/pane"));
     let content = match placed(&s, "feed").what {
         What::Scroll { content, .. } => content,
@@ -1282,15 +1422,27 @@ fn the_wheel_scrolls_the_region_under_the_pointer_within_its_content() {
     assert!(!s.scroll(ScrollBy::Pixels(-100.)), "already at the top");
     assert!(s.scroll(ScrollBy::Pixels(100.)));
     assert!(s.animating(), "laid out at the next tick");
-    s.tick(&t, &mut text, t0 + Duration::from_millis(16));
+    s.tick(
+        t.with_types(&types()),
+        &mut text,
+        t0 + Duration::from_millis(16),
+    );
     assert_eq!(rect(&s, "c0/pane")[1], c0[1] - 100.);
     assert_eq!(offset(&s), 100.);
     // A detent is the viewport's height to the 2/3, as GTK's.
     assert!(s.scroll(ScrollBy::Steps(1.)));
-    s.tick(&t, &mut text, t0 + Duration::from_millis(32));
+    s.tick(
+        t.with_types(&types()),
+        &mut text,
+        t0 + Duration::from_millis(32),
+    );
     assert_eq!(offset(&s), (100. + h.powf(2. / 3.)).round());
     assert!(s.scroll(ScrollBy::Pixels(1e6)));
-    s.tick(&t, &mut text, t0 + Duration::from_millis(48));
+    s.tick(
+        t.with_types(&types()),
+        &mut text,
+        t0 + Duration::from_millis(48),
+    );
     assert_eq!(offset(&s), content - h, "never past its content");
     assert!(!s.scroll(ScrollBy::Pixels(10.)), "already at the end");
     // Hover follows what moved under the pointer.
@@ -1312,7 +1464,14 @@ fn page_keys_move_the_focused_region_and_tab_scrolls_the_focus_into_view() {
     let mut text = backend();
     let mut s = ViewState::new(0);
     let t0 = Instant::now();
-    s.layout(&feed(10), (360., 400.), 1., &t, &mut text, t0);
+    s.layout(
+        &feed(10),
+        (360., 400.),
+        1.,
+        t.with_types(&types()),
+        &mut text,
+        t0,
+    );
     let feed = rect(&s, "feed");
     // Tab walks card, close, card, close...: the ninth stop is c4's card, below the view.
     for _ in 0..9 {
@@ -1354,7 +1513,14 @@ fn the_bar_shows_on_scroll_hides_after_its_delay_and_its_lane_takes_presses_and_
     let mut text = backend();
     let mut s = ViewState::new(0);
     let t0 = Instant::now();
-    s.layout(&feed(20), (360., 400.), 1., &t, &mut text, t0);
+    s.layout(
+        &feed(20),
+        (360., 400.),
+        1.,
+        t.with_types(&types()),
+        &mut text,
+        t0,
+    );
     let feed = rect(&s, "feed");
     let lane = (feed[0] + feed[2] - 6., feed[1] + feed[3] - 20.);
     // Hidden, the lane is the content's: a press there presses the card under it.
@@ -1373,18 +1539,22 @@ fn the_bar_shows_on_scroll_hides_after_its_delay_and_its_lane_takes_presses_and_
     s.button(false, now);
     // Shown (motion over the region revealed it), the lane takes the press: it jumps there
     // and presses nothing below.
-    s.tick(&t, &mut text, now + Duration::from_millis(16));
+    s.tick(
+        t.with_types(&types()),
+        &mut text,
+        now + Duration::from_millis(16),
+    );
     let now = now + Duration::from_millis(16);
     s.button(true, now);
     assert_eq!(s.press(), None);
     let now = now + Duration::from_millis(16);
-    s.tick(&t, &mut text, now);
+    s.tick(t.with_types(&types()), &mut text, now);
     let jumped = offset(&s);
     assert!(jumped > 0., "a press low on the track jumps down");
     // It drags from there, the thumb following the pointer.
     s.pointer_motion(lane.0, lane.1 - 50.);
     let now = now + Duration::from_millis(16);
-    s.tick(&t, &mut text, now);
+    s.tick(t.with_types(&types()), &mut text, now);
     assert!(offset(&s) < jumped, "dragging up scrolls up");
     assert_eq!(s.hover(), None, "the lane keeps its hover from the content");
     assert_eq!(s.button(false, now), None);
@@ -1418,7 +1588,14 @@ fn a_rebuild_keeps_the_first_card_in_view_where_it_was() {
     let mut text = backend();
     let mut s = ViewState::new(0);
     let t0 = Instant::now();
-    s.layout(&feed(10), (360., 400.), 1., &t, &mut text, t0);
+    s.layout(
+        &feed(10),
+        (360., 400.),
+        1.,
+        t.with_types(&types()),
+        &mut text,
+        t0,
+    );
     s.pointer_motion(60., 200.);
     s.scroll(ScrollBy::Pixels(200.));
     let now = settle(&mut s, &t, &mut text, t0);
@@ -1432,18 +1609,39 @@ fn a_rebuild_keeps_the_first_card_in_view_where_it_was() {
     // A notification arrives at the top while the reader is down the list.
     let mut rows = vec![card("new", "Body", Align::FirstLine)];
     rows.extend((0..10).map(|i| card(&format!("c{i}"), "Body", Align::FirstLine)));
-    s.layout(&feed_of(rows), (360., 400.), 1., &t, &mut text, now);
+    s.layout(
+        &feed_of(rows),
+        (360., 400.),
+        1.,
+        t.with_types(&types()),
+        &mut text,
+        now,
+    );
     assert_eq!(s.rect(&first.0), Some(first.1), "what was read stays put");
     assert_eq!(offset(&s), 200. + rect(&s, "new/pane")[3] + 8.);
-    s.tick(&t, &mut text, now + t.motion.base / 2);
+    s.tick(t.with_types(&types()), &mut text, now + t.motion.base / 2);
     assert_eq!(s.rect(&first.0), Some(first.1), "and nothing slides");
     // At the top, a new card pushes the list down as it always did.
     let mut s = ViewState::new(0);
-    s.layout(&feed(3), (360., 400.), 1., &t, &mut text, now);
+    s.layout(
+        &feed(3),
+        (360., 400.),
+        1.,
+        t.with_types(&types()),
+        &mut text,
+        now,
+    );
     let c0 = rect(&s, "c0/pane");
     let mut rows = vec![card("new", "Body", Align::FirstLine)];
     rows.extend((0..3).map(|i| card(&format!("c{i}"), "Body", Align::FirstLine)));
-    s.layout(&feed_of(rows), (360., 400.), 1., &t, &mut text, now);
+    s.layout(
+        &feed_of(rows),
+        (360., 400.),
+        1.,
+        t.with_types(&types()),
+        &mut text,
+        now,
+    );
     assert_eq!(offset(&s), 0.);
     let later = settle(&mut s, &t, &mut text, now);
     assert!(later > now);
@@ -1456,7 +1654,14 @@ fn placeholders_stand_in_for_rows_outside_the_window_at_the_height_they_had() {
     let mut text = backend();
     let mut s = ViewState::new(0);
     let t0 = Instant::now();
-    s.layout(&feed(30), (360., 400.), 1., &t, &mut text, t0);
+    s.layout(
+        &feed(30),
+        (360., 400.),
+        1.,
+        t.with_types(&types()),
+        &mut text,
+        t0,
+    );
     let whole = placed(&s, "feed").what.clone();
     let heights: Vec<f64> = (0..30)
         .map(|i| rect(&s, &format!("c{i}/pane"))[3])
@@ -1480,7 +1685,14 @@ fn placeholders_stand_in_for_rows_outside_the_window_at_the_height_they_had() {
         .filter(|n| matches!(n.kind, Kind::Pane(_)))
         .count();
     assert!(built < 10, "{built} built");
-    s.layout(&feed_of(rows), (360., 400.), 1., &t, &mut text, t0);
+    s.layout(
+        &feed_of(rows),
+        (360., 400.),
+        1.,
+        t.with_types(&types()),
+        &mut text,
+        t0,
+    );
     assert!(
         matches!((placed(&s, "feed").what.clone(), whole), (What::Scroll { content: a, .. }, What::Scroll { content: b, .. }) if a == b),
         "the content keeps its height"
@@ -1724,11 +1936,22 @@ fn a_wheel_scrolls_by_its_detents_and_a_touchpad_by_its_pixels() {
     let mut text = backend();
     let mut s = ViewState::new(0);
     let t0 = Instant::now();
-    s.layout(&feed(10), (360., 400.), 1., &t, &mut text, t0);
+    s.layout(
+        &feed(10),
+        (360., 400.),
+        1.,
+        t.with_types(&types()),
+        &mut text,
+        t0,
+    );
     let h = rect(&s, "feed")[3];
     s.pointer_motion(60., 200.);
     s.scroll(wheel.into());
-    s.tick(&t, &mut text, t0 + Duration::from_millis(16));
+    s.tick(
+        t.with_types(&types()),
+        &mut text,
+        t0 + Duration::from_millis(16),
+    );
     assert_eq!(
         offset(&s),
         h.powf(2. / 3.).round(),
@@ -1745,7 +1968,7 @@ fn a_view_laid_in_bounds_answers_in_surface_coordinates() {
         &view,
         [600., 40., 360., 400.],
         1.,
-        &t,
+        t.with_types(&types()),
         &mut backend(),
         Instant::now(),
     );
@@ -1873,7 +2096,7 @@ fn a_semantic_id_stays_with_its_node_when_the_view_changes_around_it() {
         &list(&["b"]),
         (360., 600.),
         1.,
-        &tokens(),
+        tokens().with_types(&types()),
         &mut backend(),
         Instant::now(),
     );
@@ -1896,7 +2119,7 @@ fn a_cascade_flings_the_shown_cards_top_to_bottom_and_reports_once_when_the_last
         &swipe_list(&["a", "b", "c"]),
         (360., 800.),
         1.,
-        &t,
+        t.with_types(&types()),
         &mut text,
         t0,
     );
@@ -1913,7 +2136,7 @@ fn a_cascade_flings_the_shown_cards_top_to_bottom_and_reports_once_when_the_last
     assert_eq!(s.cascade(&keys, stagger, "clear-all", t0), None);
     assert!(s.animating());
     let t1 = t0 + stagger / 2;
-    let first = s.tick(&t, &mut text, t1);
+    let first = s.tick(t.with_types(&types()), &mut text, t1);
     assert!(first.activated.is_empty());
     assert!(
         rect(&s, "a/pane")[0] > at_rest[0][0],
@@ -1923,11 +2146,17 @@ fn a_cascade_flings_the_shown_cards_top_to_bottom_and_reports_once_when_the_last
     assert_eq!(rect(&s, "c/pane"), at_rest[2]);
     let t2 = t0 + t.motion.base;
     assert!(
-        s.tick(&t, &mut text, t2).activated.is_empty(),
+        s.tick(t.with_types(&types()), &mut text, t2)
+            .activated
+            .is_empty(),
         "only the last reports"
     );
     assert_eq!(placed(&s, "a/pane").alpha, 0., "and the first stays gone");
-    let end = s.tick(&t, &mut text, t0 + stagger * 2 + t.motion.base);
+    let end = s.tick(
+        t.with_types(&types()),
+        &mut text,
+        t0 + stagger * 2 + t.motion.base,
+    );
     assert_eq!(
         end.activated,
         vec![Activated {
@@ -1948,7 +2177,14 @@ fn a_cascade_with_nothing_shown_or_reduced_motion_reports_at_once() {
     let t0 = Instant::now();
     let stagger = Duration::from_millis(45);
     let mut s = ViewState::new(0);
-    s.layout(&swipe_list(&["a"]), (360., 800.), 1., &t, &mut text, t0);
+    s.layout(
+        &swipe_list(&["a"]),
+        (360., 800.),
+        1.,
+        t.with_types(&types()),
+        &mut text,
+        t0,
+    );
     let gone = s.cascade(&[Key::from("nowhere")], stagger, "clear-all", t0);
     assert_eq!(gone.map(|a| a.action), Some("clear-all".into()));
     s.set_reduced_motion(true);
@@ -2087,11 +2323,18 @@ fn a_controls_description_reaches_its_reader() {
     let mut text = backend();
     let mut s = ViewState::new(0);
     let t0 = Instant::now();
-    s.layout(&swipe_list(&["a"]), (360., 800.), 1., &t, &mut text, t0);
+    s.layout(
+        &swipe_list(&["a"]),
+        (360., 800.),
+        1.,
+        t.with_types(&types()),
+        &mut text,
+        t0,
+    );
     let keys = [Key::from("a/card")];
     let stagger = Duration::from_millis(45);
     assert_eq!(s.cascade(&keys, stagger, "clear", t0), None);
-    s.tick(&t, &mut text, t0 + t.motion.base);
+    s.tick(t.with_types(&types()), &mut text, t0 + t.motion.base);
     assert_eq!(
         s.cascade(&keys, stagger, "again", t0 + t.motion.base)
             .map(|a| a.action),
@@ -2153,7 +2396,7 @@ fn a_slider_takes_the_value_under_the_pointer_and_holds_it_until_release() {
         &slider_view(20.),
         (360., 400.),
         1.,
-        &t,
+        t.with_types(&types()),
         &mut backend(),
         Instant::now(),
     );
@@ -2172,7 +2415,7 @@ fn a_slider_takes_the_value_under_the_pointer_and_holds_it_until_release() {
         &slider_view(100.),
         (360., 400.),
         1.,
-        &t,
+        t.with_types(&types()),
         &mut backend(),
         Instant::now(),
     );
@@ -2520,9 +2763,10 @@ fn switch_row(on: bool, enabled: bool) -> Node {
         .enabled(enabled)
 }
 fn switch_progress(s: &ViewState) -> f64 {
-    match placed(s, "sw").what {
-        What::Switch { progress, .. } => progress,
-        ref w => panic!("not a switch: {w:?}"),
+    let p = placed(s, "sw");
+    match &p.what {
+        What::Drawing(Part::Switch(_)) => p.progress.unwrap(),
+        w => panic!("not a switch: {w:?}"),
     }
 }
 
@@ -2548,7 +2792,7 @@ fn a_switch_is_the_tokens_size_and_its_row_is_what_is_pressed() {
     assert_eq!(placed(&s, "sw").control, Some(row), "the row holds it");
     assert!(matches!(
         placed(&s, "sw").what,
-        What::Switch { on: true, .. }
+        What::Drawing(Part::Switch(Switch { on: true }))
     ));
     assert_eq!(switch_progress(&s), 1., "seen first, it is at its state");
     assert!(!s.animating());
@@ -2560,24 +2804,39 @@ fn a_switch_slides_the_same_both_ways_from_where_it_is() {
     let mut text = backend();
     let mut s = ViewState::new(0);
     let t0 = Instant::now();
-    s.layout(&switch_row(false, true), (44., 24.), 1., &t, &mut text, t0);
-    s.layout(&switch_row(true, true), (44., 24.), 1., &t, &mut text, t0);
+    s.layout(
+        &switch_row(false, true),
+        (44., 24.),
+        1.,
+        t.with_types(&types()),
+        &mut text,
+        t0,
+    );
+    s.layout(
+        &switch_row(true, true),
+        (44., 24.),
+        1.,
+        t.with_types(&types()),
+        &mut text,
+        t0,
+    );
     assert!(s.animating());
-    s.tick(&t, &mut text, t0 + t.motion.base / 2);
+    s.tick(t.with_types(&types()), &mut text, t0 + t.motion.base / 2);
     let mid = switch_progress(&s);
     assert!(mid > 0. && mid < 1., "{mid}");
     s.layout(
         &switch_row(false, true),
         (44., 24.),
         1.,
-        &t,
+        t.with_types(&types()),
         &mut text,
         t0 + t.motion.base / 2,
     );
     assert_eq!(switch_progress(&s), mid, "no jump");
     let t1 = t0 + t.motion.base / 2;
     assert!(
-        !s.tick(&t, &mut text, t1 + t.motion.base).animating,
+        !s.tick(t.with_types(&types()), &mut text, t1 + t.motion.base)
+            .animating,
         "base, not slow"
     );
     assert_eq!(switch_progress(&s), 0.);
@@ -2585,19 +2844,34 @@ fn a_switch_slides_the_same_both_ways_from_where_it_is() {
         &switch_row(true, true),
         (44., 24.),
         1.,
-        &t,
+        t.with_types(&types()),
         &mut text,
         t1 + t.motion.base,
     );
     assert!(
-        !s.tick(&t, &mut text, t1 + t.motion.base * 2).animating,
+        !s.tick(t.with_types(&types()), &mut text, t1 + t.motion.base * 2)
+            .animating,
         "opening takes base too"
     );
     assert_eq!(switch_progress(&s), 1.);
     let mut s = ViewState::new(0);
     s.set_reduced_motion(true);
-    s.layout(&switch_row(false, true), (44., 24.), 1., &t, &mut text, t0);
-    s.layout(&switch_row(true, true), (44., 24.), 1., &t, &mut text, t0);
+    s.layout(
+        &switch_row(false, true),
+        (44., 24.),
+        1.,
+        t.with_types(&types()),
+        &mut text,
+        t0,
+    );
+    s.layout(
+        &switch_row(true, true),
+        (44., 24.),
+        1.,
+        t.with_types(&types()),
+        &mut text,
+        t0,
+    );
     assert!(!s.animating());
     assert_eq!(switch_progress(&s), 1.);
 }
@@ -2610,7 +2884,8 @@ fn a_switch_is_painted_with_the_native_switch_colours_and_fades_when_disabled() 
     let mut pixel = |on: bool, enabled: bool, x: usize, y: usize| {
         let s = laid(&switch_row(on, enabled), (44., 24.), 1.);
         let mut c = nk_render::Canvas::new(44, 24, 1.);
-        s.paint(&mut c, &t, &mut none, None).unwrap();
+        s.paint(&mut c, t.with_types(&types()), &mut none, None)
+            .unwrap();
         let px = c.finish();
         let i = (y * 44 + x) * 4;
         [px[i], px[i + 1], px[i + 2], px[i + 3]]
@@ -2641,8 +2916,13 @@ fn a_switch_is_painted_with_the_native_switch_colours_and_fades_when_disabled() 
     );
     assert_eq!(rect(&s, "sw")[3], 40.);
     let mut c = nk_render::Canvas::new(44, 40, 1.);
-    s.paint(&mut c, &t, &mut |_: &str, _: f64| None, None)
-        .unwrap();
+    s.paint(
+        &mut c,
+        t.with_types(&types()),
+        &mut |_: &str, _: f64| None,
+        None,
+    )
+    .unwrap();
     let px = c.finish();
     assert_eq!(px[(2 * 44 + 22) * 4 + 3], 0, "nothing above the track");
     assert!(px[(20 * 44 + 12) * 4] > 240, "the thumb in the middle");
@@ -2899,7 +3179,7 @@ fn a_control_off_glass_has_its_hover_painted_by_the_view_not_declared_to_hyalo()
     let mut none = |_: &str, _: f64| None;
     let paint = |s: &ViewState, none: &mut dyn FnMut(&str, f64) -> Option<Arc<nk_icons::Icon>>| {
         let mut c = nk_render::Canvas::new(200, 60, 1.);
-        s.paint(&mut c, &t, none, None).unwrap();
+        s.paint(&mut c, t.with_types(&types()), none, None).unwrap();
         c.finish()
     };
     let mut s = laid(&view, (200., 60.), 1.);
@@ -2937,7 +3217,7 @@ fn a_disabled_control_draws_its_content_in_the_disabled_ink_and_a_marker_does_no
     let ink_of = |view: Node, none: &mut dyn FnMut(&str, f64) -> Option<Arc<nk_icons::Icon>>| {
         let s = laid(&view, (120., 30.), 1.);
         let mut c = nk_render::Canvas::new(120, 30, 1.);
-        s.paint(&mut c, &t, none, None).unwrap();
+        s.paint(&mut c, t.with_types(&types()), none, None).unwrap();
         lit(&c.finish(), 120, [0, 0, 120, 30])
     };
     let on = ink_of(row("a", "go", true), &mut none);
@@ -2992,8 +3272,13 @@ fn a_content_button_is_padded_to_its_height_and_painted_by_the_view_in_the_surfa
             "nothing for Hyalo"
         );
         let mut c = nk_render::Canvas::new(300, 60, 1.);
-        s.paint(&mut c, &t, &mut |_: &str, _: f64| None, None)
-            .unwrap();
+        s.paint(
+            &mut c,
+            t.with_types(&types()),
+            &mut |_: &str, _: f64| None,
+            None,
+        )
+        .unwrap();
         let px = c.finish();
         let (x, y) = (b[0] as usize + 6, b[1] as usize + 4);
         px[(y * 300 + x) * 4 + 3]
@@ -3014,8 +3299,13 @@ fn a_content_button_is_padded_to_its_height_and_painted_by_the_view_in_the_surfa
         let mut s = laid(&view(shown, true), (300., 60.), 1.);
         let mut c = nk_render::Canvas::new(300, 60, 1.);
         s.frame(&t, Instant::now());
-        s.paint(&mut c, &t, &mut |_: &str, _: f64| None, None)
-            .unwrap();
+        s.paint(
+            &mut c,
+            t.with_types(&types()),
+            &mut |_: &str, _: f64| None,
+            None,
+        )
+        .unwrap();
         let px = c.finish();
         let (x, y) = ((b[0] + b[2] / 2.) as usize, b[1] as usize);
         [px[(y * 300 + x) * 4], px[(y * 300 + x) * 4 + 2]]
@@ -3081,8 +3371,13 @@ fn in_a_setting_row_only_the_switch_responds_and_it_bears_the_rows_name() {
         let mut s = laid(&v, (300., 40.), 1.);
         let mut c = nk_render::Canvas::new(300, 40, 1.);
         s.frame(&t, Instant::now());
-        s.paint(&mut c, &t, &mut |_: &str, _: f64| None, None)
-            .unwrap();
+        s.paint(
+            &mut c,
+            t.with_types(&types()),
+            &mut |_: &str, _: f64| None,
+            None,
+        )
+        .unwrap();
         let px = c.finish();
         let (x, y) = (
             (switch[0] - 3.) as usize,
@@ -3181,8 +3476,13 @@ fn painted(view: &Node, w: u16, h: u16) -> (ViewState, Vec<u8>) {
     let mut s = laid(view, (f64::from(w), f64::from(h)), 1.);
     let mut c = nk_render::Canvas::new(w, h, 1.);
     s.frame(&t, Instant::now());
-    s.paint(&mut c, &t, &mut |_: &str, _: f64| None, None)
-        .unwrap();
+    s.paint(
+        &mut c,
+        t.with_types(&types()),
+        &mut |_: &str, _: f64| None,
+        None,
+    )
+    .unwrap();
     (s, c.finish())
 }
 fn bgra(px: &[u8], w: usize, (x, y): (f64, f64)) -> [u8; 4] {
@@ -3432,8 +3732,13 @@ fn an_activatable_setting_row_responds_as_a_whole_and_is_painted_off_glass() {
         let mut c = nk_render::Canvas::new(400, 80, 1.);
         let f = s.frame(&tok, Instant::now());
         assert!(f.states.is_empty(), "off glass: nothing for Hyalo");
-        s.paint(&mut c, &tok, &mut |_: &str, _: f64| None, None)
-            .unwrap();
+        s.paint(
+            &mut c,
+            tok.with_types(&types()),
+            &mut |_: &str, _: f64| None,
+            None,
+        )
+        .unwrap();
         c.finish()
     };
     let hovered = paint(&mut s);
@@ -3680,8 +3985,13 @@ fn the_selected_sidebar_entrys_text_is_the_accents_foreground() {
         let mut s = laid(&sidebar(selected), (240., 200.), 1.);
         let mut c = nk_render::Canvas::new(240, 200, 1.);
         s.frame(&t, Instant::now());
-        s.paint(&mut c, &t, &mut |_: &str, _: f64| None, None)
-            .unwrap();
+        s.paint(
+            &mut c,
+            t.with_types(&types()),
+            &mut |_: &str, _: f64| None,
+            None,
+        )
+        .unwrap();
         let px = c.finish();
         let r = rect(&s, k);
         // The most opaque pixel of the title: its ink.
@@ -3752,7 +4062,14 @@ fn a_frame_stepped_by_its_slide_puts_the_glass_where_it_says_only_with_slides_of
                 Node::text("pill/t", "Button", style(14.)),
             ),
         );
-        s.layout(&view, (1100., 700.), 1., &t, &mut backend(), at);
+        s.layout(
+            &view,
+            (1100., 700.),
+            1.,
+            t.with_types(&types()),
+            &mut backend(),
+            at,
+        );
     };
     let drift = |slides: bool| {
         let mut s = ViewState::new(500);
@@ -3817,7 +4134,7 @@ fn a_sidebar_sliding_out_of_its_window_has_its_glass_cut_at_the_window_edge() {
         &view,
         [0., 0., 1100., 700.],
         1.,
-        &tokens(),
+        tokens().with_types(&types()),
         &mut backend(),
         Instant::now(),
     );
@@ -3901,11 +4218,16 @@ fn a_lifted_pane_leaves_the_windows_glass_and_paint_for_its_own_layer() {
         lit
     };
     let mut c = nk_render::Canvas::new(300, 100, 1.);
-    s.paint(&mut c, &t, &mut |_: &str, _: f64| None, None)
-        .unwrap();
+    s.paint(
+        &mut c,
+        t.with_types(&types()),
+        &mut |_: &str, _: f64| None,
+        None,
+    )
+    .unwrap();
     let window = ink(&c.finish(), 300, (0., 0.));
     let mut c = nk_render::Canvas::at(100, 80, 1., (8., 8.));
-    s.paint_lifted(&mut c, &t, &mut |_: &str, _: f64| None)
+    s.paint_lifted(&mut c, t.with_types(&types()), &mut |_: &str, _: f64| None)
         .unwrap();
     let layer = ink(&c.finish(), 100, (8., 8.));
     assert_eq!(window, 0, "the window draws none of the sidebar");
@@ -3913,13 +4235,16 @@ fn a_lifted_pane_leaves_the_windows_glass_and_paint_for_its_own_layer() {
 }
 
 /// The type scale over `style(14.)`, as `static.json` exports its steps.
-fn types() -> TypeScale {
+pub(crate) fn types() -> TypeScale {
+    types_with(14.)
+}
+fn types_with(size: f32) -> TypeScale {
     TypeScale::from_static(
         &json!({"scss": {"fse-mini": "0.75em", "fse-caption": "0.8em", "fse-small": "0.93em",
             "fse-body": "1em", "fse-subtitle": "1.1em", "fse-title-3": "1.2em",
             "fse-title-2": "1.4em", "fse-title-1": "1.7em", "fw-regular": "400",
             "fw-medium": "500", "fw-semibold": "600", "fw-bold": "700"}}),
-        style(14.),
+        style(size),
     )
     .unwrap()
 }
@@ -4085,7 +4410,7 @@ fn choosing_an_option_reports_only_a_change_and_holds_it_until_the_rebuild() {
         &speed(&SPEEDS, 1, false),
         (400., 200.),
         1.,
-        &tokens(),
+        tokens().with_types(&types()),
         &mut backend(),
         Instant::now(),
     );
@@ -4213,8 +4538,6 @@ fn sizes(chosen: usize, disabled: bool) -> Node {
                     action: "size".into(),
                     disabled,
                 },
-                &tokens().segmented,
-                &types(),
             ),
             Node::button("after", "After", "after", style(14.)),
         ],
@@ -4271,7 +4594,6 @@ fn samples(key: &str, chosen: usize, disabled: bool) -> Node {
             action: "accent".into(),
             disabled,
         },
-        &tokens().swatch,
     )
 }
 fn sample_row(chosen: usize, disabled: bool) -> Node {
@@ -4339,9 +4661,16 @@ fn swatches_measure_diameter_ring_and_gap_from_tokens() {
             action: "pick".into(),
             disabled: false,
         },
-        &t.swatch,
     );
-    let s = laid(&n, (400., 100.), 1.);
+    let mut s = ViewState::new(1000);
+    s.layout(
+        &n,
+        (400., 100.),
+        1.,
+        t.with_types(&types()),
+        &mut backend(),
+        Instant::now(),
+    );
     let a = rect(&s, "sw/0");
     let b = rect(&s, "sw/1");
     let c = rect(&s, "sw/2");
@@ -4377,8 +4706,6 @@ fn swatches_are_one_stop_and_arrows_wrap_inside_their_own_group() {
                     action: "size".into(),
                     disabled: false,
                 },
-                &tokens().segmented,
-                &types(),
             ),
             Node::radio_control("plain", "Plain", "plain", true),
         ],
@@ -4561,8 +4888,6 @@ fn a_segmented_choice_is_one_tab_stop_the_arrows_move_its_choice_and_a_reader_he
                     action: "mode".into(),
                     disabled: false,
                 },
-                &tokens().segmented,
-                &types(),
             ),
             Node::radio_control("x", "X", "x", true),
         ],
@@ -4602,8 +4927,6 @@ fn a_segmented_choice_is_painted_off_glass_the_chosen_one_in_the_accent() {
                 action: "size".into(),
                 disabled: false,
             },
-            &t.segmented,
-            &types(),
         );
         if let Kind::Stack(st) = &mut n.kind {
             for (i, sh) in shown {
@@ -4671,4 +4994,137 @@ fn a_segmented_choice_is_painted_off_glass_the_chosen_one_in_the_accent() {
         );
         assert!(!accent(px(&rest, at)), "no ring at rest");
     }
+}
+
+#[test]
+fn component_bodies_rebuild_from_the_look_without_changing_the_declaration() {
+    let n = Node::segmented(
+        "late",
+        Segmented {
+            name: "Late".into(),
+            options: vec!["One".into(), "Two".into()],
+            chosen: 0,
+            action: "choose".into(),
+            disabled: false,
+        },
+    );
+    let before = serde_json::to_value(&n).unwrap();
+    let mut s = ViewState::new(1000);
+    let mut t = tokens();
+    let ts = types();
+    let now = Instant::now();
+    s.layout(&n, (400., 80.), 1., t.with_types(&ts), &mut backend(), now);
+    let first = rect(&s, "late/0");
+    t.segmented.padding_x += 11.;
+    s.layout(&n, (400., 80.), 1., t.with_types(&ts), &mut backend(), now);
+    assert_eq!(rect(&s, "late/0")[2], first[2] + 22.);
+    assert_eq!(serde_json::to_value(&n).unwrap(), before);
+    assert!(
+        s.placed()
+            .iter()
+            .any(|p| p.key == Key::from("late/0/label"))
+    );
+}
+
+#[test]
+fn changing_a_component_type_at_the_same_key_does_not_inherit_its_animation() {
+    let mut s = laid(&Node::switch("part", false), (60., 30.), 1.);
+    let now = Instant::now();
+    s.layout(
+        &Node::switch("part", true),
+        (60., 30.),
+        1.,
+        tokens().with_types(&types()),
+        &mut backend(),
+        now,
+    );
+    assert!(s.animating());
+    s.layout(
+        &Node::check("part", true),
+        (60., 30.),
+        1.,
+        tokens().with_types(&types()),
+        &mut backend(),
+        now,
+    );
+    assert_eq!(placed(&s, "part").progress, Some(1.));
+    assert!(!s.animating());
+}
+
+#[test]
+fn component_input_routes_pointer_keys_and_reader_without_changing_activation() {
+    let n = Node::button("route", "Run", "go", style(14.));
+    let mut s = laid(&n, (120., 40.), 1.);
+    let now = Instant::now();
+    s.pointer_motion(10., 10.);
+    assert!(s.button(true, now).is_none());
+    assert_eq!(s.button(false, now).unwrap().action, "go");
+    s.key(KeyInput::Tab);
+    assert_eq!(s.key(KeyInput::Activate).unwrap().action, "go");
+    assert_eq!(s.request(&"route".into(), true).unwrap().action, "go");
+    s.layout(
+        &n.enabled(false),
+        (120., 40.),
+        1.,
+        tokens().with_types(&types()),
+        &mut backend(),
+        now,
+    );
+    assert!(s.key(KeyInput::Activate).is_none());
+    assert!(s.request(&"route".into(), true).is_none());
+}
+
+#[test]
+fn adjacent_segmented_groups_do_not_join() {
+    let group = |key: &str, chosen| {
+        Node::segmented(
+            key,
+            Segmented {
+                name: key.into(),
+                options: vec!["A".into(), "B".into()],
+                chosen,
+                action: key.into(),
+                disabled: false,
+            },
+        )
+    };
+    let n = Node::column("two", vec![group("first", 0), group("second", 1)]);
+    let mut s = laid(&n, (400., 120.), 1.);
+    s.key(KeyInput::Tab);
+    assert_eq!(s.focus(), Some(&"first/0".into()));
+    s.key(KeyInput::Tab);
+    assert_eq!(s.focus(), Some(&"second/1".into()));
+    assert_eq!(s.key(KeyInput::Right).unwrap().action, "second:0");
+    s.key(KeyInput::ShiftTab);
+    assert_eq!(s.focus(), Some(&"first/0".into()));
+    assert_eq!(s.key(KeyInput::Left).unwrap().action, "first:1");
+}
+
+#[test]
+fn a_component_rebuild_uses_the_new_type_scale_with_the_same_tokens() {
+    let n = Node::segmented(
+        "type",
+        Segmented {
+            name: "Size".into(),
+            options: vec!["Wide label".into()],
+            chosen: 0,
+            action: "size".into(),
+            disabled: false,
+        },
+    );
+    let mut s = laid(&n, (600., 120.), 1.);
+    let first = rect(&s, "type/0/label");
+    s.layout(
+        &n,
+        (600., 120.),
+        1.,
+        tokens().with_types(&types_with(24.)),
+        &mut backend(),
+        Instant::now(),
+    );
+    let next = rect(&s, "type/0/label");
+    assert!(
+        next[2] > first[2] && next[3] > first[3],
+        "body text must use the rebuilt type scale"
+    );
 }

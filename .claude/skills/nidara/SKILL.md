@@ -398,16 +398,31 @@ A window's sidebar is built of `Node::sidebar_entry` (§13.8): the selected one 
 the index with `AppWindow::value`). Outside an `AppWindow` nothing opens it — a surface hosting a
 `ViewState` itself must open the list as `AppWindow::open_menu` does. It is a combo box with its
 options for readers even closed.
-`Node::segmented(key, Segmented { .. }, &tokens.segmented, &types)` (§13.10) is a row of RADIOS:
+`Node::segmented(key, Segmented { .. })` (§13.10) is a row of RADIOS:
 segment `n` reports `"{action}:{n}"` and the arrows move the choice. Plain radios next to each
-other are one group to the keys; a segmented choice is always a group of its own (its `choice_part`
-place ends the run), so rows of them may follow one another.
-`Node::swatches(key, Swatches { .. }, &tokens.swatch)` (§13.11) uses the same group rule:
+other are one group to the keys; a segmented choice is always a group of its own (its named group
+uses the row key), so rows of them may follow one another.
+`Node::swatches(key, Swatches { .. })` (§13.11) uses the same group rule:
 coloured radios, named by the palette and described by the group, one Tab stop, arrow choices
 reporting `"{action}:{n}"`. It paints off glass; the selected band and outer keyboard focus ring
 are separate. Read every measure, tone and disabled opacity from `choices.swatch`; the gallery
 reads its named palette from exported `colors.json` in `accentOrder` (required, complete and
 unique), never the object-map order or a second list of accent colours.
+**Components (#1103 step 1, `VIEW.md` §14):** content button, segment, swatch and drawn
+switch/check/radio marks live in `nk-view/src/components/`, each answering `Component` from its
+own file. `Part::component` is the one concrete dispatch. Do not add a component match to
+`state.rs`, `layout.rs` or `motion.rs`. `ComponentLook` borrows tokens + TypeScale together:
+pass `tokens.with_types(&types)` to layout/tick/paint; rebuild on a look change. `body` expands
+once per rebuild into the retained tree; tick/anchor relayout reuse it. `FrameSpec` gives inset,
+least size and body placement. `Drawing` is noninteractive, inherits its surrounding control's
+resolved `Interaction`, and has no own semantic node. State is keyed by key + component type,
+retained while disabled, removed when absent. Input borrows only its own state/effects.
+`PaintPhase::Over` follows the current normal/lifted content, never all popup layers. Optional
+0..1 targets use common reduced-motion handling. Choice groups use named/adjacent membership;
+segment index/count are geometry only. Slider/dropdown/field/glass input and Host remain on the
+old path until their scoped conversion; `Activated` is unchanged. A conversion requires
+main↔main capture stability first, named exclusions, exact stable pixel comparison and isolated
+mutation controls; do not change the CI harness to make a conversion pass.
 A new token file goes into `scripts/export-tokens.mjs` AND `scripts/ci/settings-tokens-check.py`;
 until the owner reinstalls, `/usr/share/nidara/settings-data` lacks it, so run tests and the
 headless gallery against a fresh export (`SASS=sass node --experimental-strip-types

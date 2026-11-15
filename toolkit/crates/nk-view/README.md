@@ -11,15 +11,15 @@ from the model. `ViewState` keeps what lasts between rebuilds:
 
 | Call | What it does |
 |---|---|
-| `layout(view, size, scale, tokens, text, now)` | Measures, then places. Measured sizes are rounded up to whole device pixels and every edge is snapped to the device grid, so equal cards have equal sizes wherever they are. Texts are cached by key, string, style, line limit and width. A reveal whose `open` changed starts to ease, and a pane the rebuild moved slides from where it was drawn. |
-| `layout_in(view, bounds, scale, tokens, text, now)` | `layout` for a view that takes only `bounds` of its surface; everything it gives back is in surface coordinates. |
-| `tick(tokens, text, now)` | Advances reveals, slides, swipes, scrolls and scroll bars, and lays the view out again. It returns `Ticked`: whether anything still moves (while it does, the surface asks for frames), and the cards whose swipe just took them off the surface, as `Activated` with the swipe's action. |
+| `layout(view, size, scale, look, text, now)` | Measures, then places. Measured sizes are rounded up to whole device pixels and every edge is snapped to the device grid, so equal cards have equal sizes wherever they are. Texts are cached by key, string, style, line limit and width. A reveal whose `open` changed starts to ease, and a pane the rebuild moved slides from where it was drawn. |
+| `layout_in(view, bounds, scale, look, text, now)` | `layout` for a view that takes only `bounds` of its surface; everything it gives back is in surface coordinates. |
+| `tick(look, text, now)` | Advances reveals, slides, swipes, scrolls and scroll bars, and lays the view out again. It returns `Ticked`: whether anything still moves (while it does, the surface asks for frames), and the cards whose swipe just took them off the surface, as `Activated` with the swipe's action. |
 | `pointer_motion`, `pointer_leave`, `button(pressed, now)`, `key`, `reconcile_pointer` | Derive hover (the innermost shown, enabled control), press (cancelled by a release elsewhere), focus (Tab order), swipes, and the scroll bars' drags. The surface gets back only `Activated { key, action }`. |
 | `scroll(ScrollBy)`, `window(key)` | Scroll the region under the pointer, by pixels or wheel detents; and say what of a region's content shows, so the surface builds only those rows. |
 | `frame(tokens, now)` | Returns a `FramePane` per visible pane (its whole shape, its clip, and its glass opacity, which is its content's), plus the state regions (see below). `Frame::groups(tone, shadow)` turns the panes into material groups. |
 | `semantics(root, first_id)` | Builds the AT-SPI tree: a scroll pane per scroll region, a panel per pane, a button per control, a label per text outside a control (whole, never cut). |
 | `semantic_keys()`, `request(key, activate)` | Which control each semantic id is (ids stay with their key and role), and a reader's focus or activation on it. |
-| `paint(canvas, tokens, icons, fallback)` | Paints texts, icons, the keyboard focus ring and the scroll bars. With `fallback` it also paints the washes (D5, no material protocol). |
+| `paint(canvas, look, icons, fallback)` | Paints texts, icons, the keyboard focus ring and the scroll bars. With `fallback` it also paints the washes (D5, no material protocol). |
 
 **State regions.** Each pane's lit regions come first: press, then hover, then those still
 fading, then markers. Every other shown control follows at rest, with alpha 0. Hyalo shows a
@@ -75,3 +75,14 @@ top-left corner is one.
 text and focus colours from `tokens/colors.json`. The scroll bar's look is
 `components.json`'s `scrollbar` (`scrollbar_from`). Icon sizes are still passed in by the surface
 from its tokens.
+
+
+**Components (#1103 step 1).** `look` is `tokens.with_types(&types)`, a borrowed
+`ComponentLook` from the same appearance. Rebuild on look changes. Content buttons, segments,
+swatches and drawn switch/check/radio marks implement `components::Component`; only
+`Part::component` dispatches concrete types. Their bodies expand once at rebuild, their
+`FrameSpec` supplies measure/placement, and normal/lifted paint asks Under then Over. Drawings
+inherit resolved interaction without their own input or semantic node. State is reconciled
+by key + component type, retaining disabled keys. See `VIEW.md` §14 for the contract and
+remaining slider/dropdown/field/glass/Host work. Segmented and swatch constructors take data
+only; they read styles at expansion, rather than from constructor arguments.

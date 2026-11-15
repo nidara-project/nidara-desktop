@@ -70,6 +70,7 @@ pub struct Editor {
     menu_rect: Option<[f64; 4]>,
     menu_shift: (f64, f64),
     tokens: Option<nk_view::Tokens>,
+    types: Option<nk_view::TypeScale>,
     last: nk_view::Frame,
     menu_last: nk_view::Frame,
     /// A focus asked for before its control was laid out, and whether it shows its ring.
@@ -106,6 +107,7 @@ impl Default for Editor {
             menu_rect: None,
             menu_shift: (0., 0.),
             tokens: None,
+            types: None,
             last: Default::default(),
             menu_last: Default::default(),
             want: None,
@@ -449,11 +451,13 @@ impl Editor {
     pub(super) fn lay_out(
         &mut self,
         views: (Node, Option<Node>),
-        tokens: &nk_view::Tokens,
+        look: nk_view::ComponentLook<'_>,
         text: &mut dyn TextBackend,
         scale: f64,
     ) {
         let now = std::time::Instant::now();
+        let tokens = look.tokens;
+        self.types = Some(look.types.clone());
         self.tokens = Some(tokens.clone());
         let inner = [
             self.panel[0] + PAD,
@@ -461,8 +465,18 @@ impl Editor {
             layout::GRID_WIDTH,
             (self.panel[3] - PAD - 12.).max(0.),
         ];
-        self.view
-            .layout_in(&views.0, inner, scale, tokens, text, now);
+        self.view.layout_in(
+            &views.0,
+            inner,
+            scale,
+            tokens.with_types(
+                self.types
+                    .as_ref()
+                    .expect("tokens and type scale loaded together"),
+            ),
+            text,
+            now,
+        );
         if let Some(r) = self.view.rect(&SCROLL.into()) {
             self.viewport = r;
         }
@@ -488,8 +502,18 @@ impl Editor {
             // In Hyalo the menu is drawn on its own layer, over the tiles' layers.
             self.menu_shift = if self.layered { (x, y) } else { (0., 0.) };
             let at = [x - self.menu_shift.0, y - self.menu_shift.1, MENU_W, h];
-            self.menu_view
-                .layout_in(&menu, at, scale, tokens, text, now);
+            self.menu_view.layout_in(
+                &menu,
+                at,
+                scale,
+                tokens.with_types(
+                    self.types
+                        .as_ref()
+                        .expect("tokens and type scale loaded together"),
+                ),
+                text,
+                now,
+            );
             self.menu_rect = Some([x, y, MENU_W, h]);
         } else {
             self.menu_view.blur();
@@ -1272,7 +1296,11 @@ impl Editor {
         }
         if let Err(e) = self.view.paint(
             c,
-            &tokens,
+            tokens.with_types(
+                self.types
+                    .as_ref()
+                    .expect("tokens and type scale loaded together"),
+            ),
             &mut |_, _| None,
             base.is_some().then_some(&self.last),
         ) {
@@ -1323,7 +1351,11 @@ impl Editor {
         }
         if let Err(e) = self.menu_view.paint(
             c,
-            &tokens,
+            tokens.with_types(
+                self.types
+                    .as_ref()
+                    .expect("tokens and type scale loaded together"),
+            ),
             &mut |_, _| None,
             base.is_some().then_some(&self.menu_last),
         ) {
@@ -1395,7 +1427,12 @@ mod tests {
             nk_text::ParleyBackend::new(Arc::new(nk_text::FontSet::discover_required().unwrap()))
                 .unwrap();
         let views = editor.build(status, None, &TextStyle::default());
-        editor.lay_out(views, &tokens, &mut text, 1.);
+        editor.lay_out(
+            views,
+            tokens.with_types(&crate::nc_view::exported_types()?),
+            &mut text,
+            1.,
+        );
         Some(())
     }
     fn resync(editor: &mut Editor, stored: &layout::Stored, status: &Status, height: f64) {

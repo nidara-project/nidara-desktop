@@ -77,6 +77,7 @@ pub enum Act {
 pub struct View {
     pub state: ViewState,
     tokens: Option<Tokens>,
+    types: Option<nk_view::TypeScale>,
     groups_open: HashSet<String>,
     items_open: HashSet<u64>,
     history: Arc<Vec<Banner>>,
@@ -115,6 +116,7 @@ impl Default for View {
         Self {
             state: ViewState::new(REGIONS),
             tokens: None,
+            types: None,
             groups_open: HashSet::new(),
             items_open: HashSet::new(),
             history: Arc::default(),
@@ -815,9 +817,13 @@ impl View {
     ) {
         if self.appearance.as_ref() != Some(&look.appearance) {
             self.appearance = Some(look.appearance.clone());
+            self.types = nk_view::TypeScale::load(&look.exports, &look.appearance)
+                .map_err(|e| eprintln!("nidara-shell: the view has no type scale: {e}"))
+                .ok();
             self.tokens = tokens(&look.exports, &look.appearance)
                 .map_err(|e| eprintln!("nidara-shell: the NC view has no tokens: {e}"))
-                .ok();
+                .ok()
+                .filter(|_| self.types.is_some());
             self.state
                 .set_reduced_motion(look.appearance.reduced_motion);
         }
@@ -896,8 +902,18 @@ impl View {
             month_name: &month_name,
             error: &self.error,
         });
-        self.state
-            .layout_in(&view, bounds, scale, &tokens, text, Instant::now());
+        self.state.layout_in(
+            &view,
+            bounds,
+            scale,
+            tokens.with_types(
+                self.types
+                    .as_ref()
+                    .expect("tokens and type scale loaded together"),
+            ),
+            text,
+            Instant::now(),
+        );
         self.list = self.state.rect(&Key::from("list")).unwrap_or([0.; 4]);
         self.built = self.window();
         for p in self.state.placed() {
@@ -939,9 +955,17 @@ impl View {
     /// A frame of motion; Some when anything changed.
     pub fn tick(&mut self, text: &mut dyn nk_text::TextBackend) -> Option<Ticked> {
         let tokens = self.tokens.as_ref()?;
-        self.state
-            .animating()
-            .then(|| self.state.tick(tokens, text, Instant::now()))
+        self.state.animating().then(|| {
+            self.state.tick(
+                tokens.with_types(
+                    self.types
+                        .as_ref()
+                        .expect("tokens and type scale loaded together"),
+                ),
+                text,
+                Instant::now(),
+            )
+        })
     }
 
     pub fn animating(&self) -> bool {
@@ -1143,8 +1167,16 @@ impl View {
             return Ok(());
         };
         self.last = self.state.frame(tokens, Instant::now());
-        self.state
-            .paint(c, tokens, icons, (!material).then_some(&self.last))?;
+        self.state.paint(
+            c,
+            tokens.with_types(
+                self.types
+                    .as_ref()
+                    .expect("tokens and type scale loaded together"),
+            ),
+            icons,
+            (!material).then_some(&self.last),
+        )?;
         for (p, slot, b, visible) in self.artwork() {
             let side = match slot {
                 "hero" => art.pixels(p.rect[2].ceil() as u32),
@@ -1279,9 +1311,18 @@ fn rect(r: [f64; 4]) -> Rect {
     }
 }
 
-/// The exported tokens in the dark skin, for tests; None (skipped) without an export.
 #[cfg(test)]
 pub(crate) fn exported_tokens() -> Option<Tokens> {
+    exported_look().map(|l| l.0)
+}
+#[cfg(test)]
+pub(crate) fn exported_types() -> Option<nk_view::TypeScale> {
+    exported_look().map(|l| l.1)
+}
+
+/// The exported tokens in the dark skin, for tests; None (skipped) without an export.
+#[cfg(test)]
+fn exported_look() -> Option<(Tokens, nk_view::TypeScale)> {
     let root = std::env::var_os("NK_SETTINGS_DATA")
         .map(std::path::PathBuf::from)
         .unwrap_or_else(|| {
@@ -1315,7 +1356,10 @@ pub(crate) fn exported_tokens() -> Option<Tokens> {
         font: "Sans 11".into(),
         text_scale: 1.,
     };
-    Some(tokens(&e, &appearance).unwrap())
+    Some((
+        tokens(&e, &appearance).unwrap(),
+        nk_view::TypeScale::load(&e, &appearance).unwrap(),
+    ))
 }
 
 #[cfg(test)]
@@ -1349,6 +1393,7 @@ mod tests {
     fn laid(history: Vec<Banner>, setup: impl FnOnce(&mut View)) -> Option<View> {
         let mut p = View {
             tokens: Some(exported()?),
+            types: Some(exported_types()?),
             ..View::default()
         };
         setup(&mut p);
@@ -1625,7 +1670,14 @@ mod tests {
     /// What the kit reports by `at`, each acted on as the bar does.
     fn run_to(p: &mut View, at: Instant) -> Vec<Act> {
         let tokens = p.tokens.clone().unwrap();
-        let done = p.state.tick(&tokens, &mut text(), at).activated;
+        let done = p
+            .state
+            .tick(
+                tokens.with_types(p.types.as_ref().unwrap()),
+                &mut text(),
+                at,
+            )
+            .activated;
         done.iter().filter_map(|a| p.activated(a)).collect()
     }
     fn card_alpha(p: &View, key: &str) -> f64 {
