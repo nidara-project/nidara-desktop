@@ -2880,6 +2880,11 @@ an unapplied mutation, infrastructure failure or previous utterance as evidence.
   product file to the smoke: put it in the PKGBUILD, and the smoke gets it (a hand list here
   lacked the wallpapers, then the Settings portal — 2026-10-18). NOT a required check
   while Hyalo is a preview: it must never hold the merge queue for the desktop that ships.
+  🔴 It boots with the shipped config MINUS its `[outputs.*]` tables (#1116): vkms is
+  `Virtual-1` or `Virtual-2` as the runner numbers its cards, and the shipped
+  `[outputs.Virtual-1]` gave one tree two results (another mode, and an explicit output
+  refuses `msg output … scale=`, which five toolkit checks send). A check that needs a
+  per-output setting sets it itself; a failure that names the connector is this, not the change.
 
 ## Fixed animated viewport clipping (#1016)
 
