@@ -14,9 +14,11 @@ near 0 blurred. Each claim is checked, and then its control must break it:
   2. under the title bar the blur falls from its top edge to its bottom edge —
      control `--uniform`: not graded, as blurred at the bottom as at the top;
   3. the layers' glass shows nothing past the window's rounded corners (both layers reach the
-     window's top corners): the pixel one px in from each top corner is what lies beside the
-     window, not glass — control: a rule with `rounding = false` for the probe, whose square
-     corners then show the glass there (as every layer's glass did before it was cut);
+     window's top corners): the pixel one px in from each top corner is what is there when
+     the layers have no glass at all (the `--no-material` run), not glass. Not "what lies
+     beside the window": over a wallpaper the window's shadow grades across those few px —
+     control: a rule with `rounding = false` for the probe, whose square corners then show
+     the glass there (as every layer's glass did before it was cut);
   4. a layer's CONTENT stops at the window's edge too (a sidebar sliding out of it): of the red
      square half outside the window's left edge, nothing shows beside the window — control: the
      same test on the square's half inside the window, which must be red (the test sees it).
@@ -105,8 +107,6 @@ def measure(name, *args):
             # One px in from the top corners, and the same row just beside the window.
             'corner_left': pixel(image, x(1), y(1)),
             'corner_right': pixel(image, x(win['width'] - 2), y(1)),
-            'beside_left': pixel(image, x(-6), y(1)),
-            'beside_right': pixel(image, x(win['width'] + 5), y(1)),
             # The red square from -20 to 20: 10 px outside the window's left edge, 10 px inside.
             'overhang_out': pixel(image, x(-10), y(220)),
             'overhang_in': pixel(image, x(10), y(220)),
@@ -127,12 +127,12 @@ def title_graded(m):
     assert m['title_bottom'] > SHARP, f'the title bar is blurred at its bottom edge ({m["title_bottom"]:.1f}): not graded'
 
 
-def corners_cut(m):
+def corners_cut(m, bare):
     near = lambda a, b: all(abs(p - q) <= 12 for p, q in zip(a, b))
     for side in ('left', 'right'):
-        corner, beside = m[f'corner_{side}'], m[f'beside_{side}']
-        assert near(corner, beside), \
-            f'the {side} top corner shows {corner}, not what lies beside the window {beside}: the layers\' glass reaches past its rounded corner'
+        corner, without = m[f'corner_{side}'], bare[f'corner_{side}']
+        assert near(corner, without), \
+            f'the {side} top corner shows {corner}, not what is there without the layers\' glass {without}: it reaches past the window\'s rounded corner'
 
 
 def red(p):
@@ -165,14 +165,14 @@ def check():
         print(f'ok    under the sidebar the window\'s columns are blurred ({m["sidebar"]:.1f}), beside it sharp ({m["beside"]:.1f})', flush=True)
         title_graded(m)
         print(f'ok    under the title bar the blur falls from its top ({m["title_top"]:.1f}) to its bottom ({m["title_bottom"]:.1f})', flush=True)
-        corners_cut(m)
-        print(f'ok    the layers\' glass stops at the window\'s rounded corners ({m["corner_left"]} beside {m["beside_left"]}, {m["corner_right"]} beside {m["beside_right"]})', flush=True)
+        bare = measure('no-material', '--no-material')
+        (LOG / 'no-material.json').write_text(json.dumps(bare, indent=2))
+        corners_cut(m, bare)
+        print(f'ok    the layers\' glass stops at the window\'s rounded corners ({m["corner_left"]} as {bare["corner_left"]} without glass, {m["corner_right"]} as {bare["corner_right"]})', flush=True)
         content_cut(m)
         print(f'ok    a layer\'s content stops at the window\'s edge ({m["overhang_out"]} beside it, {m["overhang_in"]} inside)', flush=True)
         caught('the square\'s half inside', lambda m: content_cut(m, 'overhang_in'), m)
 
-        bare = measure('no-material', '--no-material')
-        (LOG / 'no-material.json').write_text(json.dumps(bare, indent=2))
         caught('--no-material', sidebar_blurred, bare)
         uniform = measure('uniform', '--uniform')
         (LOG / 'uniform.json').write_text(json.dumps(uniform, indent=2))
@@ -183,7 +183,7 @@ def check():
         finally:
             msg('settings', json.dumps({'rules': {'layer-glass-square': None}}))
         (LOG / 'square.json').write_text(json.dumps(square, indent=2))
-        caught('rounding = false', corners_cut, square)
+        caught('rounding = false', lambda m: corners_cut(m, bare), square)
         print('LAYER GLASS CHECK PASSED', flush=True)
     finally:
         msg('do', 'workspace', original)
