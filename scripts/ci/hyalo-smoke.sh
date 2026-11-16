@@ -44,7 +44,7 @@ phase_deps() {
         base-devel git rust clang hyprland \
         libinput seatd libdisplay-info libxkbcommon mesa systemd dbus \
         gobject-introspection glib2-devel esbuild \
-        gtk3 gtk4 gtk-layer-shell gtk4-layer-shell libpeas-2 pam \
+        gtk3 gtk4 gtk4-layer-shell pam \
         libpulse networkmanager libnma-gtk4 bluez-libs upower libnotify \
         pipewire wireplumber libwireplumber \
         nodejs npm gjs python python-gobject at-spi2-core \

@@ -38,7 +38,7 @@ phase_deps() {
     # list in lib/nidara-wl/build.sh for why the wlr XML has to be scanned too.
     pacman -Syu --needed --noconfirm \
         base-devel git gobject-introspection glib2-devel esbuild \
-        gtk3 gtk4 gtk-layer-shell gtk4-layer-shell libpeas-2 pam \
+        gtk3 gtk4 gtk4-layer-shell pam \
         libpulse networkmanager libnma-gtk4 bluez-libs upower libnotify \
         pipewire wireplumber libwireplumber \
         nodejs npm gjs python \
