@@ -135,7 +135,17 @@ struct Drag {
     claimed: bool,
 }
 
+/// Opt-in timings for one owner rebuild; absent during normal application use.
+#[derive(Clone, Copy, Debug, Default)]
+pub struct LayoutMetrics {
+    pub expansion: std::time::Duration,
+    pub layout: std::time::Duration,
+    pub shaped: usize,
+}
+
 pub struct ViewState {
+    profile: bool,
+    metrics: LayoutMetrics,
     placed: Vec<Placed>,
     /// The placement before swipes move it; what a rebuild compares panes against.
     laid: Vec<Placed>,
@@ -203,6 +213,8 @@ impl ViewState {
     /// others on the same material.
     pub fn new(id_base: u32) -> Self {
         Self {
+            profile: false,
+            metrics: LayoutMetrics::default(),
             placed: vec![],
             laid: vec![],
             now: Instant::now(),
@@ -333,6 +345,14 @@ impl ViewState {
         })
     }
 
+    /// Enable measurement clocks for explicit CPU probes; normal layout leaves them off.
+    pub fn set_profile(&mut self, enabled: bool) {
+        self.profile = enabled;
+    }
+    pub fn layout_metrics(&self) -> LayoutMetrics {
+        self.metrics
+    }
+
     /// Lays a rebuilt view out at `now`. A reveal whose `open` changed starts to ease, and a
     /// pane the rebuild moved slides from where it was drawn (VIEW.md §6). States whose control
     /// left, or was disabled, are cleared; hover is recomputed under the pointer, since the
@@ -369,7 +389,10 @@ impl ViewState {
             .filter(|p| matches!(p.what, What::Pane(_)))
             .map(|p| (p.key.clone(), p.rect))
             .collect();
+        let start = self.profile.then(Instant::now);
+        let shaped_before = self.text.shaped;
         let expanded = self.components.expand(view, look, text);
+        let expanded_at = start.map(|_| Instant::now());
         self.motion.view(&expanded, now, &tokens.motion);
         self.tokens = Some(tokens.clone());
         self.types = Some(look.types.clone());
@@ -409,6 +432,13 @@ impl ViewState {
             }
         }
         self.rehover();
+        if let (Some(start), Some(expanded)) = (start, expanded_at) {
+            self.metrics = LayoutMetrics {
+                expansion: expanded.duration_since(start),
+                layout: expanded.elapsed(),
+                shaped: self.text.shaped - shaped_before,
+            };
+        }
     }
 
     /// Advances the motion to `now` and lays the view out again if anything moved. Reports
@@ -546,7 +576,7 @@ impl ViewState {
         }
         for i in 0..self.placed.len() {
             if self.placed[i].part().is_some() {
-                self.component_input(i, |c, cx| c.arrange(cx));
+                self.component_layout(i);
             }
         }
     }
@@ -672,6 +702,7 @@ impl ViewState {
             interaction: self.interaction(i),
             role: p.control.map(|o| self.control(o).role),
             focused: self.focus.as_ref() == Some(&p.key),
+            showing: p.alpha > 0. && p.visible().is_some(),
             focus: self.focus.as_ref(),
             instance: self.components.instance(&p.key),
             clicks: self.clicks,
@@ -707,7 +738,19 @@ impl ViewState {
         i: usize,
         event: impl FnOnce(&dyn crate::components::Component, &mut Input<'_>),
     ) -> Option<Outcome> {
-        if matches!(self.placed[i].what, What::Control(_))
+        self.component_event(i, false, event)
+    }
+    fn component_layout(&mut self, i: usize) -> Option<Outcome> {
+        self.component_event(i, true, |c, cx| c.arrange(cx))
+    }
+    fn component_event(
+        &mut self,
+        i: usize,
+        layout: bool,
+        event: impl FnOnce(&dyn crate::components::Component, &mut Input<'_>),
+    ) -> Option<Outcome> {
+        if !layout
+            && matches!(self.placed[i].what, What::Control(_))
             && (!self.enabled(i) || self.placed[i].alpha <= 0.)
         {
             return None;
@@ -729,6 +772,7 @@ impl ViewState {
                 None
             },
             focused: self.focus.as_ref() == Some(&key),
+            showing: p.alpha > 0. && p.visible().is_some(),
             focus: self.focus.as_ref(),
             instance: self.components.instance(&p.key),
             clicks: self.clicks,
@@ -752,7 +796,10 @@ impl ViewState {
                 self.blur_key(self.focus.clone());
             }
             self.focus = Some(key);
-            self.focus_visible = false;
+            self.focus_visible = effects.keyboard_focus;
+        }
+        if let Some(reveal) = effects.reveal.take() {
+            self.reveal_rect(&reveal.region, reveal.rect);
         }
         self.host_requests.append(&mut effects.host);
         Some(effects)
@@ -793,16 +840,26 @@ impl ViewState {
             })
             .unwrap_or_default()
     }
+    pub(crate) fn retained_target(&self, target: &ReplyTarget) -> bool {
+        self.index(&target.owner).is_some_and(|i| {
+            self.placed[i].part().is_some_and(|part| {
+                part.component().type_id() == target.kind
+                    && self.components.instance(&target.owner) == target.instance
+                    && part
+                        .component()
+                        .revision(self.components.get(&target.owner))
+                        == Some(target.revision)
+            })
+        })
+    }
+    pub(crate) fn accepts_target(&self, target: &ReplyTarget) -> bool {
+        self.retained_target(target)
+            && self
+                .index(&target.owner)
+                .is_some_and(|i| self.enabled(i) && self.shown(i))
+    }
     pub fn reply(&mut self, target: &ReplyTarget, request: Request) -> Option<Activated> {
-        let i = self
-            .index(&target.owner)
-            .filter(|&i| self.enabled(i) && self.shown(i))?;
-        let part = self.placed[i].part()?.component();
-        if self.focus.as_ref() != Some(&target.owner)
-            || part.type_id() != target.kind
-            || self.components.instance(&target.owner) != target.instance
-            || part.revision(self.components.get(&target.owner)) != Some(target.revision)
-        {
+        if self.focus.as_ref() != Some(&target.owner) || !self.accepts_target(target) {
             return None;
         }
         self.respond(&target.owner, request)
@@ -981,7 +1038,20 @@ impl ViewState {
             .pointer
             .and_then(|pt| self.hit(pt))
             .map(|i| self.placed[i].key.clone());
-        self.hover != before
+        let mut changed = self.hover != before;
+        if changed && let Some(i) = before.as_ref().and_then(|key| self.index(key)) {
+            changed |= self
+                .component_input(i, |c, cx| c.pointer_leave(cx))
+                .is_some_and(|e| e.redraw);
+        }
+        if let Some(at) = self.pointer
+            && let Some(i) = self.hover.as_ref().and_then(|key| self.index(key))
+        {
+            changed |= self
+                .component_input(i, |c, cx| c.pointer_motion(cx, at))
+                .is_some_and(|e| e.redraw);
+        }
+        changed
     }
 
     /// The pointer moved; whether anything shown changed (a hover, a revealed control, a
@@ -992,6 +1062,7 @@ impl ViewState {
         let revealed = self.revealed();
         self.pointer = Some((x, y));
         if self.bar_motion((x, y)) {
+            self.rehover();
             return true;
         }
         if let Some((key, _)) = self.capture.clone()
@@ -1363,6 +1434,22 @@ impl ViewState {
         self.scroll_by(s, delta)
     }
 
+    /// Reveal a content-space rectangle with the least vertical scroll, clamped to content.
+    pub fn reveal_rect(&mut self, key: &Key, rect: Rect) -> bool {
+        let Some(s) = self
+            .index(key)
+            .filter(|&s| matches!(self.placed[s].what, What::Scroll { .. }))
+        else {
+            return false;
+        };
+        if rect.iter().any(|v| !v.is_finite()) || rect[3] < 0. {
+            return false;
+        }
+        let offset = self.offset(s);
+        let height = self.placed[s].rect[3];
+        let target = crate::layout::reveal_offset(offset, height, rect[1], rect[3]);
+        self.scroll_by(s, target - offset)
+    }
     /// The surface scrolled the region `key` itself, the pointer anywhere: a panel whose
     /// wheel the surface routes, or one that brings something of its own into view. False
     /// when it could not move. Laid out at the next `tick` or layout, as a wheel's.
@@ -1772,6 +1859,7 @@ impl ViewState {
     fn in_semantics(&self, i: usize) -> bool {
         let p = &self.placed[i];
         p.alpha > 0.
+            && !p.presentation
             && match &p.what {
                 What::Pane(_) | What::Scroll { .. } | What::Control(_) => true,
                 What::Text { .. } => p.control.is_none(),

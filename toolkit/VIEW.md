@@ -636,7 +636,8 @@ back and forward lead anywhere) each time the model changes; the window lays it 
 holds the layers, the sidebar's slide, the band, the pointer on every layer, Escape and Alt+Left
 and Right, the reader and the paint, and gives back the activations that are not its own (its
 own: the sidebar's toggle; a choice in a sidebar open over the page also closes it). The app
-calls `commit` at the end of each turn, after acting on them. `toolkit/gallery` is the
+calls `commit` with its Page builder at the end of each turn, after acting on them.
+The host settles retained rebuild requests internally. `toolkit/gallery` is the
 reference. What it does:
 
 - **`Tokens::load(exports, appearance)`** reads the kit's tokens in the user's appearance from
@@ -1194,3 +1195,70 @@ Secrets keep the owner-edited display field and the CC's existing bounded/paste/
 rules. No secret is migrated into Editor or IME. Multiline and numeric entry, Settings'
 actual migration, and a host for shell layer surfaces remain out of this step. Private
 headless/AT-SPI/scripted-IME checks do not establish physical-session or Orca acceptance.
+
+## 18. Long list and cost measurement (#1103, step 5)
+
+The long list is a single-selection component over the existing Scroll structure. Its
+application supplies a count, selected index and known uniform row height. At a rebuild,
+`LongList::node` asks a transient `ListSource` for identity/name metadata and row content.
+Only the scroll viewport range, with one row of overscan at each end, gets content nodes. Two
+aggregate placeholders reserve the known height before and after it. An ancestor clip
+changes painting/hit-testing/reader visibility, not the internal scroll extent used to
+request that range. The source is never
+stored in Part or Node: the resulting data tree stays serializable. Variable-height rows,
+multiple selection, sections, columns, nested rows and reordering are outside this step.
+
+Identity is an application item key, scoped to the list, not a recycled viewport ordinal.
+Metadata is read for the materialized range and, if outside it, the selected item; this
+does not build the selected item's content. This keeps the offscreen selected reader node
+current without retaining stale names or shaping unbuilt rows. Row content is decorative;
+embedded controls are outside this component's contract. Item identity escapes namespace
+separators internally; builders append stable suffixes to the supplied row namespace.
+Decorative row structure contributes no automatic reader containers alongside Options.
+
+The list is one focus/Tab stop. Pointer press selects the row; Up/Down, Home/End and Page
+Up/Down move the selection and request minimal scroll to reveal it. A page advances by the
+number of complete row heights in its viewport, at least one. Selection reports Index;
+Enter and a double press on the same row may invoke a separate optional action. An empty
+list has no selected item. Model indices are clamped to the current count. Type-to-jump
+and multiple-selection bindings remain outside this first component.
+
+The view handles a generic reveal-rectangle input effect before returning an activation,
+so the owner's rebuild sees the requested scroll offset. A component whose arranged
+viewport needs new content asks its host with a retained rebuild target. The app supplies
+its page builder to `AppWindow::commit(window, |host| page_from_model(host, model))`.
+AppWindow owns stale-target rejection, coalescing and the bounded convergence loop; no
+magic action or application-side retry loop is needed. A request stays live until its
+range is acknowledged or its identity is retired. After eight unsuccessful commit passes,
+the host paints the last built view, clears the retry queue and logs once per window;
+non-convergence does not close the window. Ordinary activations stay on the app
+model/event path. Idle does not reconstruct an unchanged list.
+Pointer motion/leave are generic component questions for internal hover, not list branches
+in the view. A presentational structural node keeps its layout/input behavior while
+omitting its own automatic reader node; the list uses that for its internal scroll wrapper.
+
+A reader hears one ListBox with Selection, its logical size, and item children with
+one-based posinset/setsize attributes. Materialized items use their actual layout rectangles;
+the selected item remains present with offscreen state if its content is unbuilt. No
+accessible node, text layout or placeholder is allocated for every unbuilt row.
+
+Measures and tones reuse the exported list/common tokens and the standard accent/foreground
+selection. Row extent belongs to the supplied uniform-height model, and must accommodate
+its single-line content. Selection and hover do not reshape unchanged text.
+
+The accompanying cost probe uses 5,000 logical rows at scales 1 and 1.25. It records model
+build, component expansion, layout, paint/CPU raster time and TextCache::shaped deltas for
+scroll and selection, plus the actual output refresh interval and materialized-node counts.
+Results describe this machine and scene, not physical presentation or a throughput promise.
+Partial damage, retained layout and the GPU path remain decisions for the owner after the
+measurements; this step does not choose one of them.
+
+
+The versioned gallery check includes the long-list page and its targeted inert control.
+CI executes it in the existing Hyalo job for the scheduled nightly and explicit
+workflow_dispatch runs (`NK_GALLERY_NIGHTLY`); PR runs keep their previous checks.
+The job uses the packaged gallery in the disposable vkms session. Screenshots, logs,
+result.json and workload duration.json are uploaded under hyalo-artifacts/toolkit-gallery.
+The outer gallery-nightly-duration.json records total checker wall time and exit status;
+the first scheduled-run duration must be reported as measured, never inferred from a
+private local cage run. The local check-headless.sh path remains available separately.

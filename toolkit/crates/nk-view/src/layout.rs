@@ -196,6 +196,7 @@ struct Measure {
 #[derive(Clone, Debug)]
 pub struct Placed {
     pub key: Key,
+    pub presentation: bool,
     pub rect: Rect,
     pub what: What,
     pub progress: Option<f64>,
@@ -737,6 +738,7 @@ impl Layouter<'_> {
         let rect = self.snap(r);
         out.push(Placed {
             key: n.key.clone(),
+            presentation: n.presentation,
             rect,
             progress: crate::components::part(n)
                 .and_then(|p| p.component().target())
@@ -1005,4 +1007,16 @@ pub fn first_line_centre(cache: &TextCache, p: &Placed) -> Option<f64> {
     let f = cache.get(&p.key)?;
     let l = f.layout.lines().first()?;
     Some(p.rect[1] + (l.bounds.y + l.bounds.height / 2.) as f64)
+}
+
+/// Minimum vertical offset needed to expose a content-space extent. Oversized items
+/// align their leading edge. Callers validate finite input and clamp to content bounds.
+pub(crate) fn reveal_offset(offset: f64, viewport: f64, top: f64, height: f64) -> f64 {
+    if top < offset || height > viewport {
+        top
+    } else if top + height > offset + viewport {
+        top + height - viewport
+    } else {
+        offset
+    }
 }

@@ -55,7 +55,7 @@ fn status_text(s: &str) -> &'static str {
 }
 
 /// Each page: its id (what the check and `--page` name), its title and its glyph.
-pub const PAGES: [(&str, &str, &str); 21] = [
+pub const PAGES: [(&str, &str, &str); 22] = [
     ("status", "Status", "nd-emblem-default"),
     ("button", "Button", "nd-hand"),
     ("switch", "Switch", "nd-light-mode"),
@@ -77,6 +77,7 @@ pub const PAGES: [(&str, &str, &str); 21] = [
     ("disclosure", "Disclosure", "nd-pan-end"),
     ("entry", "Editable field", "nd-input-keyboard"),
     ("search", "Search", "nd-system-search"),
+    ("list", "Long list", "nd-clipboard-list"),
 ];
 
 /// What the view is built from: the page, and what the live samples hold.
@@ -105,6 +106,8 @@ pub struct Model {
     pub entry: String,
     pub search: String,
     pub submitted: u32,
+    pub selected_row: usize,
+    pub list_opened: u32,
 }
 impl Default for Model {
     fn default() -> Self {
@@ -128,6 +131,8 @@ impl Default for Model {
             entry: "Nidara".into(),
             search: String::new(),
             submitted: 0,
+            selected_row: 0,
+            list_opened: 0,
         }
     }
 }
@@ -137,6 +142,9 @@ pub struct Measures<'a> {
     pub dropdown: &'a DropdownStyle,
     pub colors: &'a [(String, nk_render::Color)],
     pub glyph: f64,
+    pub row_height: f64,
+    pub list_window: Option<(f64, f64)>,
+    pub disabled_list_window: Option<(f64, f64)>,
 }
 
 pub fn view(m: &Model, cat: &Catalogue, t: &TypeScale, k: &Measures) -> View {
@@ -318,6 +326,7 @@ fn page(id: &str, m: &Model, cat: &Catalogue, t: &TypeScale, k: &Measures) -> Ve
         "disclosure" => disclosures(m, t),
         "entry" => entries(m, t),
         "search" => search_field(m, t),
+        "list" => long_list(m, t, k),
         _ => vec![],
     }
 }
@@ -1878,6 +1887,76 @@ fn search_field(m: &Model, t: &TypeScale) -> Vec<Node> {
     out
 }
 
+struct Records<'a>(&'a TypeScale);
+impl nk_view::ListSource for Records<'_> {
+    fn item(&self, index: usize) -> nk_view::RowInfo {
+        nk_view::RowInfo {
+            key: format!("record-{index}").into(),
+            name: format!("Record {}", index + 1),
+        }
+    }
+    fn build(&self, index: usize, key: &nk_view::Key) -> Node {
+        Node::text(
+            format!("{}/label", key.0),
+            format!("Record {}", index + 1),
+            self.0.style(Type::Body, Weight::Regular),
+        )
+    }
+}
+fn long_list(m: &Model, t: &TypeScale, k: &Measures) -> Vec<Node> {
+    let source = Records(t);
+    let mut list = nk_view::LongList::new(5000, m.selected_row, k.row_height);
+    list.activate = Some("list-open".into());
+    vec![
+        section(
+            "long-list",
+            "5,000 records · arrows, Home/End, Page Up/Down · Enter or double click opens",
+            t,
+            Node::column(
+                "ll/sample",
+                vec![
+                    Node::text(
+                        "ll/value",
+                        format!(
+                            "Selected: {} · Opened: {}",
+                            m.selected_row + 1,
+                            m.list_opened
+                        ),
+                        t.style(Type::Body, Weight::Regular),
+                    ),
+                    list.node("ll/live", "Records", "list-select", k.list_window, &source)
+                        .height(k.row_height * 6.),
+                ],
+            )
+            .gap(Space::S2),
+        ),
+        section(
+            "long-list-states",
+            "Disabled and empty",
+            t,
+            Node::column(
+                "ll/states",
+                vec![
+                    nk_view::LongList::new(20, 2, k.row_height)
+                        .node(
+                            "ll/disabled",
+                            "Disabled records",
+                            "noop",
+                            k.disabled_list_window,
+                            &source,
+                        )
+                        .height(k.row_height * 2.)
+                        .enabled(false),
+                    nk_view::LongList::new(0, 0, k.row_height)
+                        .node("ll/empty", "Empty records", "noop", None, &source)
+                        .height(k.row_height),
+                ],
+            )
+            .gap(Space::S2),
+        ),
+    ]
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -1994,6 +2073,9 @@ mod tests {
                         ("Red".into(), nk_render::rgba(255, 0, 0, 255)),
                     ],
                     glyph: 16.,
+                    row_height: 40.,
+                    list_window: None,
+                    disabled_list_window: None,
                 },
             );
             let mut all = vec![];

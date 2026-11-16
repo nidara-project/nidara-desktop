@@ -32,26 +32,60 @@ struct Gallery {
 }
 
 impl Gallery {
-    /// The page the model shows, for the window.
-    fn rebuild(&mut self) {
-        let look = self.window.look();
+    /// The app supplies data; AppWindow owns rebuild scheduling and convergence.
+    fn page(
+        host: &AppWindow,
+        model: &Model,
+        catalogue: &Catalogue,
+        colors: &[(String, nk_render::Color)],
+        at: usize,
+        history_len: usize,
+    ) -> Page {
+        let look = host.look();
         let v = pages::view(
-            &self.model,
-            &self.catalogue,
+            model,
+            catalogue,
             &look.types,
             &pages::Measures {
                 dropdown: &look.tokens.dropdown,
-                colors: &self.colors,
+                colors,
                 glyph: look.frame.icon,
+                row_height: look.tokens.row_height,
+                list_window: host.scroll_window(&nk_view::LongList::scroll_key(&"ll/live".into())),
+                disabled_list_window: host
+                    .scroll_window(&nk_view::LongList::scroll_key(&"ll/disabled".into())),
             },
         );
-        self.window.show(Page {
+        Page {
             sidebar: v.sidebar,
             content: v.content,
             title: v.title.into(),
-            can_back: self.at > 0,
-            can_forward: self.at + 1 < self.history.len(),
-        });
+            can_back: at > 0,
+            can_forward: at + 1 < history_len,
+        }
+    }
+    fn rebuild(&mut self) {
+        let page = Self::page(
+            &self.window,
+            &self.model,
+            &self.catalogue,
+            &self.colors,
+            self.at,
+            self.history.len(),
+        );
+        self.window.show(page);
+    }
+    fn commit(&mut self, window: &mut Window) -> Result<()> {
+        let (model, catalogue, colors, at, history_len) = (
+            &self.model,
+            &self.catalogue,
+            &self.colors,
+            self.at,
+            self.history.len(),
+        );
+        self.window.commit(window, |host| {
+            Self::page(host, model, catalogue, colors, at, history_len)
+        })
     }
 
     /// What an activation asks of the model.
@@ -95,6 +129,14 @@ impl Gallery {
             }
         }
         match action {
+            "list-select" => {
+                if let Some(nk_view::Value::Index(index)) = a.value {
+                    self.model.selected_row = index;
+                }
+            }
+            "list-open" => {
+                self.model.list_opened += 1;
+            }
             "entry-edit" => {
                 if let Some(nk_view::Value::Text(text)) = a.value {
                     self.model.entry = text;
@@ -180,7 +222,7 @@ impl Application for Gallery {
         for a in self.window.idle()? {
             self.activated(a);
         }
-        self.window.commit(window)
+        self.commit(window)
     }
     fn event(&mut self, event: Event, window: &mut Window) -> Result<()> {
         if pages::PAGES[self.model.page].0 == "entry" {
@@ -213,7 +255,7 @@ impl Application for Gallery {
             };
             if drop {
                 eprintln!("CONTROL_APPLIED {}", self.fault.as_deref().unwrap_or(""));
-                return self.window.commit(window);
+                return self.commit(window);
             }
         }
         // Ctrl+Page Down and Up: the pages in turn, as a notebook's tabs go.
@@ -224,13 +266,13 @@ impl Application for Gallery {
             let n = PAGES.len();
             let step = if key.sym == 0xff56 { 1 } else { n - 1 };
             self.go((self.model.page + step) % n);
-            return self.window.commit(window);
+            return self.commit(window);
         }
         let (_, activated) = self.window.event(event, window)?;
         for a in activated {
             self.activated(a);
         }
-        self.window.commit(window)
+        self.commit(window)
     }
     fn paint(&mut self, frame: Frame) -> Result<Vec<u8>> {
         self.window.paint(frame)

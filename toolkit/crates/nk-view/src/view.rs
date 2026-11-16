@@ -32,6 +32,9 @@ pub struct Node {
     /// when its content is.
     #[serde(default)]
     pub row_floor: bool,
+    /// Decorative structure: layout/input remain, its automatic reader node is omitted.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub presentation: bool,
     pub kind: Kind,
 }
 
@@ -522,8 +525,13 @@ impl Node {
             width: None,
             height: None,
             row_floor: false,
+            presentation: false,
             kind,
         }
+    }
+    pub fn presentational(mut self) -> Self {
+        self.presentation = true;
+        self
     }
     pub fn row(key: impl Into<Key>, children: Vec<Node>) -> Self {
         Self::stack(key, Axis::Horizontal, children)

@@ -1090,6 +1090,7 @@ pub fn entry_from(component: &Value, set: &Value) -> Result<EntryStyle, String> 
 /// Everything a view is laid out and drawn with.
 #[derive(Clone, Debug)]
 pub struct Tokens {
+    pub list: ListStyle,
     pub spacing: Spacing,
     pub radii: Radii,
     pub motion: Motion,
@@ -1109,4 +1110,30 @@ pub struct Tokens {
     pub row_height: f64,
     /// A group's corner (`components.json` `common.groupRadius`), as Settings' cards.
     pub group_radius: f64,
+}
+
+#[derive(Clone, Debug, PartialEq)]
+pub struct ListStyle {
+    pub inset: f64,
+    pub hover_opacity: f32,
+    pub focus_width: f64,
+}
+pub fn list_from(value: &Value) -> Result<ListStyle, String> {
+    let inset = value["highlight"]["inset"]
+        .as_f64()
+        .filter(|v| v.is_finite() && *v >= 0.)
+        .ok_or("list.highlight.inset")?;
+    let hover = value["highlight"]["hoverOpacity"]
+        .as_f64()
+        .filter(|v| v.is_finite() && (0.0..=1.0).contains(v))
+        .ok_or("list.highlight.hoverOpacity")?;
+    let focus_width = value["focus"]["width"]
+        .as_f64()
+        .filter(|v| v.is_finite() && *v > 0.)
+        .ok_or("list.focus.width")?;
+    Ok(ListStyle {
+        inset,
+        hover_opacity: hover as f32,
+        focus_width,
+    })
 }

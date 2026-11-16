@@ -4,7 +4,7 @@
 use crate::state::KeyInput;
 use crate::tokens::{
     Look, Motion, Radii, Spacing, Tokens, Washes, button_from, check_from, disclosure_from,
-    dropdown_from, entry_from, scrollbar_from, segmented_from, slider_from, swatch_from,
+    dropdown_from, entry_from, list_from, scrollbar_from, segmented_from, slider_from, swatch_from,
     switch_from,
 };
 use nk_platform::{exports::Exports, portal::Appearance};
@@ -18,6 +18,7 @@ impl Tokens {
         let colors = serde_json::json!({ "tokens": set.colors });
         let radii = Radii::from_static(&e.statics)?;
         Ok(Self {
+            list: list_from(&set.components["list"])?,
             spacing: Spacing::from_static(&e.statics)?,
             check: check_from(&set.components["check"], &colors, &radii)?,
             dropdown: dropdown_from(

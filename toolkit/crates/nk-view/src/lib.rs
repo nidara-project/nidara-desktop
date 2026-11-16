@@ -6,6 +6,7 @@
 //! state regions), the semantics, and the content paint. The surface keeps only its model
 //! and what an `Activated` means.
 pub mod components;
+pub use components::{ListSource, LongList, RowInfo};
 mod host;
 mod layout;
 mod motion;
@@ -20,10 +21,11 @@ pub use host::{Glyphs, Type, TypeScale, Weight};
 pub use layout::{Fitted, Placed, Rect, TextCache, What, first_line_centre};
 pub use state::{Activated, BUDGET, Frame, FramePane, KeyInput, ScrollBy, Ticked, ViewState};
 pub use tokens::{
-    Bezier, ButtonStyle, CheckStyle, DisclosureStyle, DropdownStyle, EntryStyle, Look, MenuStyle,
-    Motion, Radii, Radius, SegmentStyle, SliderStyle, Space, Spacing, SwatchStyle, SwitchStyle,
-    Tokens, TriggerStyle, Washes, button_from, check_from, disclosure_from, dropdown_from,
-    entry_from, parse_color, scrollbar_from, segmented_from, slider_from, swatch_from, switch_from,
+    Bezier, ButtonStyle, CheckStyle, DisclosureStyle, DropdownStyle, EntryStyle, ListStyle, Look,
+    MenuStyle, Motion, Radii, Radius, SegmentStyle, SliderStyle, Space, Spacing, SwatchStyle,
+    SwitchStyle, Tokens, TriggerStyle, Washes, button_from, check_from, disclosure_from,
+    dropdown_from, entry_from, list_from, parse_color, scrollbar_from, segmented_from, slider_from,
+    swatch_from, switch_from,
 };
 pub use view::{
     Align, Axis, Cell, Control, Corner, Dropdown, Field, Grid, Group, Icon, Ink, Justify, Key,
@@ -41,3 +43,8 @@ pub use components::{Host, HostRequest, Value};
 
 #[cfg(test)]
 mod editable_tests;
+
+#[cfg(test)]
+mod long_list_tests;
+
+pub use state::LayoutMetrics;
