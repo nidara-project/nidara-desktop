@@ -189,6 +189,16 @@ pub trait Component: Any {
     fn silhouette(&self, cx: &Read<'_>) -> Rect {
         cx.rect
     }
+    /// The focused outline, independent of input and reader geometry. Corners are
+    /// clockwise from top-left; a composite may delegate to its decorative mark.
+    fn focus_outline(&self, cx: &Read<'_>) -> Option<FocusOutline> {
+        let bounds = self.silhouette(cx);
+        Some(FocusOutline::rounded(
+            bounds,
+            self.corner()
+                .of(bounds[2], bounds[3], &cx.look.tokens.radii),
+        ))
+    }
     fn target(&self) -> Option<f64> {
         None
     }
@@ -541,17 +551,6 @@ pub(crate) fn mix(a: Color, b: Color, t: f32) -> Color {
         a.components[i] + (b.components[i] - a.components[i]) * t
     }))
 }
-pub(crate) fn ring(cx: &mut Paint<'_>, radius: f64, color: Color) {
-    if !cx.interaction.enabled || !cx.interaction.focus_ring {
-        return;
-    }
-    let w = cx.look.tokens.look.focus_width;
-    let out = 2. * w;
-    let r = cx.rect;
-    let r = [r[0] - out, r[1] - out, r[2] + 2. * out, r[3] + 2. * out];
-    cx.canvas
-        .rounded_ring(rect(&r), radius + out, w, cx.ink(color));
-}
 
 #[cfg(test)]
 mod tests {
@@ -635,5 +634,23 @@ mod tests {
         );
         assert!(store.entries.contains_key(&"disabled".into()));
         assert!(!store.entries.contains_key(&"drawn".into()));
+    }
+}
+
+/// Focus geometry only. Width, gap and colour belong to the kit.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct FocusOutline {
+    pub bounds: Rect,
+    /// Top-left, top-right, bottom-right, bottom-left.
+    pub corners: [f64; 4],
+    pub clip: Option<Rect>,
+}
+impl FocusOutline {
+    pub fn rounded(bounds: Rect, radius: f64) -> Self {
+        Self {
+            bounds,
+            corners: [radius; 4],
+            clip: None,
+        }
     }
 }

@@ -18,6 +18,7 @@ impl Tokens {
         let colors = serde_json::json!({ "tokens": set.colors });
         let radii = Radii::from_static(&e.statics)?;
         Ok(Self {
+            focus: crate::tokens::focus_from(&set.components["list"]["focus"], &colors)?,
             list: list_from(&set.components["list"])?,
             spacing: Spacing::from_static(&e.statics)?,
             check: check_from(&set.components["check"], &colors, &radii)?,

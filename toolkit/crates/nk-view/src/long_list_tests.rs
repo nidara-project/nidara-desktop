@@ -533,14 +533,10 @@ fn long_list_style_reads_exported_geometry_and_rejects_invalid_values() {
     let value =
         serde_json::json!({"highlight":{"inset":7,"hoverOpacity":0.12},"focus":{"width":3}});
     let style = crate::list_from(&value).unwrap();
-    assert_eq!(
-        (style.inset, style.hover_opacity, style.focus_width),
-        (7., 0.12, 3.)
-    );
+    assert_eq!((style.inset, style.hover_opacity), (7., 0.12));
     for (path, bad) in [
         ("/highlight/inset", serde_json::json!(-1)),
         ("/highlight/hoverOpacity", serde_json::json!(2)),
-        ("/focus/width", serde_json::json!(0)),
     ] {
         let mut broken = value.clone();
         *broken.pointer_mut(path).unwrap() = bad;

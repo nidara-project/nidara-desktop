@@ -199,13 +199,12 @@ impl Motion {
     }
 }
 
-/// The colours a view paints content in: text tiers, and the focus ring (content, D8).
+/// Content inks and selection colours. Keyboard outlines use the shared FocusStyle.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct Look {
     pub primary: Color,
     pub secondary: Color,
     pub dim: Color,
-    pub focus: Color,
     /// What is on is filled with (`--nidara-on`), and a well in the glass at rest
     /// (`--nidara-surface`) (VIEW.md §12.4).
     pub on: Color,
@@ -216,8 +215,6 @@ pub struct Look {
     pub accent_fg: Color,
     /// A disabled control's text and glyphs (`--nidara-text-disabled`).
     pub disabled: Color,
-    /// The ring's width, as `nk-widgets` draws it (D8).
-    pub focus_width: f64,
 }
 impl Look {
     /// From one set of `tokens/colors.json` (the caller picks it: accent, mode, reduce
@@ -233,13 +230,11 @@ impl Look {
             primary: token("--nidara-text")?,
             secondary: token("--nidara-text-secondary")?,
             dim: token("--nidara-text-dim")?,
-            focus: token("--nidara-accent")?,
             on: token("--nidara-on")?,
             surface: token("--nidara-surface")?,
             accent: token("--nidara-accent")?,
             accent_fg: token("--nidara-accent-fg")?,
             disabled: token("--nidara-text-disabled")?,
-            focus_width: 2.,
         })
     }
     pub fn ink(&self, ink: crate::Ink) -> Color {
@@ -629,7 +624,6 @@ pub struct TriggerStyle {
     pub pressed: Color,
     pub text: Color,
     pub arrow_color: Color,
-    pub focus: Color,
     pub disabled_opacity: f64,
 }
 impl TriggerStyle {
@@ -717,7 +711,6 @@ pub struct SegmentStyle {
     /// How much white the chosen segment takes under the pointer, and black while pressed.
     pub selected_hover_white: f64,
     pub selected_pressed_black: f64,
-    pub focus: Color,
     pub disabled_opacity: f64,
 }
 impl SegmentStyle {
@@ -795,7 +788,6 @@ pub fn segmented_from(
         selected_text: colour("selectedText")?,
         selected_hover_white: n("selectedHoverWhite")?,
         selected_pressed_black: n("selectedPressedBlack")?,
-        focus: colour("focus")?,
         disabled_opacity: n("disabledOpacity")?,
     };
     if s.disabled_opacity > 1. || s.selected_hover_white > 1. || s.selected_pressed_black > 1. {
@@ -813,7 +805,6 @@ pub struct SwatchStyle {
     pub gap: f64,
     pub selected: Color,
     pub hover: Color,
-    pub focus: Color,
     pub disabled_opacity: f64,
 }
 pub fn swatch_from(c: &Value, set: &Value) -> Result<SwatchStyle, String> {
@@ -840,7 +831,6 @@ pub fn swatch_from(c: &Value, set: &Value) -> Result<SwatchStyle, String> {
         gap: n("gap")?,
         selected: color("selectedColor")?,
         hover: color("hoverColor")?,
-        focus: color("focus")?,
         disabled_opacity: n("disabledOpacity")?,
     };
     if [s.diameter, s.border, s.ring, s.gap]
@@ -929,7 +919,6 @@ pub fn dropdown_from(
         pressed: colour(t, "pressed")?,
         text: colour(t, "text")?,
         arrow_color: colour(t, "arrowColor")?,
-        focus: colour(t, "focus")?,
         disabled_opacity: n(t, "disabledOpacity")?,
     };
     let menu = MenuStyle {
@@ -972,7 +961,6 @@ pub struct DisclosureStyle {
     pub stroke: f64,
     pub points: [(f64, f64); 3],
     pub hover_opacity: f64,
-    pub focus_width: f64,
 }
 pub fn disclosure_from(components: &Value, statics: &Value) -> Result<DisclosureStyle, String> {
     let n = |v: &Value, field: &str, positive: bool| {
@@ -1014,7 +1002,6 @@ pub fn disclosure_from(components: &Value, statics: &Value) -> Result<Disclosure
         points,
         stroke: n(&c["strokeWidth"], "strokeWidth", true)?,
         hover_opacity,
-        focus_width: n(&components["list"]["focus"]["width"], "focusWidth", true)?,
     })
 }
 
@@ -1031,7 +1018,6 @@ pub struct EntryStyle {
     pub clear_icon: String,
     pub background: Color,
     pub border_color: Color,
-    pub focus_border: Color,
     pub text: Color,
     pub dim: Color,
     pub selection: Color,
@@ -1075,7 +1061,6 @@ pub fn entry_from(component: &Value, set: &Value) -> Result<EntryStyle, String> 
         clear_icon: name("clearIcon")?,
         background: color("background")?,
         border_color: color("borderColor")?,
-        focus_border: color("focusBorder")?,
         text: color("text")?,
         dim: color("dim")?,
         selection: color("selection")?,
@@ -1090,6 +1075,7 @@ pub fn entry_from(component: &Value, set: &Value) -> Result<EntryStyle, String> 
 /// Everything a view is laid out and drawn with.
 #[derive(Clone, Debug)]
 pub struct Tokens {
+    pub focus: FocusStyle,
     pub list: ListStyle,
     pub spacing: Spacing,
     pub radii: Radii,
@@ -1116,7 +1102,6 @@ pub struct Tokens {
 pub struct ListStyle {
     pub inset: f64,
     pub hover_opacity: f32,
-    pub focus_width: f64,
 }
 pub fn list_from(value: &Value) -> Result<ListStyle, String> {
     let inset = value["highlight"]["inset"]
@@ -1127,13 +1112,44 @@ pub fn list_from(value: &Value) -> Result<ListStyle, String> {
         .as_f64()
         .filter(|v| v.is_finite() && (0.0..=1.0).contains(v))
         .ok_or("list.highlight.hoverOpacity")?;
-    let focus_width = value["focus"]["width"]
-        .as_f64()
-        .filter(|v| v.is_finite() && *v > 0.)
-        .ok_or("list.focus.width")?;
     Ok(ListStyle {
         inset,
         hover_opacity: hover as f32,
-        focus_width,
     })
+}
+
+/// Shared keyboard focus tokens, from components.list.focus.
+#[derive(Clone, Debug, PartialEq)]
+pub struct FocusStyle {
+    pub width: f64,
+    pub gap: f64,
+    pub color: Color,
+}
+pub fn focus_from(value: &Value, set: &Value) -> Result<FocusStyle, String> {
+    let width = value["width"]
+        .as_f64()
+        .filter(|v| v.is_finite() && *v > 0.)
+        .ok_or("focus.width")?;
+    let gap = value["gap"]
+        .as_f64()
+        .filter(|v| v.is_finite() && *v >= 0.)
+        .ok_or("focus.gap")?;
+    let name = value["color"].as_str().ok_or("focus.color")?;
+    let color = set["tokens"][name]
+        .as_str()
+        .ok_or_else(|| "focus.color token".to_owned())
+        .and_then(parse_color)?;
+    Ok(FocusStyle { width, gap, color })
+}
+
+impl FocusStyle {
+    pub(crate) fn outside(&self, bounds: crate::Rect) -> crate::Rect {
+        let out = self.gap + self.width;
+        [
+            bounds[0] - out,
+            bounds[1] - out,
+            bounds[2] + 2. * out,
+            bounds[3] + 2. * out,
+        ]
+    }
 }

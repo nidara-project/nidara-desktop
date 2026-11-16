@@ -8,6 +8,10 @@ pub struct Swatch {
     pub value: usize,
 }
 impl Component for Swatch {
+    fn focus_outline(&self, cx: &Read<'_>) -> Option<FocusOutline> {
+        let r = self.silhouette(cx);
+        Some(FocusOutline::rounded(r, r[2].min(r[3]) / 2.))
+    }
     fn selected(&self) -> bool {
         self.selected
     }
@@ -38,8 +42,7 @@ impl Component for Swatch {
         }
     }
     fn paint(&self, cx: &mut Paint<'_>, phase: PaintPhase) {
-        if phase == PaintPhase::Over {
-            ring(cx, cx.rect[2] / 2., cx.look.tokens.swatch.focus);
+        if phase != PaintPhase::Under {
             return;
         }
         let tokens = cx.look.tokens;

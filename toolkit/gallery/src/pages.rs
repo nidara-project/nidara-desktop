@@ -55,7 +55,7 @@ fn status_text(s: &str) -> &'static str {
 }
 
 /// Each page: its id (what the check and `--page` name), its title and its glyph.
-pub const PAGES: [(&str, &str, &str); 22] = [
+pub const PAGES: [(&str, &str, &str); 23] = [
     ("status", "Status", "nd-emblem-default"),
     ("button", "Button", "nd-hand"),
     ("switch", "Switch", "nd-light-mode"),
@@ -78,6 +78,7 @@ pub const PAGES: [(&str, &str, &str); 22] = [
     ("entry", "Editable field", "nd-input-keyboard"),
     ("search", "Search", "nd-system-search"),
     ("list", "Long list", "nd-clipboard-list"),
+    ("focus", "Focus", "nd-input-keyboard"),
 ];
 
 /// What the view is built from: the page, and what the live samples hold.
@@ -327,6 +328,7 @@ fn page(id: &str, m: &Model, cat: &Catalogue, t: &TypeScale, k: &Measures) -> Ve
         "entry" => entries(m, t),
         "search" => search_field(m, t),
         "list" => long_list(m, t, k),
+        "focus" => focus_page(t, k),
         _ => vec![],
     }
 }
@@ -1841,6 +1843,7 @@ fn search_field(m: &Model, t: &TypeScale) -> Vec<Node> {
             "q/live",
             vec![
                 Search {
+                    shown: None,
                     field,
                     name: "Search text".into(),
                     changed: "search-edit".into(),
@@ -1862,6 +1865,7 @@ fn search_field(m: &Model, t: &TypeScale) -> Vec<Node> {
         let mut field = EditableField::new(value);
         field.placeholder = "Search".into();
         Search {
+            shown: None,
             field,
             name: name.into(),
             changed: "noop".into(),
@@ -1955,6 +1959,181 @@ fn long_list(m: &Model, t: &TypeScale, k: &Measures) -> Vec<Node> {
             .gap(Space::S2),
         ),
     ]
+}
+
+/// The same outline on every component, in the portal's light or dark appearance.
+/// Background panes never change the controls' shape or add an interactive wrapper.
+fn focus_page(t: &TypeScale, k: &Measures) -> Vec<Node> {
+    use nk_view::components::{Disclosure, EditableField, Search};
+    let mut sections = vec![];
+    for glass in [false, true] {
+        let prefix = if glass { "focus/glass" } else { "focus/page" };
+        let key = |name: &str| format!("{prefix}/{name}");
+        let name = |name: &str| format!("{name} {}", if glass { "on glass" } else { "off glass" });
+        let focused = |node: Node| node.shown(Shown::Focus);
+        let segment = Node::column(
+            key("segment-samples"),
+            (0..3)
+                .map(|index| {
+                    Node::segmented(
+                        key(&format!("segments{index}")),
+                        Segmented {
+                            options: vec!["Start".into(), "Middle".into(), "End".into()],
+                            chosen: 1,
+                            disabled: false,
+                            action: "noop".into(),
+                            name: name(&format!("Segment {index}")),
+                        },
+                    )
+                    .sample_state(index, Shown::Focus)
+                })
+                .collect(),
+        )
+        .gap(Space::S3);
+        // colors_from validates a non-empty, complete named export before the page exists.
+        let color = k.colors.first().expect("validated accent palette").1;
+        let swatches = Node::swatches(
+            key("swatches"),
+            Swatches {
+                colors: vec![(name("Swatch"), color)],
+                chosen: 0,
+                disabled: false,
+                action: "noop".into(),
+                name: name("Swatches"),
+            },
+        )
+        .sample_state(0, Shown::Focus);
+        let samples = vec![
+            focused(content_button(&key("button"), &name("Button"), "noop", t)),
+            focused(button(&key("capsule"), &name("Capsule"), "noop", t)),
+            Node::switch_control(key("switch"), name("Switch"), "noop", true).shown(Shown::Focus),
+            focused(Node::check_control(
+                key("check"),
+                name("Checkbox"),
+                "noop",
+                true,
+            )),
+            focused(Node::radio_control(
+                key("radio"),
+                name("Radio"),
+                "noop",
+                true,
+            )),
+            focused(Node::dropdown(
+                key("dropdown"),
+                Dropdown {
+                    options: vec!["Option".into()],
+                    chosen: 0,
+                    disabled: false,
+                    action: "noop".into(),
+                    name: name("Dropdown"),
+                },
+            )),
+            segment,
+            swatches,
+            focused(
+                Node::slider(
+                    key("slider"),
+                    name("Slider"),
+                    "noop",
+                    Slider::new(0., 100., 1., 50.),
+                )
+                .width(240.),
+            ),
+            focused(Node::field(
+                key("display"),
+                name("Display field"),
+                "noop",
+                Field {
+                    shown: "Nidara".into(),
+                    caret: 0,
+                    anchor: 0,
+                    secret: false,
+                },
+                t.style(Type::Body, Weight::Regular),
+            )),
+            focused(
+                Disclosure {
+                    label: name("Disclosure"),
+                    expanded: false,
+                }
+                .header(key("disclosure"), "noop"),
+            ),
+            focused(
+                EditableField::new("Nidara")
+                    .node(key("entry"), name("Editable field"), "noop")
+                    .width(240.),
+            ),
+            Search {
+                shown: None,
+                field: EditableField::new("Nidara"),
+                name: name("Search"),
+                changed: "noop".into(),
+                clear_label: name("Clear search"),
+                disabled: false,
+            }
+            .node(key("search"))
+            .width(240.)
+            .sample_state(0, Shown::Focus),
+            Search {
+                field: EditableField::new("Nidara"),
+                name: name("Search clear"),
+                changed: "noop".into(),
+                clear_label: name("Clear button"),
+                disabled: false,
+                shown: None,
+            }
+            .node(key("search-clear"))
+            .width(240.)
+            .sample_state(1, Shown::Focus),
+            focused(
+                nk_view::LongList::new(3, 0, k.row_height)
+                    .node(
+                        key("list"),
+                        name("List"),
+                        "noop",
+                        Some((0., k.row_height * 2.)),
+                        &Records(t),
+                    )
+                    .height(k.row_height * 2.)
+                    .width(240.),
+            ),
+            focused(
+                nk_view::LongList::new(0, 0, k.row_height)
+                    .node(key("empty"), name("Empty list"), "noop", None, &Records(t))
+                    .height(k.row_height)
+                    .width(240.),
+            ),
+            focused(
+                content_button(&key("disabled"), &name("Disabled, no ring"), "noop", t)
+                    .enabled(false),
+            ),
+        ];
+        let rows = samples
+            .into_iter()
+            .enumerate()
+            .map(|(i, node)| {
+                let body = Node::row(key(&format!("cell{i}")), vec![node])
+                    .padding(Padding::all(Space::S3));
+                if glass {
+                    Node::pane(key(&format!("pane{i}")), Corner::Token(Radius::Sm), body)
+                } else {
+                    body
+                }
+            })
+            .collect();
+        sections.push(section(
+            &key("section"),
+            if glass {
+                "On glass · the same 2 px gap"
+            } else {
+                "Off glass · solid accent, width 2 px, gap 2 px"
+            },
+            t,
+            Node::column(key("samples"), rows).gap(Space::S2),
+        ));
+    }
+    sections
 }
 
 #[cfg(test)]

@@ -6,6 +6,20 @@ pub struct Check {
     pub radio: bool,
 }
 impl Component for Check {
+    fn focus_outline(&self, cx: &Read<'_>) -> Option<FocusOutline> {
+        let r = cx.rect;
+        let t = &cx.look.tokens.check;
+        let side = t.size.min(r[2]).min(r[3]);
+        Some(FocusOutline::rounded(
+            [
+                r[0] + (r[2] - side) / 2.,
+                r[1] + (r[3] - side) / 2.,
+                side,
+                side,
+            ],
+            if self.radio { side / 2. } else { t.radius },
+        ))
+    }
     fn body(&self, cx: &Build<'_>) -> Node {
         let side = cx.look.tokens.check.size;
         Node::spacer(cx.key("body")).width(side).height(side)

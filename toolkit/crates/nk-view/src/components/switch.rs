@@ -5,6 +5,15 @@ pub struct Switch {
     pub on: bool,
 }
 impl Component for Switch {
+    fn focus_outline(&self, cx: &Read<'_>) -> Option<FocusOutline> {
+        let r = cx.rect;
+        let t = &cx.look.tokens.switch;
+        let (w, h) = (t.width.min(r[2]), t.height.min(r[3]));
+        Some(FocusOutline::rounded(
+            [r[0] + (r[2] - w) / 2., r[1] + (r[3] - h) / 2., w, h],
+            h / 2.,
+        ))
+    }
     fn body(&self, cx: &Build<'_>) -> Node {
         let s = &cx.look.tokens.switch;
         Node::spacer(cx.key("body")).width(s.width).height(s.height)

@@ -5,7 +5,10 @@
   ],
   "default": {
     "focus": {
-      "width": 2
+      "width": 2,
+      "gap": 2,
+      "color": "--nidara-accent",
+      "source": "nidara-focus-ring: solid accent, 2px width, 2px outline-offset; shared by nk-view (#1103 step 5b)."
     },
     "highlight": {
       "inset": 4,

@@ -65,6 +65,9 @@ impl Disclosure {
     }
 }
 impl Component for Disclosure {
+    fn focus_outline(&self, cx: &Read<'_>) -> Option<FocusOutline> {
+        Some(FocusOutline::rounded(self.silhouette(cx), 0.))
+    }
     fn body(&self, cx: &Build<'_>) -> Node {
         Node::row(
             cx.key("body"),
@@ -167,13 +170,5 @@ impl Component for Disclosure {
         cx.canvas
             .polyline(&points, t.stroke * side / t.view_box, cx.ink(ink));
         cx.canvas.pop_clip();
-        if cx.interaction.focus_ring {
-            cx.canvas.rounded_ring(
-                rect(&r),
-                0.,
-                t.focus_width,
-                cx.ink(cx.look.tokens.look.focus),
-            );
-        }
     }
 }

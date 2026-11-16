@@ -36,6 +36,12 @@ impl Dropdown {
     }
 }
 impl Component for Dropdown {
+    fn focus_outline(&self, cx: &Read<'_>) -> Option<FocusOutline> {
+        Some(FocusOutline::rounded(
+            self.silhouette(cx),
+            cx.look.tokens.dropdown.trigger.radius,
+        ))
+    }
     fn body(&self, cx: &Build<'_>) -> Node {
         let t = &cx.look.tokens.dropdown.trigger;
         let chosen = self.chosen.min(self.options.len().saturating_sub(1));
@@ -215,9 +221,5 @@ impl Component for Dropdown {
             cx.ink(fill.with_alpha(fill.components[3] * a)),
         );
         cx.canvas.pop_clip();
-        if i.enabled && i.focus_ring {
-            cx.canvas
-                .rounded_ring(rect(&r), t.radius, b, cx.ink(t.focus));
-        }
     }
 }

@@ -448,6 +448,15 @@ Model/placeholder, reader text, paste and IME commit share single-line normaliza
 one final logical break, map interior breaks/tabs to spaces, remove other controls. Never
 turn these external characters into a fatal preparation error. Preedit keeps its original
 offset validation; secrets keep their separate owner policy. See VIEW.md §17.
+Keyboard focus (#1103 step 5b) is painted once by ViewState after component content,
+from components.list.focus (solid accent, width 2, gap 2). Components lend FocusOutline
+geometry, including joined corners, mark bounds, search chrome or the selected list row;
+never paint a component-local focus ring or read a component-private focus token. Menu
+rows keep their selection. Fields keep their normal border on focus. Keep semantic/input
+bounds unchanged and clip rings at ancestor/list viewports. Keyboard/reader scroll reveal
+includes the original control box plus its external outline; do not reveal only the box
+and cut the ring at the viewport edge. Geometry must remain available for offscreen
+marks before reveal; clipping is applied by paint. See VIEW.md §13.4.
 LongList (#1103 step 5, VIEW.md §18) builds only a uniform-height scroll range from a
 transient ListSource; its selected offscreen metadata stays fresh without building content.
 Apply Index actions and supply a Page builder to AppWindow::commit. The host owns the

@@ -164,6 +164,19 @@ pub(super) fn normalize_single_line(text: &str) -> Cow<'_, str> {
     Cow::Owned(out)
 }
 impl Component for EditableField {
+    fn focus_outline(&self, cx: &Read<'_>) -> Option<FocusOutline> {
+        let mut bounds = self.silhouette(cx);
+        // Search lends its chrome to the retained editor; its glyph and clear
+        // button stay inside the one outline. This does not change the hit target.
+        if !self.chrome {
+            let owner = cx.key.0.rsplit_once('/')?.0;
+            bounds = cx.placed.iter().find(|p| p.key.0 == owner)?.rect;
+        }
+        Some(FocusOutline::rounded(
+            bounds,
+            cx.look.tokens.entry.radius.min(bounds[3] / 2.),
+        ))
+    }
     fn state(&self) -> Option<Box<dyn Any>> {
         Some(Box::<State>::default())
     }
@@ -673,7 +686,7 @@ impl Component for EditableField {
             cx.look.tokens.look.disabled
         };
         if self.chrome {
-            chrome(cx, focus);
+            chrome(cx);
         }
         let viewport = self.viewport(&cx.read);
         let Some(clip) = intersection(viewport, cx.visible) else {
@@ -707,22 +720,14 @@ impl Component for EditableField {
         cx.canvas.pop_clip();
     }
 }
-pub(super) fn chrome(cx: &mut Paint<'_>, focus: bool) {
+pub(super) fn chrome(cx: &mut Paint<'_>) {
     let t = &cx.look.tokens.entry;
     let r = cx.rect;
     let radius = t.radius.min(r[3] / 2.);
     cx.canvas
         .rounded_rect(rect(&r), radius, cx.ink(t.background));
-    cx.canvas.rounded_ring(
-        rect(&r),
-        radius,
-        t.border,
-        cx.ink(if focus {
-            t.focus_border
-        } else {
-            t.border_color
-        }),
-    );
+    cx.canvas
+        .rounded_ring(rect(&r), radius, t.border, cx.ink(t.border_color));
 }
 fn intersection(a: Rect, b: Rect) -> Option<Rect> {
     let (x, y) = (a[0].max(b[0]), a[1].max(b[1]));

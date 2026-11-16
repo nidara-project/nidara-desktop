@@ -161,7 +161,7 @@ impl Styles {
             pressed: token(&field(&d["pressed"], "dropdown pressed")?)?,
             text: token(&field(&d["text"], "dropdown text")?)?,
             arrow_color: token(&field(&d["arrowColor"], "dropdown arrow colour")?)?,
-            focus: token(&field(&d["focus"], "dropdown focus")?)?,
+            focus: token(&field(&list["focus"]["color"], "focus colour")?)?,
             disabled_opacity: number(&d["disabledOpacity"])?,
         };
         let b = &c["button"];
@@ -178,7 +178,7 @@ impl Styles {
             hover: token(&field(&b["hover"], "button hover")?)?,
             pressed: token(&field(&b["pressed"], "button pressed")?)?,
             text: token(&field(&b["text"], "button text")?)?,
-            focus: token(&field(&b["focus"], "button focus")?)?,
+            focus: token(&field(&list["focus"]["color"], "focus colour")?)?,
             disabled_opacity: number(&b["disabledOpacity"])?,
         };
         let sb = &c["scrollbar"];
@@ -236,7 +236,9 @@ impl Styles {
             icon: field(&q["icon"], "search icon")?,
             background: token(&field(&q["background"], "search background")?)?,
             border_color: token(&field(&q["borderColor"], "search border")?)?,
-            focus_border: token(&field(&q["focusBorder"], "search focus border")?)?,
+            // Legacy nk-widgets search keeps its existing look until the Settings port.
+            // nk-view no longer consumes a focused-border token.
+            focus_border: token("--nidara-surface-raised")?,
             text: token(&field(&q["text"], "search text")?)?,
             dim: token(&field(&q["dim"], "search dim")?)?,
             selection: token(&field(&q["selection"], "search selection")?)?,

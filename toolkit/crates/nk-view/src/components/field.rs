@@ -104,7 +104,7 @@ impl Component for DisplayField {
         self.surface.under(cx);
         if cx.read.focused {
             cx.canvas.clip(rect(&cx.visible));
-            let sel = cx.look.tokens.look.focus;
+            let sel = cx.look.tokens.look.accent;
             for r in self.selection(&cx.read) {
                 cx.canvas.rounded_rect(
                     rect(&r),
@@ -121,6 +121,5 @@ impl Component for DisplayField {
             }
             cx.canvas.pop_clip();
         }
-        self.surface.focus(cx, cx.visible);
     }
 }
