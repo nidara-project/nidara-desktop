@@ -795,8 +795,8 @@ PY
         || { cat /tmp/hyalo/nk-phase0.log; exit 1; }
     cat /tmp/hyalo/nk-phase0.log
 
-    # Gallery acceptance, including the long list, only on the scheduled nightly.
-    # No additional work on pull_request or workflow_dispatch; required checks unchanged.
+    # Gallery acceptance, including the long list, on the nightly or explicit dispatch.
+    # No additional work on pull_request; required checks unchanged.
     if [ "${NK_GALLERY_NIGHTLY:-false}" = true ]; then
         local gallery_started=$SECONDS gallery_status=0
         NK_GALLERY_TEST=vkms NK_WIDGETS_BIN=/usr/bin/nidara-kit-gallery \

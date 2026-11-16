@@ -7,8 +7,8 @@ two scales; the live samples are driven through their readers' actions and value
 must answer. A control run with NK_GALLERY_FAULT=inert (activations dropped) must be caught,
 so the interaction oracles are shown able to fail. Evidence lives below toolkit/target.
 Run it with toolkit/gallery/check-headless.sh, never against the live session. The scheduled
-Hyalo nightly also runs it in its disposable vkms container; PR and workflow_dispatch
-jobs do not add this matrix. duration.json records the measured check time.
+Hyalo nightly and explicit workflow_dispatch runs also execute it in their disposable
+vkms container; PR jobs do not add this matrix. duration.json records measured check time.
 """
 import hashlib
 import json

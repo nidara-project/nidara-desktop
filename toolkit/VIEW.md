@@ -1255,8 +1255,8 @@ measurements; this step does not choose one of them.
 
 
 The versioned gallery check includes the long-list page and its targeted inert control.
-CI executes it in the existing Hyalo job only for the scheduled nightly
-(`NK_GALLERY_NIGHTLY`); PR and workflow_dispatch runs keep their previous checks.
+CI executes it in the existing Hyalo job for the scheduled nightly and explicit
+workflow_dispatch runs (`NK_GALLERY_NIGHTLY`); PR runs keep their previous checks.
 The job uses the packaged gallery in the disposable vkms session. Screenshots, logs,
 result.json and workload duration.json are uploaded under hyalo-artifacts/toolkit-gallery.
 The outer gallery-nightly-duration.json records total checker wall time and exit status;

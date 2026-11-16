@@ -620,8 +620,8 @@ jobs:
           # The checks that watch an animation on screen race the runner's software GL: the
           # nightly run (and a manual one) has them, a PR does not (scripts/ci/hyalo-smoke.sh).
           HYALO_ANIMATION_CHECKS: ${{ github.event_name == 'schedule' || github.event_name == 'workflow_dispatch' }}
-          # Gallery/list acceptance only on the scheduled nightly, never PR or manual jobs.
-          NK_GALLERY_NIGHTLY: ${{ github.event_name == 'schedule' }}
+          # Gallery/list acceptance on scheduled or explicitly dispatched runs, never PRs.
+          NK_GALLERY_NIGHTLY: ${{ github.event_name == 'schedule' || github.event_name == 'workflow_dispatch' }}
         run: |
           # CARGO_HOME inside the cached dir; no incremental state and no debuginfo in the
           # dev/test profiles (CI never debugs them): a cache several times smaller.
