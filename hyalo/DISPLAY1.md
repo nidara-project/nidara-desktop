@@ -181,7 +181,15 @@ entry leaves the current, confirmed-profile or DPI-derived scale available to Se
 and IPC. Explicit `scale = 1` and `scale = 1.0` both pin 1.0. The parsed configuration
 preserves omission through serialization, config reload, legacy merging and backend
 application; omitting scale in a runtime patch does not reset an existing scale.
-This distinction applies to scale; the other existing output-field defaults are unchanged.
+The same distinction applies to enabled, transform and VRR: omission leaves the layout's
+current/profile value intact, while written defaults (`enabled = true`,
+`transform = "normal"`, `vrr = false`) are still explicit constraints. Serialized partial
+entries do not invent these fields. Partial runtime commands preserve unspecified values
+too; resolved layouts sent to the backend contain explicit values. A new output with no
+profile starts enabled, unrotated and with VRR off, at its DPI-derived scale. These startup
+defaults do not become file constraints. Mode and position keep their existing optional
+constraint behavior. Invalid layouts, unsupported capabilities and disabling the last
+output remain subject to the normal validator.
 
 Legacy SetOutput uses the same whole-layout validation and recovery, never writes
 a profile and is refused during a Display1 preview. Legacy settings output patches

@@ -734,7 +734,7 @@ fn connector_connected(state: &mut Hyalo, node: DrmNode, connector: connector::I
     // Disabled connectors retain the same identity as enabled ones.
     let identity=discover_identity(device.drm_output_manager.device(),&connector,node);
     device.identities.insert(connector.handle(),identity);
-    if !config.enabled {
+    if config.enabled == Some(false) {
         tracing::info!(%name, "connected, switched off in the configuration");
         device.disabled.insert(connector.handle(), (connector, crtc));
         return;
@@ -828,7 +828,7 @@ fn connector_connected(state: &mut Hyalo, node: DrmNode, connector: connector::I
     drop(renderer);
     let dmabuf_feedback = drm_output
         .with_compositor(|c| surface_feedback(primary_gpu, device.render_node, node, &mut tty.gpus, c.surface()));
-    if config.vrr == crate::config::Vrr::On {
+    if config.vrr == Some(crate::config::Vrr::On) {
         let conn = connector.handle();
         drm_output.with_compositor(|c| {
             use smithay::backend::drm::VrrSupport;
@@ -1016,7 +1016,7 @@ pub fn rescan_disabled(state: &mut Hyalo) {
         tty.devices
             .iter()
             .flat_map(|(n, d)| d.disabled.values().map(move |(c, crtc)| (*n, c.clone(), *crtc)))
-            .filter(|(_, c, _)| state.config.outputs.get(&connector_name(c)).is_none_or(|o| o.enabled))
+            .filter(|(_, c, _)| state.config.outputs.get(&connector_name(c)).is_none_or(|o| o.enabled != Some(false)))
             .collect()
     };
     for (node, connector, crtc) in wanted {
@@ -1224,7 +1224,7 @@ fn render_surface(state: &mut Hyalo, node: DrmNode, crtc: crtc::Handle) {
         return;
     }
     let output = surface.output.clone();
-    if vrr_for_games(surface, config.outputs.get(&output.name()).map(|c| c.vrr), wm.game_fullscreen_on(&output.name())) {
+    if vrr_for_games(surface, config.outputs.get(&output.name()).and_then(|c| c.vrr), wm.game_fullscreen_on(&output.name())) {
         display_events.insert_idle(crate::display::changed);
     }
     // Hyalo's own animations are drawn as they are when this frame shows: the next vblank, on

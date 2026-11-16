@@ -62,7 +62,8 @@ pub fn arrange(state: &mut Hyalo) {
 
 /// Applies `config` to a running output. Returns what could not be applied.
 pub fn apply(state: &mut Hyalo, name: &str, cfg: &OutputConfig) -> Result<(), String> {
-    let transform = cfg.parsed_transform().ok_or("unknown transform")?;
+    let transform = cfg.parsed_transform();
+    if cfg.transform.is_some() && transform.is_none() { return Err("unknown transform".into()); }
     if let Some(scale) = cfg.scale && !(0.25..=4.0).contains(&scale) {
         return Err(format!("scale {scale} is outside 0.25..4"));
     }
@@ -70,13 +71,13 @@ pub fn apply(state: &mut Hyalo, name: &str, cfg: &OutputConfig) -> Result<(), St
     match (&mut state.backend, output) {
         (Backend::Tty(_), None) => {
             // Off, or not connected: the config now says how it comes up.
-            if cfg.enabled {
+            if cfg.enabled.unwrap_or(true) {
                 crate::backend::tty_rescan_all(state);
             }
             Ok(())
         }
         (Backend::Winit(_), None) => Err(format!("no output named {name}")),
-        (_, Some(output)) if !cfg.enabled => crate::backend::tty_disable_output(state, &output),
+        (_, Some(output)) if cfg.enabled == Some(false) => crate::backend::tty_disable_output(state, &output),
         (_, Some(output)) => {
             if let Some(m) = cfg.parsed_mode()
                 && matches!(state.backend, Backend::Tty(_)) {
@@ -92,15 +93,15 @@ pub fn apply(state: &mut Hyalo, name: &str, cfg: &OutputConfig) -> Result<(), St
             // bottom-up — and not the user's: a scale set over IPC turned the whole nested
             // desktop upside down (2026-10-07).
             let transform = match state.backend {
-                Backend::Winit(_) => output.current_transform(),
+                Backend::Winit(_) => Some(output.current_transform()),
                 _ => transform,
             };
-            output.change_current_state(None, Some(transform), cfg.scale.map(Scale::Fractional), None);
+            output.change_current_state(None, transform, cfg.scale.map(Scale::Fractional), None);
             arrange(state);
             state.update_x11_scale();
-            if let Backend::Tty(tty) = &mut state.backend {
+            if let (Backend::Tty(tty), Some(vrr)) = (&mut state.backend, cfg.vrr) {
                 let (supported, enabled) = tty.vrr_state(&output);
-                let want = match cfg.vrr {
+                let want = match vrr {
                     Vrr::Off => false,
                     Vrr::On => true,
                     // Its frames decide (backend/tty.rs → `vrr_for_games`; `arrange` queued
@@ -199,7 +200,7 @@ pub fn info(state: &Hyalo) -> Vec<OutputInfo> {
             logical_size: geo.map(|g| (g.size.w, g.size.h)),
             vrr_supported: vrr.0,
             vrr_enabled: vrr.1,
-            vrr: state.config.outputs.get(&o.name()).map_or(Vrr::Off, |c| c.vrr),
+            vrr: state.config.outputs.get(&o.name()).and_then(|c| c.vrr).unwrap_or(Vrr::Off),
         }
     };
     match &state.backend {
