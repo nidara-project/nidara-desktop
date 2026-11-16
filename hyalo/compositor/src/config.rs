@@ -598,21 +598,27 @@ impl Default for CursorConfig {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Default, Serialize, Deserialize)]
 #[serde(default, deny_unknown_fields)]
 pub struct OutputConfig {
-    pub enabled: bool,
+    /// Absent fields are unconstrained; startup defaults are resolved separately.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub enabled: Option<bool>,
     /// `WIDTHxHEIGHT` or `WIDTHxHEIGHT@HZ` (Hz may have decimals); empty = the preferred mode.
+    #[serde(skip_serializing_if = "String::is_empty")]
     pub mode: String,
     /// Omitted = leave the current/profile/DPI scale unconstrained. `1` and `1.0`
     /// alike are explicit overrides, not the default for a mode-only entry.
     #[serde(deserialize_with = "optional_number", skip_serializing_if = "Option::is_none")]
     pub scale: Option<f64>,
     /// Logical pixels; `None` = to the right of the outputs already placed.
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub position: Option<(i32, i32)>,
     /// normal, 90, 180, 270, flipped, flipped-90, flipped-180, flipped-270.
-    pub transform: String,
-    pub vrr: Vrr,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub transform: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub vrr: Option<Vrr>,
 }
 
 /// Variable refresh rate on an output: `false`, `true`, or `"games"` — on only while a game is
@@ -649,19 +655,6 @@ impl<'de> Deserialize<'de> for Vrr {
             V::B(b) => Ok(if b { Vrr::On } else { Vrr::Off }),
             V::S(s) if s == "games" => Ok(Vrr::Games),
             V::S(s) => Err(serde::de::Error::custom(format!("vrr is false, true or \"games\", not {s:?}"))),
-        }
-    }
-}
-
-impl Default for OutputConfig {
-    fn default() -> Self {
-        Self {
-            enabled: true,
-            mode: String::new(),
-            scale: None,
-            position: None,
-            transform: "normal".into(),
-            vrr: Vrr::Off,
         }
     }
 }
@@ -704,7 +697,7 @@ impl OutputConfig {
 
     pub fn parsed_transform(&self) -> Option<smithay::utils::Transform> {
         use smithay::utils::Transform;
-        Some(match self.transform.as_str() {
+        Some(match self.transform.as_deref()? {
             "normal" | "" => Transform::Normal,
             "90" => Transform::_90,
             "180" => Transform::_180,
@@ -890,7 +883,7 @@ fn from_layers(layers: Vec<toml::Table>) -> Result<Config, ConfigError> {
         if !o.mode.is_empty() && o.parsed_mode().is_none() {
             return Err(ConfigError::Invalid(format!("outputs.{name}.mode: cannot read {:?}", o.mode)));
         }
-        if o.parsed_transform().is_none() {
+        if o.transform.is_some() && o.parsed_transform().is_none() {
             return Err(ConfigError::Invalid(format!("outputs.{name}.transform: unknown {:?}", o.transform)));
         }
         if let Some(scale) = o.scale && !(0.25..=4.0).contains(&scale) {
@@ -1139,6 +1132,33 @@ fn json_to_toml(v: serde_json::Value) -> Result<toml::Value, String> {
 mod tests {
     use super::*;
     #[test]
+    fn partial_output_serialization_does_not_invent_fields_and_written_defaults_survive() {
+        let entry: OutputConfig = toml::from_str("mode = '1920x1080@60'").unwrap();
+        let wire = serde_json::to_value(&entry).unwrap();
+        assert_eq!(wire, serde_json::json!({"mode":"1920x1080@60"}));
+        assert_eq!(serde_json::from_value::<OutputConfig>(wire).unwrap(), entry);
+        assert_eq!(serde_json::to_value(OutputConfig::default()).unwrap(), serde_json::json!({}));
+        let defaults: OutputConfig = toml::from_str("enabled = true\ntransform = 'normal'\nvrr = false").unwrap();
+        let wire = serde_json::to_value(&defaults).unwrap();
+        assert_eq!(wire, serde_json::json!({"enabled":true,"transform":"normal","vrr":false}));
+        assert_eq!(serde_json::from_value::<OutputConfig>(wire).unwrap(), defaults);
+        assert!(from_layers(vec!["[outputs.X]\ntransform = 'sideways'".parse().unwrap()]).is_err());
+    }
+    #[test]
+    fn partial_runtime_requests_preserve_unspecified_output_fields() {
+        let mode: crate::ipc::Request = serde_json::from_value(serde_json::json!({"request":"set_output","name":"X","mode":"1920x1080@60"})).unwrap();
+        let empty = OutputConfig::default();
+        let partial = crate::ipc::merged_output_config(&empty, &mode);
+        assert_eq!((partial.enabled, partial.transform.as_deref(), partial.vrr), (None, None, None));
+        let request: crate::ipc::Request = serde_json::from_value(serde_json::json!({"request":"set_output","name":"X","enabled":false,"transform":"90","vrr":"games"})).unwrap();
+        let changed = crate::ipc::merged_output_config(&partial, &request);
+        assert_eq!((changed.enabled, changed.transform.as_deref(), changed.vrr), (Some(false), Some("90"), Some(Vrr::Games)));
+        assert_eq!(crate::ipc::merged_output_config(&changed, &mode), changed);
+        let defaults: crate::ipc::Request = serde_json::from_value(serde_json::json!({"request":"set_output","name":"X","enabled":true,"transform":"normal","vrr":false})).unwrap();
+        let restored = crate::ipc::merged_output_config(&changed, &defaults);
+        assert_eq!((restored.enabled, restored.transform.as_deref(), restored.vrr), (Some(true), Some("normal"), Some(Vrr::Off)));
+    }
+    #[test]
     fn output_scale_omission_survives_serialization_and_explicit_one_is_preserved() {
         let mode_only: OutputConfig = toml::from_str("mode = '1920x1080@60'").unwrap();
         assert_eq!(mode_only.scale, None);
@@ -1221,7 +1241,7 @@ mod tests {
         let o = load_from(&[sys, settings, user]).unwrap().outputs["DP-1"].clone();
         assert_eq!(o.scale, Some(1.5), "the user's hand edit wins over Settings");
         assert_eq!(o.mode, "2560x1440@144", "Settings' value where the user set nothing");
-        assert_eq!(o.vrr, Vrr::On, "the shipped value where neither did");
+        assert_eq!(o.vrr, Some(Vrr::On), "the shipped value where neither did");
     }
 
     #[test]
@@ -1229,7 +1249,7 @@ mod tests {
         let d = tmpdir("vrr");
         let f = write(&d, "a.toml", "[outputs.A]\nvrr = false\n[outputs.B]\nvrr = true\n[outputs.C]\nvrr = \"games\"\n");
         let c = load_from(&[f]).unwrap();
-        assert_eq!((c.outputs["A"].vrr, c.outputs["B"].vrr, c.outputs["C"].vrr), (Vrr::Off, Vrr::On, Vrr::Games));
+        assert_eq!((c.outputs["A"].vrr, c.outputs["B"].vrr, c.outputs["C"].vrr), (Some(Vrr::Off), Some(Vrr::On), Some(Vrr::Games)));
         let bad = write(&d, "b.toml", "[outputs.A]\nvrr = \"always\"\n");
         assert!(load_from(&[bad]).is_err(), "a word that is not games is refused, not read as off");
         let json = serde_json::to_string(&[Vrr::Off, Vrr::On, Vrr::Games]).unwrap();

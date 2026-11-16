@@ -398,7 +398,7 @@ fn inventory(state: &Hyalo) -> Vec<Output> {
                 } else if o.enabled {
                     o.transform.clone()
                 } else {
-                    cfg.map_or("normal".into(), |c| c.transform.clone())
+                    cfg.and_then(|c| c.transform.clone()).unwrap_or_else(|| "normal".into())
                 },
                 x: o.position.or_else(|| cfg.and_then(|c| c.position)).map_or(0, |p| p.0),
                 y: o.position.or_else(|| cfg.and_then(|c| c.position)).map_or(0, |p| p.1),
@@ -778,23 +778,23 @@ fn apply(state: &mut Hyalo, layout: &Layout) -> std::result::Result<(), String> 
                 return Err("mode disappeared".into());
             }
             let cfg = OutputConfig {
-                enabled: s.enabled,
+                enabled: Some(s.enabled),
                 mode: m
                     .map(|m| format!("{}x{}@{:.3}", m.width, m.height, m.refresh_mhz as f64 / 1000.0))
                     .unwrap_or_default(),
                 scale: Some(s.scale),
                 position: Some((s.x, s.y)),
-                transform: s.transform.clone(),
-                vrr: match s.vrr.as_str() {
+                transform: Some(s.transform.clone()),
+                vrr: Some(match s.vrr.as_str() {
                     "on" => Vrr::On,
                     "games" => Vrr::Games,
                     _ => Vrr::Off,
-                },
+                }),
             };
             state.config.outputs.insert(o.connector.clone(), cfg.clone());
             configs.push((o.connector.clone(), cfg));
         }
-        configs.sort_by_key(|(_, c)| !c.enabled);
+        configs.sort_by_key(|(_, c)| c.enabled == Some(false));
         for (name, cfg) in &configs {
             crate::outputs::apply(state, name, cfg)?;
         }
@@ -806,10 +806,10 @@ fn apply(state: &mut Hyalo, layout: &Layout) -> std::result::Result<(), String> 
                 .iter()
                 .find(|o| o.name == name)
                 .ok_or("output disappeared during apply")?;
-            if o.enabled != cfg.enabled {
+            if o.enabled != cfg.enabled.unwrap_or(true) {
                 return Err("output enable/disable not observed".into());
             }
-            if cfg.enabled {
+            if cfg.enabled.unwrap_or(true) {
                 let want = cfg.parsed_mode().ok_or("invalid prepared mode")?;
                 if !o
                     .current_mode
@@ -1004,15 +1004,12 @@ fn merge_configs(outputs: &[Output], layout: &mut Layout, configs: &BTreeMap<Str
         let Some(c) = configs.get(&o.connector) else {
             continue;
         };
-        s.enabled = c.enabled;
+        if let Some(enabled) = c.enabled { s.enabled = enabled; }
         if let Some(scale) = c.scale { s.scale = scale; }
-        s.transform = c.transform.clone();
-        s.vrr = match c.vrr {
-            Vrr::Off => "off",
-            Vrr::On => "on",
-            Vrr::Games => "games",
+        if let Some(transform) = &c.transform { s.transform = transform.clone(); }
+        if let Some(vrr) = c.vrr {
+            s.vrr = match vrr { Vrr::Off => "off", Vrr::On => "on", Vrr::Games => "games" }.into();
         }
-        .into();
         if let Some((x, y)) = c.position {
             s.x = x;
             s.y = y;
@@ -1036,8 +1033,11 @@ fn merge_configs(outputs: &[Output], layout: &mut Layout, configs: &BTreeMap<Str
     }
 }
 fn check_overrides(state: &Hyalo, layout: &Layout) -> std::result::Result<(), String> {
+    check_config_overrides(&state.displays.outputs, layout, &state.displays.overrides)
+}
+fn check_config_overrides(outputs: &[Output], layout: &Layout, configs: &BTreeMap<String, OutputConfig>) -> std::result::Result<(), String> {
     let mut constrained = layout.clone();
-    merge_overrides(state, &mut constrained);
+    merge_configs(outputs, &mut constrained, configs);
     if constrained != *layout {
         Err("layout conflicts with explicit compositor configuration; edit the override first".into())
     } else {
@@ -1071,15 +1071,12 @@ pub fn legacy_apply(state: &mut Hyalo, name: &str, cfg: &OutputConfig) -> std::r
         .find(|o| o.connector == name)
         .ok_or("output unavailable")?;
     let s = layout.outputs.iter_mut().find(|s| s.id == o.id).unwrap();
-    s.enabled = cfg.enabled;
+    if let Some(enabled) = cfg.enabled { s.enabled = enabled; }
     if let Some(scale) = cfg.scale { s.scale = scale; }
-    s.transform = cfg.transform.clone();
-    s.vrr = match cfg.vrr {
-        Vrr::Off => "off",
-        Vrr::On => "on",
-        Vrr::Games => "games",
+    if let Some(transform) = &cfg.transform { s.transform = transform.clone(); }
+    if let Some(vrr) = cfg.vrr {
+        s.vrr = match vrr { Vrr::Off => "off", Vrr::On => "on", Vrr::Games => "games" }.into();
     }
-    .into();
     if let Some((x, y)) = cfg.position {
         s.x = x;
         s.y = y;
@@ -1138,15 +1135,12 @@ pub fn validate_config(state: &Hyalo, configs: &BTreeMap<String, OutputConfig>) 
     for s in &mut layout.outputs {
         let o = state.displays.outputs.iter().find(|o| o.id == s.id).unwrap();
         let Some(c) = configs.get(&o.connector) else { continue };
-        s.enabled = c.enabled;
+        if let Some(enabled) = c.enabled { s.enabled = enabled; }
         if let Some(scale) = c.scale { s.scale = scale; }
-        s.transform = c.transform.clone();
-        s.vrr = match c.vrr {
-            Vrr::Off => "off",
-            Vrr::On => "on",
-            Vrr::Games => "games",
+        if let Some(transform) = &c.transform { s.transform = transform.clone(); }
+        if let Some(vrr) = c.vrr {
+            s.vrr = match vrr { Vrr::Off => "off", Vrr::On => "on", Vrr::Games => "games" }.into();
         }
-        .into();
         if let Some((x, y)) = c.position {
             s.x = x;
             s.y = y;
@@ -1249,6 +1243,66 @@ fn arm_lease_timer(state: &mut Hyalo) {
 #[cfg(test)]
 mod tests {
     use super::*;
+    fn mode_only_fixture() -> (Vec<Output>, Layout, BTreeMap<String, OutputConfig>) {
+        let mut outputs = vec![model::tests::output("Virtual-1", false, 1920, 1080), model::tests::output("Virtual-2", false, 1920, 1080)];
+        for o in &mut outputs { o.physical_width_mm = 310; o.vrr_supported = true; }
+        let layout = default_layout(&outputs);
+        let configs = outputs.iter().map(|o| (o.connector.clone(), toml::from_str("mode = '1920x1080@60'").unwrap())).collect();
+        (outputs, layout, configs)
+    }
+    #[test]
+    fn mode_only_first_boot_keeps_enabled_normal_vrr_off_and_dpi_scale() {
+        let (outputs, mut layout, configs) = mode_only_fixture();
+        merge_configs(&outputs, &mut layout, &configs);
+        for setting in &layout.outputs {
+            assert!(setting.enabled);
+            assert_eq!(setting.transform, "normal");
+            assert_eq!(setting.vrr, "off");
+            assert_eq!(setting.scale, 1.5);
+        }
+        assert!(validate(layout, &outputs).is_ok());
+    }
+    #[test]
+    fn mode_only_override_leaves_enabled_unconstrained() {
+        let (outputs, mut layout, configs) = mode_only_fixture();
+        layout.outputs[0].enabled = false;
+        layout.primary = layout.outputs[1].id.clone();
+        assert!(validate(layout.clone(), &outputs).is_ok());
+        assert!(check_config_overrides(&outputs, &layout, &configs).is_ok());
+    }
+    #[test]
+    fn mode_only_override_leaves_transform_unconstrained() {
+        let (outputs, mut layout, configs) = mode_only_fixture();
+        layout.outputs[0].transform = "180".into();
+        assert!(validate(layout.clone(), &outputs).is_ok());
+        assert!(check_config_overrides(&outputs, &layout, &configs).is_ok());
+    }
+    #[test]
+    fn mode_only_override_leaves_vrr_unconstrained() {
+        let (outputs, mut layout, configs) = mode_only_fixture();
+        for vrr in ["on", "games"] {
+            layout.outputs[0].vrr = vrr.into();
+            assert!(validate(layout.clone(), &outputs).is_ok());
+            assert!(check_config_overrides(&outputs, &layout, &configs).is_ok(), "{vrr}");
+        }
+    }
+    #[test]
+    fn written_output_defaults_remain_constraints() {
+        let (outputs, initial, _) = mode_only_fixture();
+        for (field, value) in [("enabled", "true"), ("transform", "'normal'"), ("vrr", "false")] {
+            let config = toml::from_str(&format!("{field} = {value}")).unwrap();
+            let configs = BTreeMap::from([("Virtual-1".into(), config)]);
+            assert!(check_config_overrides(&outputs, &initial, &configs).is_ok());
+            let mut changed = initial.clone();
+            match field {
+                "enabled" => { changed.outputs[0].enabled = false; changed.primary = changed.outputs[1].id.clone(); }
+                "transform" => changed.outputs[0].transform = "180".into(),
+                _ => changed.outputs[0].vrr = "games".into(),
+            }
+            assert!(validate(changed.clone(), &outputs).is_ok());
+            assert!(check_config_overrides(&outputs, &changed, &configs).is_err(), "{field}");
+        }
+    }
     #[test]
     fn mode_only_override_does_not_pin_output_scale_on_either_virtual_connector() {
         for name in ["Virtual-1", "Virtual-2"] {

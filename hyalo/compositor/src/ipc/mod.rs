@@ -424,7 +424,7 @@ pub fn merged_output_config(base: &OutputConfig, req: &Request) -> OutputConfig 
     let mut c = base.clone();
     if let Request::SetOutput { enabled, mode, scale, transform, position, vrr, .. } = req {
         if let Some(v) = enabled {
-            c.enabled = *v;
+            c.enabled = Some(*v);
         }
         if let Some(v) = mode {
             c.mode = v.clone();
@@ -433,13 +433,13 @@ pub fn merged_output_config(base: &OutputConfig, req: &Request) -> OutputConfig 
             c.scale = Some(*v);
         }
         if let Some(v) = transform {
-            c.transform = v.clone();
+            c.transform = Some(v.clone());
         }
         if let Some(v) = position {
             c.position = Some(*v);
         }
         if let Some(v) = vrr {
-            c.vrr = *v;
+            c.vrr = Some(*v);
         }
     }
     c

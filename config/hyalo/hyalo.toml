@@ -311,6 +311,9 @@ disable_while_typing = true
 mode = "1920x1080@60"
 
 # Outputs, by connector name (`nidara-hyalo msg outputs` lists them):
+# Only fields written here constrain Settings/IPC; a mode-only entry does not pin scale,
+# enabled, transform or VRR. Written defaults (enabled=true, transform="normal", vrr=false)
+# are explicit overrides. New outputs still start enabled, normal and VRR off at DPI scale.
 #
 # [outputs.DP-1]
 # mode = "2560x1440@144"
