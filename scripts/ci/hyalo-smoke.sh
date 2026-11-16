@@ -248,6 +248,7 @@ phase_boot() {
         XDG_CURRENT_DESKTOP=Nidara \
         NK_REAL_GATES="${NK_REAL_GATES:-true}" NK_REAL_FULL="${NK_REAL_FULL:-true}" \
         NK_SETTINGS_IME_NIGHTLY="${HYALO_ANIMATION_CHECKS:-false}" \
+        NK_GALLERY_NIGHTLY="${NK_GALLERY_NIGHTLY:-false}" \
         HYALO_ANIMATION_CHECKS="${HYALO_ANIMATION_CHECKS:-true}" \
         dbus-run-session -- bash "$REPO/scripts/ci/hyalo-smoke.sh" run
 }
@@ -793,6 +794,23 @@ PY
         > /tmp/hyalo/nk-phase0.log 2>&1 \
         || { cat /tmp/hyalo/nk-phase0.log; exit 1; }
     cat /tmp/hyalo/nk-phase0.log
+
+    # Gallery acceptance, including the long list, only on the scheduled nightly.
+    # No additional work on pull_request or workflow_dispatch; required checks unchanged.
+    if [ "${NK_GALLERY_NIGHTLY:-false}" = true ]; then
+        local gallery_started=$SECONDS gallery_status=0
+        NK_GALLERY_TEST=vkms NK_WIDGETS_BIN=/usr/bin/nidara-kit-gallery \
+            NK_WIDGETS_LOG="$OUT/toolkit-gallery" NK_SETTINGS_DATA=/usr/share/nidara/settings-data \
+            HYALO_IME_PROBE_BIN=/usr/local/bin/hyalo-ime-probe \
+            python "$REPO/scripts/ci/nk-gallery-check.py" > "$OUT/gallery-nightly.log" 2>&1 \
+            || gallery_status=$?
+        cat "$OUT/gallery-nightly.log"
+        local gallery_elapsed=$((SECONDS - gallery_started))
+        printf '{"elapsed_seconds":%s,"exit_status":%s}\n' "$gallery_elapsed" "$gallery_status" \
+            > "$OUT/gallery-nightly-duration.json"
+        log "gallery nightly completed in $gallery_elapsed s (status=$gallery_status)"
+        [ "$gallery_status" -eq 0 ] || { log "FAIL: nightly gallery acceptance"; exit "$gallery_status"; }
+    fi
 
     # Settings SearchInput + actual font chooser View, nightly/manual only.
     if [ "${NK_SETTINGS_IME_NIGHTLY:-false}" = true ]; then

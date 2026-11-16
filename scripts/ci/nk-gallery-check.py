@@ -6,7 +6,9 @@ Every page is opened from its sidebar entry by a reader, as Orca would, and scre
 two scales; the live samples are driven through their readers' actions and values, and each
 must answer. A control run with NK_GALLERY_FAULT=inert (activations dropped) must be caught,
 so the interaction oracles are shown able to fail. Evidence lives below toolkit/target.
-Run it with toolkit/gallery/check-headless.sh, never against the live session.
+Run it with toolkit/gallery/check-headless.sh, never against the live session. The scheduled
+Hyalo nightly also runs it in its disposable vkms container; PR and workflow_dispatch
+jobs do not add this matrix. duration.json records the measured check time.
 """
 import hashlib
 import json
@@ -31,9 +33,16 @@ PAGES = [('status', 'Status'), ('button', 'Button'), ('switch', 'Switch'),
          ('segmented', 'Segmented choice'), ('swatches', 'Swatches'), ('row', 'Setting row'), ('slider', 'Slider'),
          ('field', 'Text field'), ('glass', 'Glass card'), ('text', 'Text'), ('icons', 'Icons'),
          ('layout', 'Layout'), ('scroll', 'Scroll'), ('overlay', 'Overlay'), ('grid', 'Grid'),
-         ('reveal', 'Reveal'), ('disclosure', 'Disclosure'), ('entry','Editable field'), ('search','Search')]
-if Path(os.environ['XDG_RUNTIME_DIR']).resolve() != Path(os.environ['NK_WIDGETS_RUN']).resolve() / 'runtime':
-    raise RuntimeError('use toolkit/gallery/check-headless.sh')
+         ('reveal', 'Reveal'), ('disclosure', 'Disclosure'), ('entry','Editable field'), ('search','Search'), ('list','Long list')]
+if os.environ.get('NK_GALLERY_TEST') == 'vkms':
+    # Only the disposable hyalo-smoke container's unprivileged test session.
+    if (os.getuid() == 0
+            or Path(os.environ['XDG_RUNTIME_DIR']).resolve() != Path('/run/hyalo-smoke')
+            or Path(os.environ['HYALO_CONTROL']).resolve() != Path('/tmp/hyalo/control')):
+        raise RuntimeError('use the private hyalo-smoke vkms session')
+else:
+    if Path(os.environ['XDG_RUNTIME_DIR']).resolve() != Path(os.environ['NK_WIDGETS_RUN']).resolve() / 'runtime':
+        raise RuntimeError('use toolkit/gallery/check-headless.sh')
 if LOG == Path('/tmp') or Path('/tmp') in LOG.parents:
     raise RuntimeError('gallery evidence must not use /tmp')
 LOG.mkdir(parents=True, exist_ok=True)
@@ -80,10 +89,14 @@ def walk(node):
     return out
 
 
-def app_tree():
+def app_tree(pid):
     for app in children(Atspi.get_desktop(0)):
         try:
             app.set_cache_mask(Atspi.Cache.NONE)
+            # The registry can briefly retain the previous scale/control client.
+            # A matching title alone is not evidence that this is our new process.
+            if app.get_process_id() != pid:
+                continue
             for node in children(app):
                 if node and node.get_name() == TITLE:
                     return node
@@ -132,7 +145,7 @@ session.call_sync('org.a11y.Bus', '/org/a11y/bus', 'org.freedesktop.DBus.Propert
                   None, Gio.DBusCallFlags.NONE, 5000, None)
 
 
-def run(directory, fault=None, shots=True, editor_only=False):
+def run(directory, fault=None, shots=True, editor_only=False, list_only=False):
     directory.mkdir(parents=True, exist_ok=True)
     log = directory / 'client.log'
     env = dict(os.environ)
@@ -316,9 +329,10 @@ def run(directory, fault=None, shots=True, editor_only=False):
 
         try:
             barrier(lambda: 'CONTENT_READY' in text() and 'A11Y_READY' in text(), 'gallery readiness', 15)
-            root = barrier(app_tree, 'AT-SPI window')
+            root = barrier(lambda: app_tree(process.pid), 'AT-SPI window for current PID')
             hashes = {}
-            for page, title in ([p for p in PAGES if p[0]=="entry"] if editor_only else PAGES):
+            for page, title in ([p for p in PAGES if p[0]=="entry"] if editor_only
+                                else [p for p in PAGES if p[0]=="list"] if list_only else PAGES):
                 sidebar_open()
                 entry = barrier(lambda: find(root, title, Atspi.Role.TOGGLE_BUTTON), f'sidebar entry {title}')
                 if page != 'status':
@@ -356,6 +370,55 @@ def run(directory, fault=None, shots=True, editor_only=False):
                     activate('Clear search',Atspi.Role.PUSH_BUTTON)
                     barrier(lambda: text_of('Search text')=='', 'search clear control')
                     check('search/clear-focus',has_state(find(root,'Search text',Atspi.Role.ENTRY),Atspi.StateType.FOCUSED),'clear did not return focus')
+                elif page == 'list':
+                    content_ready()
+                    def records(): return find(root,'Records',Atspi.Role.LIST_BOX)
+                    palette=json.loads((Path(os.environ['NK_SETTINGS_DATA'])/'tokens/colors.json').read_text())
+                    appearance=session.call_sync('org.freedesktop.portal.Desktop','/org/freedesktop/portal/desktop',
+                        'org.freedesktop.portal.Settings','ReadAll',GLib.Variant('(as)',(['org.freedesktop.appearance'],)),
+                        GLib.VariantType.new('(a{sa{sv}})'),Gio.DBusCallFlags.NONE,5000,None).unpack()[0]
+                    accent=bytes(round(v*255) for v in appearance['org.freedesktop.appearance']['accent-color'])
+                    if accent not in [bytes.fromhex(v.lstrip('#')) for v in palette['accents'].values()]:
+                        raise InfrastructureError('portal accent is outside the exported palette')
+                    def painted_selection(stage):
+                        selected=records().get_selection_iface().get_selected_child(0)
+                        box=selected.get_component_iface().get_extents(Atspi.CoordType.WINDOW)
+                        win=next(w for w in ipc('windows')['windows'] if w['app_id']=='nidara-kit-gallery')
+                        scale=ipc('outputs')['outputs'][0]['scale']
+                        path=directory/f'list-{stage}.ppm';ipc('screenshot',path)
+                        head,dims,depth,rgb=path.read_bytes().split(b'\n',3)
+                        w,h=map(int,dims.split());x=int((win['x']+box.x+box.width/2)*scale);y=int((win['y']+box.y+box.height/2)*scale)
+                        return 0<=x<w and 0<=y<h and rgb[(y*w+x)*3:(y*w+x+1)*3]==accent
+                    live=barrier(records,'list container')
+                    check('list/bounded', 1 <= len(children(live)) <= 20, 'constructed all records')
+                    check('list/size', live.get_attributes().get('setsize')=='5000', 'reader has no total size')
+                    selected=live.get_selection_iface().get_selected_child(0)
+                    check('list/initial',selected.get_name()=='Record 1' and selected.get_attributes().get('posinset')=='1','wrong initial selection')
+                    published(lambda: live.get_component_iface().grab_focus())
+                    for code, expected, stage in [(107,5000,'end'),(103,4999,'up'),(102,1,'home'),(108,2,'down'),(109,8,'page-down'),(104,2,'page-up')]:
+                        key(code)
+                        try: barrier(lambda: find(root,f'Selected: {expected} · Opened: 0'),'list/'+stage)
+                        except InfrastructureError as error: raise OracleFailure(f'list/{stage}: {error}') from error
+                        live=records();selected=live.get_selection_iface().get_selected_child(0)
+                        check('list/'+stage,selected.get_name()==f'Record {expected}' and has_state(selected,Atspi.StateType.SHOWING),'selection not revealed')
+                        check('list/'+stage+'-bounded',len(children(live))<=20,'range did not stay bounded')
+                        if stage in ('end','home'):
+                            try: barrier(lambda: painted_selection(stage),'list/'+stage+' pixels')
+                            except InfrastructureError as error: raise OracleFailure(f'list/{stage}-paint: {error}') from error
+                            check('list/'+stage+'-paint',True,'')
+                            if shots: ipc('screenshot',directory/f'list-{stage}.png')
+                    key(28)
+                    try: barrier(lambda: find(root,'Selected: 2 · Opened: 1'),'list/open')
+                    except InfrastructureError as error: raise OracleFailure(f'list/open: {error}') from error
+                    check('list/open',True,'')
+                    key(57);pump(.1)
+                    check('list/space',find(root,'Selected: 2 · Opened: 1') is not None,'Space opened a row')
+                    disabled=find(root,'Disabled records',Atspi.Role.LIST_BOX)
+                    check('list/disabled',not has_state(disabled,Atspi.StateType.ENABLED) and len(children(disabled))>=2,'disabled list is active or empty')
+                    empty=find(root,'Empty records',Atspi.Role.LIST_BOX)
+                    check('list/empty',len(children(empty))==0,'empty list has options')
+                    pump(.3)
+                    if shots: ipc('screenshot',directory/'list-selected.png')
                 elif page == 'button':
                     activate('Press me', Atspi.Role.PUSH_BUTTON)
                     check('button/press', find(root, 'Pressed 1 times') is not None,
@@ -488,7 +551,7 @@ def run(directory, fault=None, shots=True, editor_only=False):
                 elif page == 'reveal':
                     activate('Open', Atspi.Role.PUSH_BUTTON)
                     check('reveal/open', find(root, 'Revealed') is not None, 'the reveal did not open')
-            if editor_only:
+            if editor_only or list_only:
                 return "PASS"
             # The band: back and forward walk the pages visited, the toggle hides the sidebar.
             activate('Back', Atspi.Role.PUSH_BUTTON)
@@ -526,6 +589,7 @@ def run(directory, fault=None, shots=True, editor_only=False):
 
 output = ipc('outputs')['outputs'][0]
 results = {}
+started = time.monotonic()
 try:
     for scale in (1, 1.25):
         ipc('output', output['name'], f'scale={scale}')
@@ -553,8 +617,18 @@ try:
     except OracleFailure as e:
         print(f'  control CAUGHT: {e}', flush=True)
         results['control'] = 'CAUGHT'
+    print('control: list selection dropped', flush=True)
+    try:
+        run(LOG / 'control-list-inert', fault='inert', shots=False, list_only=True)
+        raise InfrastructureError('the inert list control passed')
+    except OracleFailure as error:
+        if 'list/end:' not in str(error):
+            raise InfrastructureError(f'list control failed the wrong oracle: {error}') from error
+        print(f'  control CAUGHT list: {error}', flush=True)
+        results['list-control'] = 'CAUGHT'
     (LOG / 'result.json').write_text(json.dumps(results, indent=2))
 finally:
+    (LOG / 'duration.json').write_text(json.dumps({'elapsed_seconds': time.monotonic() - started}, indent=2))
     try:
         ipc('output', output['name'], f"scale={output['scale']}")
     finally:

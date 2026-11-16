@@ -457,6 +457,9 @@ Retained key/type/instance/revision guards layout replies; disabled components
 still arrange, hidden/satisfied ranges retire requests. Input eligibility is stricter than
 retained identity. Pointer-motion/leave and reveal-rectangle effects are generic; never add
 list names to state/layout/motion. Presentational structure omits only its own reader node.
+Gallery acceptance including the long list runs in the scheduled Hyalo nightly only
+(NK_GALLERY_NIGHTLY); no extra PR/workflow_dispatch matrix. Artifacts include actual
+elapsed_seconds in toolkit-gallery/duration.json; local cage timing is not runner timing.
 Use the opt-in long-list-cost CPU probe for 5,000 rows at 1/1.25 before proposing GPU,
 partial damage or retained layout. Do not infer physical frame rate from CPU timings.
 Read.part and Inset frame placement use actual body geometry, not repeated position arithmetic.

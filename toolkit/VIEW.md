@@ -1252,3 +1252,13 @@ scroll and selection, plus the actual output refresh interval and materialized-n
 Results describe this machine and scene, not physical presentation or a throughput promise.
 Partial damage, retained layout and the GPU path remain decisions for the owner after the
 measurements; this step does not choose one of them.
+
+
+The versioned gallery check includes the long-list page and its targeted inert control.
+CI executes it in the existing Hyalo job only for the scheduled nightly
+(`NK_GALLERY_NIGHTLY`); PR and workflow_dispatch runs keep their previous checks.
+The job uses the packaged gallery in the disposable vkms session. Screenshots, logs,
+result.json and workload duration.json are uploaded under hyalo-artifacts/toolkit-gallery.
+The outer gallery-nightly-duration.json records total checker wall time and exit status;
+the first scheduled-run duration must be reported as measured, never inferred from a
+private local cage run. The local check-headless.sh path remains available separately.
