@@ -775,7 +775,7 @@ fn connector_connected(state: &mut Hyalo, node: DrmNode, connector: connector::I
     output.change_current_state(
         Some(wl_mode),
         config.parsed_transform(),
-        Some(smithay::output::Scale::Fractional(config.scale)),
+        config.scale.map(smithay::output::Scale::Fractional),
         None,
     );
     output.user_data().insert_if_missing(|| OutputId { node, crtc });
@@ -837,7 +837,7 @@ fn connector_connected(state: &mut Hyalo, node: DrmNode, connector: connector::I
             }
         });
     }
-    tracing::info!(%name, mode = ?wl_mode, scale = config.scale, "output on");
+    tracing::info!(%name, mode = ?wl_mode, scale = output.current_scale().fractional_scale(), "output on");
     device.surfaces.insert(
         crtc,
         Surface {

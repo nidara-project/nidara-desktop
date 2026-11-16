@@ -63,8 +63,8 @@ pub fn arrange(state: &mut Hyalo) {
 /// Applies `config` to a running output. Returns what could not be applied.
 pub fn apply(state: &mut Hyalo, name: &str, cfg: &OutputConfig) -> Result<(), String> {
     let transform = cfg.parsed_transform().ok_or("unknown transform")?;
-    if !(0.25..=4.0).contains(&cfg.scale) {
-        return Err(format!("scale {} is outside 0.25..4", cfg.scale));
+    if let Some(scale) = cfg.scale && !(0.25..=4.0).contains(&scale) {
+        return Err(format!("scale {scale} is outside 0.25..4"));
     }
     let output = crate::backend::physical_output(state, name);
     match (&mut state.backend, output) {
@@ -95,7 +95,7 @@ pub fn apply(state: &mut Hyalo, name: &str, cfg: &OutputConfig) -> Result<(), St
                 Backend::Winit(_) => output.current_transform(),
                 _ => transform,
             };
-            output.change_current_state(None, Some(transform), Some(Scale::Fractional(cfg.scale)), None);
+            output.change_current_state(None, Some(transform), cfg.scale.map(Scale::Fractional), None);
             arrange(state);
             state.update_x11_scale();
             if let Backend::Tty(tty) = &mut state.backend {

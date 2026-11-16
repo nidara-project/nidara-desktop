@@ -99,6 +99,10 @@ unique-sender token. Its 15 seconds start only after new frames have reached eve
 output, with a separate bounded activation wait. The disk worker saves confirmed profiles;
 a UI timeout is not the recovery owner. Existing SetOutput/config reload paths validate the
 whole layout too. Manual compositor overrides win; conflicting edits fail explicitly.
+Scale is optional in OutputConfig: a mode-only output table must not pin it to 1.0.
+Only an explicit scale constrains Display1/IPC edits; `scale = 1` is explicit too.
+Preserve absence in config serialization and partial/runtime/backend merges, keeping the
+current/profile/DPI scale instead. Other output-field defaults retain their existing rules.
 
 Power1 forwards a sequenced, owner-authenticated lid effect; it remains the sole lid/suspend
 policy owner. Its forwarder sends only on desired-state or Display1-owner changes, outside

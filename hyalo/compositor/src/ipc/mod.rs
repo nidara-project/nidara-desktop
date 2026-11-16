@@ -430,7 +430,7 @@ pub fn merged_output_config(base: &OutputConfig, req: &Request) -> OutputConfig 
             c.mode = v.clone();
         }
         if let Some(v) = scale {
-            c.scale = *v;
+            c.scale = Some(*v);
         }
         if let Some(v) = transform {
             c.transform = v.clone();

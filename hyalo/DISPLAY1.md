@@ -176,6 +176,13 @@ other than the generated settings layer constrain profiles and mutations; a
 conflicting request is refused. Invalid startup constraints trigger safe recovery
 and expose the refusal in `last_error`.
 
+An output entry constrains scale only when it explicitly contains `scale`. A mode-only
+entry leaves the current, confirmed-profile or DPI-derived scale available to Settings
+and IPC. Explicit `scale = 1` and `scale = 1.0` both pin 1.0. The parsed configuration
+preserves omission through serialization, config reload, legacy merging and backend
+application; omitting scale in a runtime patch does not reset an existing scale.
+This distinction applies to scale; the other existing output-field defaults are unchanged.
+
 Legacy SetOutput uses the same whole-layout validation and recovery, never writes
 a profile and is refused during a Display1 preview. Legacy settings output patches
 are preflighted before disk writes. Once Display1 owns a confirmed profile for a
