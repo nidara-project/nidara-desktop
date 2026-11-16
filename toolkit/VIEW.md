@@ -734,6 +734,21 @@ decides the rest. Each component has three layers, kept apart:
 4. **Tab and Shift+Tab reach every control**, in reading order. A group (radios, segments,
    tabs, a list, a menu) is one stop, moved within by the arrows. The ring shows only after
    keyboard use.
+
+   **One focus ring (#1103 step 5b).** The view paints it after all component content
+   in the current normal/lifted pass. Components return `FocusOutline` geometry only
+   (bounds, four continuous corner radii and an optional clip), never a focus colour
+   or width, and never paint their own focus. `components.list.focus` is the single
+   token record: solid accent, width 2 logical px, a clear gap of 2 logical px on glass
+   and off it. The outer outline grows by gap + width, its radii by the same distance;
+   no layout, hit target, Tab order or reader bounds change. Ancestor clips still apply.
+   Composite switch/check/radio controls lend their mark's outline; joined segments
+   keep only their own outside corners. A long list lends its selected row (or the
+   viewport when empty), clipped to the list viewport; offscreen rows get no invented
+   outline. Search lends the whole chrome to its inner editor. Fields keep their
+   normal border on focus: only this ring is a focus signal. Menu rows retain their
+   accent selection and opt out. Disabled, hidden and pointer-only focus have no ring.
+
 5. **Disabled**: no hover, press or Tab stop; faded to the component's `disabledOpacity`, its
    text in the disabled ink; readers still find it, as unavailable.
 6. **The accent marks only what is on or chosen**: a switch on, a box checked, a radio chosen,
@@ -788,7 +803,7 @@ decides the rest. Each component has three layers, kept apart:
 | Disclosure | the whole header row; › turns 90°; → opens, ← closes | open | — |
 | Back and forward | each half of one glass capsule; Alt+← / Alt+→ | enabled by history | `header` |
 | Title bar | its buttons; the rest moves the window; two presses maximise | — | `header` |
-| Text field | the whole field; caret, word and line selection; focus = accent border | placeholder | `search` |
+| Text field | the whole field; caret, word and line selection; focus = the shared external ring | placeholder | `search` |
 | Password field | as a text field, plus a reveal button; Caps Lock warning; readers never read it | — | `search` |
 | Search field | as a text field; the ✕ clears; Escape clears, then leaves; Ctrl+F focuses | — | `search` |
 | Link | its text; underline on hover; Enter | — | — |
@@ -889,7 +904,7 @@ option with an arrow; a setting row ends with it (§13.6).
 
 - **The trigger is off glass** (§13.2, `Part::Dropdown`): the view fills it with
   `dropdown.trigger`'s tone inside its border, lighter under the pointer and darker while
-  pressed, and draws the focus ring in that border. Its label is the chosen option after the
+  pressed; its focus ring is the shared external outline (§13.4). Its label is the chosen option after the
   `labelMargin`, the arrow (`nd-pan-down`) at the end inside the padding. It is **as wide as its
   widest option** (`Node::room`), so a choice never moves what lies beside it. Disabled, its fill
   is at `disabledOpacity` and what it holds in `Ink::Disabled`.
@@ -972,7 +987,7 @@ rebuilds with the chosen index; the gallery reads its palette and names from exp
   Disabled fill and band use `disabledOpacity`; the keyboard focus ring stands outside the chosen
   band and disappears when disabled.
 - `SwatchStyle` requires every field from `components.json` `choices.swatch`: diameter 30,
-  border 3, outer ring 2, gap 8, selected and hover colours, focus colour and disabled opacity.
+  border 3, outer ring 2, gap 8, selected and hover colours and disabled opacity. Focus uses §13.4.
   There are no decoder defaults. The row keeps circular controls and the exact gap when stretched.
 
 The Swatches gallery page shows rest, selected, hover, pressed, focus and disabled states plus
@@ -1105,8 +1120,8 @@ accepts a reader request. No new Configure property or view-specific dispatch is
 new components receive their data in their constructor.
 
 Measures and tones match Settings' existing nk-widgets disclosure: common padding,
-ROW_HEIGHT.single, body text and disabled inks, full-row neutral hover and square focus
-ring. rows.disclosure exports the 16px icon and the nd-pan-end 24-unit path/stroke;
+ROW_HEIGHT.single, body text and disabled inks, full-row neutral hover and the shared focus
+outline (§13.4). rows.disclosure exports the 16px icon and the nd-pan-end 24-unit path/stroke;
 turning it by 90 degrees reproduces nd-pan-down, with intermediate angles supplied by
 the generic target motion. The body reserves its icon slot with a fixed empty row,
 not a flex spacer. The gallery catalogue now records both implementations; Settings
