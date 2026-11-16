@@ -7,7 +7,8 @@
 //!
 //! An app gives it a `Page` (its sidebar, its content, its title, whether back and forward
 //! lead anywhere) each time its model changes, and acts on the activations it gives back. It
-//! calls `commit` at the end of each turn, after acting on them.
+//! calls `commit` with its page builder at the end of each turn, after acting on them.
+//! The kit settles retained rebuild requests before returning; apps never route them as actions.
 //!
 //! An owner in the page is the window's to open (VIEW.md §13.9): its list is a popup over the
 //! window, and the app hears only the selection.
@@ -25,9 +26,6 @@ use nk_wayland::{
     PopupEvent, PopupId, PopupPlacement, PopupSide, Result, Window, WindowAction, WindowBackground,
 };
 use std::time::Instant;
-
-/// A retained component needs its owner to rebuild data before the next paint.
-pub const REBUILD: &str = "nk-view:rebuild";
 
 /// The content's scroll region.
 pub const CONTENT: &str = "frame/content";
@@ -136,6 +134,49 @@ pub struct Labels {
     pub forward: String,
 }
 
+/// Bounded owner work. A stalled builder keeps the last committed view and logs once.
+#[derive(Default)]
+struct Convergence {
+    warned: bool,
+}
+impl Convergence {
+    fn run(&mut self, pass: impl FnMut(bool) -> Result<bool>) -> Result<()> {
+        self.drive(pass, || {
+            eprintln!("nk-view: component rebuild did not converge; keeping the last built view")
+        })
+    }
+    fn drive(
+        &mut self,
+        mut pass: impl FnMut(bool) -> Result<bool>,
+        mut warn: impl FnMut(),
+    ) -> Result<()> {
+        const LIMIT: usize = 8;
+        for turn in 0..LIMIT {
+            if !pass(turn + 1 < LIMIT)? {
+                return Ok(());
+            }
+        }
+        if !self.warned {
+            warn();
+            self.warned = true;
+        }
+        Ok(())
+    }
+}
+
+// A callback is acknowledged only when reconciliation retires its exact target.
+// Taking it out of the host queue alone is not evidence that the builder handled it.
+pub(crate) fn retain_rebuilds(state: &ViewState, requests: &mut Vec<ReplyTarget>) -> bool {
+    let mut live = Vec::new();
+    for target in std::mem::take(requests) {
+        if state.retained_target(&target) && !live.contains(&target) {
+            live.push(target);
+        }
+    }
+    *requests = live;
+    !requests.is_empty()
+}
+
 pub struct AppWindow {
     look: WindowLook,
     labels: Labels,
@@ -180,6 +221,7 @@ pub struct AppWindow {
     /// Activations of a tick taken in `commit`, given to the app on the next turn.
     pending: Vec<Activated>,
     rebuilds: Vec<ReplyTarget>,
+    convergence: Convergence,
     menu: Option<Menu>,
     /// What the turn asked of the list, done in `commit`.
     menu_request: Option<MenuRequest>,
@@ -273,6 +315,7 @@ impl AppWindow {
             revision: 0,
             pending: vec![],
             rebuilds: vec![],
+            convergence: Convergence::default(),
             menu: None,
             menu_request: None,
             grab: None,
@@ -315,23 +358,15 @@ impl AppWindow {
     pub fn scroll_window(&self, key: &Key) -> Option<(f64, f64)> {
         self.state.window(key)
     }
-    /// Complete model callbacks before painting; stale retained targets are discarded.
-    pub fn take_actions(&mut self) -> Vec<Activated> {
+    fn take_actions(&mut self) -> Vec<Activated> {
         let mut out = Vec::new();
         for action in std::mem::take(&mut self.pending) {
             self.route(action, &mut out);
         }
-        let mut emitted = std::collections::HashSet::new();
-        for target in std::mem::take(&mut self.rebuilds) {
-            if self.state.retained_target(&target) && emitted.insert(target.owner.clone()) {
-                out.push(Activated {
-                    key: target.owner,
-                    action: REBUILD.into(),
-                    value: None,
-                });
-            }
-        }
         out
+    }
+    fn needs_rebuild(&mut self) -> bool {
+        retain_rebuilds(&self.state, &mut self.rebuilds)
     }
     pub fn sidebar_open(&self) -> bool {
         self.sidebar.open()
@@ -729,8 +764,36 @@ impl AppWindow {
 
     /// The end of a turn, after the app acted on what it was given: the window controls
     /// placed, the reader's tree published, the layers painted and the window redrawn as far
-    /// as anything changed.
-    pub fn commit(&mut self, window: &mut Window) -> Result<()> {
+    /// as anything changed. The callback builds a Page from the app model and this host
+    /// (including scroll windows). Stale requests are discarded and simultaneous requests
+    /// share one callback. Non-convergence keeps the last built view and logs once; transport
+    /// errors still propagate. Ordinary pending activations remain for the next idle turn.
+    pub fn commit(
+        &mut self,
+        window: &mut Window,
+        mut rebuild: impl FnMut(&Self) -> Page,
+    ) -> Result<()> {
+        let mut convergence = std::mem::take(&mut self.convergence);
+        let result = convergence.run(|again| {
+            self.commit_once(window)?;
+            if !self.needs_rebuild() {
+                return Ok(false);
+            }
+            if again {
+                let page = rebuild(self);
+                self.show(page);
+            } else {
+                // No busy idle loop after the bounded fallback. A future model/input turn
+                // may ask again, but this malformed build keeps its committed data.
+                self.rebuilds.clear();
+            }
+            Ok(true)
+        });
+        self.convergence = convergence;
+        result
+    }
+
+    fn commit_once(&mut self, window: &mut Window) -> Result<()> {
         for request in self.state.take_host_requests() {
             Host::request(self, request);
         }
@@ -1397,5 +1460,73 @@ impl AppWindow {
             color: self.look.background,
             level: None,
         })
+    }
+}
+
+#[cfg(test)]
+mod convergence_tests {
+    use super::*;
+    #[test]
+    fn settled_turn_does_not_rebuild_and_converging_turn_stops_at_once() {
+        let mut c = Convergence::default();
+        let mut commits = 0;
+        let mut builds = 0;
+        c.run(|again| {
+            commits += 1;
+            if commits == 1 {
+                assert!(again);
+                builds += 1;
+                Ok(true)
+            } else {
+                Ok(false)
+            }
+        })
+        .unwrap();
+        assert_eq!((commits, builds), (2, 1));
+        assert!(!c.warned);
+        c.run(|_| Ok(false)).unwrap();
+        assert!(!c.warned);
+    }
+    #[test]
+    fn nonconvergence_keeps_last_commit_without_rebuilding_an_uncommitted_page() {
+        let mut c = Convergence::default();
+        let mut commits = 0;
+        let mut builds = 0;
+        let mut painted = 0;
+        c.run(|again| {
+            commits += 1;
+            painted = builds;
+            if again {
+                builds += 1;
+            }
+            Ok(true)
+        })
+        .unwrap();
+        assert_eq!((commits, builds, painted), (8, 7, 7));
+        assert!(c.warned);
+        let mut warnings = 0;
+        let mut once = Convergence::default();
+        for _ in 0..3 {
+            once.drive(|_| Ok(true), || warnings += 1).unwrap();
+        }
+        once.drive(|_| Ok(false), || warnings += 1).unwrap();
+        once.drive(|_| Ok(true), || warnings += 1).unwrap();
+        assert_eq!(warnings, 1);
+        c.run(|_| Ok(false)).unwrap();
+        assert!(c.warned, "do not log every stalled episode");
+    }
+    #[test]
+    fn transport_error_is_preserved() {
+        let mut c = Convergence::default();
+        let mut calls = 0;
+        let error = c
+            .run(|_| {
+                calls += 1;
+                Err("transport failed".into())
+            })
+            .unwrap_err();
+        assert_eq!(calls, 1);
+        assert_eq!(error.to_string(), "transport failed");
+        assert!(!c.warned);
     }
 }

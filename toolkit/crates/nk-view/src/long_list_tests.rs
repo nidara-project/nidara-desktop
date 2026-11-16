@@ -285,6 +285,11 @@ fn long_list_pointer_selects_on_press_and_double_click_opens_only_same_record() 
         .button(true, now + std::time::Duration::from_millis(100))
         .unwrap();
     assert_eq!(a.action, "open");
+    assert_eq!(
+        a.value,
+        Some(Value::Index(1)),
+        "double-click opens the previously selected new row"
+    );
     s.button(false, now + std::time::Duration::from_millis(110));
     s.pointer_motion(30., 80.);
     let a = s
@@ -542,4 +547,51 @@ fn long_list_style_reads_exported_geometry_and_rejects_invalid_values() {
         assert!(crate::list_from(&broken).is_err());
     }
     assert!(crate::list_from(&serde_json::json!({})).is_err());
+}
+
+#[test]
+fn long_list_host_keeps_unacknowledged_requests_and_retires_acknowledged_or_stale_ones() {
+    let mut s = ViewState::new(0);
+    let source = Source::default();
+    let target = lay(&mut s, &source, 5000, 0, true).pop().unwrap();
+    let mut requests = vec![target.clone(), target.clone()];
+    assert!(crate::window::retain_rebuilds(&s, &mut requests));
+    assert_eq!(
+        requests.len(),
+        1,
+        "coalesce one host rebuild without losing its acknowledgement"
+    );
+    // A bad app rebuilds the same bootstrap data instead of consulting the scroll window.
+    let n = LongList::new(5000, 0, 32.).node("list", "Records", "select", None, &source);
+    s.layout(
+        &n,
+        (320., 256.),
+        1.,
+        crate::tests::tokens().with_types(&crate::tests::types()),
+        &mut crate::tests::backend(),
+        Instant::now(),
+    );
+    assert!(
+        crate::window::retain_rebuilds(&s, &mut requests),
+        "unhandled callback must retry, not disappear"
+    );
+    settle(&mut s, &source, 5000, 0, true);
+    assert!(!crate::window::retain_rebuilds(&s, &mut requests));
+    requests.push(target);
+    assert!(!crate::window::retain_rebuilds(&s, &mut requests));
+}
+#[test]
+fn reveal_offset_is_minimal_for_visible_taller_and_outside_rows() {
+    for (offset, viewport, top, height, wanted) in [
+        (100., 80., 110., 20., 100.),
+        (100., 80., 80., 20., 80.),
+        (100., 80., 170., 20., 110.),
+        (100., 80., 110., 100., 110.),
+        (0., 256., 159968., 32., 159744.),
+    ] {
+        assert_eq!(
+            crate::layout::reveal_offset(offset, viewport, top, height),
+            wanted
+        );
+    }
 }

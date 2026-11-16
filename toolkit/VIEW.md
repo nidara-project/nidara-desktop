@@ -636,7 +636,8 @@ back and forward lead anywhere) each time the model changes; the window lays it 
 holds the layers, the sidebar's slide, the band, the pointer on every layer, Escape and Alt+Left
 and Right, the reader and the paint, and gives back the activations that are not its own (its
 own: the sidebar's toggle; a choice in a sidebar open over the page also closes it). The app
-calls `commit` at the end of each turn, after acting on them. `toolkit/gallery` is the
+calls `commit` with its Page builder at the end of each turn, after acting on them.
+The host settles retained rebuild requests internally. `toolkit/gallery` is the
 reference. What it does:
 
 - **`Tokens::load(exports, appearance)`** reads the kit's tokens in the user's appearance from
@@ -1224,10 +1225,14 @@ and multiple-selection bindings remain outside this first component.
 
 The view handles a generic reveal-rectangle input effect before returning an activation,
 so the owner's rebuild sees the requested scroll offset. A component whose arranged
-viewport needs new content asks its host for a generic REBUILD notification with retained
-identity. AppWindow exposes its scroll window and pending actions; an application drains
-those actions and rebuilds before painting. Requests are deduplicated and retired by a
-satisfied range, or by replacement/removal. Idle does not reconstruct an unchanged list.
+viewport needs new content asks its host with a retained rebuild target. The app supplies
+its page builder to `AppWindow::commit(window, |host| page_from_model(host, model))`.
+AppWindow owns stale-target rejection, coalescing and the bounded convergence loop; no
+magic action or application-side retry loop is needed. A request stays live until its
+range is acknowledged or its identity is retired. After eight unsuccessful commit passes,
+the host paints the last built view, clears the retry queue and logs once per window;
+non-convergence does not close the window. Ordinary activations stay on the app
+model/event path. Idle does not reconstruct an unchanged list.
 Pointer motion/leave are generic component questions for internal hover, not list branches
 in the view. A presentational structural node keeps its layout/input behavior while
 omitting its own automatic reader node; the list uses that for its internal scroll wrapper.

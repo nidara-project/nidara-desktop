@@ -1447,13 +1447,7 @@ impl ViewState {
         }
         let offset = self.offset(s);
         let height = self.placed[s].rect[3];
-        let target = if rect[1] < offset || rect[3] > height {
-            rect[1]
-        } else if rect[1] + rect[3] > offset + height {
-            rect[1] + rect[3] - height
-        } else {
-            offset
-        };
+        let target = crate::layout::reveal_offset(offset, height, rect[1], rect[3]);
         self.scroll_by(s, target - offset)
     }
     /// The surface scrolled the region `key` itself, the pointer anywhere: a panel whose

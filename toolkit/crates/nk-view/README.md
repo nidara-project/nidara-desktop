@@ -111,7 +111,9 @@ Owner-edited secret fields are unchanged. See VIEW.md §17 for the full lifecycl
 **Long lists (#1103 step 5).** `LongList` uses a transient `ListSource` for stable item
 metadata and decorative row nodes, constructing only the uniform-height visible range
 plus overscan. Its root owns single selection, keyboard reveal and ListBox semantics;
-see `VIEW.md` §18 for exclusions and `REBUILD` owner-turn handling. Source builders append
+see `VIEW.md` §18 for exclusions. Pass the Page builder to `AppWindow::commit`; the host
+settles retained rebuild requests internally and falls back to the last built view with
+one warning if the builder does not converge. Source builders append
 stable suffixes to the supplied row namespace. The source is never retained in the node.
 
 To measure the CPU path with 5,000 rows at scales 1 and 1.25, run

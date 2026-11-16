@@ -32,55 +32,65 @@ struct Gallery {
 }
 
 impl Gallery {
-    /// The page the model shows, for the window.
-    fn rebuild(&mut self) {
-        let look = self.window.look();
+    /// The app supplies data; AppWindow owns rebuild scheduling and convergence.
+    fn page(
+        host: &AppWindow,
+        model: &Model,
+        catalogue: &Catalogue,
+        colors: &[(String, nk_render::Color)],
+        at: usize,
+        history_len: usize,
+    ) -> Page {
+        let look = host.look();
         let v = pages::view(
-            &self.model,
-            &self.catalogue,
+            model,
+            catalogue,
             &look.types,
             &pages::Measures {
                 dropdown: &look.tokens.dropdown,
-                colors: &self.colors,
+                colors,
                 glyph: look.frame.icon,
                 row_height: look.tokens.row_height,
-                list_window: self
-                    .window
-                    .scroll_window(&nk_view::LongList::scroll_key(&"ll/live".into())),
-                disabled_list_window: self
-                    .window
+                list_window: host.scroll_window(&nk_view::LongList::scroll_key(&"ll/live".into())),
+                disabled_list_window: host
                     .scroll_window(&nk_view::LongList::scroll_key(&"ll/disabled".into())),
             },
         );
-        self.window.show(Page {
+        Page {
             sidebar: v.sidebar,
             content: v.content,
             title: v.title.into(),
-            can_back: self.at > 0,
-            can_forward: self.at + 1 < self.history.len(),
-        });
-    }
-
-    fn commit(&mut self, window: &mut Window) -> Result<()> {
-        for _ in 0..8 {
-            self.window.commit(window)?;
-            let actions = self.window.take_actions();
-            if actions.is_empty() {
-                return Ok(());
-            }
-            for a in actions {
-                self.activated(a);
-            }
+            can_back: at > 0,
+            can_forward: at + 1 < history_len,
         }
-        Err("component layout requests did not converge".into())
+    }
+    fn rebuild(&mut self) {
+        let page = Self::page(
+            &self.window,
+            &self.model,
+            &self.catalogue,
+            &self.colors,
+            self.at,
+            self.history.len(),
+        );
+        self.window.show(page);
+    }
+    fn commit(&mut self, window: &mut Window) -> Result<()> {
+        let (model, catalogue, colors, at, history_len) = (
+            &self.model,
+            &self.catalogue,
+            &self.colors,
+            self.at,
+            self.history.len(),
+        );
+        self.window.commit(window, |host| {
+            Self::page(host, model, catalogue, colors, at, history_len)
+        })
     }
 
     /// What an activation asks of the model.
     fn activated(&mut self, a: Activated) {
         let action = a.action.as_str();
-        if action == nk_view::REBUILD {
-            return self.rebuild();
-        }
         if let Some(id) = action.strip_prefix("page:") {
             if let Some(i) = PAGES.iter().position(|(p, _, _)| *p == id) {
                 self.go(i);

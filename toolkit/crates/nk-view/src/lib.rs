@@ -32,7 +32,7 @@ pub use view::{
     Kind, Layer, Node, Overlay, Padding, Pane, Reveal, Role, Scroll, Segmented, SettingRow, Shown,
     SidebarEntry, Slider, SliderEnd, Stack, Swatches, Text, Wash,
 };
-pub use window::{AppWindow, CONTENT, Labels, Page, REBUILD, WindowLook};
+pub use window::{AppWindow, CONTENT, Labels, Page, WindowLook};
 
 #[cfg(test)]
 mod tests;

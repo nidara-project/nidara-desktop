@@ -378,13 +378,7 @@ impl Component for LongList {
             && let Some(index) = selected
         {
             let top = index as f64 * self.row_height;
-            wanted_offset = if top < offset || self.row_height > viewport[3] {
-                top
-            } else if top + self.row_height > offset + viewport[3] {
-                top + self.row_height - viewport[3]
-            } else {
-                offset
-            };
+            wanted_offset = crate::layout::reveal_offset(offset, viewport[3], top, self.row_height);
             cx.effects.reveal = Some(RevealRect {
                 region: Self::scroll_key(read.key),
                 rect: [0., top, 0., self.row_height],

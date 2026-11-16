@@ -356,7 +356,8 @@ remain catalogue targets, not claims of this implementation.
 
 The large-list gallery page now uses nk-view LongList: uniform known-height rows,
 single selection, visible-range construction and placeholders, total/position semantics,
-keyboard reveal and optional separate open action. Its 5,000-record CPU probe is
+keyboard reveal and optional separate open action. Row contents are decorative only;
+rows containing interactive controls need a different component. Its 5,000-record CPU probe is
 `cargo run --release -p nk-view --example long-list-cost` with exported NK_SETTINGS_DATA.
 Variable heights, sections/columns/trees, multiple selection, reordering and type-to-jump
 remain future catalogue work. GPU, partial damage and retained layout await measured choice.

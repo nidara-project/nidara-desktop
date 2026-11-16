@@ -1713,8 +1713,11 @@ Disabled and empty lists retain their layout and semantics. Embedded controls, v
 heights, multi-selection, sections, columns, reordering and type-to-jump are excluded.
 
 Components may use generic reveal-rectangle effects and retained `HostRequest::Rebuild`
-notifications. `AppWindow::take_actions` returns `REBUILD` only for a current key/type/
-instance/revision; drain these actions and repeat commit before painting until settled.
+notifications. Applications pass their Page builder to `AppWindow::commit(window, |host|
+page_from_model(host, model))`; the host owns validation/coalescing and up to eight
+commit passes. There is no synthetic rebuild action for applications to route. Unhandled
+requests remain until reconciliation acknowledges them. Exhaustion paints the last
+committed view, clears pending retries and logs once, without closing the window.
 Satisfied or hidden ranges retire pending requests. Disabled components still receive
 arrange questions: eligibility for input differs from retained identity for layout.
 `Node::presentational()` omits its own structural reader node while keeping input/layout.

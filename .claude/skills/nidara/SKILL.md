@@ -450,8 +450,10 @@ turn these external characters into a fatal preparation error. Preedit keeps its
 offset validation; secrets keep their separate owner policy. See VIEW.md §17.
 LongList (#1103 step 5, VIEW.md §18) builds only a uniform-height scroll range from a
 transient ListSource; its selected offscreen metadata stays fresh without building content.
-Apply Index actions and drain AppWindow REBUILD callbacks through repeated commit before
-painting. Retained key/type/instance/revision guards layout replies; disabled components
+Apply Index actions and supply a Page builder to AppWindow::commit. The host owns the
+bounded retry loop and retained acknowledgements; apps never route a magic rebuild action.
+Non-convergence paints the last built view and warns once without closing the window.
+Retained key/type/instance/revision guards layout replies; disabled components
 still arrange, hidden/satisfied ranges retire requests. Input eligibility is stricter than
 retained identity. Pointer-motion/leave and reveal-rectangle effects are generic; never add
 list names to state/layout/motion. Presentational structure omits only its own reader node.
@@ -478,7 +480,8 @@ scripts/export-tokens.mjs <dir>` over a copy of the installed data, then `NK_SET
 **nk-view is the kit's one way to build, for apps too (#1079, `VIEW.md` §13).** An application
 window IS the kit's: `nk_view::AppWindow` (§13.2), as `toolkit/gallery` uses it. The app keeps
 its model, gives the window a `Page` (sidebar, content, title, back/forward) on each change,
-acts on the activations `event`/`idle` give back, and calls `commit` at the end of the turn.
+acts on the activations `event`/`idle` give back, and calls `commit` with its Page builder
+at the end of the turn; AppWindow owns retained rebuild scheduling and convergence.
 The window owns the rest — the frame (`FrameStyle`: the sidebar on a layer of its own over the
 page with Settings' panel glass, the content scrolling under a header band whose graded blur
 and glass buttons are layers, Hyalo's window controls on the user's side), the slide and the
