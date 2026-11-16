@@ -353,3 +353,10 @@ as well as the existing nk-widgets implementation. They expose Text/EditableText
 selection/caret geometry. Secret fields retain their existing owner-managed policy; multiline
 and numeric fields are outside this migration. Search result relations and recent-query menus
 remain catalogue targets, not claims of this implementation.
+
+The large-list gallery page now uses nk-view LongList: uniform known-height rows,
+single selection, visible-range construction and placeholders, total/position semantics,
+keyboard reveal and optional separate open action. Its 5,000-record CPU probe is
+`cargo run --release -p nk-view --example long-list-cost` with exported NK_SETTINGS_DATA.
+Variable heights, sections/columns/trees, multiple selection, reordering and type-to-jump
+remain future catalogue work. GPU, partial damage and retained layout await measured choice.

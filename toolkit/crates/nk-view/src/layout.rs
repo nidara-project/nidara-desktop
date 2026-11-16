@@ -196,6 +196,7 @@ struct Measure {
 #[derive(Clone, Debug)]
 pub struct Placed {
     pub key: Key,
+    pub presentation: bool,
     pub rect: Rect,
     pub what: What,
     pub progress: Option<f64>,
@@ -737,6 +738,7 @@ impl Layouter<'_> {
         let rect = self.snap(r);
         out.push(Placed {
             key: n.key.clone(),
+            presentation: n.presentation,
             rect,
             progress: crate::components::part(n)
                 .and_then(|p| p.component().target())

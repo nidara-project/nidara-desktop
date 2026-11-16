@@ -26,6 +26,9 @@ use nk_wayland::{
 };
 use std::time::Instant;
 
+/// A retained component needs its owner to rebuild data before the next paint.
+pub const REBUILD: &str = "nk-view:rebuild";
+
 /// The content's scroll region.
 pub const CONTENT: &str = "frame/content";
 /// The sidebar's pane, drawn on its own layer.
@@ -176,6 +179,7 @@ pub struct AppWindow {
     revision: u64,
     /// Activations of a tick taken in `commit`, given to the app on the next turn.
     pending: Vec<Activated>,
+    rebuilds: Vec<ReplyTarget>,
     menu: Option<Menu>,
     /// What the turn asked of the list, done in `commit`.
     menu_request: Option<MenuRequest>,
@@ -194,6 +198,7 @@ fn row_of(list: &ListSpec, key: &Key) -> Option<usize> {
 impl Host for AppWindow {
     fn request(&mut self, request: HostRequest) {
         match request {
+            HostRequest::Rebuild { target } => self.rebuilds.push(target),
             HostRequest::OpenList { owner, list } => {
                 self.menu_request = Some(if self.menu.as_ref().is_some_and(|m| m.owner == owner) {
                     MenuRequest::Close
@@ -267,6 +272,7 @@ impl AppWindow {
             a11y: None,
             revision: 0,
             pending: vec![],
+            rebuilds: vec![],
             menu: None,
             menu_request: None,
             grab: None,
@@ -305,6 +311,27 @@ impl AppWindow {
     /// A control's value (a slider's), as the view holds it.
     pub fn value(&self, key: &crate::view::Key) -> Option<f64> {
         self.state.value(key)
+    }
+    pub fn scroll_window(&self, key: &Key) -> Option<(f64, f64)> {
+        self.state.window(key)
+    }
+    /// Complete model callbacks before painting; stale retained targets are discarded.
+    pub fn take_actions(&mut self) -> Vec<Activated> {
+        let mut out = Vec::new();
+        for action in std::mem::take(&mut self.pending) {
+            self.route(action, &mut out);
+        }
+        let mut emitted = std::collections::HashSet::new();
+        for target in std::mem::take(&mut self.rebuilds) {
+            if self.state.retained_target(&target) && emitted.insert(target.owner.clone()) {
+                out.push(Activated {
+                    key: target.owner,
+                    action: REBUILD.into(),
+                    value: None,
+                });
+            }
+        }
+        out
     }
     pub fn sidebar_open(&self) -> bool {
         self.sidebar.open()
@@ -412,6 +439,9 @@ impl AppWindow {
     }
 
     pub fn poll_interval_ms(&self) -> u32 {
+        if !self.pending.is_empty() || !self.rebuilds.is_empty() {
+            return 0;
+        }
         let sliding = self
             .sidebar
             .animating(Instant::now(), &self.look.tokens.motion);
@@ -425,10 +455,7 @@ impl AppWindow {
 
     /// A turn without an event: the reader's requests, the slide's next step, the fades.
     pub fn idle(&mut self) -> Result<Vec<Activated>> {
-        let mut out = vec![];
-        for a in std::mem::take(&mut self.pending) {
-            self.route(a, &mut out);
-        }
+        let mut out = self.take_actions();
         let now = Instant::now();
         if let Some(a) = &self.a11y {
             a.check()?;
@@ -758,6 +785,9 @@ impl AppWindow {
             if let Some(c) = self.controls {
                 let (x, y) = self.look.frame.controls_at(self.size, c);
                 window.place_window_controls(x, y, !self.look.dark)?;
+            }
+            for request in self.state.take_host_requests() {
+                Host::request(self, request);
             }
             self.publish(window)?;
             self.paint_dirty = true;

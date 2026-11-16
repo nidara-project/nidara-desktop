@@ -448,6 +448,15 @@ Model/placeholder, reader text, paste and IME commit share single-line normaliza
 one final logical break, map interior breaks/tabs to spaces, remove other controls. Never
 turn these external characters into a fatal preparation error. Preedit keeps its original
 offset validation; secrets keep their separate owner policy. See VIEW.md §17.
+LongList (#1103 step 5, VIEW.md §18) builds only a uniform-height scroll range from a
+transient ListSource; its selected offscreen metadata stays fresh without building content.
+Apply Index actions and drain AppWindow REBUILD callbacks through repeated commit before
+painting. Retained key/type/instance/revision guards layout replies; disabled components
+still arrange, hidden/satisfied ranges retire requests. Input eligibility is stricter than
+retained identity. Pointer-motion/leave and reveal-rectangle effects are generic; never add
+list names to state/layout/motion. Presentational structure omits only its own reader node.
+Use the opt-in long-list-cost CPU probe for 5,000 rows at 1/1.25 before proposing GPU,
+partial damage or retained layout. Do not infer physical frame rate from CPU timings.
 Read.part and Inset frame placement use actual body geometry, not repeated position arithmetic.
 Raw key/IME/arrange/blur questions stay generic; blur must not cancel another control's pending
 input. Changes carry Text, Enter has an optional distinct action, and no-op requests do not activate.

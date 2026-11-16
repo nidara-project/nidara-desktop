@@ -54,6 +54,7 @@ pub struct Read<'a> {
     pub interaction: Interaction,
     pub role: Option<Role>,
     pub focused: bool,
+    pub showing: bool,
     pub focus: Option<&'a Key>,
     pub instance: u64,
     pub clicks: u8,
@@ -125,6 +126,7 @@ pub struct ReplyTarget {
 }
 #[derive(Clone, Debug, PartialEq)]
 pub enum HostRequest {
+    Rebuild { target: ReplyTarget },
     OpenList { owner: Key, list: Box<ListSpec> },
     Copy { text: String },
     Paste { target: ReplyTarget },
@@ -134,4 +136,11 @@ pub enum HostRequest {
 }
 pub trait Host {
     fn request(&mut self, request: HostRequest);
+}
+
+/// A rectangle in a scroll region's content coordinates to bring minimally into view.
+#[derive(Clone, Debug)]
+pub struct RevealRect {
+    pub region: Key,
+    pub rect: Rect,
 }

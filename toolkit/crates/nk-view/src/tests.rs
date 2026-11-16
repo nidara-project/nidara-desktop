@@ -39,6 +39,7 @@ pub(crate) fn tokens() -> Tokens {
         "--nidara-surface-strong": "rgba(255, 255, 255, 0.30)", "--nidara-accent-fg": "#ffffff",
         "--nidara-surface-back": "rgba(255, 255, 255, 0.04)", "--nidara-accent-30": "rgba(0, 136, 255, 0.3)", "--nidara-radius-pill": "9999px", "--nidara-bg": "rgba(22, 22, 34, 1.00)"}});
     Tokens {
+        list: crate::tokens::ListStyle{inset:4.,hover_opacity:0.08,focus_width:2.},
         spacing: Spacing::from_static(&statics()).unwrap(),
         radii: Radii::from_static(&statics()).unwrap(),
         motion: Motion::from_static(&statics()).unwrap(),

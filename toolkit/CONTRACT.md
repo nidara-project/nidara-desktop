@@ -1696,3 +1696,29 @@ key/type/process-unique instance/revision plus a native Window-owned request ID.
 requests do not activate. The view's existing display/secret field remains owner edited and
 never enters the new editor/IME path. See VIEW.md §17 for API, token provenance, wire lifetime
 and explicit private-vs-physical acceptance limits.
+
+### nk-view long list (#1103 step 5)
+
+`LongList::new(count, selected_index, uniform_row_height).node(key, name, changed,
+window, &source)` materializes only its scroll window plus one overscan row at each end.
+`ListSource::item(index)` provides stable model identity and current reader name;
+`build(index, scoped_key)` provides decorative single-line content (append stable child
+suffixes to that namespace). Model-key slashes/percent signs are escaped internally.
+The transient source is not stored in the serializable node. The selected item's metadata is queried even
+when offscreen, without building its content. Supply `AppWindow::scroll_window` using
+`LongList::scroll_key`; apply Index selection actions and rebuild before commit.
+`activate: Option<String>` is a separate Enter/double-click action. The root is one
+focus stop, exposes ListBox/Selection and logical size/position, and owns row paint.
+Disabled and empty lists retain their layout and semantics. Embedded controls, variable
+heights, multi-selection, sections, columns, reordering and type-to-jump are excluded.
+
+Components may use generic reveal-rectangle effects and retained `HostRequest::Rebuild`
+notifications. `AppWindow::take_actions` returns `REBUILD` only for a current key/type/
+instance/revision; drain these actions and repeat commit before painting until settled.
+Satisfied or hidden ranges retire pending requests. Disabled components still receive
+arrange questions: eligibility for input differs from retained identity for layout.
+`Node::presentational()` omits its own structural reader node while keeping input/layout.
+`ViewState::set_profile(true)` opts into expansion/layout durations and shaped deltas
+for each rebuild (`layout_metrics`); normal operation does not read these timing clocks.
+The `long-list-cost` example prints raw CPU samples, including canvas raster/finish; it
+makes no claim about compositor presentation. See VIEW.md §18 for the owner-turn rules.

@@ -7,6 +7,8 @@ use std::{
     any::{Any, TypeId},
     collections::{HashMap, HashSet},
 };
+mod long_list;
+pub use long_list::{ListSource, LongList, RowInfo};
 mod editable;
 pub use editable::EditableField;
 mod search;
@@ -146,6 +148,7 @@ pub struct Outcome {
     pub focus: bool,
     pub keyboard_focus: bool,
     pub host: Vec<HostRequest>,
+    pub reveal: Option<RevealRect>,
 }
 pub struct Input<'a> {
     pub state: Option<&'a mut (dyn Any + 'static)>,
@@ -157,6 +160,8 @@ pub trait Component: Any {
         Ok(())
     }
     fn arrange(&self, _cx: &mut Input<'_>) {}
+    fn pointer_motion(&self, _cx: &mut Input<'_>, _at: (f64, f64)) {}
+    fn pointer_leave(&self, _cx: &mut Input<'_>) {}
     fn key_event(&self, _cx: &mut Input<'_>, _key: &nk_wayland::Key) {}
     fn ime(&self, _cx: &mut Input<'_>, _batch: &nk_wayland::ImeBatch) {}
     fn text_input(&self, _cx: &Read<'_>) -> Option<nk_wayland::TextInput> {
@@ -261,6 +266,7 @@ pub trait Component: Any {
 }
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub enum Part {
+    LongList(LongList),
     Button(Button),
     Segment(Segment),
     Swatch(Swatch),
@@ -288,6 +294,7 @@ impl Part {
     /// The only dispatch that names concrete components.
     pub fn component(&self) -> &dyn Component {
         match self {
+            Self::LongList(c) => c,
             Self::Button(c) => c,
             Self::Segment(c) => c,
             Self::Swatch(c) => c,

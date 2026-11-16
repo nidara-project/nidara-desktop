@@ -107,3 +107,16 @@ clipboard replies with key/type/instance/revision identity and wire IDs, and upd
 surrounding text/caret geometry. Read.part uses actual body geometry; Inset fills a frame's
 inner box. Backends implement fork for retained editors; preparation errors are explicit.
 Owner-edited secret fields are unchanged. See VIEW.md §17 for the full lifecycle and limits.
+
+**Long lists (#1103 step 5).** `LongList` uses a transient `ListSource` for stable item
+metadata and decorative row nodes, constructing only the uniform-height visible range
+plus overscan. Its root owns single selection, keyboard reveal and ListBox semantics;
+see `VIEW.md` §18 for exclusions and `REBUILD` owner-turn handling. Source builders append
+stable suffixes to the supplied row namespace. The source is never retained in the node.
+
+To measure the CPU path with 5,000 rows at scales 1 and 1.25, run
+`NK_SETTINGS_DATA=/path/to/export cargo run --release -p nk-view --example long-list-cost`.
+The JSON lines separate application build, expansion, remaining layout, CPU canvas
+paint/finish and shaped-count deltas. These opt-in clocks do not run in normal layout.
+Compare totals to the measured output interval; the probe does not measure compositor
+presentation, physical-session fluidity or Orca acceptance.

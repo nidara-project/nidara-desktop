@@ -43,6 +43,13 @@ impl Gallery {
                 dropdown: &look.tokens.dropdown,
                 colors: &self.colors,
                 glyph: look.frame.icon,
+                row_height: look.tokens.row_height,
+                list_window: self
+                    .window
+                    .scroll_window(&nk_view::LongList::scroll_key(&"ll/live".into())),
+                disabled_list_window: self
+                    .window
+                    .scroll_window(&nk_view::LongList::scroll_key(&"ll/disabled".into())),
             },
         );
         self.window.show(Page {
@@ -54,9 +61,26 @@ impl Gallery {
         });
     }
 
+    fn commit(&mut self, window: &mut Window) -> Result<()> {
+        for _ in 0..8 {
+            self.window.commit(window)?;
+            let actions = self.window.take_actions();
+            if actions.is_empty() {
+                return Ok(());
+            }
+            for a in actions {
+                self.activated(a);
+            }
+        }
+        Err("component layout requests did not converge".into())
+    }
+
     /// What an activation asks of the model.
     fn activated(&mut self, a: Activated) {
         let action = a.action.as_str();
+        if action == nk_view::REBUILD {
+            return self.rebuild();
+        }
         if let Some(id) = action.strip_prefix("page:") {
             if let Some(i) = PAGES.iter().position(|(p, _, _)| *p == id) {
                 self.go(i);
@@ -95,6 +119,14 @@ impl Gallery {
             }
         }
         match action {
+            "list-select" => {
+                if let Some(nk_view::Value::Index(index)) = a.value {
+                    self.model.selected_row = index;
+                }
+            }
+            "list-open" => {
+                self.model.list_opened += 1;
+            }
             "entry-edit" => {
                 if let Some(nk_view::Value::Text(text)) = a.value {
                     self.model.entry = text;
@@ -180,7 +212,7 @@ impl Application for Gallery {
         for a in self.window.idle()? {
             self.activated(a);
         }
-        self.window.commit(window)
+        self.commit(window)
     }
     fn event(&mut self, event: Event, window: &mut Window) -> Result<()> {
         if pages::PAGES[self.model.page].0 == "entry" {
@@ -213,7 +245,7 @@ impl Application for Gallery {
             };
             if drop {
                 eprintln!("CONTROL_APPLIED {}", self.fault.as_deref().unwrap_or(""));
-                return self.window.commit(window);
+                return self.commit(window);
             }
         }
         // Ctrl+Page Down and Up: the pages in turn, as a notebook's tabs go.
@@ -224,13 +256,13 @@ impl Application for Gallery {
             let n = PAGES.len();
             let step = if key.sym == 0xff56 { 1 } else { n - 1 };
             self.go((self.model.page + step) % n);
-            return self.window.commit(window);
+            return self.commit(window);
         }
         let (_, activated) = self.window.event(event, window)?;
         for a in activated {
             self.activated(a);
         }
-        self.window.commit(window)
+        self.commit(window)
     }
     fn paint(&mut self, frame: Frame) -> Result<Vec<u8>> {
         self.window.paint(frame)
