@@ -604,9 +604,10 @@ pub struct OutputConfig {
     pub enabled: bool,
     /// `WIDTHxHEIGHT` or `WIDTHxHEIGHT@HZ` (Hz may have decimals); empty = the preferred mode.
     pub mode: String,
-    /// `1` and `1.0` alike: TOML tells them apart, a person does not.
-    #[serde(deserialize_with = "number")]
-    pub scale: f64,
+    /// Omitted = leave the current/profile/DPI scale unconstrained. `1` and `1.0`
+    /// alike are explicit overrides, not the default for a mode-only entry.
+    #[serde(deserialize_with = "optional_number", skip_serializing_if = "Option::is_none")]
+    pub scale: Option<f64>,
     /// Logical pixels; `None` = to the right of the outputs already placed.
     pub position: Option<(i32, i32)>,
     /// normal, 90, 180, 270, flipped, flipped-90, flipped-180, flipped-270.
@@ -657,12 +658,16 @@ impl Default for OutputConfig {
         Self {
             enabled: true,
             mode: String::new(),
-            scale: 1.0,
+            scale: None,
             position: None,
             transform: "normal".into(),
             vrr: Vrr::Off,
         }
     }
+}
+
+fn optional_number<'de, D: serde::Deserializer<'de>>(d: D) -> Result<Option<f64>, D::Error> {
+    number(d).map(Some)
 }
 
 fn number<'de, D: serde::Deserializer<'de>>(d: D) -> Result<f64, D::Error> {
@@ -888,8 +893,8 @@ fn from_layers(layers: Vec<toml::Table>) -> Result<Config, ConfigError> {
         if o.parsed_transform().is_none() {
             return Err(ConfigError::Invalid(format!("outputs.{name}.transform: unknown {:?}", o.transform)));
         }
-        if !(0.25..=4.0).contains(&o.scale) {
-            return Err(ConfigError::Invalid(format!("outputs.{name}.scale: {} is outside 0.25..4", o.scale)));
+        if let Some(scale) = o.scale && !(0.25..=4.0).contains(&scale) {
+            return Err(ConfigError::Invalid(format!("outputs.{name}.scale: {scale} is outside 0.25..4")));
         }
     }
     Ok(config)
@@ -1133,6 +1138,29 @@ fn json_to_toml(v: serde_json::Value) -> Result<toml::Value, String> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn output_scale_omission_survives_serialization_and_explicit_one_is_preserved() {
+        let mode_only: OutputConfig = toml::from_str("mode = '1920x1080@60'").unwrap();
+        assert_eq!(mode_only.scale, None);
+        let wire = serde_json::to_value(&mode_only).unwrap();
+        assert!(wire.get("scale").is_none(), "serializing a partial entry must not invent a scale");
+        assert_eq!(serde_json::from_value::<OutputConfig>(wire).unwrap(), mode_only);
+        let mode_request: crate::ipc::Request = serde_json::from_value(serde_json::json!({
+            "request": "set_output", "name": "Virtual-1", "mode": "1920x1080@60"
+        })).unwrap();
+        assert_eq!(crate::ipc::merged_output_config(&mode_only, &mode_request).scale, None);
+        let scale_request: crate::ipc::Request = serde_json::from_value(serde_json::json!({
+            "request": "set_output", "name": "Virtual-1", "scale": 1.25
+        })).unwrap();
+        let changed = crate::ipc::merged_output_config(&mode_only, &scale_request);
+        assert_eq!(changed.scale, Some(1.25));
+        assert_eq!(crate::ipc::merged_output_config(&changed, &mode_request).scale, Some(1.25));
+        for value in ["1", "1.0", "1.25"] {
+            let explicit: OutputConfig = toml::from_str(&format!("scale = {value}")).unwrap();
+            assert_eq!(explicit.scale, Some(value.parse().unwrap()));
+            assert_eq!(serde_json::from_value::<OutputConfig>(serde_json::to_value(&explicit).unwrap()).unwrap(), explicit);
+        }
+    }
 
     #[test]
     fn legacy_suspend_is_normalized_per_layer_before_merge() {
@@ -1180,7 +1208,7 @@ mod tests {
         assert_eq!(c.input.keyboard.layout, "es");
         assert_eq!(c.input.keyboard.repeat_rate, 30, "a key the user did not set keeps the shipped value");
         let o = &c.outputs["DP-1"];
-        assert_eq!(o.scale, 1.5);
+        assert_eq!(o.scale, Some(1.5));
         assert_eq!(o.parsed_mode(), Some((2560, 1440, Some(143912))));
     }
 
@@ -1191,7 +1219,7 @@ mod tests {
         let settings = write(&d, "settings.toml", "[outputs.DP-1]\nscale = 1.25\nmode = \"2560x1440@144\"\n");
         let user = write(&d, "user.toml", "[outputs.DP-1]\nscale = 1.5\n");
         let o = load_from(&[sys, settings, user]).unwrap().outputs["DP-1"].clone();
-        assert_eq!(o.scale, 1.5, "the user's hand edit wins over Settings");
+        assert_eq!(o.scale, Some(1.5), "the user's hand edit wins over Settings");
         assert_eq!(o.mode, "2560x1440@144", "Settings' value where the user set nothing");
         assert_eq!(o.vrr, Vrr::On, "the shipped value where neither did");
     }
@@ -1266,7 +1294,7 @@ mod tests {
         assert_eq!(c.input.pointer.accel_speed, 0.0);
         assert_eq!(c.input.pointer.accel_profile, "flat");
         assert!(c.input.keyboard.numlock);
-        assert_eq!(c.outputs["DP-1"].scale, 1.0);
+        assert_eq!(c.outputs["DP-1"].scale, Some(1.0));
         assert_eq!(c.workspaces.mode_of(3), crate::wm::WorkspaceMode::Floating);
     }
 

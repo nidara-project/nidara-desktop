@@ -391,7 +391,7 @@ fn inventory(state: &Hyalo) -> Vec<Output> {
                 scale: if o.enabled {
                     o.scale
                 } else {
-                    cfg.map_or(1.0, |c| c.scale)
+                    cfg.and_then(|c| c.scale).unwrap_or(1.0)
                 },
                 transform: if matches!(state.backend, Backend::Winit(_)) {
                     "normal".into()
@@ -782,7 +782,7 @@ fn apply(state: &mut Hyalo, layout: &Layout) -> std::result::Result<(), String> 
                 mode: m
                     .map(|m| format!("{}x{}@{:.3}", m.width, m.height, m.refresh_mhz as f64 / 1000.0))
                     .unwrap_or_default(),
-                scale: s.scale,
+                scale: Some(s.scale),
                 position: Some((s.x, s.y)),
                 transform: s.transform.clone(),
                 vrr: match s.vrr.as_str() {
@@ -1005,7 +1005,7 @@ fn merge_configs(outputs: &[Output], layout: &mut Layout, configs: &BTreeMap<Str
             continue;
         };
         s.enabled = c.enabled;
-        s.scale = c.scale;
+        if let Some(scale) = c.scale { s.scale = scale; }
         s.transform = c.transform.clone();
         s.vrr = match c.vrr {
             Vrr::Off => "off",
@@ -1072,7 +1072,7 @@ pub fn legacy_apply(state: &mut Hyalo, name: &str, cfg: &OutputConfig) -> std::r
         .ok_or("output unavailable")?;
     let s = layout.outputs.iter_mut().find(|s| s.id == o.id).unwrap();
     s.enabled = cfg.enabled;
-    s.scale = cfg.scale;
+    if let Some(scale) = cfg.scale { s.scale = scale; }
     s.transform = cfg.transform.clone();
     s.vrr = match cfg.vrr {
         Vrr::Off => "off",
@@ -1139,7 +1139,7 @@ pub fn validate_config(state: &Hyalo, configs: &BTreeMap<String, OutputConfig>) 
         let o = state.displays.outputs.iter().find(|o| o.id == s.id).unwrap();
         let Some(c) = configs.get(&o.connector) else { continue };
         s.enabled = c.enabled;
-        s.scale = c.scale;
+        if let Some(scale) = c.scale { s.scale = scale; }
         s.transform = c.transform.clone();
         s.vrr = match c.vrr {
             Vrr::Off => "off",
@@ -1249,6 +1249,36 @@ fn arm_lease_timer(state: &mut Hyalo) {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn mode_only_override_does_not_pin_output_scale_on_either_virtual_connector() {
+        for name in ["Virtual-1", "Virtual-2"] {
+            let mut output = model::tests::output(name, false, 1920, 1080);
+            output.physical_width_mm = 310;
+            let outputs = vec![output];
+            assert_eq!(default_layout(&outputs).outputs[0].scale, 1.5, "DPI default must survive too");
+            let cfg: OutputConfig = toml::from_str("mode = '1920x1080@60'").unwrap();
+            let configs = BTreeMap::from([(name.into(), cfg)]);
+            for scale in [1.0, 1.25, 1.5] {
+                let mut layout = default_layout(&outputs);
+                layout.outputs[0].scale = scale;
+                let expected = layout.clone();
+                merge_configs(&outputs, &mut layout, &configs);
+                assert_eq!(layout, expected, "mode-only override must allow scale {scale} on {name}");
+            }
+        }
+    }
+    #[test]
+    fn explicit_output_scale_including_one_still_constrains_layouts() {
+        let outputs = vec![model::tests::output("Virtual-1", false, 1920, 1080)];
+        for value in ["1", "1.0", "1.5"] {
+            let cfg: OutputConfig = toml::from_str(&format!("scale = {value}")).unwrap();
+            let configs = BTreeMap::from([("Virtual-1".into(), cfg)]);
+            let mut layout = default_layout(&outputs);
+            layout.outputs[0].scale = 1.25;
+            merge_configs(&outputs, &mut layout, &configs);
+            assert_eq!(layout.outputs[0].scale, value.parse::<f64>().unwrap());
+        }
+    }
     #[test]
     fn closed_lid_stays_inhibited_across_dpms_idle_and_wake() {
         let mut outputs = vec![
