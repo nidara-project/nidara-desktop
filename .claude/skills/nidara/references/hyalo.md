@@ -2921,5 +2921,17 @@ maps is drawn over it.
 - **The same unchanged file is not decoded twice:** the follower restates its settings when
   outputs change.
 - Hyprland (frozen) keeps `awww`; the follower uses it only when no Hyalo socket exists.
-- Not done yet: GNOME's `picture-uri` (W2), the portal with its consent (W3), game mode's
-  temporary wallpaper (W4), fit and centre.
+- **GNOME's `picture-uri` (W2), both ways.** Config1 writes `picture-uri` and
+  `picture-uri-dark` when the wallpaper changes, and `nidara-sessiond` hears them
+  (`config/store.rs` → `registry::adopt_gnome_wallpaper`): an app that sets the wallpaper by
+  writing the key, with no portal, gets the same result as on GNOME. The echo of our own
+  write names the picture already saved and is dropped; a key naming no usable picture is
+  logged and left alone.
+- 🔑 **Who may change the wallpaper (owner, 2026-11-16):** no global switch. An app that is
+  not sandboxed is obeyed without asking, by the portal or by the key — it runs with the
+  user's own rights and could write the file itself, so asking would be theatre. A
+  SANDBOXED app can only ask the portal, and is asked about the first time with a preview,
+  remembered per app, revocable in Settings (W3, with the portal in Rust: it needs a kit
+  dialog, so after the toolkit).
+- Not done yet: the portal with that consent (W3), game mode's temporary wallpaper (W4),
+  fit and centre.

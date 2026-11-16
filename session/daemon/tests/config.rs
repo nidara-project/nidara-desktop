@@ -646,6 +646,29 @@ if os.path.exists(os.path.join(os.environ['HOME'], 'awww-refuse')):
     env.gsettings_set("org.gnome.desktop.interface", "cursor-size", "48");
     peer.expect(json!({"request":"settings","patch":{"cursor":{"theme":"TestCursor","size":48}}}))
         .await;
+    // An app that sets the wallpaper the GNOME way (no portal): its picture becomes the
+    // wallpaper and Hyalo is told; a key that names no usable picture changes nothing.
+    let by_app = env.dir.join("set-by-an-app.png");
+    std::fs::write(&by_app, b"fixture").unwrap();
+    env.gsettings_set(
+        "org.gnome.desktop.background",
+        "picture-uri",
+        &format!("'file://{}'", by_app.display()),
+    );
+    peer.expect(json!({"request":"wallpaper","path":by_app,"transition":"fade"}))
+        .await;
+    let saved = || {
+        let text = std::fs::read_to_string(env.dir.join("config/nidara/wallpaper")).unwrap();
+        serde_json::from_str::<serde_json::Value>(&text).unwrap()["path"].clone()
+    };
+    assert_eq!(saved(), json!(by_app));
+    env.gsettings_set(
+        "org.gnome.desktop.background",
+        "picture-uri",
+        "'file:///no/such/picture.png'",
+    );
+    tokio::time::sleep(std::time::Duration::from_millis(400)).await;
+    assert_eq!(saved(), json!(by_app), "a missing picture is not adopted");
     env.gsettings_set(
         "org.gnome.desktop.interface",
         "color-scheme",

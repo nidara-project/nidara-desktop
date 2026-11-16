@@ -84,7 +84,7 @@ pub struct Key {
 
 const INTERFACE: &str = "org.gnome.desktop.interface";
 const WM: &str = "org.gnome.desktop.wm.preferences";
-const BACKGROUND: &str = "org.gnome.desktop.background";
+pub const BACKGROUND: &str = "org.gnome.desktop.background";
 const APPEARANCE: &str = "org.nidara.appearance";
 const NIGHT: &str = "org.nidara.night-light";
 const MEDIA: &str = "org.nidara.media";
@@ -1172,6 +1172,28 @@ pub fn valid_wallpaper(raw: &str) -> Result<Value, String> {
         ));
     }
     Ok(Value::Text(path.to_string_lossy().into_owned()))
+}
+/// A picture an app set the GNOME way, by writing `picture-uri` instead of asking the
+/// portal: it becomes the wallpaper, as it would on GNOME. `Ok(false)` when it already is
+/// (our own write of that key after a change made here comes back as this). An app that is
+/// not sandboxed needs no consent for it: it could write the wallpaper's file just as well.
+pub fn adopt_gnome_wallpaper(st: &Store, uri: &str) -> Result<bool, String> {
+    let Value::Text(path) = valid_wallpaper(uri)? else {
+        return Ok(false);
+    };
+    let current = read_wallpaper(st)["path"].as_str().map(str::to_owned);
+    let same = current
+        .as_deref()
+        .and_then(|c| valid_wallpaper(c).ok())
+        .is_some_and(|c| c == Value::Text(path.clone()))
+        || current.as_deref() == Some(path.as_str());
+    if same {
+        return Ok(false);
+    }
+    match set(st, "wallpaper.current", &path) {
+        Ok(_) => Ok(true),
+        Err(Refusal::Invalid(e)) | Err(Refusal::Failed(e)) => Err(e),
+    }
 }
 /// The bundled wallpapers (the greeter's excluded): a checkout's own in dev mode, then the
 /// installed ones (`ui/lib/wallpaper.ts`).

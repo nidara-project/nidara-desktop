@@ -118,6 +118,28 @@ pub fn spawn(changes: Arc<Changes>) -> Handle {
                         .unwrap()
                         .connect_changed(Some("cursor-size"), move |_, _| updates.publish());
                 }
+                // GNOME's wallpaper keys: an app that sets the wallpaper by writing them
+                // (#1044). The file changes, and its monitor below announces it.
+                for k in ["picture-uri", "picture-uri-dark"] {
+                    if let Some(background) = store
+                        .settings(registry::BACKGROUND)
+                        .filter(|_| store.has(registry::BACKGROUND, k))
+                    {
+                        background.connect_changed(Some(k), move |background, k| {
+                            let uri = background.string(k);
+                            if uri.is_empty() {
+                                return;
+                            }
+                            STORE.with(|s| {
+                                if let Some(st) = s.borrow().as_ref()
+                                    && let Err(e) = registry::adopt_gnome_wallpaper(st, &uri)
+                                {
+                                    eprintln!("[config] {k} is not a wallpaper here: {e}");
+                                }
+                            });
+                        });
+                    }
+                }
                 // The wallpaper's file: whoever writes it (the TypeScript shell, a script).
                 let file = gio::File::for_path(store.wallpaper_file());
                 match file.monitor_file(gio::FileMonitorFlags::NONE, gio::Cancellable::NONE) {
