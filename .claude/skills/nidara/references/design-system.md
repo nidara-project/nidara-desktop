@@ -1057,7 +1057,7 @@ out on purpose, the exception belongs beside the blanket.
 
 The Rust `nk-view` kit supersedes the following frozen TS focus distinction (#1103 step 5b,
 owner, 2026-11-16): every control, including text/search fields, uses the one external ring
-of VIEW.md §13.4. Fields keep their normal border. The shared `components.list.focus` tokens
+of VIEW.md §13.4. Fields keep their normal border. The shared `components.focus` tokens
 set solid accent, width 2 and gap 2; components lend geometry, never paint focus themselves.
 The TS stylesheet rule below still describes the remaining TS applications.
 

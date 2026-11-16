@@ -330,8 +330,8 @@ fn shapes_match_marks_joins_and_search_chrome() {
 #[test]
 fn focus_tokens_are_shared_and_private_painters_stay_removed() {
     let record =
-        serde_json::from_str::<serde_json::Value>(include_str!("../../../tokens/list.json"))
-            .unwrap()["default"]["focus"]
+        serde_json::from_str::<serde_json::Value>(include_str!("../../../tokens/focus.json"))
+            .unwrap()["default"]
             .clone();
     let set = serde_json::json!({"tokens":{"--nidara-accent":"#0088ff"}});
     let style = crate::focus_from(&record, &set).unwrap();
@@ -479,5 +479,50 @@ fn keyboard_and_reader_scroll_reveal_the_external_ring_not_only_the_input_box() 
                     .any(|n| n.states.focused)
             );
         }
+    }
+}
+
+#[test]
+fn clear_uses_the_existing_navigation_icon_pattern_and_ring_fits_inside_search() {
+    let t = tokens();
+    let ts = types();
+    let node = Search {
+        field: EditableField::new("Text"),
+        name: "Search".into(),
+        changed: "noop".into(),
+        clear_label: "Clear".into(),
+        disabled: false,
+        shown: None,
+    }
+    .node("c")
+    .width(240.);
+    for scale in [1., 1.25] {
+        let s = scene(node.clone(), scale);
+        let i = s.index(&"c/clear".into()).unwrap();
+        let p = &s.placed[i];
+        let shape = p
+            .part()
+            .unwrap()
+            .component()
+            .focus_outline(&Read {
+                look: t.with_types(&ts),
+                ..s.context(i)
+            })
+            .unwrap();
+        assert_eq!((shape.bounds[2], shape.bounds[3]), (24., 24.));
+        assert!(
+            (p.rect[3] - (30. * scale).ceil() / scale).abs() < 1e-8,
+            "existing hit area preserved on the device grid"
+        );
+        let outer = t.focus.outside(shape.bounds);
+        let field = s.rect(&"c".into()).unwrap();
+        assert!(
+            outer[0] >= field[0]
+                && outer[1] >= field[1]
+                && outer[0] + outer[2] <= field[0] + field[2]
+                && outer[1] + outer[3] <= field[1] + field[3]
+        );
+        let edge = shape.bounds[1] - field[1];
+        assert!(edge >= t.entry.clear_edge && edge < t.entry.clear_edge + 1. / scale);
     }
 }

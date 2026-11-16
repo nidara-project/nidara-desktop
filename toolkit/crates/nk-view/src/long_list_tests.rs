@@ -530,8 +530,7 @@ fn long_list_range_uses_its_scroll_extent_when_an_outer_viewport_clips_it() {
 }
 #[test]
 fn long_list_style_reads_exported_geometry_and_rejects_invalid_values() {
-    let value =
-        serde_json::json!({"highlight":{"inset":7,"hoverOpacity":0.12},"focus":{"width":3}});
+    let value = serde_json::json!({"highlight":{"inset":7,"hoverOpacity":0.12}});
     let style = crate::list_from(&value).unwrap();
     assert_eq!((style.inset, style.hover_opacity), (7., 0.12));
     for (path, bad) in [

@@ -100,7 +100,22 @@ impl Clear {
         });
     }
 }
+impl Clear {
+    fn visible(&self, cx: &Read<'_>) -> Rect {
+        let r = cx.rect;
+        let side = cx.look.tokens.entry.clear_button.min(r[2]).min(r[3]);
+        [
+            r[0] + (r[2] - side) / 2.,
+            r[1] + (r[3] - side) / 2.,
+            side,
+            side,
+        ]
+    }
+}
 impl Component for Clear {
+    fn silhouette(&self, cx: &Read<'_>) -> Rect {
+        self.visible(cx)
+    }
     fn focus_outline(&self, cx: &Read<'_>) -> Option<FocusOutline> {
         let bounds = self.silhouette(cx);
         Some(FocusOutline::rounded(bounds, bounds[3] / 2.))
@@ -130,7 +145,7 @@ impl Component for Clear {
         if phase != PaintPhase::Under {
             return;
         }
-        let r = cx.rect;
+        let r = self.visible(&cx.read);
         if cx.interaction.enabled && (cx.interaction.hover || cx.interaction.pressed) {
             cx.canvas
                 .rounded_rect(rect(&r), r[3] / 2., cx.ink(cx.look.tokens.button.hover));

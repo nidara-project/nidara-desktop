@@ -72,6 +72,8 @@ local subsets during that work; the CI invocation has no subset and stays strict
 D8 list tokens originate in provisional shared `toolkit/tokens/list.json`.
 The exporter resolves default/variants into `components.json` at `variants[i].list`; the demo
 reads the portal-selected installed variant, without compiled fallback values.
+Shared focus is exported separately from `toolkit/tokens/focus.json` as
+`variants[i].focus` (#1103 step 5b); the legacy adapter consumes that record.
 Pointer focus has no ring, keyboard focus uses the element's own shape, and
 selection stays independent. These numbers still require live owner review.
 

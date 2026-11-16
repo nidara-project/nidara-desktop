@@ -1016,6 +1016,9 @@ pub struct EntryStyle {
     pub icon_gap: f64,
     pub icon: String,
     pub clear_icon: String,
+    /// Visible icon button follows header.navigation; the hit frame is unchanged.
+    pub clear_button: f64,
+    pub clear_edge: f64,
     pub background: Color,
     pub border_color: Color,
     pub text: Color,
@@ -1023,7 +1026,11 @@ pub struct EntryStyle {
     pub selection: Color,
     pub selection_text: Color,
 }
-pub fn entry_from(component: &Value, set: &Value) -> Result<EntryStyle, String> {
+pub fn entry_from(
+    component: &Value,
+    set: &Value,
+    navigation: &Value,
+) -> Result<EntryStyle, String> {
     let n = |k: &str| {
         component[k]
             .as_f64()
@@ -1059,6 +1066,14 @@ pub fn entry_from(component: &Value, set: &Value) -> Result<EntryStyle, String> 
         icon_gap: n("iconGap")?,
         icon: name("icon")?,
         clear_icon: name("clearIcon")?,
+        clear_button: navigation["button"]
+            .as_f64()
+            .filter(|v| v.is_finite() && *v > 0.)
+            .ok_or("entry: navigation.button")?,
+        clear_edge: navigation["edge"]
+            .as_f64()
+            .filter(|v| v.is_finite() && *v >= 0.)
+            .ok_or("entry: navigation.edge")?,
         background: color("background")?,
         border_color: color("borderColor")?,
         text: color("text")?,
@@ -1066,7 +1081,11 @@ pub fn entry_from(component: &Value, set: &Value) -> Result<EntryStyle, String> 
         selection: color("selection")?,
         selection_text: color("selectionText")?,
     };
-    if style.min_height <= 0. || style.icon_size <= 0. {
+    if style.min_height <= 0.
+        || style.icon_size <= 0.
+        || style.clear_button + 2. * style.clear_edge > style.min_height
+        || style.icon_size > style.clear_button
+    {
         return Err("entry: empty control".into());
     }
     Ok(style)
@@ -1118,7 +1137,7 @@ pub fn list_from(value: &Value) -> Result<ListStyle, String> {
     })
 }
 
-/// Shared keyboard focus tokens, from components.list.focus.
+/// Shared keyboard focus tokens, from components.focus.
 #[derive(Clone, Debug, PartialEq)]
 pub struct FocusStyle {
     pub width: f64,

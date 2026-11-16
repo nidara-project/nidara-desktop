@@ -615,8 +615,10 @@ Phase 0 remains an independent client of those four crates.
   `Application::window_controls`, places the root-local box, and sends fallback
   actions through `Window::window_action` from the same activation path.
   D8: `highlight_shape` is shared by selection, hover and keyboard-only focus.
-  Lists take inset/opacity, focus width and separator thickness/colour from
-  `toolkit/tokens/list.json` via `components.json`'s mode variant `list` object. Readers
+  Lists take inset/opacity and separator thickness/colour from
+  `toolkit/tokens/list.json` via `components.json`'s mode variant `list` object.
+  Shared focus colour/width/gap come from `toolkit/tokens/focus.json` via the
+  sibling `focus` object (#1103 step 5b), also consumed by the legacy adapter. Readers
   select the portal variant and reject absent fields rather than guessing defaults.
   Common geometry and named content widths live in components.json too; glass.json
   remains material-only. Group + rows is the shared reusable options component.

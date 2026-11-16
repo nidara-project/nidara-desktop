@@ -48,6 +48,7 @@ impl Styles {
                 .ok_or_else(|| format!("missing {what}"))
         };
         let list = list_tokens(c)?;
+        let focus = focus_tokens(c)?;
         let palette = Palette {
             background: token("--nidara-bg")?,
             surface: token("--nidara-surface")?,
@@ -57,7 +58,7 @@ impl Styles {
             accent: token("--nidara-accent")?,
             track: token("--nidara-surface")?,
             thumb: token("--nidara-thumb")?,
-            focus: token("--nidara-accent")?,
+            focus: token(&field(&focus["color"], "shared focus colour")?)?,
             separator: token(&field(
                 &list["separator"]["color"],
                 "list separator colour",
@@ -91,7 +92,7 @@ impl Styles {
             switch_width: number(&sw["width"])?,
             radius: number(&c["common"]["radius"])?,
             group_radius: number(&c["common"]["groupRadius"])?,
-            focus_width: number(&list["focus"]["width"])?,
+            focus_width: number(&focus["width"])?,
             highlight_inset: number(&list["highlight"]["inset"])?,
             hover_opacity: number(&list["highlight"]["hoverOpacity"])?,
             separator_width: number(&list["separator"]["physicalPixels"])?,
@@ -161,7 +162,7 @@ impl Styles {
             pressed: token(&field(&d["pressed"], "dropdown pressed")?)?,
             text: token(&field(&d["text"], "dropdown text")?)?,
             arrow_color: token(&field(&d["arrowColor"], "dropdown arrow colour")?)?,
-            focus: token(&field(&list["focus"]["color"], "focus colour")?)?,
+            focus: token(&field(&focus["color"], "focus colour")?)?,
             disabled_opacity: number(&d["disabledOpacity"])?,
         };
         let b = &c["button"];
@@ -178,7 +179,7 @@ impl Styles {
             hover: token(&field(&b["hover"], "button hover")?)?,
             pressed: token(&field(&b["pressed"], "button pressed")?)?,
             text: token(&field(&b["text"], "button text")?)?,
-            focus: token(&field(&list["focus"]["color"], "focus colour")?)?,
+            focus: token(&field(&focus["color"], "focus colour")?)?,
             disabled_opacity: number(&b["disabledOpacity"])?,
         };
         let sb = &c["scrollbar"];
@@ -334,16 +335,30 @@ pub fn parse(text: &str) -> Result<Color, String> {
     Err(format!("unsupported exported colour {text}"))
 }
 
-/// A components variant's D8 list data, checked: a width, inset, opacity or line out of range
+/// Shared outline tokens, also consumed by the remaining legacy widget adapter.
+fn focus_tokens(variant: &Json) -> Result<&Json, String> {
+    let focus = &variant["focus"];
+    let width = number(&focus["width"])?;
+    let gap = number(&focus["gap"])?;
+    if !width.is_finite()
+        || width <= 0.
+        || !gap.is_finite()
+        || gap < 0.
+        || focus["color"].as_str().is_none()
+    {
+        return Err("invalid focus tokens".into());
+    }
+    Ok(focus)
+}
+
+/// A components variant's D8 list data, checked: an inset, opacity or line out of range
 /// is refused, not drawn.
 fn list_tokens(variant: &Json) -> Result<&Json, String> {
     let list = &variant["list"];
-    let width = number(&list["focus"]["width"])?;
     let inset = number(&list["highlight"]["inset"])?;
     let opacity = number(&list["highlight"]["hoverOpacity"])?;
     let line = number(&list["separator"]["physicalPixels"])?;
-    if width <= 0.
-        || inset < 0.
+    if inset < 0.
         || !(0. ..=1.).contains(&opacity)
         || line <= 0.
         || list["separator"]["color"].as_str().is_none()
@@ -400,9 +415,9 @@ mod tests {
     }
 
     #[test]
-    fn list_tokens_refuse_missing_or_invalid_fields() {
+    fn list_and_shared_focus_tokens_refuse_missing_or_invalid_fields() {
         let ok = serde_json::json!({"list": {
-            "focus": {"width": 2}, "highlight": {"inset": 4, "hoverOpacity": 0.08},
+            "highlight": {"inset": 4, "hoverOpacity": 0.08},
             "separator": {"physicalPixels": 1, "color": "--nidara-border"}}});
         assert!(list_tokens(&ok).is_ok());
         let mut missing = ok.clone();
@@ -411,6 +426,17 @@ mod tests {
         let mut invalid = ok.clone();
         invalid["list"]["highlight"]["hoverOpacity"] = serde_json::json!(1.5);
         assert!(list_tokens(&invalid).is_err());
+        let focus = serde_json::json!({"focus":serde_json::from_str::<Json>(include_str!("../../../tokens/focus.json")).unwrap()["default"]});
+        assert!(focus_tokens(&focus).is_ok());
+        for (key, bad) in [
+            ("width", serde_json::json!(0)),
+            ("gap", serde_json::json!(-1)),
+            ("color", Json::Null),
+        ] {
+            let mut v = focus.clone();
+            v["focus"][key] = bad;
+            assert!(focus_tokens(&v).is_err());
+        }
     }
 
     #[test]

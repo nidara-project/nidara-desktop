@@ -449,7 +449,7 @@ one final logical break, map interior breaks/tabs to spaces, remove other contro
 turn these external characters into a fatal preparation error. Preedit keeps its original
 offset validation; secrets keep their separate owner policy. See VIEW.md §17.
 Keyboard focus (#1103 step 5b) is painted once by ViewState after component content,
-from components.list.focus (solid accent, width 2, gap 2). Components lend FocusOutline
+from components.focus (solid accent, width 2, gap 2). Components lend FocusOutline
 geometry, including joined corners, mark bounds, search chrome or the selected list row;
 never paint a component-local focus ring or read a component-private focus token. Menu
 rows keep their selection. Fields keep their normal border on focus. Keep semantic/input

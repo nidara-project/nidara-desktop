@@ -1,0 +1,10 @@
+{
+  "$comment": "Shared keyboard focus for the whole kit: nidara-focus-ring in _tokens.scss; owner #1103 step 5b. Geometry belongs to components, colour/width/gap only here.",
+  "default": {
+    "width": 2,
+    "gap": 2,
+    "color": "--nidara-accent",
+    "source": "nidara-focus-ring: solid accent, 2px width, 2px outline-offset; shared by nk-view (#1103 step 5b)."
+  },
+  "variants": []
+}

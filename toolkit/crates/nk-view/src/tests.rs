@@ -39,7 +39,7 @@ pub(crate) fn tokens() -> Tokens {
         "--nidara-surface-strong": "rgba(255, 255, 255, 0.30)", "--nidara-accent-fg": "#ffffff",
         "--nidara-surface-back": "rgba(255, 255, 255, 0.04)", "--nidara-accent-30": "rgba(0, 136, 255, 0.3)", "--nidara-radius-pill": "9999px", "--nidara-bg": "rgba(22, 22, 34, 1.00)"}});
     Tokens {
-        focus: focus_from(&serde_json::from_str::<serde_json::Value>(include_str!("../../../tokens/list.json")).unwrap()["default"]["focus"], &set).unwrap(),
+        focus: focus_from(&serde_json::from_str::<serde_json::Value>(include_str!("../../../tokens/focus.json")).unwrap()["default"], &set).unwrap(),
         list: crate::tokens::ListStyle{inset:4.,hover_opacity:0.08},
         spacing: Spacing::from_static(&statics()).unwrap(),
         radii: Radii::from_static(&statics()).unwrap(),
@@ -73,8 +73,8 @@ pub(crate) fn tokens() -> Tokens {
             &set,
         )
         .unwrap(),
-        disclosure: disclosure_from(&json!({"common":{"padding":12}, "list":{"highlight":{"hoverOpacity":0.08}, "focus":{"width":2}}, "rows":serde_json::from_str::<serde_json::Value>(include_str!("../../../tokens/rows.json")).unwrap()["default"]}), &json!({"ts":{"ROW_HEIGHT":{"single":48}}})).unwrap(),
-        entry: entry_from(&serde_json::from_str::<serde_json::Value>(include_str!("../../../tokens/search.json")).unwrap()["default"], &set).unwrap(),
+        disclosure: disclosure_from(&json!({"common":{"padding":12}, "list":{"highlight":{"hoverOpacity":0.08}}, "rows":serde_json::from_str::<serde_json::Value>(include_str!("../../../tokens/rows.json")).unwrap()["default"]}), &json!({"ts":{"ROW_HEIGHT":{"single":48}}})).unwrap(),
+        entry: entry_from(&serde_json::from_str::<serde_json::Value>(include_str!("../../../tokens/search.json")).unwrap()["default"], &set, &serde_json::from_str::<serde_json::Value>(include_str!("../../../tokens/header.json")).unwrap()["default"]["navigation"]).unwrap(),
         row_height: 48.,
         group_radius: 16.,
     }
@@ -5777,7 +5777,7 @@ fn disclosure_chevron_paints_the_settings_icon_and_changes_orientation() {
 fn disclosure_tokens_are_shared_settings_exports_without_fallbacks() {
     let rows: serde_json::Value =
         serde_json::from_str(include_str!("../../../tokens/rows.json")).unwrap();
-    let mut c = json!({"rows":rows["default"], "common":{"padding":12}, "list":{"highlight":{"hoverOpacity":0.08}, "focus":{"width":2}}});
+    let mut c = json!({"rows":rows["default"], "common":{"padding":12}, "list":{"highlight":{"hoverOpacity":0.08}}});
     let statics = json!({"ts":{"ROW_HEIGHT":{"single":48}}});
     let t = disclosure_from(&c, &statics).unwrap();
     assert_eq!(

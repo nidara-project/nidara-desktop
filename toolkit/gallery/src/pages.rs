@@ -2087,6 +2087,22 @@ fn focus_page(t: &TypeScale, k: &Measures) -> Vec<Node> {
             .width(240.)
             .sample_state(1, Shown::Focus),
             focused(
+                Node::sidebar_entry(
+                    key("sidebar"),
+                    SidebarEntry {
+                        title: name("Sidebar entry"),
+                        glyph: "nd-preferences-system".into(),
+                        action: "noop".into(),
+                        selected: false,
+                        style: t.style(Type::Body, Weight::Regular),
+                    },
+                    k.glyph,
+                )
+                .width(240.),
+            ),
+            // Reference: menu focus is its accent selection, without a ring.
+            focused(Node::menu_row(key("menu"), name("Menu row"), "noop", false).width(240.)),
+            focused(
                 nk_view::LongList::new(3, 0, k.row_height)
                     .node(
                         key("list"),

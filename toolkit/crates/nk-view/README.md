@@ -72,7 +72,7 @@ top-left corner is one.
 **Tokens, never literals.** Gaps and paddings are `Space` steps, corners are `Pill` or a
 `Radius` step (`ts.RADIUS`), and motion uses the kit's curves and durations, all from
 `tokens/static.json`. Washes come from `tokens/glass.json` (the control piece's `states`), and
-text colours from `tokens/colors.json`; the single keyboard outline reads colour, width and gap from `components.list.focus`. Components lend geometry through `FocusOutline`, including four joined corners and a clip, and ViewState paints it after their content. Fields keep their normal border. The scroll bar's look is
+text colours from `tokens/colors.json`; the single keyboard outline reads colour, width and gap from `components.focus`. Components lend geometry through `FocusOutline`, including four joined corners and a clip, and ViewState paints it after their content. Fields keep their normal border. The scroll bar's look is
 `components.json`'s `scrollbar` (`scrollbar_from`). Icon sizes are still passed in by the surface
 from its tokens.
 

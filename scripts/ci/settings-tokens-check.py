@@ -17,7 +17,7 @@ usage: settings-tokens-check.py OUT_DIR
 - Every step of every variant's `control` piece carries what toolkit/tokens/control.json adds
   (toolkit/CONTRACT.md, "Floating control capsule"): its response (null only with reduce
   transparency), its states' washes and shared fadeMs, its two inks — a reader has no defaults.
-- Every components.json mode variant carries D8 list focus/highlight/separator tokens with a resolvable colour,
+- Every components.json mode variant carries shared focus and D8 list highlight/separator tokens with a resolvable colour,
   and the radio groups' choices (toolkit/tokens/choices.json, #882) with resolvable colours and font,
   the range controls' slider and spin (toolkit/tokens/range.json, #882), the switch (toolkit/tokens/switch.json),
   the checkbox's and radio's mark (toolkit/tokens/check.json) and the rows' second line, footer and disclosure (toolkit/tokens/rows.json).
@@ -151,7 +151,9 @@ for variant in variants:
 for variant in component_variants:
     where = f"components: list (dark={variant['dark']}, reduce={variant['reduceTransparency']})"
     listing = variant.get('list') or {}
-    focus = listing.get('focus') or {}
+    focus = variant.get('focus') or {}
+    if 'focus' in listing:
+        fail.append(f'{where}: shared focus must not be nested in list')
     highlight = listing.get('highlight') or {}
     separator = listing.get('separator') or {}
     opacity = highlight.get('hoverOpacity')
@@ -176,7 +178,7 @@ for variant in component_variants:
     ]
     for component, key in private_focus:
         if key in component:
-            fail.append(f'{where}: private focus token {key} must use list.focus')
+            fail.append(f'{where}: private focus token {key} must use focus')
     choices = variant.get('choices') or {}
     segmented = choices.get('segmented') or {}
     swatch = choices.get('swatch') or {}

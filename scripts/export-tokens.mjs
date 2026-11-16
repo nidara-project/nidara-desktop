@@ -136,6 +136,7 @@ const SIDES = 400
 // A control on glass (toolkit/CONTRACT.md, "Floating control capsule"): `default`, then every
 // entry of `variants` whose dark/reduceTransparency match, field by field.
 const control = JSON.parse(readFileSync(join(repo, "toolkit/tokens/control.json"), "utf8"))
+const focus = JSON.parse(readFileSync(join(repo, "toolkit/tokens/focus.json"), "utf8"))
 const list = JSON.parse(readFileSync(join(repo, "toolkit/tokens/list.json"), "utf8"))
 const choices = JSON.parse(readFileSync(join(repo, "toolkit/tokens/choices.json"), "utf8"))
 const range = JSON.parse(readFileSync(join(repo, "toolkit/tokens/range.json"), "utf8"))
@@ -186,6 +187,7 @@ for (const dark of [true, false])
             return value
         }
         componentVariants.push({ dark, reduceTransparency,
+            focus: variantFor(focus, dark, reduceTransparency),
             list: variantFor(list, dark, reduceTransparency),
             choices: variantFor(choices, dark, reduceTransparency),
             range: variantFor(range, dark, reduceTransparency),

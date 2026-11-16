@@ -737,7 +737,7 @@ decides the rest. Each component has three layers, kept apart:
    **One focus ring (#1103 step 5b).** The view paints it after all component content
    in the current normal/lifted pass. Components return `FocusOutline` geometry only
    (bounds, four continuous corner radii and an optional clip), never a focus colour
-   or width, and never paint their own focus. `components.list.focus` is the single
+   or width, and never paint their own focus. `components.focus` is the single
    token record: solid accent, width 2 logical px, a clear gap of 2 logical px on glass
    and off it. The outer outline grows by gap + width, its radii by the same distance;
    no layout, hit target, Tab order or reader bounds change. Ancestor clips still apply.
@@ -1208,7 +1208,9 @@ and publication revision, with Editor's UTF-8/grapheme validation and native geo
 control inside one search chrome. The clear intent enters the same editor and returns focus;
 Escape first handles composition, then clears a nonempty query, then is left for the host.
 Search/entry measures and colors come from components.search; the clear glyph comes from
-search.clearIcon. State, keyboard, semantics and painting are shared, not a second editor.
+search.clearIcon. The clear control keeps its existing hit area; its visible circle uses
+header.navigation.button (24) with header.navigation.edge (4), so its external focus ring
+fits within the 32 px field. State, keyboard, semantics and painting are shared, not a second editor.
 
 Secrets keep the owner-edited display field and the CC's existing bounded/paste/no-copy
 rules. No secret is migrated into Editor or IME. Multiline and numeric entry, Settings'

@@ -2908,7 +2908,9 @@ the current content viewport (after the sampled sidebar inset), not the window.
 
 D8's provisional list source is `toolkit/tokens/list.json` (`default` plus whole
 field `variants`, like control.json). The exporter attaches the resolved `list`
-object to each components.json mode variant. Native readers select the portal variant from the
+object to each components.json mode variant. Shared focus moved to its own
+`toolkit/tokens/focus.json` and sibling `focus` object (#1103 step 5b).
+Native readers select the portal variant from the
 installed export; never compile fallback visual numbers into an application.
 settings-tokens-check requires each field and its CI control removes highlight
 from one mode variant. Form width still aliases the existing WINDOW_LAYOUT tokens.
