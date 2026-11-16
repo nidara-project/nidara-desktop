@@ -116,6 +116,20 @@ settles retained rebuild requests internally and falls back to the last built vi
 one warning if the builder does not converge. Source builders append
 stable suffixes to the supplied row namespace. The source is never retained in the node.
 
+For `AppWindow::commit`, borrow the model fields separately before the call and pass a
+builder that takes `&AppWindow` plus those data references and returns a `Page`:
+
+```rust
+let (model, catalogue) = (&self.model, &self.catalogue);
+self.window.commit(window, |host| build_page(host, model, catalogue))
+```
+
+The fields can remain in one application struct. Copy navigation counters before the
+call too. Capturing all of `self` or calling `self.rebuild()` inside the closure would
+conflict with the mutable borrow of `self.window`. The host applies the returned page;
+model updates stay in the event/idle handler before commit. The gallery's
+`src/main.rs` shows the complete pattern with its history and appearance inputs.
+
 To measure the CPU path with 5,000 rows at scales 1 and 1.25, run
 `NK_SETTINGS_DATA=/path/to/export cargo run --release -p nk-view --example long-list-cost`.
 The JSON lines separate application build, expansion, remaining layout, CPU canvas
