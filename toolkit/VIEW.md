@@ -555,8 +555,7 @@ on or off.
   the row is not a control. Tab stops on the switch, and a reader hears one toggle button named
   by the row (`name`) with its checked state, as GTK says a switch. A row that activates as a
   whole is an app's choice (a row property), never the default.
-- **Its focus ring stands outside the track**, one ring width away: the track is the switch's
-  edge and would cover a ring drawn inside it.
+- **Focus** follows the track via the shared external outline (§13.4).
 - **Measures and colours are the native switch's** (`components.json` `switch`,
   `toolkit/tokens/switch.json`): 44×24, a pill track in `trackColor` turning `checkedColor`,
   its 1 px border in `borderColor` turning `checkedBorderColor`, a thumb in `thumbColor` kept
@@ -742,10 +741,15 @@ decides the rest. Each component has three layers, kept apart:
    token record: solid accent, width 2 logical px, a clear gap of 2 logical px on glass
    and off it. The outer outline grows by gap + width, its radii by the same distance;
    no layout, hit target, Tab order or reader bounds change. Ancestor clips still apply.
+   Keyboard/reader reveal includes the external outline as well as the original control
+   box, so scrolling into view does not cut off the ring. It changes only the required
+   scroll offset, not the content's layout or the scroll range.
    Composite switch/check/radio controls lend their mark's outline; joined segments
    keep only their own outside corners. A long list lends its selected row (or the
    viewport when empty), clipped to the list viewport; offscreen rows get no invented
-   outline. Search lends the whole chrome to its inner editor. Fields keep their
+   outline. Focus geometry must be available before a scroll reveal, even when a mark
+   is currently clipped offscreen; only the painter tests visibility. Search lends the
+   whole chrome to its inner editor. Fields keep their
    normal border on focus: only this ring is a focus signal. Menu rows retain their
    accent selection and opt out. Disabled, hidden and pointer-only focus have no ring.
 
@@ -833,8 +837,8 @@ label after it, as a settings page does.
   is the surface with its border, lifted under the pointer (`hover`, `hoverBorder`) and darker
   while pressed; checked, it fills with the accent and carries a tick in its foreground; a
   chosen radio keeps a band of the window's background inside its border, leaving the accent
-  as its dot. Disabled, all of it is drawn at `disabledOpacity`. Its focus ring stands outside
-  the border, as the switch's does.
+  as its dot. Disabled, all of it is drawn at `disabledOpacity`. Its focus uses the shared
+  external outline (§13.4), outside the border, as the switch's does.
 - **A radio group is the radios next to each other** in the controls' order. Tab stops on it
   once, at its chosen radio (else its first); the arrows move the choice to the next or
   previous one, round the group, and report that radio's action, as a click on it would. The
@@ -961,8 +965,8 @@ Settings' dock size and gaming mode presets are this.
   outline's `border` and a line before it; the chosen one is `selectedColor` to its edges with
   `selectedText`, lighter by `selectedHoverWhite` under the pointer and darker by
   `selectedPressedBlack` while pressed. Disabled, all of it is at `disabledOpacity`.
-- **The focus ring** stands outside the segment a ring's width away, since the chosen segment is
-  the accent as the ring is, and is drawn after every segment so a neighbour never covers it.
+- **The focus ring** follows the segment's own joined corners with the shared gap (§13.4),
+  separating its accent from a chosen segment's fill.
 - **Measures, tones and the font** are `components.json` `choices.segmented`
   (`toolkit/tokens/choices.json`), read into `SegmentStyle`: 14 × 5 padding in a 1 border, a
   20 text line, the `sm` corner, `fse-small` at `fw-medium`. Nothing is a default.
