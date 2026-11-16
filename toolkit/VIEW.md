@@ -801,12 +801,6 @@ decides the rest. Each component has three layers, kept apart:
 | Dialog, alert | modal on its parent, centred; Escape cancels; Enter the default; destructive is red and never the default | default button | glass |
 | Progress, spinner, level bar, badge | do not respond; readers get the value | indeterminate | — |
 
-### 13.5 Done
-
-A component is in the kit when, in one change: its function is in `nk-view` with its tokens;
-its page is in the gallery with every state; the gallery's check covers that page; and its row
-on the status page says so. A surface may use only components that are in the kit.
-
 ### 13.5 Checkbox and radio
 
 `Node::check_control(key, name, action, on)` and `Node::radio_control(key, name, action,
@@ -983,6 +977,12 @@ rebuilds with the chosen index; the gallery reads its palette and names from exp
 The Swatches gallery page shows rest, selected, hover, pressed, focus and disabled states plus
 a live Accent colour choice. These checks do not replace owner review in the installed session.
 
+
+### 13.12 Done
+
+A component is in the kit when, in one change: its function is in `nk-view` with its tokens;
+its page is in the gallery with every state; the gallery's check covers that page; and its row
+on the status page says so. A surface may use only components that are in the kit.
 
 ## 14. Components (#1103)
 
