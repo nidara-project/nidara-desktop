@@ -80,13 +80,5 @@ impl Component for Button {
             canvas.rounded_ring(rect(&r), radius, b.border, faded(b.border_color));
         }
         canvas.pop_clip();
-        if interaction.focus_ring {
-            canvas.rounded_ring(
-                rect(&r),
-                radius,
-                tokens.look.focus_width,
-                ink(tokens.look.focus),
-            );
-        }
     }
 }

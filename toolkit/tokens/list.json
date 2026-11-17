@@ -4,9 +4,6 @@
     "Default applies to every dark/reduceTransparency variant; variants override whole fields like control.json. Exported once as list in each components.json mode variant, independent of material."
   ],
   "default": {
-    "focus": {
-      "width": 2
-    },
     "highlight": {
       "inset": 4,
       "hoverOpacity": 0.08,

@@ -137,6 +137,47 @@ impl Canvas {
         self.context
             .stroke_path(&corner_path(bounds, (radius - inset).max(0.), self.scale));
     }
+    /// An inward ring with independent top-left, top-right, bottom-right and
+    /// bottom-left radii. Uses the same continuous corners as rounded_rect.
+    pub fn rounded_ring_corners(&mut self, r: Rect, corners: [f64; 4], width: f64, color: Color) {
+        if width <= 0. || r.width <= 0. || r.height <= 0. {
+            return;
+        }
+        let inset = width.min(r.width.min(r.height) as f64) / 2.;
+        let b = rect(r).inset(-inset);
+        let mut path = BezPath::new();
+        for (quarter, index) in [1, 2, 3, 0].into_iter().enumerate() {
+            let mut points = nidara_corner::outline(
+                b.width(),
+                b.height(),
+                (corners[index] - inset).max(0.),
+                0.5 / self.scale.max(1.),
+            );
+            // outline's zero-radius rectangle starts at top-left; the curved
+            // outline starts at top-right. Keep this method's quarter order.
+            if points.len() == 4 {
+                points.rotate_left(1);
+            }
+            let n = points.len() / 4;
+            for p in &points[quarter * n..(quarter + 1) * n] {
+                let point = (b.x0 + p[0], b.y0 + p[1]);
+                if path.elements().is_empty() {
+                    path.move_to(point);
+                } else {
+                    path.line_to(point);
+                }
+            }
+        }
+        path.close_path();
+        // This is an inward ring. Keep the CPU stroke rasterizer within that
+        // contract: some dimensions emit a rectangular tail outside the path's
+        // bounds (e.g. 180x56 at 48,434), even with round joins.
+        self.clip(r);
+        self.context.set_stroke(Stroke::new(width));
+        self.context.set_paint(color);
+        self.context.stroke_path(&path);
+        self.pop_clip();
+    }
     /// Everything painted until `pop_opacity` is composited as one layer at `alpha`, so a
     /// picture fades with what it belongs to.
     pub fn push_opacity(&mut self, alpha: f64) {
@@ -525,5 +566,62 @@ mod progress_tests {
         let mut canvas = Canvas::new(64, 64, 1.);
         canvas.progress_arc((32., 32.), 20., 4., 0., rgba(255, 255, 255, 255));
         assert!(canvas.finish().iter().all(|b| *b == 0));
+    }
+}
+
+#[cfg(test)]
+mod corner_ring_tests {
+    use super::*;
+    #[test]
+    fn focus_stroke_never_spikes_outside_its_bounds() {
+        for scale in [1., 1.25] {
+            let bounds = Rect {
+                x: 48.,
+                y: 434.,
+                width: 180.,
+                height: 56.,
+            };
+            let mut c = Canvas::new((1100. * scale) as u16, (678. * scale) as u16, scale);
+            c.rounded_ring_corners(bounds, [4.; 4], 2., rgba(0, 136, 255, 255));
+            let pixels = c.finish();
+            let stride = (1100. * scale) as usize;
+            for y in 0..(678. * scale) as usize {
+                for x in 0..stride {
+                    if (x as f64) < (bounds.x as f64 * scale).floor()
+                        || x as f64 >= ((bounds.x + bounds.width) as f64 * scale).ceil()
+                        || (y as f64) < (bounds.y as f64 * scale).floor()
+                        || y as f64 >= ((bounds.y + bounds.height) as f64 * scale).ceil()
+                    {
+                        assert_eq!(
+                            pixels[(y * stride + x) * 4 + 3],
+                            0,
+                            "stroke escaped bounds at {x},{y}, scale {scale}"
+                        );
+                    }
+                }
+            }
+        }
+    }
+    #[test]
+    fn equal_corners_match_the_existing_continuous_outline() {
+        for scale in [1., 1.25] {
+            for radius in [0., 6., 18.] {
+                let bounds = Rect {
+                    x: 8.,
+                    y: 8.,
+                    width: 48.,
+                    height: 32.,
+                };
+                let mut old = Canvas::new(80, 80, scale);
+                // Compare the existing continuous path within its inward bounds;
+                // its unbounded CPU stroke can emit the same tail as the new path.
+                old.clip(bounds);
+                old.rounded_ring(bounds, radius, 2., rgba(0, 136, 255, 255));
+                old.pop_clip();
+                let mut new = Canvas::new(80, 80, scale);
+                new.rounded_ring_corners(bounds, [radius; 4], 2., rgba(0, 136, 255, 255));
+                assert_eq!(old.finish(), new.finish(), "scale={scale} radius={radius}");
+            }
+        }
     }
 }

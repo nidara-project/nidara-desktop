@@ -39,7 +39,8 @@ pub(crate) fn tokens() -> Tokens {
         "--nidara-surface-strong": "rgba(255, 255, 255, 0.30)", "--nidara-accent-fg": "#ffffff",
         "--nidara-surface-back": "rgba(255, 255, 255, 0.04)", "--nidara-accent-30": "rgba(0, 136, 255, 0.3)", "--nidara-radius-pill": "9999px", "--nidara-bg": "rgba(22, 22, 34, 1.00)"}});
     Tokens {
-        list: crate::tokens::ListStyle{inset:4.,hover_opacity:0.08,focus_width:2.},
+        focus: focus_from(&serde_json::from_str::<serde_json::Value>(include_str!("../../../tokens/focus.json")).unwrap()["default"], &set).unwrap(),
+        list: crate::tokens::ListStyle{inset:4.,hover_opacity:0.08},
         spacing: Spacing::from_static(&statics()).unwrap(),
         radii: Radii::from_static(&statics()).unwrap(),
         motion: Motion::from_static(&statics()).unwrap(),
@@ -72,8 +73,8 @@ pub(crate) fn tokens() -> Tokens {
             &set,
         )
         .unwrap(),
-        disclosure: disclosure_from(&json!({"common":{"padding":12}, "list":{"highlight":{"hoverOpacity":0.08}, "focus":{"width":2}}, "rows":serde_json::from_str::<serde_json::Value>(include_str!("../../../tokens/rows.json")).unwrap()["default"]}), &json!({"ts":{"ROW_HEIGHT":{"single":48}}})).unwrap(),
-        entry: entry_from(&serde_json::from_str::<serde_json::Value>(include_str!("../../../tokens/search.json")).unwrap()["default"], &set).unwrap(),
+        disclosure: disclosure_from(&json!({"common":{"padding":12}, "list":{"highlight":{"hoverOpacity":0.08}}, "rows":serde_json::from_str::<serde_json::Value>(include_str!("../../../tokens/rows.json")).unwrap()["default"]}), &json!({"ts":{"ROW_HEIGHT":{"single":48}}})).unwrap(),
+        entry: entry_from(&serde_json::from_str::<serde_json::Value>(include_str!("../../../tokens/search.json")).unwrap()["default"], &set, &serde_json::from_str::<serde_json::Value>(include_str!("../../../tokens/header.json")).unwrap()["default"]["navigation"]).unwrap(),
         row_height: 48.,
         group_radius: 16.,
     }
@@ -1489,8 +1490,8 @@ fn page_keys_move_the_focused_region_and_tab_scrolls_the_focus_into_view() {
     let r = rect(&s, "c4/card");
     assert_eq!(
         r[1] + r[3],
-        feed[1] + feed[3],
-        "scrolled by as little as shows it"
+        feed[1] + feed[3] - t.focus.gap - t.focus.width,
+        "scrolled by as little as shows the whole external ring"
     );
     let at = offset(&s);
     s.key(KeyInput::PageDown);
@@ -3304,7 +3305,7 @@ fn a_content_button_is_padded_to_its_height_and_painted_by_the_view_in_the_surfa
     );
     assert!(rest < hover && hover < press, "{rest} < {hover} < {press}");
     assert!(at(None, false) < rest, "faded while disabled");
-    // Focus: the accent ring on its edge, where the border lies.
+    // Focus: shared external ring; the original border is untouched.
     let edge = |shown: Option<Shown>| {
         let mut s = laid(&view(shown, true), (300., 60.), 1.);
         let mut c = nk_render::Canvas::new(300, 60, 1.);
@@ -3317,7 +3318,7 @@ fn a_content_button_is_padded_to_its_height_and_painted_by_the_view_in_the_surfa
         )
         .unwrap();
         let px = c.finish();
-        let (x, y) = ((b[0] + b[2] / 2.) as usize, b[1] as usize);
+        let (x, y) = ((b[0] + b[2] / 2.) as usize, (b[1] + b[3] + 2.) as usize);
         [px[(y * 300 + x) * 4], px[(y * 300 + x) * 4 + 2]]
     };
     let (plain, ringed) = (edge(None), edge(Some(Shown::Focus)));
@@ -4444,7 +4445,7 @@ fn enter_space_and_the_arrows_open_a_dropdown_and_a_disabled_one_is_skipped() {
 }
 
 #[test]
-fn a_dropdowns_trigger_is_painted_off_glass_and_rings_inside_its_border() {
+fn a_dropdowns_trigger_is_painted_off_glass_and_uses_the_shared_external_ring() {
     let t = tokens();
     let view = |shown: Option<Shown>| {
         let mut d = Node::dropdown(
@@ -4474,8 +4475,8 @@ fn a_dropdowns_trigger_is_painted_off_glass_and_rings_inside_its_border() {
     );
     let (_, hover) = painted(&view(Some(Shown::Hover)), 300, 40);
     assert_ne!(bgra(&rest, 300, inside), bgra(&hover, 300, inside), "hover");
-    // The ring in the border's room: the accent there only when focused.
-    let edge = (r[0] + 1., r[1] + r[3] / 2.);
+    // Shared ring is beyond a clear 2px gap, leaving the border alone.
+    let edge = (r[0] + r[2] + 2., r[1] + r[3] / 2.);
     let (_, ringed) = painted(&view(Some(Shown::Focus)), 300, 40);
     let ring = bgra(&ringed, 300, edge);
     assert!(ring[0] > 200 && ring[2] < 50, "the accent: {ring:?}");
@@ -4629,7 +4630,6 @@ fn swatch_tokens_are_whole_or_rejected() {
         "gap",
         "selectedColor",
         "hoverColor",
-        "focus",
         "disabledOpacity",
     ] {
         let mut c = source.clone();
@@ -5777,7 +5777,7 @@ fn disclosure_chevron_paints_the_settings_icon_and_changes_orientation() {
 fn disclosure_tokens_are_shared_settings_exports_without_fallbacks() {
     let rows: serde_json::Value =
         serde_json::from_str(include_str!("../../../tokens/rows.json")).unwrap();
-    let mut c = json!({"rows":rows["default"], "common":{"padding":12}, "list":{"highlight":{"hoverOpacity":0.08}, "focus":{"width":2}}});
+    let mut c = json!({"rows":rows["default"], "common":{"padding":12}, "list":{"highlight":{"hoverOpacity":0.08}}});
     let statics = json!({"ts":{"ROW_HEIGHT":{"single":48}}});
     let t = disclosure_from(&c, &statics).unwrap();
     assert_eq!(

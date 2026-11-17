@@ -81,6 +81,16 @@ impl SliderControl {
     }
 }
 impl Component for SliderControl {
+    fn focus_outline(&self, cx: &Read<'_>) -> Option<FocusOutline> {
+        // Ancestors clip the outline after painting, without rounding a cut edge.
+        let bounds = self.thumb(cx).unwrap_or(cx.rect);
+        Some(FocusOutline::rounded(
+            bounds,
+            self.surface
+                .corner
+                .of(bounds[2], bounds[3], &cx.look.tokens.radii),
+        ))
+    }
     fn body(&self, cx: &Build<'_>) -> Node {
         Node::spacer(cx.key("track"))
     }
@@ -269,6 +279,5 @@ impl Component for SliderControl {
                 .rounded_rect(rect(&inner), inner[2] / 2., ink_of(1.));
             cx.canvas.pop_clip();
         }
-        self.surface.focus(cx, self.silhouette(&cx.read));
     }
 }

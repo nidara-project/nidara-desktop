@@ -7,6 +7,26 @@ pub struct DisplayField {
     pub surface: Surface,
 }
 impl Component for DisplayField {
+    fn focus_outline(&self, cx: &Read<'_>) -> Option<FocusOutline> {
+        // This legacy frameless field can be no larger than its glyph advances.
+        // Lend the existing entry box, or its enclosing row when that is larger,
+        // without changing input/reader geometry or adding another frame.
+        let (text, _) = cx.text("text")?;
+        let entry = &cx.look.tokens.entry;
+        let px = entry.padding_x + entry.border;
+        let py = ((entry.min_height - text.rect[3]) / 2.).max(entry.border);
+        let left = cx.rect[0].min(text.rect[0] - px);
+        let top = cx.rect[1].min(text.rect[1] - py);
+        let right = (cx.rect[0] + cx.rect[2]).max(text.rect[0] + text.rect[2] + px);
+        let bottom = (cx.rect[1] + cx.rect[3]).max(text.rect[1] + text.rect[3] + py);
+        let bounds = [left, top, right - left, bottom - top];
+        Some(FocusOutline::rounded(
+            bounds,
+            self.corner()
+                .of(bounds[2], bounds[3], &cx.look.tokens.radii),
+        ))
+    }
+
     fn body(&self, cx: &Build<'_>) -> Node {
         Node::text(cx.key("text"), self.field.shown.clone(), self.style.clone())
     }
@@ -104,7 +124,7 @@ impl Component for DisplayField {
         self.surface.under(cx);
         if cx.read.focused {
             cx.canvas.clip(rect(&cx.visible));
-            let sel = cx.look.tokens.look.focus;
+            let sel = cx.look.tokens.look.accent;
             for r in self.selection(&cx.read) {
                 cx.canvas.rounded_rect(
                     rect(&r),
@@ -121,6 +141,5 @@ impl Component for DisplayField {
             }
             cx.canvas.pop_clip();
         }
-        self.surface.focus(cx, cx.visible);
     }
 }

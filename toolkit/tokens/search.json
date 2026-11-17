@@ -10,7 +10,6 @@
     "icon": "nd-system-search",
     "background": "--nidara-surface-back",
     "borderColor": "--nidara-border",
-    "focusBorder": "--nidara-surface-raised",
     "text": "--nidara-text",
     "dim": "--nidara-text-dim",
     "selection": "--nidara-accent-30",

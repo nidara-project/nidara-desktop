@@ -18,6 +18,7 @@ impl Tokens {
         let colors = serde_json::json!({ "tokens": set.colors });
         let radii = Radii::from_static(&e.statics)?;
         Ok(Self {
+            focus: crate::tokens::focus_from(&set.components["focus"], &colors)?,
             list: list_from(&set.components["list"])?,
             spacing: Spacing::from_static(&e.statics)?,
             check: check_from(&set.components["check"], &colors, &radii)?,
@@ -29,7 +30,11 @@ impl Tokens {
             )?,
             segmented: segmented_from(&set.components["choices"]["segmented"], &colors, &radii)?,
             swatch: swatch_from(&set.components["choices"]["swatch"], &colors)?,
-            entry: entry_from(&set.components["search"], &colors)?,
+            entry: entry_from(
+                &set.components["search"],
+                &colors,
+                &set.components["header"]["navigation"],
+            )?,
             disclosure: disclosure_from(set.components, &e.statics)?,
             radii,
             motion: Motion::from_static(&e.statics)?,

@@ -22,7 +22,6 @@
       "pressed": "--nidara-surface-active",
       "text": "--nidara-text",
       "arrowColor": "--nidara-text-dim",
-      "focus": "--nidara-accent",
       "disabledOpacity": 0.45
     },
     "menu": {

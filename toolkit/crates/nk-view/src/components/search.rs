@@ -8,6 +8,9 @@ pub struct Search {
     pub changed: String,
     pub clear_label: String,
     pub disabled: bool,
+    /// Gallery-only stable keyboard-focus sample of the inner editor.
+    #[serde(default)]
+    pub shown: Option<(usize, crate::Shown)>,
 }
 impl Search {
     pub fn node(self, key: impl Into<Key>) -> Node {
@@ -15,6 +18,14 @@ impl Search {
     }
 }
 impl Component for Search {
+    fn configure(&self, property: Configure) -> Option<Part> {
+        let Configure::Sample(index @ 0..=1, shown) = property else {
+            return None;
+        };
+        let mut next = self.clone();
+        next.shown = Some((index, shown));
+        Some(Part::Search(next))
+    }
     fn contains_controls(&self) -> bool {
         true
     }
@@ -23,6 +34,13 @@ impl Component for Search {
         let mut field = self.field.clone();
         field.chrome = false;
         field.escape_clears = true;
+        let mut input = field
+            .node(cx.key("input"), self.name.clone(), self.changed.clone())
+            .enabled(!self.disabled)
+            .grow();
+        if let Some((0, shown)) = self.shown {
+            input = input.shown(shown);
+        }
         let mut nodes = vec![
             Node::icon(cx.key("icon"), t.icon.clone(), t.icon_size).ink(if self.disabled {
                 crate::Ink::Disabled
@@ -30,10 +48,7 @@ impl Component for Search {
                 crate::Ink::Dim
             }),
             Node::row(cx.key("icon-gap"), vec![]).width(t.icon_gap),
-            field
-                .node(cx.key("input"), self.name.clone(), self.changed.clone())
-                .enabled(!self.disabled)
-                .grow(),
+            input,
         ];
         if !editable::normalize_single_line(&self.field.text).is_empty() {
             let mut clear = Node::control(
@@ -47,6 +62,9 @@ impl Component for Search {
                 c.part = Some(Box::new(Part::SearchClear(Clear {
                     owner: cx.key("input"),
                 })));
+            }
+            if let Some((1, shown)) = self.shown {
+                clear = clear.shown(shown);
             }
             nodes.push(clear);
         }
@@ -62,7 +80,7 @@ impl Component for Search {
     }
     fn paint(&self, cx: &mut Paint<'_>, phase: PaintPhase) {
         if phase == PaintPhase::Under {
-            super::editable::chrome(cx, cx.read.focused_part("input"));
+            super::editable::chrome(cx);
         }
     }
 }
@@ -82,7 +100,26 @@ impl Clear {
         });
     }
 }
+impl Clear {
+    fn visible(&self, cx: &Read<'_>) -> Rect {
+        let r = cx.rect;
+        let side = cx.look.tokens.entry.clear_button.min(r[2]).min(r[3]);
+        [
+            r[0] + (r[2] - side) / 2.,
+            r[1] + (r[3] - side) / 2.,
+            side,
+            side,
+        ]
+    }
+}
 impl Component for Clear {
+    fn silhouette(&self, cx: &Read<'_>) -> Rect {
+        self.visible(cx)
+    }
+    fn focus_outline(&self, cx: &Read<'_>) -> Option<FocusOutline> {
+        let bounds = self.silhouette(cx);
+        Some(FocusOutline::rounded(bounds, bounds[3] / 2.))
+    }
     fn body(&self, cx: &Build<'_>) -> Node {
         let t = &cx.look.tokens.entry;
         Node::icon(cx.key("glyph"), t.clear_icon.clone(), t.icon_size).ink(crate::Ink::Dim)
@@ -108,18 +145,10 @@ impl Component for Clear {
         if phase != PaintPhase::Under {
             return;
         }
-        let r = cx.rect;
+        let r = self.visible(&cx.read);
         if cx.interaction.enabled && (cx.interaction.hover || cx.interaction.pressed) {
             cx.canvas
                 .rounded_rect(rect(&r), r[3] / 2., cx.ink(cx.look.tokens.button.hover));
-        }
-        if cx.interaction.focus_ring {
-            cx.canvas.rounded_ring(
-                rect(&r),
-                r[3] / 2.,
-                cx.look.tokens.look.focus_width,
-                cx.ink(cx.look.tokens.look.focus),
-            );
         }
     }
 }

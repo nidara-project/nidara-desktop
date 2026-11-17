@@ -1536,7 +1536,32 @@ impl ViewState {
         let Some(s) = self.placed[i].scroll else {
             return;
         };
-        let (r, v) = (self.placed[i].rect, self.placed[s].rect);
+        let (mut r, v) = (self.placed[i].rect, self.placed[s].rect);
+        // Revealing only the input box cuts off an external keyboard outline.
+        // Keep the original target (notably a list's viewport), plus any outline
+        // outside it. Inner outline clips still apply; ancestor clips must not
+        // shrink this reveal request before it has brought the control into view.
+        if self.interaction(i).focus_ring
+            && let Some(outline) = self.placed[i]
+                .part()
+                .and_then(|part| part.component().focus_outline(&self.context(i)))
+        {
+            let style = &self.tokens.as_ref().expect("laid view").focus;
+            let outside = style.outside(outline.bounds);
+            let outside = outline.clip.map_or(Some(outside), |clip| {
+                crate::layout::intersect(outside, clip)
+            });
+            if let Some(b) = outside {
+                let x = r[0].min(b[0]);
+                let y = r[1].min(b[1]);
+                r = [
+                    x,
+                    y,
+                    (r[0] + r[2]).max(b[0] + b[2]) - x,
+                    (r[1] + r[3]).max(b[1] + b[3]) - y,
+                ];
+            }
+        }
         let delta = if r[1] < v[1] {
             r[1] - v[1]
         } else if r[1] + r[3] > v[1] + v[3] {
@@ -1946,6 +1971,60 @@ impl ViewState {
     ) -> Result<(), String> {
         self.paint_part(canvas, look, icons, None, true)
     }
+    fn paint_focus(
+        &self,
+        canvas: &mut Canvas,
+        look: ComponentLook<'_>,
+        part: &dyn Fn(usize) -> bool,
+    ) {
+        let tokens = look.tokens;
+        for (i, p) in self.placed.iter().enumerate() {
+            if !part(i)
+                || !matches!(p.what, What::Control(_))
+                || !self.shown(i)
+                || p.alpha <= 0.
+                || p.visible().is_none()
+            {
+                continue;
+            }
+            let interaction = self.interaction(i);
+            if !interaction.enabled || !interaction.focus_ring {
+                continue;
+            }
+            let cx = Read {
+                look,
+                ..self.context(i)
+            };
+            let outline = p
+                .part()
+                .and_then(|part| part.component().focus_outline(&cx));
+            if let Some(outline) = outline {
+                if let Some(clip) = p.clip {
+                    canvas.clip(rect(&clip));
+                }
+                if let Some(clip) = outline.clip {
+                    canvas.clip(rect(&clip));
+                }
+                let style = &tokens.focus;
+                let out = style.gap + style.width;
+                let bounds = style.outside(outline.bounds);
+                canvas.rounded_ring_corners(
+                    rect(&bounds),
+                    outline.corners.map(|r| r + out),
+                    style.width,
+                    style
+                        .color
+                        .with_alpha(style.color.components[3] * p.alpha as f32),
+                );
+                if outline.clip.is_some() {
+                    canvas.pop_clip();
+                }
+                if p.clip.is_some() {
+                    canvas.pop_clip();
+                }
+            }
+        }
+    }
     fn paint_part(
         &self,
         canvas: &mut Canvas,
@@ -2128,6 +2207,7 @@ impl ViewState {
                 );
             }
         }
+        self.paint_focus(canvas, look, &part);
         for s in self.regions().filter(|&s| part(s)) {
             if let (Some(bar), Some(g)) = (self.bars.get(&self.placed[s].key), self.bar_geometry(s))
             {
@@ -2189,3 +2269,7 @@ fn inside(r: Rect, p: (f64, f64)) -> bool {
 fn overlaps(a: Rect, b: Rect) -> bool {
     a[0] < b[0] + b[2] && b[0] < a[0] + a[2] && a[1] < b[1] + b[3] && b[1] < a[1] + a[3]
 }
+
+#[cfg(test)]
+#[path = "focus_tests.rs"]
+mod focus_tests;

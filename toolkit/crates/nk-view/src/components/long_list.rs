@@ -244,6 +244,28 @@ impl LongList {
     }
 }
 impl Component for LongList {
+    fn focus_outline(&self, cx: &Read<'_>) -> Option<FocusOutline> {
+        let viewport = self.viewport(cx)?.0;
+        let bounds = if self.count == 0 {
+            viewport
+        } else {
+            let selected = self.current(cx.state)?;
+            let row = self.rows.iter().find(|row| row.index == selected)?;
+            let r = self.row_rect(cx, &row.item)?;
+            let inset = cx.look.tokens.list.inset;
+            [
+                r[0] + inset,
+                r[1] + inset,
+                (r[2] - 2. * inset).max(0.),
+                (r[3] - 2. * inset).max(0.),
+            ]
+        };
+        let mut outline = FocusOutline::rounded(bounds, cx.look.tokens.radii.px(crate::Radius::Sm));
+        // Rows must not escape the scrolling viewport. An empty list has no
+        // scrolling content: its ring surrounds the viewport itself.
+        outline.clip = (self.count > 0).then_some(viewport);
+        Some(outline)
+    }
     fn state(&self) -> Option<Box<dyn Any>> {
         Some(Box::<State>::default())
     }
@@ -569,16 +591,6 @@ impl Component for LongList {
                     .with_alpha(style.hover_opacity * cx.alpha as f32);
                 cx.canvas.rounded_rect(rect(&bounds), radius, color);
             }
-            if selected == Some(row.index) && cx.interaction.enabled && cx.interaction.focus_ring {
-                let color = cx.ink(cx.look.tokens.look.focus);
-                cx.canvas
-                    .rounded_ring(rect(&bounds), radius, style.focus_width, color);
-            }
-        }
-        if self.count == 0 && cx.interaction.focus_ring && cx.interaction.enabled {
-            let color = cx.ink(cx.look.tokens.look.focus);
-            cx.canvas
-                .rounded_ring(rect(&viewport), radius, style.focus_width, color);
         }
         cx.canvas.pop_clip();
     }

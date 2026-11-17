@@ -1055,6 +1055,12 @@ been guessed at twice:
 Before writing one, ask which components style that element themselves; when one of them opts
 out on purpose, the exception belongs beside the blanket.
 
+The Rust `nk-view` kit supersedes the following frozen TS focus distinction (#1103 step 5b,
+owner, 2026-11-16): every control, including text/search fields, uses the one external ring
+of VIEW.md §13.4. Fields keep their normal border. The shared `components.focus` tokens
+set solid accent, width 2 and gap 2; components lend geometry, never paint focus themselves.
+The TS stylesheet rule below still describes the remaining TS applications.
+
 🔑 **Focus is not one affordance.** A control styled as an INPUT (the dropdown trigger, the text
 inputs) shows keyboard focus as its 2px border going accent — no ring. A BUTTON shows a ring
 (`nidara-focus-ring`, now in `ui/lib/nidara-kit/styles/_tokens.scss` so all three bundles share it). One

@@ -17,7 +17,7 @@ usage: settings-tokens-check.py OUT_DIR
 - Every step of every variant's `control` piece carries what toolkit/tokens/control.json adds
   (toolkit/CONTRACT.md, "Floating control capsule"): its response (null only with reduce
   transparency), its states' washes and shared fadeMs, its two inks — a reader has no defaults.
-- Every components.json mode variant carries D8 list focus/highlight/separator tokens with a resolvable colour,
+- Every components.json mode variant carries shared focus and D8 list highlight/separator tokens with a resolvable colour,
   and the radio groups' choices (toolkit/tokens/choices.json, #882) with resolvable colours and font,
   the range controls' slider and spin (toolkit/tokens/range.json, #882), the switch (toolkit/tokens/switch.json),
   the checkbox's and radio's mark (toolkit/tokens/check.json) and the rows' second line, footer and disclosure (toolkit/tokens/rows.json).
@@ -151,11 +151,14 @@ for variant in variants:
 for variant in component_variants:
     where = f"components: list (dark={variant['dark']}, reduce={variant['reduceTransparency']})"
     listing = variant.get('list') or {}
-    focus = listing.get('focus') or {}
+    focus = variant.get('focus') or {}
+    if 'focus' in listing:
+        fail.append(f'{where}: shared focus must not be nested in list')
     highlight = listing.get('highlight') or {}
     separator = listing.get('separator') or {}
     opacity = highlight.get('hoverOpacity')
     if not (positive_number(focus.get('width'))
+            and positive_number(focus.get('gap'), True)
             and positive_number(highlight.get('inset'), True)
             and positive_number(opacity, True) and opacity <= 1
             and positive_number(separator.get('physicalPixels'))):
@@ -163,6 +166,19 @@ for variant in component_variants:
     key = separator.get('color')
     if not isinstance(key, str) or not all(key in color_set['tokens'] for color_set in sets):
         fail.append(f'{where}: missing separator colour token {key}')
+    focus_color = focus.get('color')
+    if not isinstance(focus_color, str) or not all(focus_color in color_set['tokens'] for color_set in sets):
+        fail.append(f'{where}: missing shared focus colour {focus_color}')
+    private_focus = [
+        (variant.get('button') or {}, 'focus'),
+        ((variant.get('dropdown') or {}).get('trigger') or {}, 'focus'),
+        ((variant.get('choices') or {}).get('segmented') or {}, 'focus'),
+        ((variant.get('choices') or {}).get('swatch') or {}, 'focus'),
+        (variant.get('search') or {}, 'focusBorder'),
+    ]
+    for component, key in private_focus:
+        if key in component:
+            fail.append(f'{where}: private focus token {key} must use focus')
     choices = variant.get('choices') or {}
     segmented = choices.get('segmented') or {}
     swatch = choices.get('swatch') or {}
@@ -178,8 +194,8 @@ for variant in component_variants:
         fail.append(f'{where}: incomplete or invalid choices (segmented/swatch)')
     for key in (segmented.get('borderColor'), segmented.get('selectedColor'), segmented.get('selectedText'),
                 segmented.get('background'), segmented.get('hover'), segmented.get('pressed'),
-                segmented.get('text'), segmented.get('focus'),
-                swatch.get('selectedColor'), swatch.get('hoverColor'), swatch.get('focus')):
+                segmented.get('text'),
+                swatch.get('selectedColor'), swatch.get('hoverColor')):
         if not isinstance(key, str) or not all(key in color_set['tokens'] for color_set in sets):
             fail.append(f'{where}: missing choices colour token {key}')
     ranged = variant.get('range') or {}
@@ -245,7 +261,7 @@ for variant in component_variants:
             valid_radius = False
         if not valid_radius:
             fail.append(f'{where}: invalid SearchInput radius dimension')
-    for k in ('background', 'borderColor', 'focusBorder', 'text', 'dim', 'selection', 'selectionText'):
+    for k in ('background', 'borderColor', 'text', 'dim', 'selection', 'selectionText'):
         colour = search.get(k)
         if not isinstance(colour, str) or not all(colour in s['tokens'] for s in sets):
             fail.append(f'{where}: missing SearchInput colour {k}: {colour}')
@@ -263,7 +279,7 @@ for variant in component_variants:
     opacity = trigger.get('disabledOpacity')
     if not isinstance(opacity, (int, float)) or not 0 <= opacity <= 1:
         fail.append(f'{where}: invalid dropdown disabled opacity')
-    for k in ('background', 'hover', 'pressed', 'text', 'arrowColor', 'focus'):
+    for k in ('background', 'hover', 'pressed', 'text', 'arrowColor'):
         colour = trigger.get(k)
         if not isinstance(colour, str) or not all(colour in s['tokens'] for s in sets):
             fail.append(f'{where}: missing dropdown colour {k}: {colour}')

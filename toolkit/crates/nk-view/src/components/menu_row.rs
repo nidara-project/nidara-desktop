@@ -12,6 +12,10 @@ impl MenuRow {
     }
 }
 impl Component for MenuRow {
+    fn focus_outline(&self, _cx: &Read<'_>) -> Option<FocusOutline> {
+        None
+    }
+
     fn body(&self, cx: &Build<'_>) -> Node {
         let m = &cx.look.tokens.dropdown.menu;
         Node::row(

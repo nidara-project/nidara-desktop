@@ -252,6 +252,7 @@ fn search_normalizes_its_clear_control_visibility_with_the_entry() {
     lay(
         &mut s,
         &Search {
+            shown: None,
             field: EditableField::new("\n"),
             name: "Search".into(),
             changed: "search".into(),
@@ -454,6 +455,7 @@ fn editor_font_change_reflows_without_losing_selection_preedit_or_undo() {
 fn editor_search_escape_boundary_and_clear_are_composed_through_the_host() {
     let search = |value: &str| {
         Search {
+            shown: None,
             field: EditableField::new(value),
             name: "Search".into(),
             changed: "search".into(),
@@ -564,7 +566,10 @@ fn editor_paints_source_chrome_focus_text_selection_and_disabled_ink() {
     let alpha = rest[top];
     s.request(&"edit".into(), false);
     let focused = pixels(&s);
-    assert!(focused[top] > alpha, "focused source border");
+    assert_eq!(
+        focused[top], alpha,
+        "focus must leave the normal border unchanged"
+    );
     s.respond(&"edit".into(), Request::SetText("alpha".into()));
     let plain = pixels(&s);
     assert_ne!(focused, plain);
@@ -688,6 +693,7 @@ fn editor_latest_paste_intent_wins_and_targets_cannot_cross_view_instances() {
 #[test]
 fn search_composes_exactly_one_source_chrome_around_its_entry() {
     let search = Search {
+        shown: None,
         field: EditableField::new(""),
         name: "Search".into(),
         changed: "changed".into(),

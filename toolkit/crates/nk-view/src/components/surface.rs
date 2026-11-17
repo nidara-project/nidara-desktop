@@ -45,23 +45,30 @@ impl Surface {
             cx.canvas.pop_clip();
         }
     }
-    pub fn focus(&self, cx: &mut Paint<'_>, silhouette: Rect) {
-        if !cx.interaction.focus_ring {
-            return;
-        }
-        let w = cx.look.tokens.look.focus_width;
-        let out = if cx.read.owns_mark { 2. * w } else { 0. };
-        let r = silhouette;
-        let r = [r[0] - out, r[1] - out, r[2] + 2. * out, r[3] + 2. * out];
-        cx.canvas.rounded_ring(
-            rect(&r),
-            self.corner.of(r[2], r[3], &cx.look.tokens.radii),
-            w,
-            cx.ink(cx.look.tokens.look.focus),
-        );
-    }
 }
 impl Component for Surface {
+    fn focus_outline(&self, cx: &Read<'_>) -> Option<FocusOutline> {
+        if cx.owns_mark {
+            let owner = cx.placed.iter().position(|p| &p.key == cx.key)?;
+            if let Some(mark) = cx.placed.iter().find(|p| {
+                p.control == Some(owner)
+                    && p.alpha > 0.
+                    && p.part().is_some_and(|p| p.component().owns_mark())
+            }) {
+                // Geometry must exist even before scroll reveal makes the mark visible.
+                return mark.part()?.component().focus_outline(&Read {
+                    rect: mark.rect,
+                    visible: mark.visible().unwrap_or(mark.rect),
+                    ..*cx
+                });
+            }
+        }
+        let bounds = self.silhouette(cx);
+        Some(FocusOutline::rounded(
+            bounds,
+            self.corner.of(bounds[2], bounds[3], &cx.look.tokens.radii),
+        ))
+    }
     fn body(&self, cx: &Build<'_>) -> Node {
         cx.child.clone()
     }
@@ -90,7 +97,7 @@ impl Component for Surface {
     }
     fn content_ink(&self, cx: &Read<'_>, _at: Rect, ink: Color) -> Color {
         if self.on {
-            cx.look.tokens.look.focus
+            cx.look.tokens.look.accent
         } else if self.marked && self.accent {
             cx.look.tokens.look.accent_fg
         } else {
@@ -139,7 +146,6 @@ impl Component for Surface {
     fn paint(&self, cx: &mut Paint<'_>, phase: PaintPhase) {
         if phase == PaintPhase::Under {
             self.under(cx);
-            self.focus(cx, cx.visible);
         }
     }
 }

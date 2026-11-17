@@ -1,5 +1,6 @@
 {
   "_": "The kit's catalogue (toolkit/CATALOG.md, #1079) and where each component stands. status: view = in nk-view, the kit's one way to build (VIEW.md §13); both = in nk-view and in nk-widgets, two copies to make one; widgets = only in nk-widgets, still to move; hand = drawn by hand in a surface, debt; missing = nowhere yet. page = the gallery page that shows it. A component counts as done only when its status is view and it has a page.",
+  "focusPage": {"page": "focus", "covers": "All nk-view focus outlines on and off glass; portal light/dark appearances; shared list.focus tokens"},
   "groups": [
     {
       "name": "Windows and structure",

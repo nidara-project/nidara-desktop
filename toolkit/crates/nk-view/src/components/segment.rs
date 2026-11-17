@@ -10,6 +10,19 @@ pub struct Segment {
     pub value: usize,
 }
 impl Component for Segment {
+    fn focus_outline(&self, cx: &Read<'_>) -> Option<FocusOutline> {
+        let mut outline =
+            FocusOutline::rounded(self.silhouette(cx), cx.look.tokens.segmented.radius);
+        if self.join_before {
+            outline.corners[0] = 0.;
+            outline.corners[3] = 0.;
+        }
+        if self.join_after {
+            outline.corners[1] = 0.;
+            outline.corners[2] = 0.;
+        }
+        Some(outline)
+    }
     fn selected(&self) -> bool {
         self.selected
     }
@@ -63,12 +76,7 @@ impl Component for Segment {
         ))
     }
     fn paint(&self, cx: &mut Paint<'_>, phase: PaintPhase) {
-        if phase == PaintPhase::Over {
-            ring(
-                cx,
-                cx.look.tokens.segmented.radius,
-                cx.look.tokens.segmented.focus,
-            );
+        if phase != PaintPhase::Under {
             return;
         }
         let tokens = cx.look.tokens;
