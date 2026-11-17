@@ -150,6 +150,15 @@ package, launch-unit, names and parent tiers are documented in
 `session/daemon/src/applications/WINDOW-IDENTITY.md`. Ambiguous/unknown stays window
 backed. Matching updates alone can bring an unpinned app's icon into the dock.
 
+**A window waits for its answer (#1127).** Hyalo announces a window to the dock directly,
+and whose it is comes from Applications1 on another channel, so the window arrives first:
+measured 18 to 309 ms earlier. Drawn at once it showed as an unknown app, then jumped to
+its own. So while the service is live and has not answered for a window (no match, or
+`MatchKind` "pending"), the hub keeps it out of the dock's view (`Hub::dock_windows`).
+An answer of "unknown" is an answer. A service that never answers hides nothing for
+ever: after the shell's own deadline for a window answer (`hyalo::DEADLINE`) the window
+is shown as what it is. Without the service there is nothing to wait for.
+
 **Signals (D2).** Each slot carries a `Signal` beside its windows: a **count** and a
 **progress** from the app's Unity record in Applications1 (`Launcher`, shown only while
 the app makes it visible; a zero count is no badge), and **attention**, true when Hyalo
@@ -176,7 +185,11 @@ From the existing TS dock, so the two look alike: padding 10 and gap 4 at every 
 (`SEPARATOR_AIR`, owner 2026-11-03: with the gap fixed at 4 it had shrunk to 6); capsule
 radius concentric with the icons (`capsule_radius`, 24 at icon 64, the one continuous
 corner); screen gap
-`DOCK_SCREEN_GAP` = 4 logical px, dot 5 px. The glass is Hyalo's: one `Pane` per dock
+`DOCK_SCREEN_GAP` = 4 logical px, dot 5 px. The gap is INSIDE the surface
+(`geometry::to_edge`): the surface reaches the screen edge, its layer margin is 0 at rest
+and the exclusive zone carries the gap. It was the layer's margin, so the four rows before
+the edge were outside the dock: a pointer thrown to the edge lost the magnification, and
+with auto-hide started the hide clock (#1127). The glass is Hyalo's: one `Pane` per dock
 with the exported `dock` tone (`tokens/glass.json`, by mode and reduce transparency); the
 client paints only icons, dots and the separator (commandment 12).
 Dots and the separator are placed on whole device pixels where they rest (crisp), and from
@@ -197,9 +210,15 @@ the icons under it on the TS dock's bell: a gaussian of sigma 1.1 slots, icons t
 `max-icon-size` (absolute logical px), separators growing 0.4 of that. The surface is an
 **envelope** laid out once per configure (`geometry::envelope`): headroom across the
 dock (at most a third of the output) and slack at both ends of the main axis, so a grown
-icon never needs a new surface size; the exclusive zone stays the rest capsule's. Only
-the glass and the grown icons take input (the input region follows the strip), so the
-envelope's empty room passes clicks through, except a **reach** beside the resting glass,
+icon never needs a new surface size; the exclusive zone stays the rest capsule's. Input is
+ONE band (`Layout::input`): at rest the glass, out to the screen edge, so the envelope's
+empty room passes clicks through; once an icon has grown out of the glass, the surface's
+whole headroom. It was the glass plus each icon's square, and then the tallest icon's
+height: between two icons the bell's peak dips, so either way a pointer travelling
+sideways near the top of an icon left the dock and the magnification collapsed (#1127,
+measured). In that band a press counts only from an icon's own far side to the edge
+(`Layout::hit`): above a lower neighbour it keeps the magnification, it presses nothing.
+Beside the resting glass there is a **reach**,
 at its height, three sigmas long (where the bell is down to about 1 %): there the pointer
 coming in from a side already grows the end icons, as on the TS dock (which took the
 pointer 250 px past each end). A press there does nothing; only the glass opens the dock
@@ -230,8 +249,11 @@ the dock's, and never wait for another enter/leave or add a timer (#1030).
 **Auto-hide (D2).** With `auto-hide` on the dock reserves nothing (exclusive zone 0)
 and slides out past its screen edge once the pointer has been gone `hide-delay` ms
 (`autohide.rs`). It slides as the TS dock did, by the layer's margin on its anchored
-edge, eased with an 80 ms time constant (snapped under reduced motion), so the surface
-and its layout never change for it. Once out, its input region is only a 2 px strip
+edge (0 in place, negative on the way out), eased with an 80 ms time constant (snapped
+under reduced motion), so the surface and its layout never change for it. A slide is
+timed from the tick that finds it started, never from the loop's last wake: the idle loop
+sleeps up to a minute, and measured from there the first step was the whole way, so the
+dock appeared at once (#1127). Once out, its input region is only a 2 px strip
 along the screen edge, as long as the glass: the pointer pressed against that edge
 brings it back. An open menu, the chooser or the keyboard (Shell1 `focus:dock`) keeps
 it out until they let go, and the delay starts again from then. Turning the
@@ -384,7 +406,7 @@ subtracted again when the configured size already left it out. Checked with corn
 scales 1, 1.25 and 2.
 
 Position changes go through `set_layer_placement` on the same surface (T1); no
-recreation. The input region is the resting capsule.
+recreation. The input region is the band described under magnification.
 
 ## 6. Actions
 

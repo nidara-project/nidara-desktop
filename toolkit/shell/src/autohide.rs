@@ -5,7 +5,7 @@
 //! layer's margin on its anchored edge, so the surface and everything laid out in it stay
 //! as they are; while it is out a thin band along the screen edge still takes the pointer.
 //! A menu, the chooser or the keyboard keeps it out until they let go.
-use crate::geometry::{Layout, Position, SCREEN_GAP};
+use crate::geometry::{Layout, Position};
 use std::time::{Duration, Instant};
 
 /// The slide's easing time constant, seconds: settled in about a third of a second.
@@ -16,22 +16,21 @@ const BAND: i32 = 2;
 const OUT: f64 = 0.8;
 
 /// How far the dock slides to be out of sight: from its glass's inner edge to the screen
-/// edge (the glass sits against the surface's anchored edge; the room for magnification
-/// is on the other side).
+/// edge, which is the surface's anchored edge (`geometry::to_edge`); the room for
+/// magnification is on the other side.
 pub fn distance(l: &Layout) -> f64 {
     let [x, y, w, _] = l.glass;
-    let inside = match l.position {
+    match l.position {
         Position::Bottom => l.size.1 as f64 - y,
         Position::Left => x + w,
         Position::Right => l.size.0 as f64 - x,
-    };
-    inside + SCREEN_GAP
+    }
 }
 
-/// The margin on the anchored edge with the dock `slide` of the way out (negative once
-/// the surface reaches past the screen edge).
+/// The margin on the anchored edge with the dock `slide` of the way out: 0 in place,
+/// negative as the surface reaches past the screen edge.
 pub fn margin(l: &Layout, slide: f64) -> i32 {
-    SCREEN_GAP as i32 - (slide * distance(l)).round() as i32
+    -(slide * distance(l)).round() as i32
 }
 
 /// The strip along the screen edge, `BAND` deep and as long as the glass, in surface
@@ -53,6 +52,9 @@ pub struct Hide {
     /// How far out it is now, 0 (in place) to 1 (out of sight).
     pub slide: f64,
     at: Instant,
+    /// The slide is under way. A slide that begins is timed from the tick that finds it,
+    /// never from the last time the loop woke.
+    sliding: bool,
     hide_at: Option<Instant>,
     inside: bool,
 }
@@ -65,6 +67,7 @@ impl Hide {
             revealed: !auto,
             slide: if auto { 1. } else { 0. },
             at: Instant::now(),
+            sliding: false,
             hide_at: None,
             inside: false,
         }
@@ -122,14 +125,28 @@ impl Hide {
                 self.revealed = false;
             }
         }
-        let dt = now.saturating_duration_since(self.at).as_secs_f64();
-        self.at = now;
         let target = if self.revealed { 0. } else { 1. };
         if self.slide == target {
+            self.sliding = false;
             return false;
         }
+        if reduce_motion {
+            self.slide = target;
+            self.sliding = false;
+            return true;
+        }
+        if !self.sliding {
+            // It starts here. The idle loop may have slept for a minute: measured from its
+            // last wake, the first step covered the whole way and the dock appeared at once
+            // (owner, 2026-11-16).
+            self.sliding = true;
+            self.at = now;
+            return true;
+        }
+        let dt = now.saturating_duration_since(self.at).as_secs_f64();
+        self.at = now;
         let next = self.slide + (target - self.slide) * (1. - (-dt / SLIDE).exp());
-        self.slide = if reduce_motion || (next - target).abs() < 0.005 {
+        self.slide = if (next - target).abs() < 0.005 {
             target
         } else {
             next
@@ -150,7 +167,7 @@ impl Hide {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::geometry::{Slot, envelope, layout};
+    use crate::geometry::{Slot, envelope, layout, to_edge};
 
     const MS: Duration = Duration::from_millis(1);
 
@@ -196,9 +213,34 @@ mod tests {
         let mut h = Hide::new(false);
         h.set_auto(true, Duration::ZERO, t0);
         h.tick(t0, false, false);
-        assert!(h.tick(t0 + 16 * MS, false, false));
+        h.tick(t0 + 16 * MS, false, false);
+        assert!(h.tick(t0 + 32 * MS, false, false));
         assert!(h.slide > 0. && h.slide < 1.);
-        assert_eq!(h.wait(t0 + 16 * MS, 16 * MS), Some(16 * MS));
+        assert_eq!(h.wait(t0 + 32 * MS, 16 * MS), Some(16 * MS));
+    }
+
+    #[test]
+    fn a_slide_starts_when_it_starts_however_long_the_loop_slept() {
+        let t0 = Instant::now();
+        let s = Duration::from_secs(1);
+        // Hidden and idle for a minute, then the pointer reaches the edge.
+        let mut h = Hide::new(true);
+        h.tick(t0, false, false);
+        h.enter();
+        assert!(h.tick(t0 + 60 * s, false, false), "the loop keeps ticking");
+        assert_eq!(h.slide, 1., "nothing moved on the tick that found it");
+        assert_eq!(h.wait(t0 + 60 * s, 16 * MS), Some(16 * MS));
+        h.tick(t0 + 60 * s + 16 * MS, false, false);
+        assert!(h.slide > 0.5 && h.slide < 1., "one frame in: {}", h.slide);
+        // And the other way, after resting in place.
+        let mut h = Hide::new(true);
+        h.enter();
+        h.tick(t0, false, true);
+        h.leave(Duration::ZERO, t0 + 30 * s);
+        h.tick(t0 + 30 * s, false, false);
+        assert_eq!(h.slide, 0.);
+        h.tick(t0 + 30 * s + 16 * MS, false, false);
+        assert!(h.slide > 0. && h.slide < 0.5, "one frame out: {}", h.slide);
     }
 
     #[test]
@@ -206,8 +248,8 @@ mod tests {
         let slots = [Slot::Icon, Slot::Separator, Slot::Icon];
         for pos in [Position::Bottom, Position::Left, Position::Right] {
             let rest = layout(&slots, 48, pos, (1280, 800), 0.);
-            let l = envelope(rest.clone(), &slots, 96, (1280, 800), 0.);
-            assert_eq!(margin(&l, 0.), SCREEN_GAP as i32);
+            let l = to_edge(envelope(rest.clone(), &slots, 96, (1280, 800), 0.));
+            assert_eq!(margin(&l, 0.), 0);
             let m = margin(&l, 1.);
             // Fully out: the glass's inner edge lies on the screen edge, or past it.
             let glass_inner = match pos {
