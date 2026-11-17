@@ -287,8 +287,9 @@ one with a `timeout-minutes`):
 ⚠️ A REQUIRED check skipped by a path filter never reports, and that **stalls the merge queue** —
 skip the *work* inside a job, never the job. A job skipped by its `if:` DOES report (as a pass),
 which is how `scope` (`scripts/ci/ci-scope.sh`, its own self-test first) gates the long jobs:
-`code=false` (every changed path a `.md`) skips smoke/hyalo/toolkit/sessiond. `gates=true` runs
-the Hyalo job's real fcitx5/Orca matrices (~35 of its ~45 min) ONLY when a changed path is one
+`code=false` (every changed path a `.md`) skips smoke/hyalo/hyalo-real/toolkit/sessiond. `gates=true`
+starts `hyalo-real`, the job with the real fcitx5/Orca matrices (~40 min of checks, split out of
+the Hyalo job in #1126 so the nightly run fits its ceiling) ONLY when a changed path is one
 they use — `needs_gates()`, a list of what RUNS them: Hyalo's input, focus, a11y, handlers,
 shortcuts, binds, control, layers and focus-grab files and its Cargo files; the toolkit (not the
 Settings slice); the layers protocol; Hyalo's config; the matrix checks. `full=true` adds their
