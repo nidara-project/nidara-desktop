@@ -676,7 +676,7 @@ pub async fn spawn() -> Result<(Handle, Arc<Notify>), Error> {
         identity_dirty,
         package_revision,
     };
-    super::identity::spawn(handle.clone());
+    super::identity::spawn(handle.clone()).await?;
     Ok((handle, notify))
 }
 

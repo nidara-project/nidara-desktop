@@ -7,9 +7,11 @@ use std::{
     path::{Path, PathBuf},
 };
 
-pub fn spawn(store: super::store::Handle) {
+pub async fn spawn(store: super::store::Handle) -> Result<(), super::Error> {
+    // Service readiness is gated on this one collector, never on the GLib actor.
+    let collector = prepare_latest(Collector::default(), &store.package_revision).await?;
     tokio::spawn(async move {
-        let mut collector = Collector::default();
+        let mut collector = collector;
         let mut warned = false;
         loop {
             store.identity_dirty.notified().await;
@@ -31,9 +33,14 @@ pub fn spawn(store: super::store::Handle) {
                 store.identity_dirty.notify_one();
                 continue;
             };
-            let version = store
-                .package_revision
-                .load(std::sync::atomic::Ordering::Relaxed);
+            collector = match prepare_latest(collector, &store.package_revision).await {
+                Ok(next) => next,
+                Err(e) => {
+                    eprintln!("[applications] identity package worker exited: {e}");
+                    return;
+                }
+            };
+            let version = collector.revision;
             let job = tokio::task::spawn_blocking(move || {
                 if collector.known_units != units {
                     collector.known_units = units;
@@ -78,6 +85,38 @@ pub fn spawn(store: super::store::Handle) {
             }
         }
     });
+    Ok(())
+}
+
+// A transaction creates package directories before all their files are written.
+// Wait only while work is pending, off actor/H1; never retain a partial transaction.
+async fn prepare_latest(
+    mut collector: Collector,
+    revision: &std::sync::atomic::AtomicU64,
+) -> Result<Collector, super::Error> {
+    loop {
+        let lock = collector
+            .db
+            .parent()
+            .unwrap_or(&collector.db)
+            .join("db.lck");
+        while lock.exists() {
+            tokio::time::sleep(std::time::Duration::from_millis(100)).await;
+        }
+        let version = revision.load(std::sync::atomic::Ordering::Relaxed);
+        collector = tokio::task::spawn_blocking(move || {
+            collector.prepare_packages(version);
+            collector
+        })
+        .await
+        .map_err(|e| super::Error::Failed(format!("identity package worker: {e}")))?;
+        if !lock.exists() && revision.load(std::sync::atomic::Ordering::Relaxed) == version {
+            return Ok(collector);
+        }
+        // A transaction started during the read, so even an unchanged version
+        // cannot certify this candidate. The single owner retries after unlock.
+        collector.loaded = false;
+    }
 }
 
 fn apply_evidence(
@@ -135,6 +174,7 @@ impl Packages {
     /// Only packages that install a launcher can answer, so only their files are indexed:
     /// on a desktop that is a few dozen of over a thousand packages.
     fn load(db: &Path, root: &Path) -> Option<Self> {
+        let _span = super::icon_cache::span("identity-package-load", "packages", 0);
         let mut p = Self::default();
         for entry in std::fs::read_dir(db).ok()?.flatten() {
             let dir = entry.path();
@@ -336,20 +376,40 @@ impl Collector {
             cache: BTreeMap::new(),
         }
     }
+    fn prepare_packages(&mut self, revision: u64) {
+        if self.loaded && self.revision == revision {
+            return;
+        }
+        self.packages = Packages::load(&self.db, &self.root);
+        self.loaded = true; // Unavailable databases are also attempted once per version.
+        self.revision = revision;
+        self.cache.clear();
+    }
     pub fn collect(
         &mut self,
         epoch: &str,
         revision: u64,
         windows: &BTreeMap<u64, Window>,
     ) -> BTreeMap<u64, Evidence> {
-        if self.revision != revision || self.epoch != epoch {
+        let _span =
+            super::icon_cache::span("identity-evidence-collect", "windows", windows.len() as u32);
+        if !self.loaded || self.revision != revision {
+            return windows
+                .keys()
+                .map(|id| {
+                    (
+                        *id,
+                        Evidence {
+                            pending: true,
+                            ..Evidence::default()
+                        },
+                    )
+                })
+                .collect();
+        }
+        if self.epoch != epoch {
             self.cache.clear();
             self.epoch = epoch.into();
-            if self.revision != revision {
-                self.packages = None;
-                self.loaded = false;
-                self.revision = revision;
-            }
         }
         self.query_budget = 12;
         if self.main_pids.len() > 8192 {
@@ -388,10 +448,6 @@ impl Collector {
             evidence.flatpak.push(v);
         }
         evidence.snap = unit_ids(&read(dir.join("cgroup")).unwrap_or_default()).2;
-        if !self.loaded {
-            self.packages = Packages::load(&self.db, &self.root);
-            self.loaded = true;
-        }
         if let Some(p) = self.packages.as_mut()
             && let Some(exe) = window_exe.to_str()
         {
@@ -581,6 +637,91 @@ async fn main_pid(unit: &str) -> Option<u32> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    impl Collector {
+        fn collect_prepared(
+            &mut self,
+            epoch: &str,
+            version: u64,
+            windows: &BTreeMap<u64, Window>,
+        ) -> BTreeMap<u64, Evidence> {
+            self.prepare_packages(version);
+            self.collect(epoch, version, windows)
+        }
+    }
+    #[test]
+    fn first_window_uses_preloaded_index_and_idle_reload_is_shared() {
+        let (r, mut c) = fixture();
+        process(&r, 40, 1, "/usr/bin/app", "");
+        put(
+            &r,
+            "db/app-1/files",
+            "%FILES%\nusr/bin/app\nusr/share/applications/app.desktop\n",
+        );
+        put(
+            &r,
+            "usr/share/applications/app.desktop",
+            "[Desktop Entry]\nExec=app\n",
+        );
+        assert!(c.collect("e", 1, &window(40))[&1].pending);
+        c.prepare_packages(1);
+        std::fs::remove_file(r.join("db/app-1/files")).unwrap();
+        // A second caller for this version must reuse the prepared index.
+        c.prepare_packages(1);
+        assert_eq!(
+            c.collect("e", 1, &window(40))[&1].packages,
+            vec!["/usr/share/applications/app.desktop"]
+        );
+        c.prepare_packages(2);
+        assert!(c.collect("e", 2, &BTreeMap::new()).is_empty());
+        assert!(c.collect("e", 2, &window(40))[&1].packages.is_empty());
+        std::fs::remove_dir_all(r).unwrap();
+    }
+    #[tokio::test]
+    async fn transaction_finishes_before_the_shared_preload() {
+        let (r, c) = fixture();
+        let lock = r.join("db.lck");
+        std::fs::write(&lock, "").unwrap();
+        let revision = std::sync::Arc::new(std::sync::atomic::AtomicU64::new(1));
+        let current = revision.clone();
+        let worker = tokio::spawn(async move { prepare_latest(c, &current).await.unwrap() });
+        tokio::time::sleep(std::time::Duration::from_millis(150)).await;
+        assert!(!worker.is_finished());
+        put(
+            &r,
+            "db/app-1/files",
+            "%FILES%\nusr/bin/app\nusr/share/applications/app.desktop\n",
+        );
+        put(
+            &r,
+            "usr/share/applications/app.desktop",
+            "[Desktop Entry]\nExec=app\n",
+        );
+        revision.store(2, std::sync::atomic::Ordering::Relaxed);
+        std::fs::remove_file(lock).unwrap();
+        let mut c = tokio::time::timeout(std::time::Duration::from_secs(2), worker)
+            .await
+            .unwrap()
+            .unwrap();
+        assert_eq!(c.revision, 2);
+        assert_eq!(
+            c.packages.as_mut().unwrap().for_exe("/usr/bin/app"),
+            vec!["/usr/share/applications/app.desktop"]
+        );
+        std::fs::remove_dir_all(r).unwrap();
+    }
+    #[test]
+    fn unavailable_database_is_attempted_once_per_version() {
+        let (r, mut c) = fixture();
+        std::fs::remove_dir(r.join("db")).unwrap();
+        c.prepare_packages(1);
+        assert!(c.loaded && c.packages.is_none());
+        std::fs::create_dir(r.join("db")).unwrap();
+        c.prepare_packages(1);
+        assert!(c.packages.is_none());
+        c.prepare_packages(2);
+        assert!(c.packages.is_some());
+        std::fs::remove_dir_all(r).unwrap();
+    }
     fn fixture() -> (PathBuf, Collector) {
         let base = std::env::var_os("NIDARA_IDENTITY_EVIDENCE")
             .map(PathBuf::from)
@@ -673,9 +814,9 @@ mod tests {
             .collect::<Vec<_>>()
             .join("/");
         process(&r, 80, 1, "/manual/app", &format!("0::/{group}"));
-        assert!(c.collect("e", 1, &window(80))[&1].pending);
+        assert!(c.collect_prepared("e", 1, &window(80))[&1].pending);
         assert!(!c.cache.contains_key(&1));
-        assert!(!c.collect("e", 1, &window(80))[&1].pending);
+        assert!(!c.collect_prepared("e", 1, &window(80))[&1].pending);
         assert!(c.cache.contains_key(&1));
     }
     #[test]
@@ -711,8 +852,11 @@ mod tests {
         );
         c.main_pids
             .insert("app-terminal@launch-7.service".into(), Some(70));
-        assert_eq!(c.collect("e", 1, &window(71))[&1], Evidence::default());
-        let terminal = c.collect("e", 1, &window(70));
+        assert_eq!(
+            c.collect_prepared("e", 1, &window(71))[&1],
+            Evidence::default()
+        );
+        let terminal = c.collect_prepared("e", 1, &window(70));
         assert_eq!(
             terminal[&1].packages,
             vec!["/usr/share/applications/terminal.desktop"]
@@ -748,15 +892,23 @@ mod tests {
             "[Desktop Entry]\nExec=chrome\n",
         );
         process(&r, 10, 1, "/usr/lib/chatgpt/ChatGPT", "");
-        let evidence = c.collect("e", 1, &window(10));
+        let evidence = c.collect_prepared("e", 1, &window(10));
         assert_eq!(
             evidence[&1].packages,
             vec!["/usr/share/applications/chatgpt.desktop"]
         );
         process(&r, 11, 1, "/opt/chromium/chrome", "");
-        assert!(c.collect("e", 1, &window(11))[&1].packages.is_empty());
+        assert!(
+            c.collect_prepared("e", 1, &window(11))[&1]
+                .packages
+                .is_empty()
+        );
         process(&r, 12, 1, "/unowned/chatgpt", "");
-        assert!(c.collect("e", 1, &window(12))[&1].packages.is_empty());
+        assert!(
+            c.collect_prepared("e", 1, &window(12))[&1]
+                .packages
+                .is_empty()
+        );
     }
     #[test]
     fn only_packages_with_a_launcher_are_indexed_and_a_bad_entry_skips_only_itself() {
@@ -820,7 +972,7 @@ mod tests {
         );
         c.main_pids
             .insert("app-claude@launch-123.service".into(), Some(21));
-        let e = c.collect("e", 1, &window(20));
+        let e = c.collect_prepared("e", 1, &window(20));
         assert!(e[&1].units.contains(&"claude".into()));
         assert!(e[&1].flatpak.is_empty());
         assert!(e[&1].packages.is_empty());
@@ -831,7 +983,7 @@ mod tests {
             "[Instance]\nname=wrong\n[Application]\nname=org.flat.App\n",
         );
         assert_eq!(
-            c.collect("e", 1, &window(30))[&1].flatpak,
+            c.collect_prepared("e", 1, &window(30))[&1].flatpak,
             vec!["org.flat.App"]
         );
         let (unit, scope, snap) = unit_ids(
@@ -846,7 +998,7 @@ mod tests {
         let (r, mut c) = fixture();
         process(&r, 40, 1, "/usr/bin/app", "");
         let ws = window(40);
-        assert!(c.collect("e", 1, &ws)[&1].packages.is_empty());
+        assert!(c.collect_prepared("e", 1, &ws)[&1].packages.is_empty());
         put(
             &r,
             "db/app-1/files",
@@ -857,9 +1009,9 @@ mod tests {
             "usr/share/applications/app.desktop",
             "[Desktop Entry]\nExec=app\n",
         );
-        assert!(c.collect("e", 1, &ws)[&1].packages.is_empty());
+        assert!(c.collect_prepared("e", 1, &ws)[&1].packages.is_empty());
         assert_eq!(
-            c.collect("e", 2, &ws)[&1].packages,
+            c.collect_prepared("e", 2, &ws)[&1].packages,
             vec!["/usr/share/applications/app.desktop"]
         );
         put(
@@ -867,9 +1019,12 @@ mod tests {
             "proc/40/root/.flatpak-info",
             "[Application]\nname=changed\n",
         );
-        assert!(c.collect("e", 2, &ws)[&1].flatpak.is_empty());
-        assert_eq!(c.collect("new", 2, &ws)[&1].flatpak, vec!["changed"]);
-        c.collect("new", 2, &BTreeMap::new());
+        assert!(c.collect_prepared("e", 2, &ws)[&1].flatpak.is_empty());
+        assert_eq!(
+            c.collect_prepared("new", 2, &ws)[&1].flatpak,
+            vec!["changed"]
+        );
+        c.collect_prepared("new", 2, &BTreeMap::new());
         assert!(c.cache.is_empty());
     }
     #[test]
@@ -888,11 +1043,11 @@ mod tests {
             "proc/51/root/.flatpak-info",
             "[Application]\nname=wrong\n",
         );
-        let e = c.collect("e", 1, &window(50));
+        let e = c.collect_prepared("e", 1, &window(50));
         assert!(e[&1].flatpak.is_empty());
         assert!(e[&1].units.is_empty());
         process(&r, 60, 61, "/hand/a", "");
         process(&r, 61, 60, "/hand/b", "");
-        assert!(c.collect("e", 1, &window(60))[&1].units.is_empty());
+        assert!(c.collect_prepared("e", 1, &window(60))[&1].units.is_empty());
     }
 }

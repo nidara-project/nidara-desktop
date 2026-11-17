@@ -49,6 +49,12 @@ candidates are discarded and their domains coalesced again. The worker receives 
 metadata, never the Store, GSettings, monitors or mutable usage/launch/window state.
 The owner merges current usage/Unity/generations and publishes in a short step. H1/jobs
 continue during the read. Each effect still yields to consent notifications first.
+A separate exclusive identity collector prepares the pacman index before service
+publication/H1 connection and reloads on package invalidation even without windows.
+Windows share its prepared version; collect/process never load it. Pending preparation
+waits off actor/H1 for the transaction lock and rechecks version/lock after reading.
+A stale lock delays preparation, never triggers deletion. An unavailable package database
+is attempted once per version; other resolver tiers remain available. See WINDOW-IDENTITY.md.
 Changing a real app can update its selected-asset watches; a generic catalogue/default
 notice does not walk icon trees. Unchanged metadata does not rebuild the identity index.
 
@@ -252,3 +258,18 @@ Raw traces, scripts and binary hashes are in the local `evidence-1127-applicatio
 directory. The existing A1/A2/A3 fixtures and 148 daemon unit tests pass; no new CI job
 or checker was added. The short `a1127` worktree path lets the existing cursor socket
 test stay below SUN_LEN without exclusions or a test patch.
+
+
+The owner-approved package preloading extension was compared against the registry-only
+branch in three alternating fresh-profile starts per version on the same private
+Hyalo/bus. First-window H1 receipt → identified answer changed from 117–528 ms
+(median 118) to 13–22 ms (median 15). Process start → Applications usage readiness
+was 4550/882/901 ms before and 1014/992/1007 ms after: the first before-run is a cold
+outlier, and the later pairs show the ~105–127 ms package read moved into startup.
+Each process recorded exactly one package read; all after-reads finished before
+service readiness, and every before-read started only with the first window.
+This is a small cache/order-sensitive local sample, not a startup or latency guarantee.
+The raw six rounds/spans are in `preload-paired` and `preload-comparison.json`.
+The final daemon passes 151 unit tests and A1/A2/A3 integrations, plus workspace Clippy.
+New regressions cover a reused preloaded first-window index, idle version reload,
+an unavailable database and preparation waiting through a transaction.

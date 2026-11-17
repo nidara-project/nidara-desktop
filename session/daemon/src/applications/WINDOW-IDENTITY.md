@@ -31,12 +31,21 @@ No inherited environment marker, title heuristic or Chrome/PWA special rule is
 used. A user override mechanism remains outside this change.
 
 Process and package reads run outside GLib/H1 and painting. Evidence is cached for
-an unchanged window identity and the package database is indexed lazily, watched
-for invalidation, and never queried by spawning pacman. Only packages that install
+an unchanged window identity and one exclusive collector prepares the package index before Applications1 takes
+its bus name or starts H1. Windows never initiate an index read. The package
+monitor schedules the same collector even with zero windows; concurrent arrivals
+share that version's preparation, and a version change during a read discards it.
+No pacman subprocess is used. Only packages that install
 a non-browser launcher are indexed (a few dozen of over a thousand on a desktop,
 about 27,000 paths instead of 1.2 million), and one directory monitor on the
 database's `local/` invalidates it: an install or upgrade creates a new package
-directory there. An unreadable entry skips only itself. Late evidence is accepted
+directory there. Pending preparation waits outside actor/H1 while `db.lck`
+exists, checking every 100 ms only during that wait, and rejects a read if a
+transaction starts or the version changes before it finishes. This avoids freezing
+a directory-created-but-files-not-yet-written index. A stale lock delays service
+startup (or package identity refresh after startup); we never remove the lock.
+An unreadable entry skips only itself. An unavailable database is attempted once
+per version, allowing the remaining resolver tiers to work without per-window retries. Late evidence is accepted
 only for the same compositor connection and window identity. Token bindings live
 until window close/connection loss; a consumed launch record cannot erase them.
 Multiple Wayland windows can reuse a token only on the first presenting client's

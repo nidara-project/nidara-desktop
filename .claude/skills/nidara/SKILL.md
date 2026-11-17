@@ -545,7 +545,11 @@ coalesced focus_changed for accounting. Read `session/daemon/src/applications/A3
 sandbox, package ownership, launch unit, names and parent, with bounded set
 narrowing. The dock consumes WindowMatches for the current Hyalo run; never add
 a local matcher. Proc/pacman reads run outside GLib/H1 and painting, cached per
-window identity and invalidated by package monitors. HTTP-handler packages are
+window identity and invalidated by package monitors. One exclusive identity collector
+prepares packages before Applications1 publication/H1 and reloads even with no windows;
+window queries never load the index. Pending preparation waits off-actor for pacman's
+db.lck and rechecks version/lock after reading; no polling when idle or lock removal.
+An unavailable database is attempted once per version. HTTP-handler packages are
 excluded to preserve PWA identity. Inherited environment and executable
 substrings never choose an app. A token can identify several windows while its
 foreground activation grant remains single-use and reuse is confined to the first

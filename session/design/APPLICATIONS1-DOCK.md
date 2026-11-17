@@ -164,6 +164,11 @@ Empty intersections cannot replace stronger evidence. `Narrowing:aa{sv}` names
 contributing tiers and their candidate counts. Names preserve exact current ID,
 StartupWMClass, verified Flatpak ID, ASCII case-insensitive ID/WMClass and initial
 ID. See `daemon/src/applications/WINDOW-IDENTITY.md` for bounds and invalidation.
+One exclusive off-actor collector preloads package ownership before publishing
+Applications1/starting H1 and refreshes it on pacman invalidation even with no
+windows. Windows share the prepared version; no per-window package-index load.
+A database transaction lock delays preparation; an invalidated read cannot publish
+old evidence. See WINDOW-IDENTITY.md for unavailable databases and lock lifecycle.
 Package ownership means the pacman database owns both the actual executable and
 installed desktop file; a launcher-written systemd unit can also choose an
 identity when its main process or our recorded resolved Exec binary matches the
