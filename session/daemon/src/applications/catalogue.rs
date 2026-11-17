@@ -70,18 +70,11 @@ pub fn data_dirs() -> Vec<PathBuf> {
         .collect()
 }
 pub fn roots() -> Vec<PathBuf> {
-    let explicit = std::env::var_os("XDG_DATA_DIRS").is_some_and(|s| !s.is_empty());
-    let history = root_history();
+    // Unknown absent roots are healthy. Retain them as filtered watch targets so
+    // installing Flatpak/Snap for the first time is observable without polling.
     data_dirs()
-        .iter()
+        .into_iter()
         .map(|p| p.join("applications"))
-        .filter(|p| {
-            explicit
-                || (!p.to_string_lossy().contains("flatpak")
-                    && !p.to_string_lossy().contains("snapd"))
-                || p.is_dir()
-                || history.contains_key(p)
-        })
         .collect()
 }
 pub fn bounded(path: &Path, max: u64) -> Result<Vec<u8>, String> {

@@ -31,12 +31,21 @@ No inherited environment marker, title heuristic or Chrome/PWA special rule is
 used. A user override mechanism remains outside this change.
 
 Process and package reads run outside GLib/H1 and painting. Evidence is cached for
-an unchanged window identity and the package database is indexed lazily, watched
-for invalidation, and never queried by spawning pacman. Only packages that install
+an unchanged window identity and one exclusive collector prepares the package index before Applications1 takes
+its bus name or starts H1. Windows never initiate an index read. The package
+monitor schedules the same collector even with zero windows; concurrent arrivals
+share that version's preparation, and a version change during a read discards it.
+No pacman subprocess is used. Only packages that install
 a non-browser launcher are indexed (a few dozen of over a thousand on a desktop,
 about 27,000 paths instead of 1.2 million), and one directory monitor on the
 database's `local/` invalidates it: an install or upgrade creates a new package
-directory there. An unreadable entry skips only itself. Late evidence is accepted
+directory there. Pending preparation waits outside actor/H1 while `db.lck`
+exists, checking every 100 ms only during that wait, and rejects a read if a
+transaction starts or the version changes before it finishes. This avoids freezing
+a directory-created-but-files-not-yet-written index. A stale lock delays service
+startup (or package identity refresh after startup); we never remove the lock.
+An unreadable entry skips only itself. An unavailable database is attempted once
+per version, allowing the remaining resolver tiers to work without per-window retries. Late evidence is accepted
 only for the same compositor connection and window identity. Token bindings live
 until window close/connection loss; a consumed launch record cannot erase them.
 Multiple Wayland windows can reuse a token only on the first presenting client's
@@ -48,3 +57,14 @@ Validation must exercise each tier, ambiguity/narrowing, parent cycles, browser
 exclusion, inherited markers, expiry/close/epoch boundaries, delayed workers and
 the dock/ResolveWindow common result. Removing a tier must break its positive
 case. Fixture evidence does not establish installed or physical-session behavior.
+
+Registry refresh (#1127) is independent of window observation. Opening a known app or
+receiving H1 does not invalidate the catalogue or artwork. Catalogue/default, artwork and
+autostart invalidations are read by one bounded worker; the actor handles H1 meanwhile.
+The 100 ms debounce is a pending deadline. Candidates have invalidation generations and
+merge only filesystem metadata into the latest actor state, preserving current usage,
+launches and window epochs. An unchanged catalogue keeps its identity index. Watch plans
+are targeted and reused, including next-component recovery of missing custom roots;
+GIO owns standard app/default notices and is rearmed by a query. See the README and
+contract section 3 for coverage limits and recovery. This changes registry scheduling,
+not the resolver tiers or the dock's separate pending-window safety net.

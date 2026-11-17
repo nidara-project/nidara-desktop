@@ -70,6 +70,17 @@ Daemon icon reads validate against `session/daemon/src/applications/icon_view.rs
 the atomically published icon metadata; do not put their pre/post-decode checks
 back on `Store::call`, behind synchronous catalogue refresh. Actor effects publish
 before reply; override writes withdraw/re-publish, and actor exit retires the view.
+Applications1 registry invalidations are domain-specific (#1127): GIO owns standard
+app/default notices; custom/missing targets use filtered, reused watches. Reuse must
+rearm a retired directory instance even when its pathname is unchanged. The 100 ms
+debounce is a select deadline, never a sleep in an actor branch. Only one filesystem
+candidate is read off-actor; apply each finished catalogue/default/autostart result
+and reread only domains dirtied since it started, so mixed/long bursts cannot starve
+publication. Icon portions alone revalidate the captured theme/revision and selected
+app→icon map. Current H1/usage/effects remain with GLib. Set/ResetIconOverride waits
+asynchronously for that same reader to commit its icon baseline before replying;
+do not acknowledge the file write then let its monitor invalidate an ensuing decode. Never put icon-tree walks or whole-monitor rebuilds back on a window,
+launch, layout or default-handler path. Read applications/README.md and WINDOW-IDENTITY.md.
 The TS conventions below still apply to the remaining
 TS applications and frozen Hyprland source.
 
@@ -538,7 +549,11 @@ coalesced focus_changed for accounting. Read `session/daemon/src/applications/A3
 sandbox, package ownership, launch unit, names and parent, with bounded set
 narrowing. The dock consumes WindowMatches for the current Hyalo run; never add
 a local matcher. Proc/pacman reads run outside GLib/H1 and painting, cached per
-window identity and invalidated by package monitors. HTTP-handler packages are
+window identity and invalidated by package monitors. One exclusive identity collector
+prepares packages before Applications1 publication/H1 and reloads even with no windows;
+window queries never load the index. Pending preparation waits off-actor for pacman's
+db.lck and rechecks version/lock after reading; no polling when idle or lock removal.
+An unavailable database is attempted once per version. HTTP-handler packages are
 excluded to preserve PWA identity. Inherited environment and executable
 substrings never choose an app. A token can identify several windows while its
 foreground activation grant remains single-use and reuse is confined to the first

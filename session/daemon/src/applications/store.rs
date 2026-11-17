@@ -2,15 +2,13 @@
 use super::{
     Error,
     catalogue::{self, App},
-    layout,
+    layout, refresh,
 };
-use futures_util::FutureExt;
 use gio::prelude::*;
 use serde_json::{Value, json};
 use std::{
     collections::{BTreeMap, BTreeSet},
-    ffi::OsString,
-    path::{Path, PathBuf},
+    path::PathBuf,
     sync::Arc,
     time::{Duration, Instant},
 };
@@ -56,6 +54,10 @@ pub struct Store {
     present: BTreeMap<PathBuf, String>,
     next_generation: u64,
     icon_fingerprint: String,
+    asset_fingerprint: String,
+    icon_waiters: Vec<(u64, oneshot::Sender<Result<u64, Error>>)>,
+    autostarts: Option<super::autostart::Index>,
+    monitor_plans: BTreeMap<u32, refresh::Plan>,
     pins: Option<gio::Settings>,
     /// The layout this service last wrote. GSettings tells us of our own write too, and
     /// that is not a change to read again: answered with a full refresh, it held the
@@ -63,9 +65,9 @@ pub struct Store {
     /// (owner, 2026-11-02: pinning felt slow).
     written: Arc<std::sync::Mutex<Option<Vec<String>>>>,
     pub settings: super::super::config::registry::Store,
-    monitors: Vec<gio::FileMonitor>,
-    dirty: Arc<Notify>,
-    monitor_failed: bool,
+    monitors: BTreeMap<PathBuf, refresh::Monitor>,
+    dirty: Arc<refresh::Dirty>,
+    monitor_failed: u32,
     _app_monitor: gio::AppInfoMonitor,
     _volumes: gio::VolumeMonitor,
     pub notify: Arc<Notify>,
@@ -93,7 +95,7 @@ impl Store {
             .and_then(|s| s.lookup("org.nidara.dock", true))
             .filter(|s| s.has_key("pinned") && s.has_key("layout") && s.has_key("layout-version"));
         let pins = schema.map(|s| gio::Settings::new_full(&s, None::<&gio::SettingsBackend>, None));
-        let dirty = Arc::new(Notify::new());
+        let dirty = Arc::new(refresh::Dirty::default());
         let written: Arc<std::sync::Mutex<Option<Vec<String>>>> = Arc::default();
         if let Some(p) = &pins {
             let d = dirty.clone();
@@ -112,7 +114,7 @@ impl Store {
                     })
                 });
                 if !ours {
-                    d.notify_one();
+                    d.mark(refresh::LAYOUT);
                 }
             });
         }
@@ -125,18 +127,18 @@ impl Store {
             .map(|s| gio::Settings::new_full(&s, None::<&gio::SettingsBackend>, None));
         if let Some(i) = &interface {
             let d = dirty.clone();
-            i.connect_changed(Some("icon-theme"), move |_, _| d.notify_one());
+            i.connect_changed(Some("icon-theme"), move |_, _| d.mark(refresh::THEME));
         }
         let app_monitor = gio::AppInfoMonitor::get();
         let d = dirty.clone();
-        app_monitor.connect_changed(move |_| d.notify_one());
+        app_monitor.connect_changed(move |_| d.mark(refresh::CATALOGUE | refresh::DEFAULTS));
         let volumes = gio::VolumeMonitor::get();
         let d = dirty.clone();
-        volumes.connect_mount_added(move |_, _| d.notify_one());
+        volumes.connect_mount_added(move |_, _| d.mark(refresh::READ));
         let d = dirty.clone();
-        volumes.connect_mount_removed(move |_, _| d.notify_one());
+        volumes.connect_mount_removed(move |_, _| d.mark(refresh::READ));
         let d = dirty.clone();
-        volumes.connect_mount_changed(move |_, _| d.notify_one());
+        volumes.connect_mount_changed(move |_, _| d.mark(refresh::READ));
         Self {
             launches: super::launch::Book::default(),
             usage: super::usage::Usage::new(),
@@ -177,12 +179,16 @@ impl Store {
             present: catalogue::root_history(),
             next_generation: 0,
             icon_fingerprint: String::new(),
+            asset_fingerprint: String::new(),
+            icon_waiters: Vec::new(),
+            autostarts: None,
+            monitor_plans: BTreeMap::new(),
             pins,
             settings: super::super::config::registry::Store::new(),
-            monitors: vec![],
+            monitors: BTreeMap::new(),
             dirty,
             written,
-            monitor_failed: false,
+            monitor_failed: 0,
             _app_monitor: app_monitor,
             _volumes: volumes,
             notify,
@@ -226,10 +232,11 @@ impl Store {
         if theme != self.theme {
             self.theme = theme;
             self.icons_changed();
+            self.dirty.mark(refresh::ICONS);
         }
     }
-    pub fn invalidate(&self) {
-        self.dirty.notify_one();
+    pub fn invalidate_autostart(&self) {
+        self.dirty.mark(refresh::AUTOSTART);
     }
     pub fn mark(&mut self, domain: &str) {
         self.revision += 1;
@@ -320,47 +327,145 @@ impl Store {
         self.mark("layout");
         Ok(())
     }
-    pub fn refresh(&mut self) {
-        let _refresh = super::icon_cache::span("catalogue-refresh", "catalogue", 0);
-        self.apply_theme();
-        let previous = self.present.clone();
-        let mut scan = {
-            let _span = super::icon_cache::span("catalogue-scan", "catalogue", 0);
-            catalogue::scan(&self.roots, &mut self.present)
-        };
-        if previous != self.present
-            && catalogue::root_history_valid()
-            && let Err(e) = catalogue::save_root_history(&self.present)
-        {
-            scan.healthy = false;
-            scan.diagnostics.push(format!("root history: {e}"));
-            self.present = previous;
+    fn read_input(&self, domains: u32) -> refresh::Input {
+        refresh::Input {
+            icon_revision: self.icon_revision,
+            domains,
+            roots: self.roots.clone(),
+            present: self.present.clone(),
+            snapshot: self.icon_view.get().ok(),
+            theme: self.theme.clone(),
         }
-        if !catalogue::root_history_valid() {
-            scan.healthy = false;
-            scan.diagnostics
-                .push("root history corrupt or unreadable; pruning disabled".into());
-        }
-        let icon_audit = super::icon_cache::span("catalogue-icon-audit", "catalogue", 0);
-        let (icon_watches, _, mut signatures) = super::icons::watches();
-        let mut assets = std::collections::BTreeMap::new();
-        for a in scan.apps.values() {
-            let path = assets
-                .entry((a.id.clone(), a.icon.clone()))
-                .or_insert_with(|| super::icons::resolve(a, &self.theme, 64));
-            if let Some(p) = path.as_ref()
-                && let Ok(m) = std::fs::metadata(p)
-            {
-                signatures.push_str(&format!("{}:{}:{:?};", p.display(), m.len(), m.modified()));
+    }
+    fn read_failed(&mut self, domains: u32, error: &str) {
+        self.monitor_failed |= domains;
+        if domains & refresh::CATALOGUE != 0 {
+            let message = "registry read unavailable; keeping the previous catalogue";
+            let changed = self.healthy || !self.diagnostics.iter().any(|s| s == message);
+            self.healthy = false;
+            if !self.diagnostics.iter().any(|s| s == message) {
+                self.diagnostics.push(message.into());
+            }
+            if changed {
+                self.mark("catalogue");
             }
         }
-        drop(icon_audit);
-        let fingerprint = catalogue::hash(signatures.as_bytes());
-        if !self.icon_fingerprint.is_empty() && self.icon_fingerprint != fingerprint {
-            self.icon_revision += 1;
-            self.mark("icons");
+        if domains & refresh::ICONS != 0 {
+            for (_, reply) in self.icon_waiters.drain(..) {
+                let _ = reply.send(Err(Error::Failed(
+                    "icon write applied; audit unavailable".into(),
+                )));
+            }
         }
-        self.icon_fingerprint = fingerprint;
+        eprintln!("Applications1 read worker: {error}");
+    }
+    fn apply_read(&mut self, result: refresh::Output) {
+        let _span = super::icon_cache::span("registry-apply", "registry", 0);
+        let mut plans_changed = false;
+        let mut plan = |plans: &mut BTreeMap<u32, refresh::Plan>, group, value| {
+            if plans.get(&group) != Some(&value) {
+                plans.insert(group, value);
+                plans_changed = true;
+            }
+        };
+        // Catalogue/default/autostart results always make progress. Only icon
+        // audits depend on mutable theme/override context captured by the reader.
+        let icon_context = result.icon_revision == self.icon_revision && result.theme == self.theme;
+        if let Some((index, watches)) = result.autostart {
+            self.autostarts = Some(index);
+            plan(&mut self.monitor_plans, refresh::AUTOSTART, watches);
+            let index = self.autostarts.as_ref().unwrap();
+            let mut changed = false;
+            for app in self.apps.values_mut() {
+                let next = index.state(app);
+                if app.record["Autostart"] != next {
+                    app.record["Autostart"] = next;
+                    changed = true;
+                }
+            }
+            if changed {
+                self.catalogue_revision += 1;
+                self.mark("autostart");
+            }
+        }
+        if let Some((mut scan, present, watches)) = result.catalogue {
+            plan(&mut self.monitor_plans, refresh::CATALOGUE, watches);
+            let previous = self.present.clone();
+            self.present = present;
+            if previous != self.present
+                && catalogue::root_history_valid()
+                && let Err(e) = catalogue::save_root_history(&self.present)
+            {
+                scan.healthy = false;
+                scan.diagnostics.push(format!("root history: {e}"));
+                self.present = previous;
+            }
+            if !catalogue::root_history_valid() {
+                scan.healthy = false;
+                scan.diagnostics
+                    .push("root history corrupt or unreadable; pruning disabled".into());
+            }
+            self.apply_catalogue(scan);
+        }
+        let mut icons_changed = false;
+        let mut settled = false;
+        if icon_context {
+            if let Some((signature, watches)) = result.artwork {
+                icons_changed |=
+                    !self.icon_fingerprint.is_empty() && self.icon_fingerprint != signature;
+                self.icon_fingerprint = signature;
+                plan(&mut self.monitor_plans, refresh::ICONS, watches);
+                settled = true;
+            }
+            if let Some(refresh::Assets {
+                signature,
+                watches,
+                apps,
+            }) = result.assets
+            {
+                if apps == refresh::icon_ids(&self.apps) {
+                    icons_changed |=
+                        !self.asset_fingerprint.is_empty() && self.asset_fingerprint != signature;
+                    self.asset_fingerprint = signature;
+                    plan(&mut self.monitor_plans, refresh::ASSETS, watches);
+                } else {
+                    settled = false;
+                    self.dirty.mark(refresh::ICONS);
+                }
+            }
+            if icons_changed {
+                self.icons_changed();
+            }
+        } else if result.artwork.is_some() || result.assets.is_some() {
+            self.dirty.mark(refresh::ICONS);
+        }
+        if let Some(default) = result.default
+            && self.default != default
+        {
+            self.default = default;
+            self.mark("defaults");
+        }
+        if plans_changed
+            || self.monitor_failed != 0
+            || self.monitors.values().any(refresh::Monitor::retired)
+        {
+            self.monitor_failed =
+                refresh::sync(&mut self.monitors, &self.monitor_plans, &self.dirty);
+        }
+        if settled {
+            // Complete acknowledged writes only after their filesystem baseline
+            // and new metadata are committed, never inside the blocking reader.
+            self.publish_icons();
+            for (revision, reply) in std::mem::take(&mut self.icon_waiters) {
+                if revision <= result.icon_revision {
+                    let _ = reply.send(Ok(self.icon_revision));
+                } else if !reply.is_closed() {
+                    self.icon_waiters.push((revision, reply));
+                }
+            }
+        }
+    }
+    fn apply_catalogue(&mut self, scan: catalogue::Scan) {
         let previous_health = self.healthy;
         let previous_diagnostics = self.diagnostics.clone();
         self.healthy = scan.healthy;
@@ -378,7 +483,10 @@ impl Store {
             self.last_persist = Instant::now();
         }
         self.unity.retain(&ids);
-        let autostarts = super::autostart::Index::scan();
+        let autostarts = self
+            .autostarts
+            .as_ref()
+            .expect("autostart initialized before catalogue");
         for (id, a) in &mut apps {
             a.record["Autostart"] = autostarts.state(a);
             let (score, observed, is_new) = self.usage.fields(id);
@@ -402,15 +510,24 @@ impl Store {
             }
             self.catalogue_revision += 1;
             self.mark("catalogue");
+            self.index = super::observation::Index::new(&self.apps);
+            self.identity_dirty.notify_one();
+            self.refresh_matches();
         }
-        let default = gio::AppInfo::default_for_type("inode/directory", false)
-            .and_then(|a| a.id())
-            .map(|s| s.to_string())
-            .unwrap_or_default();
-        if default != self.default {
-            self.default = default;
-            self.mark("defaults");
+        if previous_health != self.healthy || previous_diagnostics != self.diagnostics {
+            self.mark("catalogue");
         }
+        self.usage.boundary(
+            self.observation.eligible(&self.index),
+            monotonic_us(),
+            false,
+            false,
+            wall(),
+        );
+        self.project_usage();
+        self.refresh_layout();
+    }
+    fn refresh_layout(&mut self) {
         let pending = self.pins.as_ref().map(|p| {
             let raw = p
                 .strv("layout")
@@ -442,106 +559,10 @@ impl Store {
                 Err(e) => self.diagnostics.push(e.to_string()),
             }
         }
-        if previous_health != self.healthy || previous_diagnostics != self.diagnostics {
-            self.mark("catalogue");
-        }
-        self.index = super::observation::Index::new(&self.apps);
-        self.identity_dirty.notify_one();
-        // Unchanged matches must not end the refresh: the asset monitors below are
-        // rebuilt for every catalogue scan, windows or not.
-        self.refresh_matches();
-        self.usage.boundary(
-            self.observation.eligible(&self.index),
-            monotonic_us(),
-            false,
-            false,
-            wall(),
-        );
-        self.project_usage();
-        for m in self.monitors.drain(..) {
-            m.cancel();
-        }
-        // Watch asset trees (directory watches are not recursive), selected
-        // absolute assets, defaults and the root history. Missing roots watch
-        // their nearest existing ancestor so creation/remount can recover.
-        // Icon trees past the traversal bounds keep their top-level watches
-        // (icons::watches), not a recovery timer (#1051).
-        self.monitor_failed = false;
-        let mut watches = scan.watches;
-        watches.extend(icon_watches);
-        for p in assets.values().flatten() {
-            if let Some(p) = p.parent() {
-                watches.insert(p.to_owned());
-            }
-        }
-        watches.extend(super::autostart::roots());
-        watches.insert(catalogue::home().join(".config"));
-        if let Some(p) = std::env::var_os("XDG_CONFIG_HOME") {
-            watches.insert(p.into());
-        }
-        let history = catalogue::root_history_path();
-        // The history's directory also holds the usage state this store writes
-        // every 30 s: only the history file itself is a catalogue event (#1051).
-        let mut installed = BTreeMap::<PathBuf, Option<OsString>>::new();
-        for mut path in watches
-            .into_iter()
-            .chain(history.parent().map(Path::to_path_buf))
-        {
-            let only = (Some(path.as_path()) == history.parent())
-                .then(|| history.file_name().map(OsString::from))
-                .flatten();
-            while !path.is_dir() {
-                if !path.pop() {
-                    break;
-                }
-            }
-            // A directory also wanted unfiltered for another reason stays unfiltered.
-            match installed.get_mut(&path) {
-                Some(filter) => {
-                    if *filter != only {
-                        *filter = None;
-                    }
-                }
-                None => {
-                    installed.insert(path, only);
-                }
-            }
-        }
-        if installed.len() > 8192 {
-            self.monitor_failed = true;
-        }
-        for (path, only) in installed.into_iter().take(8192) {
-            match watch_directory(&path, only, self.dirty.clone()) {
-                Ok(m) => self.monitors.push(m),
-                Err(_) => self.monitor_failed = true,
-            }
-        }
     }
     pub fn metadata(&self) -> Value {
         json!({"CatalogueRevision":self.catalogue_revision,"LayoutRevision":self.layout_revision,"UsageRevision":self.usage_revision,"LauncherRevision":self.launcher_revision,"IconRevision":self.icon_revision,"CatalogueComplete":self.healthy,"Diagnostics":self.diagnostics,"Apps":self.apps.values().map(|a|a.record.clone()).collect::<Vec<_>>(),"LayoutAvailable":self.layout_available(),"Layout":layout::records(&self.layout,&self.apps,&self.default),"DefaultDirectoryApp":self.default,"WindowMatches":self.matches,"HyaloEpoch":self.observation.epoch,"ActiveLaunches":self.launches.active(),"MatchingAvailable":self.observation.live,"UsageAvailable":self.observation.live&&self.usage.available(),"UsageReason":if self.usage.available(){&self.observation_reason}else{self.usage.unavailable_reason()},"NewAppsAvailable":self.usage.baseline_available(),"NewAppsReason":self.usage.unavailable_reason(),"LauncherAvailable":self.unity.available,"LauncherHydrationIncomplete":self.unity.incomplete,"LaunchAvailable":true,"LaunchObservationAvailable":self.observation.live})
     }
-}
-/// A directory monitor that marks the store dirty. With `only`, an event counts
-/// only when it names that file, as either side of a rename.
-fn watch_directory(
-    path: &Path,
-    only: Option<OsString>,
-    dirty: Arc<Notify>,
-) -> Result<gio::FileMonitor, glib::Error> {
-    let m = gio::File::for_path(path).monitor_directory(
-        gio::FileMonitorFlags::WATCH_MOVES,
-        None::<&gio::Cancellable>,
-    )?;
-    m.connect_changed(move |_, file, other, _| {
-        let names = |f: &gio::File| {
-            only.as_deref()
-                .is_none_or(|n| f.basename().is_some_and(|b| b.as_os_str() == n))
-        };
-        if names(file) || other.is_some_and(names) {
-            dirty.notify_one();
-        }
-    });
-    Ok(m)
 }
 type Job = Box<dyn FnOnce(&mut Store) + Send>;
 #[derive(Clone)]
@@ -572,6 +593,27 @@ impl Handle {
             rx,
             icon_view,
         )
+    }
+    /// Writes are acknowledged after the existing single reader has committed
+    /// the corresponding icon baseline. The actor/H1 keep serving other jobs.
+    pub async fn icon_write(
+        &self,
+        write: impl FnOnce(&mut Store) -> Result<(), Error> + Send + 'static,
+    ) -> Result<u64, Error> {
+        let reply = self
+            .call(move |s| {
+                write(s)?;
+                let (tx, rx) = oneshot::channel();
+                s.icon_waiters.retain(|(_, tx)| !tx.is_closed());
+                s.icon_waiters.push((s.icon_revision, tx));
+                s.dirty.mark(refresh::ICONS);
+                Ok(rx)
+            })
+            .await?;
+        tokio::time::timeout(Duration::from_secs(5), reply)
+            .await
+            .map_err(|_| Error::Timeout("icon write applied; audit result uncertain".into()))?
+            .map_err(|_| Error::Unavailable("icon audit worker exited".into()))?
     }
     pub async fn call<T: Send + 'static>(
         &self,
@@ -613,49 +655,67 @@ pub async fn spawn() -> Result<(Handle, Arc<Notify>), Error> {
             let ctx = glib::MainContext::new();
             let _ = ctx.with_thread_default(|| {
                 let mut store = Store::new(n, published, identity_wake, package_version);
-                store.refresh();
+                store.apply_theme();
+                // The initial read already includes the just-selected theme.
+                store.dirty.take();
+                let first=refresh::read(store.read_input(refresh::READ));
+                store.apply_read(first);
                 store.publish_icons();
                 let _ = ready_tx.send(());
                 let main_loop = glib::MainLoop::new(Some(&ctx), false);
                 let stop = main_loop.clone();
                 ctx.spawn_local(async move {
-                    let mut backoff = 1_u64;
-                    let mut recovery_at = Instant::now() + Duration::from_secs(1);
+                    let mut backoff=1_u64;
+                    let mut recovery_at=Instant::now()+Duration::from_secs(1);
+                    let mut pending=store.dirty.take();
+                    let mut debounce=None;
+                    let mut work:Option<(u32,oneshot::Receiver<refresh::Output>)>=None;
                     loop {
-                        let dirty = store.dirty.clone();
-                        let recovery = async {
-                            if store.healthy && !store.monitor_failed {
-                                std::future::pending::<()>().await;
-                            } else {
-                                glib::timeout_future(recovery_at.saturating_duration_since(Instant::now())).await;
-                            }
-                        };
+                        if pending!=0 && debounce.is_none(){debounce=Some(Instant::now()+Duration::from_millis(100));}
+                        let dirty=store.dirty.clone();
                         let deadline=store.tracking_deadline();
                         let tracking=async {match deadline {Some(at)=>glib::timeout_future(at.saturating_duration_since(Instant::now())).await,None=>std::future::pending::<()>().await}};
+                        let ready_at=debounce.filter(|_|work.is_none());
+                        let timer=async {match ready_at {Some(at)=>glib::timeout_future(at.saturating_duration_since(Instant::now())).await,None=>std::future::pending::<()>().await}};
+                        let recover=(!store.healthy || store.monitor_failed!=0) && work.is_none() && pending==0;
+                        let recovery=async {if recover {glib::timeout_future(recovery_at.saturating_duration_since(Instant::now())).await;}else{std::future::pending::<()>().await;}};
+                        let completed=async {match work.as_mut(){Some((_,rx))=>rx.await,None=>std::future::pending().await}};
                         tokio::select! {
-                            biased;
-                            _ = dirty.notified() => {
-                                // GLib timer coalesces an event burst without waking idle.
-                                glib::timeout_future(Duration::from_millis(100)).await;
-                                // Consume the notification accumulated during coalescing.
-                                let _ = dirty.notified().now_or_never();
-                                store.refresh();
-                                store.publish_icons();
-                                backoff = 1;
-                                recovery_at = Instant::now() + Duration::from_secs(backoff);
+                            _=dirty.wake.notified()=>{
+                                pending|=dirty.take();
+                                if pending&refresh::THEME!=0 {store.apply_theme();pending&=!refresh::THEME;}
+                                if pending&refresh::LAYOUT!=0 {store.refresh_layout();store.publish_icons();pending&=!refresh::LAYOUT;}
                             }
-                            _ = recovery => {
-                                store.refresh();
-                                store.publish_icons();
-                                backoff = (backoff * 2).min(60);
-                                recovery_at = Instant::now() + Duration::from_secs(backoff);
+                            _=timer=>{
+                                let domains=std::mem::take(&mut pending)&refresh::READ;debounce=None;
+                                if domains!=0 {
+                                    let input=store.read_input(domains);
+                                    let (tx,rx)=oneshot::channel();
+                                    match std::thread::Builder::new().name("applications-read".into()).spawn(move||{let _=tx.send(refresh::read(input));}) {
+                                        Ok(_)=>work=Some((domains,rx)),
+                                        Err(e)=>{store.read_failed(domains,&e.to_string());recovery_at=Instant::now()+Duration::from_secs(backoff);backoff=(backoff*2).min(60);}
+                                    }
+                                }
                             }
-                            _ = tracking => {store.tracking_tick(); store.publish_icons();}
-                            job = rx.recv() => {
-                                let Some(job) = job else { break };
-                                // A ready queue must yield so normal-priority GSettings
-                                // consent notifications run before the next effect.
-                                glib::timeout_future_with_priority(glib::Priority::LOW, Duration::ZERO).await;
+                            result=completed=>{
+                                let (domains,_)=work.take().expect("completed read");
+                                match result {
+                                    Ok(candidate)=>store.apply_read(candidate),
+                                    Err(e)=>{store.read_failed(domains,&e.to_string());}
+                                }
+                                store.publish_icons();
+                                backoff=if store.healthy && store.monitor_failed==0 {1}else{(backoff*2).min(60)};
+                                recovery_at=Instant::now()+Duration::from_secs(backoff);
+                            }
+                            _=recovery=>{
+                                pending|=store.monitor_failed;
+                                if !store.healthy {pending|=refresh::CATALOGUE|refresh::DEFAULTS;}
+                            }
+                            _=tracking=>{store.tracking_tick();store.publish_icons();}
+                            job=rx.recv()=>{
+                                let Some(job)=job else{break;};
+                                // Keep consent notifications ahead of each effect.
+                                glib::timeout_future_with_priority(glib::Priority::LOW,Duration::ZERO).await;
                                 job(&mut store);
                             }
                         }
@@ -676,7 +736,7 @@ pub async fn spawn() -> Result<(Handle, Arc<Notify>), Error> {
         identity_dirty,
         package_revision,
     };
-    super::identity::spawn(handle.clone());
+    super::identity::spawn(handle.clone()).await?;
     Ok((handle, notify))
 }
 
@@ -1044,16 +1104,18 @@ mod tests {
     /// Writes `name` the way the store does (a temporary, then a rename) and says
     /// whether the history directory's monitor marked the catalogue dirty.
     fn dirtied_by(dir: &std::path::Path, name: &str) -> bool {
-        use futures_util::FutureExt;
-        let dirty = std::sync::Arc::new(tokio::sync::Notify::new());
+        let dirty = std::sync::Arc::new(super::refresh::Dirty::default());
         let ctx = glib::MainContext::new();
         ctx.with_thread_default(|| {
-            let _m = super::watch_directory(
-                dir,
-                Some("applications-roots-v1.json".into()),
-                dirty.clone(),
-            )
-            .unwrap();
+            let mut plan = super::refresh::Plan::new();
+            super::refresh::file(
+                &mut plan,
+                &dir.join("applications-roots-v1.json"),
+                super::refresh::CATALOGUE,
+            );
+            let mut monitors = std::collections::BTreeMap::new();
+            let plans = std::collections::BTreeMap::from([(super::refresh::CATALOGUE, plan)]);
+            assert_eq!(super::refresh::sync(&mut monitors, &plans, &dirty), 0);
             let temp = dir.join(format!(".{name}-{}", super::super::unique()));
             std::fs::write(&temp, b"{}").unwrap();
             std::fs::rename(&temp, dir.join(name)).unwrap();
@@ -1064,7 +1126,7 @@ mod tests {
             }
         })
         .unwrap();
-        dirty.notified().now_or_never().is_some()
+        dirty.take() != 0
     }
 
     #[test]

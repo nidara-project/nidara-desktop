@@ -32,29 +32,53 @@ parsed executable basename in search, never for arbitrary argument matching.
 No child is started by the catalogue or a search.
 
 XDG_DATA_HOME and XDG_DATA_DIRS are authoritative; when the latter is unset,
-standard user/system, Flatpak and Snap export locations are included when
-present or previously observed. Explicit XDG_DATA_DIRS enables fully private
-profiles without traversing host exports. Watch the nearest existing ancestor
-for missing roots, all scanned directories, and atomic changes. Changes coalesce
-for 100 ms on the blocking GLib MainLoop. The bounded async job receiver wakes
-that context on demand and yields before each effect to service consent changes.
-A healthy, fully monitored catalogue has no periodic rescan or 5 ms loop. Failed
-scans/monitor installation use recovery backoff from 1 to 60 seconds; jobs do not
-reset its deadline. Recursive bounded icon watches and resolved asset parents
-cover artwork changes, including non-selected sizes. Icon traversal is bounded
-to 4096 directories/65536 entries/16 levels. Every icon root and each theme
-directly in it stay watched whatever the bounds: a theme's index.theme and
-icon-theme.cache live there and package updates rewrite that cache. A tree past
-the bounds (a normal /usr/share/icons with Papirus has ~7900 directories) is
-therefore watched at that level, never polled; a deeper change in a theme without
-a cache is only seen at the next real event (#1051). Combined installed directory
-watches are capped at 8192, with the recovery backoff if that cap is passed. The
-root-history directory also holds the usage state written every 30 s, so its
-watch counts only events naming the history file: the store never wakes itself
-with its own checkpoints (#1051). AppInfo/volume notifications
-cover default-handler/mount changes. A scan failure/degraded root preserves the previous complete
-in-process catalogue. Initial partial metadata is labelled incomplete. There is
-no empty-success claim or pruning on failed/partial/unmounted roots.
+standard user/system, Flatpak and Snap export locations are included. Unknown absent
+roots are healthy watch targets, so installing an exporter for the first time is
+observable too. Explicit XDG_DATA_DIRS enables fully private profiles without
+traversing host exports. GIO AppInfoMonitor supplies the standard catalogue/defaults
+notice; the worker's GAppInfo query rearms it after each change. Our additional roots
+and recursively parsed subdirectories retain their own watches. A missing target
+watches only its next required component, not unrelated siblings such as gvfs-metadata.
+There is no blanket watch of ~/.config or XDG_CONFIG_HOME.
+
+Catalogue/defaults, icons, autostart, layout and theme invalidate independently.
+The 100 ms coalescing deadline participates in the actor's select; no selected branch
+sleeps behind an incoming window. At most one read worker builds a filesystem candidate.
+Every completed catalogue/default/autostart read is applied, including during a long
+burst; only domains marked since that read started are coalesced for another read.
+No unrelated invalidation can veto publication. Icon portions alone revalidate the
+captured theme/revision and selected app→icon map, rescheduling only their domain. The worker receives immutable
+metadata, never the Store, GSettings, monitors or mutable usage/launch/window state.
+The owner merges current usage/Unity/generations and publishes in a short step. H1/jobs
+continue during the read. Each effect still yields to consent notifications first.
+A separate exclusive identity collector prepares the pacman index before service
+publication/H1 connection and reloads on package invalidation even without windows.
+Windows share its prepared version; collect/process never load it. Pending preparation
+waits off actor/H1 for the transaction lock and rechecks version/lock after reading.
+A stale lock delays preparation, never triggers deletion. An unavailable package database
+is attempted once per version; other resolver tiers remain available. See WINDOW-IDENTITY.md.
+Set/ResetIconOverride responds after that same reader has committed the post-write
+icon fingerprint baseline and published its revision. An old in-flight icon portion
+cannot settle a newer write. The 5-second wait is asynchronous; actor/H1 stay available.
+Audit failure/timeout reports that the write was applied but confirmation is uncertain.
+This prevents a delayed monitor of the acknowledged write from staling its first decode;
+external changes during a decode still invalidate it.
+Changing a real app can update its selected-asset watches; a generic catalogue/default
+notice does not walk icon trees. Unchanged metadata does not rebuild the identity index.
+
+Monitors are reused; only changed target/rule sets are installed or removed. A retired
+directory monitor is rearmed even if a quick replacement leaves the same pathname. Icon
+roots/themes and resolved asset parents cover artwork changes, including non-selected
+sizes, absolute files and symlink targets. Traversal remains bounded to 4096 directories,
+65536 entries and 16 levels. Root/theme watches survive an incomplete walk, so a large
+Papirus tree does not enable periodic refresh (#1051). A deeper change without a theme
+cache beyond those bounds is still seen only at a subsequent real event. Installed
+watches remain capped at 8192. Actual monitor failures or degraded catalogue roots use
+recovery backoff from 1 to 60 seconds, scoped to affected domains; ordinary jobs do not
+reset its deadline. The history-file watch ignores usage checkpoints and their temporary
+files. AppInfo/volume notices preserve defaults and mount recovery. A failed/partial scan
+keeps the previous complete in-process catalogue; initial partial data is explicitly
+incomplete, never empty success or evidence to prune pins.
 
 A bounded, atomically replaced 0600 root-history map at
 `$XDG_STATE_HOME/nidara/applications-roots-v1.json` records previously observed
@@ -227,3 +251,52 @@ bounded reconnect backoff (1–30 s); Unity has no healthy polling. Nonzero usag
 decays/checkpoints every 30 s; ordinary committed-time writes coalesce at up to
 1 Hz. Baseline/new-marker transitions commit before publication.
 These new workloads are not covered by the historical A1 zero-tick sample.
+
+## Registry scheduling evidence (#1127)
+
+A small before/after run used the same private Hyalo/bus, identical fresh profiles,
+four desktop entries and the real icon trees. Dev binaries had debug/incremental disabled.
+For three unrelated-file/window cases, H1 receipt to identified WindowMatches changed
+from 681–728 ms (median 712) to 10–17 ms (median 14). A real artwork change still took
+>800 ms to audit off-actor, but its window answered in 10 ms before that audit ended.
+No registry reads started for the unrelated-file cases. The first cold case remains
+separate (506 → 118 ms); no cold-start or installed-session latency guarantee is inferred.
+Both versions recovered a missing root, atomic replacement and two consecutive changes.
+Raw traces, scripts and binary hashes are in the local `evidence-1127-applications-events`
+directory. The existing A1/A2/A3 fixtures and 148 daemon unit tests pass; no new CI job
+or checker was added. The short `a1127` worktree path lets the existing cursor socket
+test stay below SUN_LEN without exclusions or a test patch.
+
+
+The owner-approved package preloading extension was compared against the registry-only
+branch in three alternating fresh-profile starts per version on the same private
+Hyalo/bus. First-window H1 receipt → identified answer changed from 117–528 ms
+(median 118) to 13–22 ms (median 15). Process start → Applications usage readiness
+was 4550/882/901 ms before and 1014/992/1007 ms after: the first before-run is a cold
+outlier, and the later pairs show the ~105–127 ms package read moved into startup.
+Each process recorded exactly one package read; all after-reads finished before
+service readiness, and every before-read started only with the first window.
+This is a small cache/order-sensitive local sample, not a startup or latency guarantee.
+The raw six rounds/spans are in `preload-paired` and `preload-comparison.json`.
+The final daemon passes 151 unit tests and A1/A2/A3 integrations, plus workspace Clippy.
+New regressions cover a reused preloaded first-window index, idle version reload,
+an unavailable database and preparation waiting through a transaction.
+
+
+Review follow-up (#1134): the global dirty generation was removed. It discarded
+complete reads even for unrelated marks and starved publication under a continuous
+mixed-domain burst. The private before/after control adds the same 250 ms read delay
+to both binaries and writes catalogue/autostart every 40 ms for 3.2 seconds: the old
+version publishes zero intermediate catalogue states; the fix publishes 8 and 9 in
+two repeats, before the burst ends. Pending domains still drive the next read.
+
+The CI GetIcon Stale after SetIconOverride was also reproduced at the exact same
+call: its delayed filesystem audit revised the acknowledged artwork during decode.
+With the same additional 650 ms Sample decode delay and 250 ms read delay in both
+binaries, the previous head fails and the fixed version passes the complete A1
+walk twice. Set/Reset now await the existing reader's baseline publication, without
+blocking actor/H1 or relaxing post-decode checks. The uninstrumented version passes
+151 unit tests, A1/A2/A3 and workspace Clippy. Local scripts/binary hashes and logs
+are in `review-*`; instrumentation is absent from production and no CI checker changed.
+The package-preload latency figures above were measured at 188884a0 before this
+review follow-up, not remeasured or presented as a final-head latency guarantee.
