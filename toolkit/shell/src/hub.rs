@@ -253,6 +253,11 @@ struct PendingUnpin {
     at: std::time::Instant,
 }
 
+/// How long a new window waits for the application service to say whose it is before the
+/// dock shows it as an unknown app: as long as the shell waits for any answer about a
+/// window. Answers measured between 18 and 309 ms (#1127).
+const IDENTITY_WAIT: std::time::Duration = crate::hyalo::DEADLINE;
+
 pub struct Hub {
     history: crate::notifications::History,
     nc_output: Option<String>,
@@ -267,6 +272,9 @@ pub struct Hub {
     pending_unpins: Vec<PendingUnpin>,
     apps: Option<AppsState>,
     windows: Vec<HyaloWindow>,
+    /// Windows the application service has not answered for yet: when each was first seen
+    /// without an answer, or None once [`IDENTITY_WAIT`] passed and it is shown as unknown.
+    identity_wait: HashMap<u64, Option<std::time::Instant>>,
     hyalo_epoch: u64,
     hyalo_run: u64,
     locked: bool,
@@ -353,6 +361,7 @@ impl Hub {
             pending_unpins: vec![],
             apps: None,
             windows: vec![],
+            identity_wait: HashMap::new(),
             hyalo_epoch: 0,
             hyalo_run: 0,
             locked: false,
@@ -431,10 +440,24 @@ impl Hub {
                 self.retire_transients(retired);
                 self.publish();
             }
-            let event = match self.notifications.next_deadline() {
-                Some(at) => match rx.recv_timeout(std::time::Duration::from_millis(
-                    at.saturating_sub(self.notification_now()),
-                )) {
+            if self.identity_give_up() {
+                self.publish();
+            }
+            let notice = self.notifications.next_deadline().map(|at| {
+                std::time::Duration::from_millis(at.saturating_sub(self.notification_now()))
+            });
+            let identity = self
+                .identity_wait
+                .values()
+                .flatten()
+                .map(|at| IDENTITY_WAIT.saturating_sub(at.elapsed()))
+                .min();
+            let wait = match (notice, identity) {
+                (Some(a), Some(b)) => Some(a.min(b)),
+                (a, b) => a.or(b),
+            };
+            let event = match wait {
+                Some(wait) => match rx.recv_timeout(wait) {
                     Ok(e) => e,
                     Err(std::sync::mpsc::RecvTimeoutError::Timeout) => continue,
                     Err(_) => break,
@@ -1099,12 +1122,40 @@ impl Hub {
                     .and_then(|s| s.parse::<u64>().ok())
                     == Some(self.hyalo_run)
         });
+        let mut waiting = std::mem::take(&mut self.identity_wait);
         for w in &mut self.windows {
-            w.window.desktop_id = source
-                .and_then(|a| a.window_matches.get(&w.window.id))
-                .cloned()
-                .unwrap_or_default();
+            let answer = source.and_then(|a| a.window_matches.get(&w.window.id));
+            // Hyalo announces a window before the service has said whose it is. Until it
+            // does, the window is nobody's: showing it would paint an unknown app first.
+            if source.is_some() && answer.is_none() {
+                let since = waiting
+                    .remove(&w.window.id)
+                    .unwrap_or_else(|| Some(std::time::Instant::now()));
+                self.identity_wait.insert(w.window.id, since);
+            }
+            w.window.desktop_id = answer.cloned().unwrap_or_default();
         }
+    }
+
+    /// The windows the dock shows: every one whose app is known, or known to be unknown.
+    fn dock_windows(&self) -> Vec<Window> {
+        self.windows
+            .iter()
+            .filter(|w| !matches!(self.identity_wait.get(&w.window.id), Some(Some(_))))
+            .map(|w| w.window.clone())
+            .collect()
+    }
+
+    /// True when a window's wait has just run out, so the dock must be drawn again.
+    fn identity_give_up(&mut self) -> bool {
+        let mut any = false;
+        for at in self.identity_wait.values_mut() {
+            if at.is_some_and(|at| at.elapsed() >= IDENTITY_WAIT) {
+                *at = None;
+                any = true;
+            }
+        }
+        any
     }
 
     /// Only the apps the dock shows get their art fetched.
@@ -1136,7 +1187,7 @@ impl Hub {
             ),
             None => (&[][..], &[][..], None),
         };
-        let windows: Vec<Window> = self.windows.iter().map(|w| w.window.clone()).collect();
+        let windows = self.dock_windows();
         let view = self.model.view(&Inputs {
             apps,
             pins,
@@ -1755,6 +1806,49 @@ mod tests {
             })
         });
         (memory, rx)
+    }
+    #[test]
+    fn a_window_waits_for_its_answer_before_the_dock_shows_it() {
+        let mut hub = Hub::new(
+            Prefs::default(),
+            None,
+            None,
+            Arc::new(Status::default()),
+            None,
+        );
+        hub.handle(HubEvent::Apps(AppsUpdate::State(AppsState {
+            epoch: 1,
+            revision: 1,
+            hyalo_epoch: "77:connection".into(),
+            matching_available: true,
+            ..Default::default()
+        })));
+        let windows = |ids: &[u64]| HyaloUpdate::Windows {
+            epoch: 1,
+            run: 77,
+            windows: ids.iter().map(|id| hw(*id, "DP-1", false)).collect(),
+            workspaces: vec![],
+        };
+        hub.handle(HubEvent::Hyalo(windows(&[6, 7])));
+        assert!(hub.dock_windows().is_empty(), "no answer yet: nobody's");
+        // The answer arrives: one is an app, the other is known to be unknown.
+        let mut answered = hub.apps.clone().unwrap();
+        answered.window_matches.insert(6, "a.desktop".into());
+        answered.window_matches.insert(7, String::new());
+        hub.handle(HubEvent::Apps(AppsUpdate::State(answered)));
+        assert_eq!(hub.dock_windows().len(), 2);
+        // A service that never answers does not hide a window for ever.
+        hub.handle(HubEvent::Hyalo(windows(&[6, 7, 8])));
+        assert_eq!(hub.dock_windows().len(), 2);
+        assert!(!hub.identity_give_up(), "not yet");
+        *hub.identity_wait.get_mut(&8).unwrap() = Some(std::time::Instant::now() - IDENTITY_WAIT);
+        assert!(hub.identity_give_up());
+        assert_eq!(hub.dock_windows().len(), 3);
+        assert!(!hub.identity_give_up(), "said once");
+        // Without the service there is nothing to wait for.
+        hub.handle(HubEvent::Apps(AppsUpdate::Unavailable("gone".into())));
+        hub.handle(HubEvent::Hyalo(windows(&[6, 7, 8, 9])));
+        assert_eq!(hub.dock_windows().len(), 4);
     }
     #[test]
     fn a_new_window_of_an_unpinned_app_fetches_its_icon() {

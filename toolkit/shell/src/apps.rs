@@ -295,7 +295,9 @@ fn snapshot_data(conn: &Connection) -> Result<AppsState, String> {
             .filter_map(|m| {
                 let id = number(m, "WindowId");
                 let app = text(m, "DesktopId");
-                (text(m, "HyaloEpoch") == parsed.hyalo_epoch).then_some((id, app))
+                // "pending" is the service still looking: no answer yet, not "unknown".
+                (text(m, "HyaloEpoch") == parsed.hyalo_epoch && text(m, "MatchKind") != "pending")
+                    .then_some((id, app))
             })
             .collect(),
     );

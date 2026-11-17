@@ -150,6 +150,15 @@ package, launch-unit, names and parent tiers are documented in
 `session/daemon/src/applications/WINDOW-IDENTITY.md`. Ambiguous/unknown stays window
 backed. Matching updates alone can bring an unpinned app's icon into the dock.
 
+**A window waits for its answer (#1127).** Hyalo announces a window to the dock directly,
+and whose it is comes from Applications1 on another channel, so the window arrives first:
+measured 18 to 309 ms earlier. Drawn at once it showed as an unknown app, then jumped to
+its own. So while the service is live and has not answered for a window (no match, or
+`MatchKind` "pending"), the hub keeps it out of the dock's view (`Hub::dock_windows`).
+An answer of "unknown" is an answer. A service that never answers hides nothing for
+ever: after the shell's own deadline for a window answer (`hyalo::DEADLINE`) the window
+is shown as what it is. Without the service there is nothing to wait for.
+
 **Signals (D2).** Each slot carries a `Signal` beside its windows: a **count** and a
 **progress** from the app's Unity record in Applications1 (`Launcher`, shown only while
 the app makes it visible; a zero count is no badge), and **attention**, true when Hyalo
