@@ -32,12 +32,15 @@ pub use view::{
     Kind, Layer, Node, Overlay, Padding, Pane, Reveal, Role, Scroll, Segmented, SettingRow, Shown,
     SidebarEntry, Slider, SliderEnd, Stack, Swatches, Text, Wash,
 };
-pub use window::{AppWindow, CONTENT, Labels, Page, WindowLook};
+pub use window::{
+    Alert, AppWindow, CONTENT, Dialog, DialogAnswer, DialogButton, DialogContent, DialogUpdate,
+    Labels, Page, WindowLook,
+};
 
 #[cfg(test)]
 mod tests;
 
-pub use components::{Check, ComponentLook, Drawing, Part, Switch};
+pub use components::{ButtonAppearance, Check, ComponentLook, Drawing, Part, Switch};
 
 pub use components::{Host, HostRequest, Value};
 

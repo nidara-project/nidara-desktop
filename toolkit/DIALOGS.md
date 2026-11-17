@@ -1,7 +1,7 @@
 # Dialog and alert, #1103 step 6
 
 Owner authorized implementation in the Codex chat on 2026-11-17. Base: main2dcda568.
-This records the contract before implementation; acceptance evidence will be appended.
+The first commit records the contract; implementation and local acceptance follow it.
 
 ## Scope and owner decisions
 
@@ -31,7 +31,8 @@ retained component instance; cancellation/error must also retire the modal names
   parent's queue and painting through a restricted parent adapter, while rejecting its
   input and accessibility requests. Old run_dialog callers remain supported.
 - No Rust action-risk mechanism currently exists. CATALOG.md labels it a proposal.
-  The owner is being asked about an explicit declaration, not a consent implementation.
+  The owner decided directly in Codex to reserve risk for another step (2026-11-17).
+  This step therefore adds neither risk annotations nor a consent mechanism.
 
 ## Host and lifetime
 
@@ -46,8 +47,9 @@ Map all semantic relations/selection targets consistently, retire them on every 
 and restore parent publication/focus even after a transport or content error.
 
 Dialog/alert root roles differ, but both are modal and active only on actual focus.
-Alert message is its description. Buttons keep complete localized names and declared
-risk. Look/reduced-motion changes reach both windows; there is no nested glass pane for
+Alert message is its description. Buttons keep complete localized names. The original
+risk requirement is explicitly deferred by the owner; destructive colouring is not an
+agent-risk declaration. Look/reduced-motion changes reach both windows; there is no nested glass pane for
 its own sake. The root owns the glass and content uses ordinary kit nodes.
 
 ## Size and tokens
@@ -75,3 +77,27 @@ Negative controls independently catch default Enter, Escape, Tab confinement, re
 focus, parent refusal and destructive-default validation. Existing stable gallery pages
 keep their pixels. New checks stay local until any tracked checker patch is approved.
 Physical-session/Orca and vkms evidence are reported separately, never inferred.
+
+## Local acceptance record
+
+Evidence directory: `evidence-1103-dialogs` in the owner's ChatGPT workspace. Full toolkit
+workspace: 747 tests passed, with the existing wallpaper timing benchmark ignored. Hyalo:
+170 tests passed; toolkit and compositor Clippy pass with warnings denied. The generated
+button recipes pass the token checker in all four mode variants; three broken exports
+(missing primary recipe, invalid fraction, unresolved colour) are rejected.
+
+The private headless Hyalo runs use real libatspi and a scripted input-method probe,
+never the installed session. At scales 1 and 1.25, 71 dialog checks cover initial focus,
+composition/default/list Enter, composition/modal Escape, Tab traversal, restoration,
+parent refusal, outside press, compositor close, modal roles, centering and portal updates.
+Six independent source mutations are rejected by explicit wrong-state oracles, with the
+original source restored after each. The historical cascade fails the centering regression.
+The existing gallery passes 119 assertions per scale and its 13 negative controls; the
+measured run took 428 seconds. All 26 selected stable component captures match two fresh
+main references byte for byte. The final binary passes the modal checks again; two accepted reader responses yield one
+first answer, and header dragging moves through the compositor. Evidence is beside the
+screenshots. Physical-session/Orca and vkms validation remain pending.
+
+Settings tests need the complete fresh export: run both `scripts/export-tokens.mjs` and
+`scripts/export-settings-data.mjs` into the same directory and pass `NK_SETTINGS_DATA`.
+The gallery's token-only export is insufficient for Settings' manifest/page tests.

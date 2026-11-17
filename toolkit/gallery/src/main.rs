@@ -4,6 +4,7 @@
 //! kit alone. It is also the reference for an application on nk-view (§13.2): the window is
 //! the kit's (`AppWindow`); the app keeps its model, builds its page from it, and acts on what
 //! the window gives back.
+mod dialogs;
 mod pages;
 
 use nk_platform::{exports::Exports, portal::Portal};
@@ -29,6 +30,7 @@ struct Gallery {
     inert: bool,
     fault: Option<String>,
     paste_replies: usize,
+    dialog_request: Option<(nk_view::Key, String)>,
 }
 
 impl Gallery {
@@ -85,7 +87,11 @@ impl Gallery {
         );
         self.window.commit(window, |host| {
             Self::page(host, model, catalogue, colors, at, history_len)
-        })
+        })?;
+        if let Some((key, kind)) = self.dialog_request.take() {
+            self.open_modal(window, key, &kind)?;
+        }
+        Ok(())
     }
 
     /// What an activation asks of the model.
@@ -129,6 +135,10 @@ impl Gallery {
             }
         }
         match action {
+            "dialog-open" | "alert-open" | "alert-delete" | "dialog-invalid" => {
+                self.dialog_request = Some((a.key, action.to_owned()));
+                return;
+            }
             "list-select" => {
                 if let Some(nk_view::Value::Index(index)) = a.value {
                     self.model.selected_row = index;
@@ -357,6 +367,7 @@ fn run() -> Result<()> {
         inert: std::env::var("NK_GALLERY_FAULT").as_deref() == Ok("inert"),
         fault: std::env::var("NK_GALLERY_FAULT").ok(),
         paste_replies: 0,
+        dialog_request: None,
     };
     gallery.rebuild();
     nk_wayland::run(

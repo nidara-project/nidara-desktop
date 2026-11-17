@@ -4,6 +4,7 @@ use nk_wayland::{Glass, Material, Shadow, Tone};
 use nk_widgets::Result;
 use serde_json::Value;
 
+#[derive(Clone)]
 pub struct PanelMaterial {
     steps: Vec<(f64, Material)>,
 }

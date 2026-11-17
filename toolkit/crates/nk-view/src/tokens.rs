@@ -439,7 +439,17 @@ pub struct SwitchStyle {
 /// A button in a page's content, which no glass lies under (`components.json` `button`,
 /// `toolkit/tokens/button.json`: Settings' row button). The view paints all of it.
 #[derive(Clone, Copy, Debug, PartialEq)]
+pub struct ButtonPaintStyle {
+    pub background: Color,
+    pub border: Color,
+    pub hover: Color,
+    pub pressed: Color,
+    pub text: Color,
+}
+#[derive(Clone, Copy, Debug, PartialEq)]
 pub struct ButtonStyle {
+    pub primary: ButtonPaintStyle,
+    pub destructive: ButtonPaintStyle,
     pub padding_x: f64,
     pub padding_y: f64,
     pub border: f64,
@@ -476,7 +486,51 @@ pub fn button_from(component: &Value, set: &Value) -> Result<ButtonStyle, String
             .ok_or_else(|| format!("colors.json: no {name}"))
             .and_then(parse_color)
     };
+    let colour_at = |v: &Value, key: &str| -> Result<Color, String> {
+        let name = v[key]
+            .as_str()
+            .ok_or_else(|| format!("button appearance: no {key}"))?;
+        set["tokens"][name]
+            .as_str()
+            .ok_or_else(|| format!("colors.json: no {name}"))
+            .and_then(parse_color)
+    };
+    let fraction = |v: &Value, key: &str| -> Result<f32, String> {
+        v[key]
+            .as_f64()
+            .filter(|n| n.is_finite() && (0. ..=1.).contains(n))
+            .map(|n| n as f32)
+            .ok_or_else(|| format!("button appearance: invalid {key}"))
+    };
+    let primary = &component["primary"];
+    let accent = colour_at(primary, "color")?;
+    let white = fraction(primary, "hoverWhite")?;
+    let black = fraction(primary, "pressedBlack")?;
+    let mix = |amount: f32, endpoint: f32| {
+        Color::new([
+            accent.components[0] * (1. - amount) + endpoint * amount,
+            accent.components[1] * (1. - amount) + endpoint * amount,
+            accent.components[2] * (1. - amount) + endpoint * amount,
+            accent.components[3],
+        ])
+    };
+    let destructive = &component["destructive"];
+    let red = colour_at(destructive, "color")?;
     Ok(ButtonStyle {
+        primary: ButtonPaintStyle {
+            background: accent,
+            border: accent.with_alpha(fraction(primary, "borderAlpha")?),
+            hover: mix(white, 1.),
+            pressed: mix(black, 0.),
+            text: colour_at(primary, "text")?,
+        },
+        destructive: ButtonPaintStyle {
+            background: red.with_alpha(fraction(destructive, "restAlpha")?),
+            border: red.with_alpha(fraction(destructive, "borderAlpha")?),
+            hover: red.with_alpha(fraction(destructive, "hoverAlpha")?),
+            pressed: red.with_alpha(fraction(destructive, "pressedAlpha")?),
+            text: colour_at(destructive, "text")?,
+        },
         padding_x: n("paddingX")?,
         padding_y: n("paddingY")?,
         border: n("border")?,

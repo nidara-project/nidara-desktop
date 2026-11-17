@@ -26,6 +26,9 @@ use nk_wayland::{
     PopupEvent, PopupId, PopupPlacement, PopupSide, Result, Window, WindowAction, WindowBackground,
 };
 use std::time::Instant;
+#[path = "dialog.rs"]
+mod dialog;
+pub use dialog::{Alert, Dialog, DialogAnswer, DialogButton, DialogContent, DialogUpdate};
 
 /// The content's scroll region.
 pub const CONTENT: &str = "frame/content";
@@ -66,6 +69,7 @@ enum MenuRequest {
 
 /// What the window paints with in one appearance: the kit's tokens and type, Settings' panel
 /// glass, the frame's measures and the window's background.
+#[derive(Clone)]
 pub struct WindowLook {
     pub tokens: Tokens,
     pub types: TypeScale,
@@ -178,6 +182,10 @@ pub(crate) fn retain_rebuilds(state: &ViewState, requests: &mut Vec<ReplyTarget>
 }
 
 pub struct AppWindow {
+    modal_frame: Option<dialog::ModalFrame>,
+    suspended: bool,
+    active: bool,
+    focus_restore: Option<crate::state::FocusLease>,
     look: WindowLook,
     labels: Labels,
     name: String,
@@ -286,6 +294,10 @@ impl AppWindow {
         // they never ease on their own (VIEW.md §13.2).
         band.set_slides(false);
         Self {
+            modal_frame: None,
+            suspended: false,
+            active: false,
+            focus_restore: None,
             look,
             labels,
             name: name.into(),
@@ -374,6 +386,21 @@ impl AppWindow {
 
     /// Lays the page out in the frame at `now`, and the band over it.
     fn lay(&mut self, now: Instant) {
+        if let (Some(modal), Some(page)) = (&self.modal_frame, &self.page) {
+            let root = modal.content(page, &self.look, self.controls);
+            self.state.set_slides(false);
+            self.state.layout(
+                &root,
+                self.size,
+                self.scale,
+                self.look.tokens.with_types(&self.look.types),
+                self.text.as_mut(),
+                now,
+            );
+            self.changed = true;
+            self.paint_dirty = true;
+            return;
+        }
         let Some(page) = self.page.clone() else {
             return;
         };
@@ -490,6 +517,9 @@ impl AppWindow {
 
     /// A turn without an event: the reader's requests, the slide's next step, the fades.
     pub fn idle(&mut self) -> Result<Vec<Activated>> {
+        if self.suspended {
+            return Ok(vec![]);
+        }
         let mut out = self.take_actions();
         let now = Instant::now();
         if let Some(a) = &self.a11y {
@@ -501,6 +531,14 @@ impl AppWindow {
             if revision != self.revision {
                 continue;
             }
+            let request = if let Some(modal) = &self.modal_frame {
+                let Some(request) = modal.request(request) else {
+                    continue;
+                };
+                request
+            } else {
+                request
+            };
             if let Request::SetText(id, _) | Request::SetSelection(id, _) = &request {
                 let keys = self.state.semantic_keys();
                 if let Some(key) = keys.get(id) {
@@ -609,6 +647,10 @@ impl AppWindow {
     /// An event for the window. What it does not take (a key no control wants) comes back as
     /// `false`, for the app's own shortcuts; activations come back for the app to act on.
     pub fn event(&mut self, event: Event, window: &mut Window) -> Result<(bool, Vec<Activated>)> {
+        if let Event::Focus(active) = &event {
+            self.active = *active;
+            self.changed = true;
+        }
         let now = Instant::now();
         let mut out = vec![];
         match &event {
@@ -665,7 +707,10 @@ impl AppWindow {
                 let (w, h) = window.size();
                 self.size = (w as f64, h as f64);
                 self.scale = window.scale();
-                if self.band_layer.is_none() && window.supports_layers() {
+                if self.modal_frame.is_none()
+                    && self.band_layer.is_none()
+                    && window.supports_layers()
+                {
                     // The blur first, so the band's buttons lie over it, and the sidebar
                     // last, over both. The blur takes no pointer.
                     let blur = window.create_layer((1, 1))?;
@@ -676,7 +721,9 @@ impl AppWindow {
                     // Only with a layer to draw it on: without (D5) the window paints it.
                     self.state.lift(Some(SIDE.into()));
                 }
-                self.sidebar.adapt(self.size.0, &self.look.frame);
+                if self.modal_frame.is_none() {
+                    self.sidebar.adapt(self.size.0, &self.look.frame);
+                }
                 self.lay(now);
                 true
             }
@@ -794,6 +841,13 @@ impl AppWindow {
     }
 
     fn commit_once(&mut self, window: &mut Window) -> Result<()> {
+        if self.active
+            && let Some(lease) = self.focus_restore.take()
+        {
+            self.state.restore_focus(&lease);
+            self.changed = true;
+            self.paint_dirty = true;
+        }
         for request in self.state.take_host_requests() {
             Host::request(self, request);
         }
@@ -846,7 +900,14 @@ impl AppWindow {
                 self.pending.extend(ticked.activated);
             }
             if let Some(c) = self.controls {
-                let (x, y) = self.look.frame.controls_at(self.size, c);
+                let (x, y) = if self.modal_frame.is_some() {
+                    self.state
+                        .rect(&"dialog/server-close".into())
+                        .map(|r| (r[0], r[1]))
+                        .unwrap_or((0., 0.))
+                } else {
+                    self.look.frame.controls_at(self.size, c)
+                };
                 window.place_window_controls(x, y, !self.look.dark)?;
             }
             for request in self.state.take_host_requests() {
@@ -871,7 +932,7 @@ impl AppWindow {
         Ok(())
     }
 
-    fn publish(&mut self, window: &Window) -> Result<()> {
+    fn semantic_tree(&mut self, window: &Window) -> nk_a11y::Tree {
         let mut root = nk_a11y::Node::new(ROOT, nk_a11y::Role::Window, self.name.clone());
         root.bounds = nk_a11y::Bounds {
             x: 0.,
@@ -879,6 +940,7 @@ impl AppWindow {
             width: self.size.0,
             height: self.size.1,
         };
+        root.states.active = self.active;
         let mut tree = self.state.semantics(root, ROOT + 1);
         // The band's buttons, children of the window as the rest is.
         let band = self.band.semantics(
@@ -895,6 +957,16 @@ impl AppWindow {
             r.children.extend(children);
         }
         self.place_options(&mut tree, window);
+        tree
+    }
+    fn publish(&mut self, window: &Window) -> Result<()> {
+        if self.suspended {
+            return Ok(());
+        }
+        let mut tree = self.semantic_tree(window);
+        if let Some(modal) = &self.modal_frame {
+            tree = modal.publish(tree, self.active)?;
+        }
         self.revision += 1;
         match &self.a11y {
             Some(a) => a.update(self.revision, tree)?,
@@ -1434,7 +1506,7 @@ impl AppWindow {
             &mut |name, size| glyphs.get(name, size),
             (!frame.material).then_some(&self.last),
         )?;
-        if self.band_layer.is_none() {
+        if self.modal_frame.is_none() && self.band_layer.is_none() {
             // No layers (D5): the band in the window itself, opaque, over the content.
             let f = &self.look.frame;
             let opaque = FrameStyle {
@@ -1456,6 +1528,9 @@ impl AppWindow {
         self.look.glass(&self.last)
     }
     pub fn window_background(&self) -> Option<WindowBackground> {
+        if self.modal_frame.is_some() {
+            return None;
+        }
         Some(WindowBackground {
             color: self.look.background,
             level: None,

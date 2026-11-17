@@ -55,6 +55,8 @@ pub struct Bounds {
 }
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub struct States {
+    /// A modal alert as well as the Dialog role.
+    pub modal: bool,
     /// A `Window`/`Dialog` that is the active window (holds keyboard focus). A screen
     /// reader ignores focus inside a window that is not active (#835).
     pub active: bool,

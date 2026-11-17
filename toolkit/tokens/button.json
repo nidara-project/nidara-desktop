@@ -1,7 +1,8 @@
 {
   "$comment": [
     "Native row button (Browse, the font buttons): ui/lib/nidara-kit/styles/_components.scss button.nidara-btn, the secondary look \u2014 padding 5px 14px, a 1px border, the shared 20px content floor, so it is 32 tall like the Dropdown trigger beside it (whose 4px padding + 2px border was chosen to match this one). Settings uses fse-small instead of fixed fs-small, as the Dropdown does.",
-    "Default applies to every component mode variant."
+    "Default applies to every component mode variant.",
+    "Primary and danger recipes are the existing nidara-btn--primary/--danger CSS. Shared focus remains components.focus (#1103 step5b)."
   ],
   "default": {
     "paddingX": 14,
@@ -16,7 +17,22 @@
     "hover": "--nidara-surface-hover",
     "pressed": "--nidara-surface-active",
     "text": "--nidara-text",
-    "disabledOpacity": 0.45
+    "disabledOpacity": 0.45,
+    "primary": {
+      "color": "--nidara-accent",
+      "text": "--nidara-accent-fg",
+      "borderAlpha": 0,
+      "hoverWhite": 0.15,
+      "pressedBlack": 0.3
+    },
+    "destructive": {
+      "color": "--nidara-danger",
+      "text": "--nidara-danger",
+      "restAlpha": 0.1,
+      "borderAlpha": 0.25,
+      "hoverAlpha": 0.2,
+      "pressedAlpha": 0.3
+    }
   },
   "variants": []
 }

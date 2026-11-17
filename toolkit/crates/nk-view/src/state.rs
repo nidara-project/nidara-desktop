@@ -143,6 +143,15 @@ pub struct LayoutMetrics {
     pub shaped: usize,
 }
 
+/// A restoration lease, bound to the same key, component type and instance.
+#[derive(Clone)]
+pub(crate) struct FocusLease {
+    key: Key,
+    kind: std::any::TypeId,
+    instance: u64,
+    visible: bool,
+}
+
 pub struct ViewState {
     profile: bool,
     metrics: LayoutMetrics,
@@ -348,6 +357,87 @@ impl ViewState {
     /// Enable measurement clocks for explicit CPU probes; normal layout leaves them off.
     pub fn set_profile(&mut self, enabled: bool) {
         self.profile = enabled;
+    }
+    pub(crate) fn focus_first_under(&mut self, root: &Key) -> bool {
+        let Some(root) = self.index(root) else {
+            return false;
+        };
+        let key = self
+            .controls()
+            .find(|&i| self.enabled(i) && self.shown(i) && self.under(i, root))
+            .map(|i| self.placed[i].key.clone());
+        if let Some(key) = key {
+            self.request(&key, false);
+            true
+        } else {
+            false
+        }
+    }
+    pub(crate) fn focus_lease(&self, key: &Key) -> Option<FocusLease> {
+        let i = self.index(key)?;
+        if !self.enabled(i) || !self.shown(i) {
+            return None;
+        }
+        Some(FocusLease {
+            key: key.clone(),
+            kind: self.placed[i].part()?.component().type_id(),
+            instance: self.components.instance(key),
+            visible: self.focus_visible,
+        })
+    }
+    pub(crate) fn restore_focus(&mut self, lease: &FocusLease) -> bool {
+        let Some(i) = self.index(&lease.key) else {
+            return false;
+        };
+        if !self.enabled(i)
+            || !self.shown(i)
+            || self.components.instance(&lease.key) != lease.instance
+            || self.placed[i]
+                .part()
+                .is_none_or(|p| p.component().type_id() != lease.kind)
+        {
+            return false;
+        }
+        self.request(&lease.key, false);
+        self.focus_visible = lease.visible;
+        true
+    }
+    /// Ask only the focused component about Enter; no unconditional activation
+    /// fallback. A modal/default-action host owns the unhandled case.
+    pub(crate) fn enter(&mut self) -> (bool, Option<Activated>) {
+        let Some(i) = self
+            .focus
+            .as_ref()
+            .and_then(|key| self.index(key))
+            .filter(|&i| self.enabled(i))
+        else {
+            return (false, None);
+        };
+        let Some(effects) = self.component_input(i, |c, cx| c.enter(cx)) else {
+            return (false, None);
+        };
+        let handled = effects.handled;
+        (handled, self.activated(i, effects))
+    }
+    /// Natural size of the already expanded view; measuring never reconciles
+    /// component state again or invents a second component tree.
+    pub(crate) fn natural_size(&mut self, backend: &mut dyn nk_text::TextBackend) -> (f64, f64) {
+        let Some(view) = &self.view else {
+            return (0., 0.);
+        };
+        let tokens = self.tokens.as_ref().expect("laid view");
+        let reveals = self.motion.progress(Instant::now());
+        Layouter {
+            spacing: &tokens.spacing,
+            reveals: &reveals,
+            offsets: &self.offsets,
+            text: backend,
+            cache: &mut self.text,
+            scale: self.scale,
+            look: tokens.with_types(self.types.as_ref().expect("laid types")),
+            row: tokens.row_height,
+        }
+        .natural_size(view, self.bounds[2])
     }
     pub fn layout_metrics(&self) -> LayoutMetrics {
         self.metrics

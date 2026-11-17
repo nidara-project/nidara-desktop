@@ -37,7 +37,7 @@ pub(crate) fn tokens() -> Tokens {
         "--nidara-surface-hover": "rgba(255, 255, 255, 0.12)",
         "--nidara-surface-active": "rgba(255, 255, 255, 0.18)",
         "--nidara-surface-strong": "rgba(255, 255, 255, 0.30)", "--nidara-accent-fg": "#ffffff",
-        "--nidara-surface-back": "rgba(255, 255, 255, 0.04)", "--nidara-accent-30": "rgba(0, 136, 255, 0.3)", "--nidara-radius-pill": "9999px", "--nidara-bg": "rgba(22, 22, 34, 1.00)"}});
+        "--nidara-surface-back": "rgba(255, 255, 255, 0.04)", "--nidara-accent-30": "rgba(0, 136, 255, 0.3)", "--nidara-radius-pill": "9999px", "--nidara-bg": "rgba(22, 22, 34, 1.00)", "--nidara-danger":"#ff3b30"}});
     Tokens {
         focus: focus_from(&serde_json::from_str::<serde_json::Value>(include_str!("../../../tokens/focus.json")).unwrap()["default"], &set).unwrap(),
         list: crate::tokens::ListStyle{inset:4.,hover_opacity:0.08},
@@ -105,10 +105,9 @@ fn check() -> serde_json::Value {
 }
 /// `components.json` `button`, as `toolkit/tokens/button.json` exports it.
 fn button() -> serde_json::Value {
-    json!({"paddingX": 14, "paddingY": 5, "border": 1, "minContentHeight": 20, "radius": "sm",
-        "background": "--nidara-surface", "borderColor": "--nidara-border",
-        "hover": "--nidara-surface-hover", "pressed": "--nidara-surface-active",
-        "disabledOpacity": 0.45})
+    serde_json::from_str::<serde_json::Value>(include_str!("../../../tokens/button.json")).unwrap()
+        ["default"]
+        .clone()
 }
 /// `components.json` `dropdown`, as `toolkit/tokens/dropdown.json` exports it.
 fn dropdown() -> serde_json::Value {
@@ -5842,4 +5841,54 @@ fn disclosure_endpoints_match_settings_chevron_vectors_at_both_scales() {
             );
         }
     }
+}
+
+#[test]
+fn modal_enter_leaves_plain_field_unhandled_but_preserves_composition_and_submit() {
+    use crate::components::EditableField;
+    let field = || EditableField::new("draft").node("name", "Name", "changed");
+    let mut state = laid(&field(), (320., 100.), 1.);
+    state.request(&"name".into(), false);
+    assert_eq!(state.enter(), (false, None));
+    state.ime(&nk_wayland::ImeBatch {
+        preedit: Some(("語".into(), 3, 3)),
+        ..Default::default()
+    });
+    assert!(state.enter().0, "composition cannot submit the dialog");
+    let mut editor = EditableField::new("draft");
+    editor.submit = Some("own-submit".into());
+    let mut state = laid(&editor.node("name", "Name", "changed"), (320., 100.), 1.);
+    state.request(&"name".into(), false);
+    let (handled, action) = state.enter();
+    assert!(handled);
+    assert_eq!(action.unwrap().action, "own-submit");
+}
+
+#[test]
+fn modal_focus_lease_requires_the_same_shown_enabled_component_instance() {
+    let control = || Node::button("launch", "Open", "open", style(14.));
+    let mut state = laid(&control(), (320., 100.), 1.);
+    state.request(&"launch".into(), false);
+    let lease = state.focus_lease(&"launch".into()).unwrap();
+    let update = |state: &mut ViewState, node: Node| {
+        state.layout(
+            &node,
+            (320., 100.),
+            1.,
+            tokens().with_types(&types()),
+            &mut backend(),
+            Instant::now(),
+        );
+    };
+    update(&mut state, control());
+    assert!(state.restore_focus(&lease));
+    update(&mut state, control().enabled(false));
+    assert!(!state.restore_focus(&lease));
+    update(&mut state, Node::spacer("gone"));
+    assert!(!state.restore_focus(&lease));
+    update(&mut state, control());
+    assert!(
+        !state.restore_focus(&lease),
+        "a recycled key is a new component"
+    );
 }

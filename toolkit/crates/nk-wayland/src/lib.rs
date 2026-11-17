@@ -7,7 +7,8 @@ pub use activation::Activation;
 mod control_material;
 pub use control_material::{ControlMaterial, InkCoverage, MaterialRect, Response, StateRegion};
 mod controls;
-pub use controls::{ControlsLayout, ControlsSide, WindowAction};
+mod modal;
+pub use controls::{ControlsButtons, ControlsLayout, ControlsSide, WindowAction};
 mod foreign;
 mod ime;
 mod keyboard;
@@ -227,7 +228,16 @@ impl DragFeedback {
 
 /// App callbacks run on the connection's thread; no callbacks survive run().
 pub trait Application {
+    /// The restricted parent adapter of a nested modal host. Ordinary applications
+    /// and legacy dialogs return None; the adapter never receives parent input.
+    fn modal_parent(&mut self) -> Option<&mut dyn Application> {
+        None
+    }
+
     /// Request server control layout before the first configure (fallback if absent).
+    fn window_control_buttons(&self) -> ControlsButtons {
+        ControlsButtons::All
+    }
     fn window_controls(&self) -> bool {
         false
     }
@@ -323,6 +333,8 @@ struct DragOut {
 }
 /// Small phase-0 window host, not a general widget library.
 pub struct Window {
+    protocol_queue: std::rc::Weak<std::cell::RefCell<wayland_client::EventQueue<Window>>>,
+    modal_hint: Option<modal::XdgDialogV1>,
     connection: Connection,
     foreign: foreign::Foreign,
     activation: Option<activation::xdg_activation_v1::XdgActivationV1>,
@@ -451,6 +463,28 @@ impl Window {
             app.event(e, self)?;
         }
         Ok(())
+    }
+    /// Content-derived toplevel bounds; zero has xdg-shell's "no limit" meaning.
+    pub fn set_size_limits(&mut self, minimum: (u32, u32), maximum: (u32, u32)) -> Result<()> {
+        if minimum.0 > i32::MAX as u32
+            || minimum.1 > i32::MAX as u32
+            || maximum.0 > i32::MAX as u32
+            || maximum.1 > i32::MAX as u32
+            || (maximum.0 != 0 && minimum.0 > maximum.0)
+            || (maximum.1 != 0 && minimum.1 > maximum.1)
+        {
+            return Err("invalid toplevel size limits".into());
+        }
+        let top = self
+            .toplevel
+            .as_ref()
+            .ok_or("size limits require a toplevel")?;
+        top.set_min_size(minimum.0 as i32, minimum.1 as i32);
+        top.set_max_size(maximum.0 as i32, maximum.1 as i32);
+        Ok(())
+    }
+    pub fn is_closed(&self) -> bool {
+        self.closed
     }
     pub fn size(&self) -> (u32, u32) {
         (self.width, self.height)
@@ -965,7 +999,7 @@ impl Window {
             .unwrap_or(1);
         self.preferred_scale(scale as u32 * 120);
     }
-    fn paint(&mut self, app: &mut impl Application) -> Result<()> {
+    fn paint<A: Application + ?Sized>(&mut self, app: &mut A) -> Result<()> {
         if !self.configured || !self.dirty || self.frame_pending {
             return Ok(());
         }
@@ -1238,7 +1272,7 @@ fn run_inner(
     mut app: impl Application,
     options: Options,
     start: Instant,
-    parent: Option<&Window>,
+    mut parent: Option<&mut Window>,
     popup_options: Option<(PopupPlacement, Option<u32>)>,
     layer: Option<(LayerSpec, Option<WakeSource>)>,
 ) -> Result<u32> {
@@ -1246,7 +1280,7 @@ fn run_inner(
         .as_ref()
         .and_then(|(spec, _)| spec.output.as_ref())
         .map(|o| o.connection.clone());
-    let conn = if let Some(parent) = parent {
+    let conn = if let Some(parent) = parent.as_deref() {
         parent.connection.clone()
     } else if let Some(own) = own {
         // The dock's own connection, where `OutputWatch::bind_output` bound its output.
@@ -1254,10 +1288,12 @@ fn run_inner(
     } else {
         Connection::connect_to_env().map_err(err)?
     };
-    let mut queue = conn.new_event_queue::<Window>();
-    let qh = queue.handle();
+    let queue = std::rc::Rc::new(std::cell::RefCell::new(conn.new_event_queue::<Window>()));
+    let qh = queue.borrow().handle();
     let registry = conn.display().get_registry(&qh, ());
     let mut w = Window {
+        protocol_queue: std::rc::Rc::downgrade(&queue),
+        modal_hint: None,
         connection: conn.clone(),
         foreign: foreign::Foreign::default(),
         activation: None,
@@ -1348,7 +1384,7 @@ fn run_inner(
         skip_material: !options.material,
         capabilities: Capabilities::default(),
     };
-    queue.roundtrip(&mut w).map_err(err)?;
+    queue.borrow_mut().roundtrip(&mut w).map_err(err)?;
     macro_rules! bind {
         ($ty:ty,$version:expr) => {{
             w.globals
@@ -1442,7 +1478,7 @@ fn run_inner(
         }
     } else if let Some((placement, grab_serial)) = popup_options {
         let xdg = xdg.insert(base.get_xdg_surface(&surface, &qh, ()));
-        let parent = parent.ok_or("popup requires a parent")?;
+        let parent = parent.as_deref().ok_or("popup requires a parent")?;
         let parent_xdg = parent
             .xdg
             .as_ref()
@@ -1463,9 +1499,18 @@ fn run_inner(
         let top = xdg.get_toplevel(&qh, ());
         top.set_app_id(options.app_id.into());
         top.set_title(options.title.into());
-        top.set_min_size(400, 300);
-        if let Some(parent) = parent {
+        if let Some(parent) = parent.as_deref() {
+            // A dialog derives its minimum from its content, not the ordinary
+            // application window's historical 400x300 floor.
             top.set_parent(parent.toplevel.as_ref());
+            let manager =
+                bind!(modal::XdgWmDialogV1, 1).ok_or("modal dialog requires xdg_wm_dialog_v1")?;
+            let hint = manager.get_xdg_dialog(&top, &qh, ());
+            hint.set_modal();
+            w.modal_hint = Some(hint);
+            manager.destroy();
+        } else {
+            top.set_min_size(400, 300);
         }
         w.toplevel = Some(top);
     }
@@ -1482,6 +1527,7 @@ fn run_inner(
     w.xdg = xdg;
     if w.toplevel.is_some() && app.window_controls() {
         w.request_window_controls();
+        w.set_window_control_buttons(app.window_control_buttons());
     }
     // Seat and manager order in registry is unspecified.
     if let (Some(m), Some(s)) = (&w.text_manager, &w.seat) {
@@ -1499,7 +1545,15 @@ fn run_inner(
     // What a batch still held when the app closed: its requests' terminals still count.
     let mut rest = Vec::new();
     while !w.closed {
-        queue.dispatch_pending(&mut w).map_err(err)?;
+        queue.borrow_mut().dispatch_pending(&mut w).map_err(err)?;
+        if let Some(parent) = parent.as_deref_mut()
+            && let Some(adapter) = app.modal_parent()
+        {
+            modal::pump_parent(parent, adapter)?;
+            if parent.closed {
+                w.close();
+            }
+        }
         w.transfers()?;
         if let Some(k) = w.keyboard.tick() {
             w.push_key(k);
@@ -1613,7 +1667,7 @@ fn run_inner(
             w.commit()?;
         }
         conn.flush().map_err(|e| format!("Wayland flush: {e}"))?;
-        if let Some(guard) = queue.prepare_read() {
+        if let Some(guard) = queue.borrow().prepare_read() {
             use rustix::event::{PollFd, PollFlags, Timespec, poll};
             let fd = guard.connection_fd();
             let mut fds = vec![PollFd::new(&fd, PollFlags::IN)];
@@ -1676,6 +1730,9 @@ impl Window {
     // Child windows share the parent's connection. Rust proxies alone do not send
     // destructors; close roles even when a callback or transport operation fails.
     fn destroy_surfaces(&mut self) {
+        if let Some(hint) = self.modal_hint.take() {
+            hint.destroy();
+        }
         self.close_popup_overlay();
         self.foreign.destroy();
         self.tokens.destroy();
@@ -1984,7 +2041,10 @@ impl Dispatch<wl_keyboard::WlKeyboard, ()> for Window {
                     .filter(|s| **s == surface)
                     .map(|_| serial);
                 w.serial = serial;
-                w.events.push(Event::Focus(true));
+                if w.keyboard.root_enter.is_none() {
+                    w.keyboard.reset();
+                }
+                w.events.push(Event::Focus(w.keyboard.root_enter.is_some()));
             }
             wl_keyboard::Event::Leave { .. } => {
                 w.keyboard.root_enter = None;
@@ -2008,6 +2068,11 @@ impl Dispatch<wl_keyboard::WlKeyboard, ()> for Window {
             wl_keyboard::Event::Key {
                 serial, key, state, ..
             } => {
+                // Several modal windows share this client/seat. A keyboard
+                // resource also sees focus on the client's other surfaces.
+                if w.keyboard.root_enter.is_none() {
+                    return;
+                }
                 if w.ignore_input_before
                     .is_some_and(|before| serial.wrapping_sub(before) as i32 <= 0)
                 {

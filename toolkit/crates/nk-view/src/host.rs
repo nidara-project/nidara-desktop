@@ -85,16 +85,21 @@ impl KeyInput {
 
 /// The interface glyphs (`nd-` names) a view draws, each looked up once per size. What is
 /// not found is logged once and drawn as nothing.
+#[derive(Clone)]
 pub struct Glyphs {
+    inner: std::rc::Rc<std::cell::RefCell<GlyphCache>>,
+}
+struct GlyphCache {
     icons: nk_icons::Icons,
     cache: HashMap<(String, u32), Option<Arc<nk_icons::Icon>>>,
 }
-
 impl Glyphs {
     pub fn new(icons: nk_icons::Icons) -> Self {
         Self {
-            icons,
-            cache: HashMap::new(),
+            inner: std::rc::Rc::new(std::cell::RefCell::new(GlyphCache {
+                icons,
+                cache: HashMap::new(),
+            })),
         }
     }
     pub fn get(&mut self, name: &str, size: f64) -> Option<Arc<nk_icons::Icon>> {
@@ -102,8 +107,9 @@ impl Glyphs {
             return None;
         }
         let px = size.round() as u32;
-        let icons = &mut self.icons;
-        self.cache
+        let mut inner = self.inner.borrow_mut();
+        let GlyphCache { icons, cache } = &mut *inner;
+        cache
             .entry((name.to_string(), px))
             .or_insert_with(|| {
                 icons

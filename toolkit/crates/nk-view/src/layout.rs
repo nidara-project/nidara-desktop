@@ -315,6 +315,11 @@ impl Layouter<'_> {
         out
     }
 
+    pub(crate) fn natural_size(&mut self, root: &Node, width: f64) -> (f64, f64) {
+        let m = self.measure(root, width);
+        (m.w, m.h)
+    }
+
     fn measure_frame(&mut self, body: &Node, width: f64, f: FrameSpec) -> Measure {
         let (x, y) = f.inset;
         let c = self.measure(body, (width - 2. * x).max(0.));

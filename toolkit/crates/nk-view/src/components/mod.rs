@@ -39,7 +39,7 @@ pub use swatches::SwatchRow;
 mod segment;
 mod swatch;
 mod switch;
-pub use button::Button;
+pub use button::{Button, ButtonAppearance};
 pub use check::Check;
 pub use segment::Segment;
 pub use swatch::Swatch;
@@ -214,6 +214,11 @@ pub trait Component: Any {
             cx.effects.handled = true;
             cx.effects.activate = true;
         }
+    }
+    /// Enter offered by a host with a default response. A component can consume
+    /// it without an activation (composition), or leave it to that host.
+    fn enter(&self, cx: &mut Input<'_>) {
+        self.key(cx, crate::KeyInput::Activate);
     }
     fn text(&self, _cx: &mut Input<'_>, _text: &str) {}
     fn request(&self, cx: &mut Input<'_>, request: Request) {

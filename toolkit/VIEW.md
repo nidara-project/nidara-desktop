@@ -1287,3 +1287,35 @@ result.json and workload duration.json are uploaded under hyalo-artifacts/toolki
 The outer gallery-nightly-duration.json records total checker wall time and exit status;
 the first scheduled-run duration must be reported as measured, never inferred from a
 private local cage run. The local check-headless.sh path remains available separately.
+
+### Modal dialog and alert (#1103 step 6)
+
+`AppWindow::run_dialog` takes a retained launcher key, a `Dialog` response specification,
+application-owned `DialogContent`, and the parent page builder. `run_alert` uses the same
+host with a message, optional detail and appearance-update callback. Both return one
+`DialogAnswer`, including cancellation by Escape/close. See `DIALOGS.md` for the contract;
+`gallery/src/dialogs.rs` is the public-API example. Settings' older `DialogTree` and font
+chooser remain unchanged until their conversion step.
+
+Response IDs must be unique. At most one cancel (first) and one default (last) are allowed;
+a destructive response cannot be default. Content consumes Enter before the default:
+IME composition, a field's own submit and list row opening retain their behavior. Escape
+first reaches composition/menu. Tab stays in the child's retained view; closing restores
+only the same shown, enabled launcher component instance. `DialogContent::buttons` may
+update eligibility, and `poll` reports appearance/content/parent changes. The parent page
+builder must read the current owner model; it is rerun on `parent_changed` and on return.
+
+A child reuses the AppWindow look, text backend, glyph cache and content components, with
+its own IME/clipboard state. Bounds are measured from content and chrome, capped by the
+parent and the existing form width; excess content scrolls. Dialogs request only the
+compositor close button; alerts request no window controls. Header dragging uses the
+press serial. Hyalo owns parent centering and the standard xdg-dialog modal hint.
+
+The nested run loop services the parent's protocol queue and painting through a restricted
+adapter. The parent ignores input and shares its one AT-SPI Bridge with the active child:
+parent actions are absent; Dialog/Alert has MODAL, with the alert message as description.
+Child semantic IDs and relations have a process-unique lifetime namespace; stale objects
+cannot address the parent or a later modal. Every returned error restores publication.
+There is no additional modal nesting or agent-risk/consent mechanism in this step (owner
+explicitly deferred risk). Default/destructive button paints use the exported `button`
+primary/destructive records; ordinary button and shared focus recipes are preserved.

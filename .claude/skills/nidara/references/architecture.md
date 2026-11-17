@@ -2915,6 +2915,22 @@ installed export; never compile fallback visual numbers into an application.
 settings-tokens-check requires each field and its CI control removes highlight
 from one mode variant. Form width still aliases the existing WINDOW_LAYOUT tokens.
 
+nk-view modal dialogs and alerts use `AppWindow::run_dialog` / `run_alert`, not a new
+application host or the legacy Settings DialogTree. Read `toolkit/DIALOGS.md` and VIEW.md's
+modal section before changing them. `DialogContent` owns the draft; the parent builder
+reads its owner's latest model. The host shares one Bridge, namespaces child IDs for each
+modal lifetime, removes parent actions, and restores only the same eligible launcher
+component. The nested Wayland loop must keep parent configure/scale/painting alive while
+refusing parent input. Standard xdg-dialog supplies modality; set_parent alone does not.
+Hyalo skips floating cascade for parented windows to preserve centering. Alerts have no
+controls; ordinary dialogs request only close. Enter reaches content before the default,
+Escape reaches composition/menu before cancel. New default/destructive button recipes
+come from button.json; shared focus is unchanged. Agent risk/consent was explicitly
+reserved for another step by the owner (17-11); do not infer it from red button styling.
+For workspace tests, NK_SETTINGS_DATA must point at both fresh exporters' output
+(export-tokens.mjs plus export-settings-data.mjs): a token-only gallery fixture lacks
+Settings' manifest, and installed exports may predate the new component fields.
+
 Keep material and component exports separate (owner, 2026-10-21): glass.json is
 only glass/tone/blur/shadow/backdrop response, including control.json. Common
 geometry, focus/hover/separators and named content widths are components.json
