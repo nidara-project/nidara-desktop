@@ -199,11 +199,24 @@ parent bus's environment. A high-priority Hidden entry masks the lower one.
 NoDisplay and OnlyShowIn/NotShowIn affect launch-list visibility; legitimate hidden
 entries remain available to identity/icon matching. TryExec, locale fallback,
 .desktop escaping, desktop actions, Terminal, Path and field codes follow their
-specifications; invalid entries do not abort a refresh. Watch missing roots via
-their closest existing parent, directory creation/deletion and atomic replace;
-coalesce bursts for 100 ms, and full-rescan after watch overflow. Publish an
-immutable new catalogue only after indexing finishes; preserve the last good
-one while scanning, with a degraded diagnostic if the scan fails.
+specifications; invalid entries do not abort a refresh. GIO AppInfoMonitor invalidates
+the standard catalogue/defaults and is rearmed by a GAppInfo query. Our additional
+Flatpak/Snap roots and nested desktop directories retain targeted coverage; missing
+roots watch only the next required component of their closest existing parent.
+Atomic replacement, two consecutive changes and mount/root recovery remain covered.
+Icons, autostart and layout have independent invalidations. Unrelated data/config
+files and a window opening never trigger a registry or artwork reconstruction.
+
+Coalesce bursts for 100 ms using a pending deadline, never a sleep inside the actor's
+selected branch. Filesystem reads run as at most one bounded candidate in flight,
+with invalidation generations rejecting stale results. The private #1127 baseline
+measured ~1.2 ms for four desktop entries but >800 ms for the icon audit, justifying
+that worker for costly real artwork changes too. GSettings, GIO monitors, live usage,
+window observations and publication stay with the GLib owner. Apply only the requested
+domains, preserving live effects; reuse unchanged monitors. H1 events/jobs continue
+while reads run. Publish an immutable new catalogue only after indexing finishes;
+preserve the last good one with degraded diagnostics if a scan fails. Recovery uses
+bounded backoff for actual failures, never periodic refresh merely for a large theme.
 
 Search preserves the current score tiers: exact, prefix, word prefix, substring,
 word-start/adjacent acronym, then the covered-name rescue tier. Match localized
