@@ -174,8 +174,9 @@ pub(crate) fn slots(view: &View) -> Vec<Slot> {
 }
 
 /// The keyboard is the dock's only while it holds the roving focus (Shell1 `focus:dock`);
-/// a click never takes it from the app. `gap` is the margin on the anchored edge: the
-/// screen gap, less however far auto-hide has slid the dock out (autohide.rs).
+/// a click never takes it from the app. `gap` is the margin on the anchored edge: 0 in
+/// place (the surface reaches the screen edge, `geometry::to_edge`), negative by however far
+/// auto-hide has slid the dock out (autohide.rs).
 pub fn placement(l: &Layout, keyboard: bool, gap: i32) -> LayerPlacement {
     let (anchor, margin) = match l.position {
         Position::Bottom => (Edges::BOTTOM, [0, 0, gap, 0]),
@@ -341,11 +342,11 @@ impl Dock {
             output,
             reserved,
         );
-        let mut l = if frame.prefs.magnification {
+        let mut l = crate::geometry::to_edge(if frame.prefs.magnification {
             envelope(rest, &slots, frame.prefs.max_icon_size, output, reserved)
         } else {
             rest
-        };
+        });
         if frame.prefs.auto_hide {
             // A dock that hides reserves nothing: windows keep the whole output.
             l.exclusive_zone = 0;
@@ -391,10 +392,9 @@ impl Dock {
             let m = crate::autohide::margin(&self.layout, self.hide.slide);
             vec![crate::autohide::band(&self.layout, m)]
         } else {
-            // What is drawn, and the reach beside the resting glass that magnifies first.
-            let mut input = self.shown.input(&slots);
-            input.extend(self.layout.reach());
-            input
+            // One band: what is drawn, the reach beside the resting glass that magnifies
+            // first, and everything between them and the screen edge.
+            vec![self.shown.input(&slots, self.layout.reach())]
         };
         if input != self.input {
             if let Err(e) = w.set_input_region(Some(&input)) {

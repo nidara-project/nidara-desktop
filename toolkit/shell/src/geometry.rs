@@ -283,6 +283,33 @@ pub fn envelope(
     l
 }
 
+/// The surface taken out to the screen edge: `SCREEN_GAP` more on its anchored side, with
+/// everything in it where it was on screen. The gap used to be the layer's margin, outside
+/// the surface, so the last rows before the edge belonged to nobody: a pointer thrown to the
+/// edge had left the dock (owner, 2026-11-16). The layer's margin is now 0 at rest and the
+/// exclusive zone carries the gap itself.
+pub fn to_edge(mut l: Layout) -> Layout {
+    let gap = SCREEN_GAP;
+    match l.position {
+        Position::Bottom => {
+            l.size.1 += gap as u32;
+            l.hits.iter_mut().for_each(|h| h[3] += gap);
+        }
+        Position::Right => {
+            l.size.0 += gap as u32;
+            l.hits.iter_mut().for_each(|h| h[2] += gap);
+        }
+        Position::Left => {
+            l.size.0 += gap as u32;
+            l.rects.iter_mut().for_each(|r| r[0] += gap);
+            l.glass[0] += gap;
+            l.hits.iter_mut().for_each(|h| h[2] += gap);
+        }
+    }
+    l.exclusive_zone += gap as i32;
+    l
+}
+
 impl Layout {
     /// What is drawn and hit now: the resting layout magnified around the pointer `p`
     /// (surface coordinates), `presence` 0..1 of the way in. The strip stays centred where
@@ -363,26 +390,48 @@ impl Layout {
         out
     }
 
-    /// Where the dock takes input: its glass and whatever icon grew out of it.
-    pub fn input(&self, slots: &[Slot]) -> Vec<[i32; 4]> {
-        let px = |r: &[f64; 4]| {
-            let (x0, y0) = (r[0].floor(), r[1].floor());
-            [
-                x0 as i32,
-                y0 as i32,
-                (r[0] + r[2]).ceil() as i32 - x0 as i32,
-                (r[1] + r[3]).ceil() as i32 - y0 as i32,
-            ]
+    /// Where the dock takes input: ONE band, along its glass and `beside` it (the reach),
+    /// from the glass's far side (the surface's, while anything is magnified) to the
+    /// surface's anchored edge. It was the
+    /// glass and each icon's own square: between two magnified icons, above the lower one,
+    /// the pointer had left the dock, and the magnification fell away under it.
+    pub fn input(&self, slots: &[Slot], beside: Option<[i32; 4]>) -> [i32; 4] {
+        let (mut x0, mut y0) = (self.glass[0], self.glass[1]);
+        let (mut x1, mut y1) = (x0 + self.glass[2], y0 + self.glass[3]);
+        let icons = self
+            .rects
+            .iter()
+            .zip(slots)
+            .filter(|(_, s)| **s == Slot::Icon);
+        let beside = beside.map(|r| r.map(f64::from));
+        for r in icons.map(|(r, _)| *r).chain(beside) {
+            x0 = x0.min(r[0]);
+            y0 = y0.min(r[1]);
+            x1 = x1.max(r[0] + r[2]);
+            y1 = y1.max(r[1] + r[3]);
+        }
+        // Once an icon has grown out of the glass the band takes the surface's whole
+        // headroom, not the height of the tallest icon now: between two icons the bell's
+        // peak dips, and a band that followed it dropped a pointer travelling along the top
+        // of one icon as it crossed to the next (measured, 2026-11-17).
+        let grown = match self.position {
+            Position::Bottom => y0 < self.glass[1] - 0.5,
+            Position::Left => x1 > self.glass[0] + self.glass[2] + 0.5,
+            Position::Right => x0 < self.glass[0] - 0.5,
         };
-        let mut out = vec![px(&self.glass)];
-        out.extend(
-            self.rects
-                .iter()
-                .zip(slots)
-                .filter(|(_, s)| **s == Slot::Icon)
-                .map(|(r, _)| px(r)),
-        );
-        out
+        let (sw, sh) = (self.size.0 as f64, self.size.1 as f64);
+        match self.position {
+            Position::Bottom => (y0, y1) = (if grown { 0. } else { y0 }, sh),
+            Position::Left => (x0, x1) = (0., if grown { sw } else { x1 }),
+            Position::Right => (x0, x1) = (if grown { 0. } else { x0 }, sw),
+        }
+        let (x0, y0) = (x0.floor(), y0.floor());
+        [
+            x0 as i32,
+            y0 as i32,
+            x1.ceil() as i32 - x0 as i32,
+            y1.ceil() as i32 - y0 as i32,
+        ]
     }
 
     /// Beside the resting glass, at its height: where the pointer, coming in from a side,
@@ -407,10 +456,22 @@ impl Layout {
     }
 
     /// The slot under a surface point, if any.
+    /// Across, a slot reaches from the far side of the glass, or of its own icon when that
+    /// grew past it, to the screen edge: the input band above a lower neighbour keeps the
+    /// magnification alive, it does not press that neighbour.
     pub fn hit(&self, x: f64, y: f64) -> Option<usize> {
-        self.hits
+        let n = self
+            .hits
             .iter()
-            .position(|[hx, hy, w, h]| x >= *hx && x < hx + w && y >= *hy && y < hy + h)
+            .position(|[hx, hy, w, h]| x >= *hx && x < hx + w && y >= *hy && y < hy + h)?;
+        let [gx, gy, gw, _] = self.glass;
+        let r = self.rects[n];
+        match self.position {
+            Position::Bottom => y >= gy.min(r[1]),
+            Position::Left => x < (gx + gw).max(r[0] + r[2]),
+            Position::Right => x >= gx.min(r[0]),
+        }
+        .then_some(n)
     }
     /// The running dot's centre for an icon slot: between the icon and the screen edge.
     pub fn dot(&self, slot: usize) -> (f64, f64) {
@@ -428,6 +489,68 @@ impl Layout {
 mod tests {
     use super::*;
     const ICONS: [Slot; 4] = [Slot::Icon, Slot::Icon, Slot::Separator, Slot::Icon];
+
+    #[test]
+    fn the_surface_reaches_the_screen_edge_and_input_is_one_band() {
+        for pos in [Position::Bottom, Position::Left, Position::Right] {
+            let rest = layout(&ICONS, 64, pos, (1920, 1080), 0.);
+            let plain = envelope(rest, &ICONS, 128, (1920, 1080), 0.);
+            let l = to_edge(plain.clone());
+            // SCREEN_GAP more on the anchored side, the zone with it, nothing moved on screen.
+            let across = |l: &Layout| if pos.horizontal() { l.size.1 } else { l.size.0 };
+            assert_eq!(across(&l), across(&plain) + SCREEN_GAP as u32, "{pos:?}");
+            assert_eq!(l.exclusive_zone, plain.exclusive_zone + SCREEN_GAP as i32);
+            let moved = if pos == Position::Left {
+                SCREEN_GAP
+            } else {
+                0.
+            };
+            assert_eq!(l.glass[0], plain.glass[0] + moved, "{pos:?}");
+            // At rest: the glass and the reach beside it, out to the screen edge; the
+            // headroom above stays the windows'.
+            let [x, y, w, h] = l.input(&ICONS, l.reach());
+            let [gx, gy, gw, gh] = l.glass.map(|v| v.round() as i32);
+            match pos {
+                Position::Bottom => {
+                    assert_eq!((y, y + h), (gy, l.size.1 as i32));
+                    assert!(x < gx && x + w > gx + gw, "the reach is in the band");
+                }
+                Position::Left => assert_eq!((x, x + w), (0, gx + gw)),
+                Position::Right => assert_eq!((x, x + w), (gx, l.size.0 as i32)),
+            }
+            let _ = (gh, h, y);
+            // Magnified: the whole headroom, wherever the pointer is along the dock. The
+            // band never follows the tallest icon, whose height dips between two icons.
+            let mid = |r: [f64; 4]| (r[0] + r[2] / 2., r[1] + r[3] / 2.);
+            let (a, b) = (mid(l.rects[0]), mid(l.rects[1]));
+            for t in [0., 0.5, 1.] {
+                let p = (a.0 + (b.0 - a.0) * t, a.1 + (b.1 - a.1) * t);
+                let m = l.magnify(&ICONS, p, 1.);
+                let [x, y, w, h] = m.input(&ICONS, l.reach());
+                match pos {
+                    Position::Bottom => assert_eq!((y, y + h), (0, l.size.1 as i32)),
+                    _ => assert_eq!((x, x + w), (0, l.size.0 as i32)),
+                }
+                let _ = (x, y, w, h);
+            }
+        }
+    }
+
+    #[test]
+    fn the_band_above_a_lower_neighbour_presses_nothing() {
+        let rest = layout(&ICONS, 64, Position::Bottom, (1920, 1080), 0.);
+        let l = to_edge(envelope(rest, &ICONS, 128, (1920, 1080), 0.));
+        let a = l.rects[0];
+        let m = l.magnify(&ICONS, (a[0] + a[2] / 2., a[1] + a[3] / 2.), 1.);
+        let (big, small) = (m.rects[0], m.rects[3]);
+        assert!(big[1] < small[1], "the far icon is lower");
+        let x = small[0] + small[2] / 2.;
+        assert_eq!(m.hit(x, big[1] + 1.), None, "above the lower icon");
+        assert_eq!(m.hit(x, small[1] + 1.), Some(3));
+        // Down to the very edge of the screen it is still that icon.
+        assert_eq!(m.hit(x, m.size.1 as f64 - 0.5), Some(3));
+        assert_eq!(l.hit(a[0] + 1., l.size.1 as f64 - 0.5), Some(0));
+    }
 
     #[test]
     fn at_rest_it_keeps_the_ts_proportions() {
