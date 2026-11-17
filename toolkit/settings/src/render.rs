@@ -31,34 +31,7 @@ use std::time::{Duration, Instant};
 
 pub type Result<T> = std::result::Result<T, String>;
 
-/// What changes the settings: the client in the app, a fake in tests.
-pub trait Editor {
-    fn session(&self) -> &Session;
-    fn apply(&mut self, key: &str, value: Value) -> std::result::Result<(), ApplyError>;
-    /// Drain/stage external changes during a modal call, without mutating its Tree.
-    fn poll(&mut self) -> Vec<Notice> {
-        Vec::new()
-    }
-    /// The one bus connection, for a builder's portal call (the file chooser); None in tests.
-    fn connection(&self) -> Option<&zbus::blocking::Connection> {
-        None
-    }
-}
-
-impl Editor for crate::client::Client {
-    fn session(&self) -> &Session {
-        crate::client::Client::session(self)
-    }
-    fn apply(&mut self, key: &str, value: Value) -> std::result::Result<(), ApplyError> {
-        crate::client::Client::apply(self, key, value)
-    }
-    fn connection(&self) -> Option<&zbus::blocking::Connection> {
-        Some(crate::client::Client::connection(self))
-    }
-    fn poll(&mut self) -> Vec<Notice> {
-        crate::client::Client::poll(self)
-    }
-}
+pub use crate::client::Editor;
 
 /// Stage real client notices before modal input/acceptance; apply external changes after return.
 pub fn stage_modal_notices(
@@ -443,7 +416,8 @@ impl Rendered {
                         (row, Control::Toggle(switch))
                     }
                     "segmented" | "preset" => {
-                        let options = choice_options(key, &entry.entry, control)?;
+                        let options =
+                            crate::row_values::choice_options(key, &entry.entry, control)?;
                         let (row, choices) = choice_row(
                             tree,
                             group,
@@ -972,39 +946,6 @@ fn show(tree: &mut Tree, session: &Session, row: &Row) -> Result<()> {
     Ok(())
 }
 
-/// A radio group's options: the schema's `ui.options` (segmented) or `ui.presets` (preset).
-fn choice_options(
-    key: &str,
-    entry: &serde_json::Value,
-    control: &str,
-) -> Result<Vec<(String, Value)>> {
-    let ui = &entry["ui"];
-    if control == "preset" {
-        let unit = ui["presetUnit"].as_str().unwrap_or_default();
-        return ui["presets"]
-            .as_array()
-            .ok_or_else(|| format!("{key}: a preset row without presets"))?
-            .iter()
-            .map(|p| {
-                let v = Value::from_json(p).ok_or_else(|| format!("{key}: a preset of no kind"))?;
-                Ok((format!("{}{unit}", v.predicate_text()), v))
-            })
-            .collect();
-    }
-    ui["options"]
-        .as_array()
-        .ok_or_else(|| format!("{key}: a segmented row without options"))?
-        .iter()
-        .map(|o| {
-            let value = o["value"]
-                .as_str()
-                .ok_or_else(|| format!("{key}: an option without its value"))?;
-            let label = o["label"].as_str().unwrap_or(value);
-            Ok((label.to_owned(), Value::Text(value.to_owned())))
-        })
-        .collect()
-}
-
 /// A row of choices. A current value none of the options is shown as it is, as one more
 /// choice labelled with the value itself (D2: "an unknown current enum value is shown").
 fn choice_row(
@@ -1037,44 +978,21 @@ fn choice_row(
     ))
 }
 
-/// A slider's range from the schema: `min`/`max`, and `ui.slider`'s unit, pct, decimals,
-/// step, commitOnRelease and debounce — with the legacy row's defaults where it has them
-/// (`NidaraSliderRow`: whole numbers unless decimals or pct; a debounce of 32 ms).
+/// Convert the shared schema values to the old renderer's range, without policy changes.
 fn slider_range(key: &str, entry: &serde_json::Value) -> Result<(ValueRange, f32, bool, Duration)> {
-    let s = &entry["ui"]["slider"];
-    let num = |v: &serde_json::Value, what: &str| {
-        v.as_f64()
-            .map(|n| n as f32)
-            .ok_or_else(|| format!("{key}: no {what}"))
-    };
-    let pct = s["pct"].as_bool().unwrap_or(false);
-    let factor = if pct { 100. } else { 1. };
-    let decimals = s["decimals"].as_u64().map(|d| d as usize);
-    let step = match s["step"].as_f64() {
-        Some(step) => step as f32 * factor,
-        None => match decimals {
-            Some(d) if !pct => 10f32.powi(-(d as i32)),
-            _ => 1.,
-        },
-    };
-    let range = ValueRange {
-        min: num(&entry["min"], "min")? * factor,
-        max: num(&entry["max"], "max")? * factor,
-        step,
-        wrap: false,
-        digits: 0,
-        decimals: if pct { 0 } else { decimals.unwrap_or(0) },
-        unit: if pct {
-            "%".into()
-        } else {
-            s["unit"].as_str().unwrap_or_default().to_owned()
-        },
-    };
-    let debounce = Duration::from_millis(s["debounce"].as_u64().unwrap_or(32));
+    let s = crate::row_values::slider(key, entry)?;
     Ok((
-        range,
-        factor,
-        s["commitOnRelease"].as_bool().unwrap_or(false),
-        debounce,
+        ValueRange {
+            min: s.min,
+            max: s.max,
+            step: s.step,
+            wrap: false,
+            digits: 0,
+            decimals: s.decimals,
+            unit: s.unit,
+        },
+        s.factor,
+        s.commit_on_release,
+        s.debounce,
     ))
 }

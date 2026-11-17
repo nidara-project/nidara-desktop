@@ -1320,3 +1320,15 @@ cannot address the parent or a later modal. Every returned error restores public
 There is no additional modal nesting or agent-risk/consent mechanism in this step (owner
 explicitly deferred risk). Default/destructive button paints use the exported `button`
 primary/destructive records; ordinary button and shared focus recipes are preserved.
+
+
+### External data in an AppWindow choice context (#1103 7a)
+
+An application can call `AppWindow::cancel_menu()` when external data invalidates
+an open or queued list. Commit that cancellation before dispatching input against
+the replacement data. This uses the existing popup close path, without an
+application-specific protocol. `AppWindow::captured()` exposes the current control
+owning a pointer sequence, so a release-only settings binding does not mistake a
+concurrent keyboard/reader request for another control's drag. Settings' new
+uninstalled entry is described in `settings/README.md`; it adds no app-specific
+case to the view state or components.

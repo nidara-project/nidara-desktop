@@ -24,30 +24,9 @@ pub struct Dropdown {
     visible: bool,
 }
 fn options(entry: &serde_json::Value, current: &str) -> Result<Vec<(String, String)>> {
-    let mut out = Vec::new();
-    for option in entry["ui"]["options"]
-        .as_array()
-        .ok_or("dropdown schema has no options")?
-    {
-        let value = option["value"]
-            .as_str()
-            .ok_or("dropdown option has no string value")?;
-        if out.iter().any(|(v, _)| v == value) {
-            return Err("duplicate dropdown value".into());
-        }
-        out.push((
-            value.to_owned(),
-            option["label"].as_str().unwrap_or(value).to_owned(),
-        ));
-    }
-    if out.is_empty() {
-        return Err("dropdown schema options are empty".into());
-    }
-    if !out.iter().any(|(v, _)| v == current) {
-        out.push((current.into(), current.into()));
-    }
-    Ok(out)
+    crate::row_values::dropdown_options(entry, current)
 }
+
 impl Dropdown {
     fn show(&mut self, cx: &mut Cx<'_>, error: Option<String>) -> Result<()> {
         let entry = cx

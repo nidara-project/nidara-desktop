@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: LGPL-3.0-or-later
 //! Production composition; CPU tests exercise View without fabricating a Window/provider.
 use nk_a11y::{Request, bridge::Bridge};
+use nk_settings::exports::open_size;
 use nk_settings::{
     Value,
     client::Client,
@@ -368,25 +369,6 @@ fn text_key(editor: &dyn Editor, key: &str) -> Result<String> {
         Some(Value::Text(value)) => Ok(value.clone()),
         _ => Err(format!("Config1 has no string {key}")),
     }
-}
-fn open_size(exports: &Exports) -> Result<(u32, u32)> {
-    let layout = &exports.statics["ts"]["WINDOW_LAYOUT"];
-    let number = |key: &str| -> Result<f64> {
-        let v = layout[key]
-            .as_f64()
-            .ok_or_else(|| format!("WINDOW_LAYOUT {key} missing"))?;
-        if v.is_finite() && v > 0. {
-            Ok(v)
-        } else {
-            Err(format!("invalid WINDOW_LAYOUT {key}"))
-        }
-    };
-    let width = number("sidebar")? + number("content")? + number("openGutter")?;
-    let height = number("minHeight")?;
-    if width > u32::MAX as f64 || height > u32::MAX as f64 {
-        return Err("window size overflow".into());
-    }
-    Ok((width.ceil() as u32, height.ceil() as u32))
 }
 fn font_configuration(
     view: &View,

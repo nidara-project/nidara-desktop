@@ -494,6 +494,17 @@ Search composes the same editor, glyph and clear control with one chrome, return
 Escape finishes composition, then clears, then leaves. Use freshly exported search.clearIcon.
 Display/secret fields keep their owner's editing, never this editor or its IME context.
 See VIEW.md §17 before extending the field; layer hosts/multiline/numeric remain later work.
+Settings' uninstalled `nidara-settings-view` (#1103 7a) is the ordinary-page
+AppWindow entry beside the old `nk-settings`. Its recursive admission rule reads
+manifest + Config1 control metadata; never list pages by name or fabricate keys
+missing from the native service. See toolkit/settings/README.md for the current Dock-only
+service limit and the explicitly simulated Input evidence. Reuse Session/Client,
+the shared Editor and row_values conversions. Failed+Changed in one reply batch
+keeps the failure after restoring the canonical value. Cancel unsent slider intent
+on unmount/service loss, and base release commits on that control's capture, not
+any pointer press. `AppWindow::cancel_menu` is the generic external-context barrier:
+commit it before handling input against replaced options. Idle Page rebuilds need
+a model/appearance change; ordinary host commits still service internal requests.
 The display field still leaves editing to its owner, including the CC's secret rules. Layer
 hosts, editable fields, clipboard/IME remain later work. A conversion requires main↔main first,
 named unstable captures, exact stable pixels and isolated mutation controls; never change the

@@ -358,10 +358,20 @@ impl AppWindow {
         self.page = Some(page);
         self.lay(Instant::now());
     }
+    /// External data invalidated a choice context. Close an open or queued list
+    /// at the next commit, before accepting input against the replacement data.
+    pub fn cancel_menu(&mut self) {
+        self.menu_request = Some(MenuRequest::Close);
+    }
     /// Scrolls the content to its top, as a new page opens.
     pub fn to_top(&mut self) {
         self.state
             .scroll_region(&CONTENT.into(), ScrollBy::Pixels(-1e9));
+    }
+    /// The control owning this pointer sequence. Bindings can distinguish its
+    /// drag updates from concurrent keyboard/reader requests for another control.
+    pub fn captured(&self) -> Option<&Key> {
+        self.state.captured()
     }
     /// A control's value (a slider's), as the view holds it.
     pub fn value(&self, key: &crate::view::Key) -> Option<f64> {
