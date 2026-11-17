@@ -227,3 +227,32 @@ fn apply_error(e: zbus::Error) -> ApplyError {
         e => ApplyError::Failed(e.to_string()),
     }
 }
+
+/// What changes the settings: the client in the app, a fake in tests.
+pub trait Editor {
+    fn session(&self) -> &Session;
+    fn apply(&mut self, key: &str, value: Value) -> std::result::Result<(), ApplyError>;
+    /// Drain/stage external changes during a modal call, without mutating its Tree.
+    fn poll(&mut self) -> Vec<Notice> {
+        Vec::new()
+    }
+    /// The one bus connection, for a builder's portal call (the file chooser); None in tests.
+    fn connection(&self) -> Option<&zbus::blocking::Connection> {
+        None
+    }
+}
+
+impl Editor for crate::client::Client {
+    fn session(&self) -> &Session {
+        crate::client::Client::session(self)
+    }
+    fn apply(&mut self, key: &str, value: Value) -> std::result::Result<(), ApplyError> {
+        crate::client::Client::apply(self, key, value)
+    }
+    fn connection(&self) -> Option<&zbus::blocking::Connection> {
+        Some(crate::client::Client::connection(self))
+    }
+    fn poll(&mut self) -> Vec<Notice> {
+        crate::client::Client::poll(self)
+    }
+}

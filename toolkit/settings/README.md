@@ -216,3 +216,50 @@ selector is packaged for factory Super+P, with pseudo on Super+Shift+P, and has 
 floating/centered window rule. Native Settings itself is not installed.
 `rust-session.sh` accepts exact binary overrides for reproducible tests and uses
 the factory configuration unchanged.
+
+## AppWindow entry: step 7a of #1103
+
+`nidara-settings-view` is a second, **uninstalled** entry point. `nk-settings` keeps
+its existing window, routing, builders and tests. The new entry takes the same
+`org.nidara.SettingsNative` Config1 writer identity without replacing an owner;
+it does not take over the desktop Settings entry point. Do not run both native
+entries on the same bus. No packaging, service or CI/checker changes are included.
+
+The new window uses `nk_view::AppWindow` for frame, sidebar, history controls,
+scrolling, menus, keyboard and accessibility. Its rows are switches, segments,
+presets, slider ends and dropdowns; disclosures contain the same ordinary items.
+The page rule is recursive and all-or-nothing: no page/browser/header builder,
+custom group, custom/decoration item or unknown/missing Describe control may slip
+through. Pages are selected by that rule, never by a list of page names.
+
+Texts, labels, fonts, geometry and appearance come from the exported manifest,
+locale/Describe and portal/WindowLook. As in the old renderer, a failed write
+replaces a row's subtitle until a later change. A Failed+Changed reply batch must
+restore the canonical value **and** keep the failure. Footer predicates and item
+visibility/sensitivity use Session's shown values. Empty group headers draw no text.
+The old renderer's value conversions and Editor interface are shared, not copied.
+
+The app holds only slider debounce/release intent, errors, disclosures and page
+history. Session still owns one write in flight per key and canonical replies.
+Dragging means that slider owns the pointer capture, not merely that any pointer
+button is down. Leaving a page or losing the service cancels unsent intent.
+External Config1 notices cancel an open/queued menu before committing replacement
+metadata, preventing old option input from reaching the new context. Idle commits
+do not rebuild an unchanged Page. The old window is deleted only in a later step.
+
+### Validation and present service limit
+
+On main d3fe60be, the actual Rust Config1 snapshot declares 43 keys. **Dock is the
+only complete ordinary page** under the new rule; Input, Notifications and other
+pages have undeclared keys. This entry does not fill in those keys, implement their
+backend, or fall back to TypeScript. That service work is outside 7a.
+
+The private graphical run therefore distinguishes two inputs: `native-schema.json`
+(the actual private daemon snapshot), and `fixture-schema.json` (the same metadata
+with nine explicit Input test keys). The latter exercises the real, unchanged Dock
+and Input manifest pages against a private Config1, including canonical replies,
+writer identity, switch/segment/preset/slider/dropdown, menu invalidation and refusal
+text. Captures at 1 and 1.25 are renderer/transport evidence, **not native Input or
+physical/Orca acceptance**. The new Rust tests also exercise recursive admission,
+release/debounce, unknown values, navigation, sensitivity and owner loss. Existing
+Settings tests are unchanged. No new headless checker or CI job was added.

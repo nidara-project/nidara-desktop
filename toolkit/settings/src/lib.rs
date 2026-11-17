@@ -49,3 +49,6 @@ pub mod wallpaper_picker;
 pub mod search;
 
 pub mod display;
+
+mod row_values;
+pub mod view_settings;

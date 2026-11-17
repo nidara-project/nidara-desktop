@@ -9,6 +9,7 @@ license.workspace = true
 publish.workspace = true
 
 [dependencies]
+nk-view = { path = "../crates/nk-view" }
 nk-a11y = { path = "../crates/nk-a11y" }
 nk-render = { path = "../crates/nk-render" }
 nk-text = { path = "../crates/nk-text", features = ["system-fonts"] }
@@ -39,3 +40,7 @@ required-features = ["ime-gates"]
 [[bin]]
 name = "nidara-display-selector"
 path = "src/bin/display-selector.rs"
+
+[[bin]]
+name = "nidara-settings-view"
+path = "src/bin/settings-view.rs"

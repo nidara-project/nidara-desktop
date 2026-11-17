@@ -45,6 +45,26 @@ impl DerefMut for Exports {
     }
 }
 
+pub fn open_size(exports: &Exports) -> Result<(u32, u32), String> {
+    let layout = &exports.statics["ts"]["WINDOW_LAYOUT"];
+    let number = |key: &str| -> Result<f64, String> {
+        let v = layout[key]
+            .as_f64()
+            .ok_or_else(|| format!("WINDOW_LAYOUT {key} missing"))?;
+        if v.is_finite() && v > 0. {
+            Ok(v)
+        } else {
+            Err(format!("invalid WINDOW_LAYOUT {key}"))
+        }
+    };
+    let width = number("sidebar")? + number("content")? + number("openGutter")?;
+    let height = number("minHeight")?;
+    if width > u32::MAX as f64 || height > u32::MAX as f64 {
+        return Err("window size overflow".into());
+    }
+    Ok((width.ceil() as u32, height.ceil() as u32))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
