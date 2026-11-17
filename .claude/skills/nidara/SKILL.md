@@ -456,7 +456,9 @@ rows keep their selection. Fields keep their normal border on focus. Keep semant
 bounds unchanged and clip rings at ancestor/list viewports. Keyboard/reader scroll reveal
 includes the original control box plus its external outline; do not reveal only the box
 and cut the ring at the viewport edge. Geometry must remain available for offscreen
-marks before reveal; clipping is applied by paint. See VIEW.md §13.4.
+marks before reveal; clipping is applied by paint. The renderer bounds the inward stroke:
+CPU rasterization can otherwise emit tails outside its rectangle. Frameless DisplayField
+lends the existing entry metrics around its text; input bounds do not grow. See VIEW.md §13.4.
 LongList (#1103 step 5, VIEW.md §18) builds only a uniform-height scroll range from a
 transient ListSource; its selected offscreen metadata stays fresh without building content.
 Apply Index actions and supply a Page builder to AppWindow::commit. The host owns the

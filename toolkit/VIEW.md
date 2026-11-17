@@ -752,6 +752,10 @@ decides the rest. Each component has three layers, kept apart:
    whole chrome to its inner editor. Fields keep their
    normal border on focus: only this ring is a focus signal. Menu rows retain their
    accent selection and opt out. Disabled, hidden and pointer-only focus have no ring.
+   Frameless DisplayField lends the union of its control box and the text box padded
+   by entry.padding_x + entry.border and entry.min_height; its input/reader bounds
+   stay unchanged, and the outline must not cross glyphs or the caret. The renderer
+   clips the inward stroke to its own bounds: CPU stroke tails must not escape them.
 
 5. **Disabled**: no hover, press or Tab stop; faded to the component's `disabledOpacity`, its
    text in the disabled ink; readers still find it, as unavailable.

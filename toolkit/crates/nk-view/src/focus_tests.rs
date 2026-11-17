@@ -526,3 +526,46 @@ fn clear_uses_the_existing_navigation_icon_pattern_and_ring_fits_inside_search()
         assert!(edge >= t.entry.clear_edge && edge < t.entry.clear_edge + 1. / scale);
     }
 }
+
+#[test]
+fn frameless_field_focus_uses_the_entry_box_and_never_crosses_text_or_caret() {
+    let t = tokens();
+    let ts = types();
+    for scale in [1., 1.25] {
+        let (_, node, key) = cases()
+            .into_iter()
+            .find(|(name, _, _)| *name == "display")
+            .unwrap();
+        let mut s = scene(node, scale);
+        let before = s.rect(&key.into()).unwrap();
+        s.request(&key.into(), false);
+        assert_eq!(s.rect(&key.into()), Some(before));
+        let i = s.index(&key.into()).unwrap();
+        let cx = Read {
+            look: t.with_types(&ts),
+            ..s.context(i)
+        };
+        let part = s.placed[i].part().unwrap().component();
+        let outline = part.focus_outline(&cx).unwrap();
+        let (text, _) = cx.text("text").unwrap();
+        assert!(outline.bounds[2] >= text.rect[2] + 2. * (t.entry.padding_x + t.entry.border));
+        assert!(outline.bounds[3] >= t.entry.min_height);
+        let caret = part.caret(&cx).unwrap();
+        let pixels = pixels(&s, scale);
+        for area in [text.rect, caret] {
+            for y in
+                (area[1] * scale).floor() as usize..((area[1] + area[3]) * scale).ceil() as usize
+            {
+                for x in (area[0] * scale).floor() as usize
+                    ..((area[0] + area[2]) * scale).ceil() as usize
+                {
+                    assert_eq!(
+                        pixels[(y * (240. * scale) as usize + x) * 4 + 3],
+                        0,
+                        "ring intersects text/caret at scale {scale}"
+                    );
+                }
+            }
+        }
+    }
+}
