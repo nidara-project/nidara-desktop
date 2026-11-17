@@ -149,7 +149,10 @@ impl Gallery {
                     title: "Delete sample?".into(),
                     message: "Delete this sample?".into(),
                     detail: Some("This is a gallery response; no files are deleted.".into()),
-                    buttons: vec![button("delete", "Delete", false, false, true), cancel],
+                    buttons: vec![
+                        button("delete", "Delete", false, false, true),
+                        button("keep", "Keep", false, false, false),
+                    ],
                 },
                 || appearance(&self.portal, &self.exports),
                 parent,

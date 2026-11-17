@@ -73,6 +73,16 @@ impl Dialog {
         });
         buttons
     }
+    fn initial_response(&self) -> Option<&DialogButton> {
+        self.buttons
+            .iter()
+            .find(|b| b.default && b.enabled && !b.destructive)
+            .or_else(|| {
+                self.ordered()
+                    .into_iter()
+                    .find(|b| b.enabled && !b.destructive)
+            })
+    }
     fn answer(&self, id: &str) -> Option<DialogAnswer> {
         self.buttons
             .iter()
@@ -428,13 +438,14 @@ impl Runner<'_> {
         }
         let target = modal
             .spec
-            .buttons
-            .iter()
-            .find(|b| b.default && b.enabled)
-            .or_else(|| modal.spec.ordered().into_iter().find(|b| b.enabled))
+            .initial_response()
             .map(|b| Key(format!("dialog/response/{}", b.id)));
         if let Some(key) = target {
             self.child.state.request(&key, false);
+        } else {
+            // With no safe response, automatic focus must not lend Enter to a
+            // destructive choice. Tab or an explicit reader/pointer may choose it.
+            self.child.state.blur();
         }
     }
     fn commit(&mut self, window: &mut Window) -> Result<()> {
@@ -877,6 +888,34 @@ mod tests {
         assert_eq!(d.answer("unknown"), None);
         d.buttons[0].destructive = true;
         assert!(d.validate().unwrap_err().contains("destructive"));
+    }
+    #[test]
+    fn initial_response_skips_destructive_and_disabled_choices_without_inventing_a_default() {
+        let mut d = Dialog {
+            title: "Delete?".into(),
+            close_label: "Close".into(),
+            buttons: vec![
+                button("delete", false, false, true),
+                button("keep", false, false, false),
+            ],
+        };
+        d.validate().unwrap();
+        assert_eq!(d.initial_response().unwrap().id, "keep");
+        assert!(
+            d.buttons.iter().all(|b| !b.default),
+            "focus does not declare a default"
+        );
+        d.buttons[1].enabled = false;
+        assert!(d.initial_response().is_none());
+        d.buttons.truncate(1);
+        assert!(d.initial_response().is_none());
+        d.buttons.push(button("other", false, false, false));
+        d.buttons.push(button("safe-default", true, false, false));
+        assert_eq!(d.initial_response().unwrap().id, "safe-default");
+        d.buttons.last_mut().unwrap().enabled = false;
+        assert_eq!(d.initial_response().unwrap().id, "other");
+        d.buttons.push(button("cancel", false, true, false));
+        assert_eq!(d.initial_response().unwrap().id, "cancel");
     }
     #[test]
     fn modal_namespace_never_reuses_ids_or_accepts_parent_requests() {

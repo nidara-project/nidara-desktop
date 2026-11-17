@@ -16,7 +16,8 @@ nested-modal capabilities are outside this step. #1128 and #1130 remain separate
 Enter reaches the focused component first: composition and a row-opening list keep it.
 Only an unhandled Enter takes the default. Escape cancels composition first, then cancels
 the window. Tab cycles inside. On open focus the first eligible content control, or the
-alert's default. Restore the original key only if it remains shown/enabled and the same
+alert's default, else the first enabled non-destructive response. If none exists,
+leave response focus empty; a destructive response requires an explicit selection. Restore the original key only if it remains shown/enabled and the same
 retained component instance; cancellation/error must also retire the modal namespace.
 
 ## Audit findings
@@ -81,7 +82,7 @@ Physical-session/Orca and vkms evidence are reported separately, never inferred.
 ## Local acceptance record
 
 Evidence directory: `evidence-1103-dialogs` in the owner's ChatGPT workspace. Full toolkit
-workspace: 747 tests passed, with the existing wallpaper timing benchmark ignored. Hyalo:
+workspace: 748 tests passed, with the existing wallpaper timing benchmark ignored. Hyalo:
 170 tests passed; toolkit and compositor Clippy pass with warnings denied. The generated
 button recipes pass the token checker in all four mode variants; three broken exports
 (missing primary recipe, invalid fraction, unresolved colour) are rejected.
@@ -101,3 +102,10 @@ screenshots. Physical-session/Orca and vkms validation remain pending.
 Settings tests need the complete fresh export: run both `scripts/export-tokens.mjs` and
 `scripts/export-settings-data.mjs` into the same directory and pass `NK_SETTINGS_DATA`.
 The gallery's token-only export is insufficient for Settings' manifest/page tests.
+
+The #1133 focus review adds `[Delete, Keep]` with no declared default or cancel:
+initial focus chooses Keep, and no safe enabled response leaves focus empty. The
+old fallback is caught by the CPU regression (Delete != Keep). The updated nk-view
+suite passes 199 tests; 14 targeted real-lib-atspi/keyboard checks at both scales
+confirm initial Enter keeps the sample, while explicitly focusing Delete still permits
+that response. These focused checks follow the initial 71-check modal matrix above.

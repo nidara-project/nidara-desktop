@@ -1300,7 +1300,8 @@ chooser remain unchanged until their conversion step.
 Response IDs must be unique. At most one cancel (first) and one default (last) are allowed;
 a destructive response cannot be default. Content consumes Enter before the default:
 IME composition, a field's own submit and list row opening retain their behavior. Escape
-first reaches composition/menu. Tab stays in the child's retained view; closing restores
+first reaches composition/menu. Initial response focus skips destructive and disabled
+responses, and stays empty if no safe response exists; this does not create a default. Tab stays in the child's retained view; closing restores
 only the same shown, enabled launcher component instance. `DialogContent::buttons` may
 update eligibility, and `poll` reports appearance/content/parent changes. The parent page
 builder must read the current owner model; it is rerun on `parent_changed` and on return.

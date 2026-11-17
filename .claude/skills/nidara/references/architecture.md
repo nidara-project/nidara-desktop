@@ -2924,7 +2924,9 @@ component. The nested Wayland loop must keep parent configure/scale/painting ali
 refusing parent input. Standard xdg-dialog supplies modality; set_parent alone does not.
 Hyalo skips floating cascade for parented windows to preserve centering. Alerts have no
 controls; ordinary dialogs request only close. Enter reaches content before the default,
-Escape reaches composition/menu before cancel. New default/destructive button recipes
+Escape reaches composition/menu before cancel. Initial response focus must skip
+destructive/disabled buttons; leave it empty when no safe response exists. Focus
+does not turn a response into a declared default. New default/destructive button recipes
 come from button.json; shared focus is unchanged. Agent risk/consent was explicitly
 reserved for another step by the owner (17-11); do not infer it from red button styling.
 For workspace tests, NK_SETTINGS_DATA must point at both fresh exporters' output
