@@ -497,8 +497,14 @@ See VIEW.md §17 before extending the field; layer hosts/multiline/numeric remai
 Settings' uninstalled `nidara-settings-view` (#1103 7a) is the ordinary-page
 AppWindow entry beside the old `nk-settings`. Its recursive admission rule reads
 manifest + Config1 control metadata; never list pages by name or fabricate keys
-missing from the native service. See toolkit/settings/README.md for the current Dock-only
-service limit and the explicitly simulated Input evidence. Reuse Session/Client,
+missing from the native service. Step 7b adds the fourteen native Notifications,
+Accessibility and Input keys: reuse their existing GSettings homes and Hyalo settings
+IPC, never write a second configuration file. Verify the merged values after an Input
+write, including both pointer and touchpad fields for unified controls. The existing
+compositor monitor reads idle/input together and guards stale reads with one serial.
+Read session/daemon/src/config/README.md for homes, followers, keyboard catalogue and
+physical-session limits; toolkit/settings/README.md distinguishes 7a fixture evidence
+from 7b native-service checks. Reuse Session/Client,
 the shared Editor and row_values conversions. Failed+Changed in one reply batch
 keeps the failure after restoring the canonical value. Cancel unsent slider intent
 on unmount/service loss, and base release commits on that control's capture, not

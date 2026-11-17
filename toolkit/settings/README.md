@@ -247,7 +247,7 @@ External Config1 notices cancel an open/queued menu before committing replacemen
 metadata, preventing old option input from reaching the new context. Idle commits
 do not rebuild an unchanged Page. The old window is deleted only in a later step.
 
-### Validation and present service limit
+### Step 7a validation and historical service limit
 
 On main d3fe60be, the actual Rust Config1 snapshot declares 43 keys. **Dock is the
 only complete ordinary page** under the new rule; Input, Notifications and other
@@ -263,3 +263,15 @@ text. Captures at 1 and 1.25 are renderer/transport evidence, **not native Input
 physical/Orca acceptance**. The new Rust tests also exercise recursive admission,
 release/debounce, unknown values, navigation, sensitivity and owner loss. Existing
 Settings tests are unchanged. No new headless checker or CI job was added.
+
+
+### Native ordinary-page service: step 7b of #1103
+
+Config1 now adds the fourteen existing Notifications, Accessibility and Input
+keys, so these pages and Dock are eligible against the native service without
+fixture keys. The AppWindow editor and admission rule are unchanged. Input writes
+go through Hyalo and are checked against its effective merged configuration;
+GSettings keys keep their existing homes and followers. Missing capabilities still
+exclude their page. See `session/daemon/src/config/README.md` for the complete
+key/home/consumer table, keyboard catalogue boundary and validation limits. The
+7a fixture results above remain historical renderer/transport evidence.

@@ -13,6 +13,9 @@
 //!
 //! Lives on the GLib thread (`store.rs`): a `gio::Settings` is not `Send`.
 
+#[path = "ordinary.rs"]
+mod ordinary;
+
 use gio::prelude::*;
 use serde_json::{Value as Json, json};
 use std::collections::HashMap;
@@ -92,6 +95,7 @@ const AUDIO: &str = "org.nidara.audio";
 const POWER: &str = "org.nidara.power";
 const AI: &str = "org.nidara.ai";
 const DOCK: &str = "org.nidara.dock";
+const NOTIFICATIONS: &str = "org.nidara.notifications";
 
 /// The GSettings of this session, by schema; a schema not installed is simply absent.
 pub struct Store {
@@ -100,6 +104,7 @@ pub struct Store {
     home: PathBuf,
     config: PathBuf,
     pub idle: std::cell::RefCell<Json>,
+    pub input: std::cell::RefCell<Json>,
     pub idle_serial: std::sync::Arc<std::sync::atomic::AtomicU64>,
 }
 impl Store {
@@ -107,7 +112,17 @@ impl Store {
         let source = gio::SettingsSchemaSource::default();
         let (mut settings, mut schemas) = (HashMap::new(), HashMap::new());
         for id in [
-            INTERFACE, WM, BACKGROUND, APPEARANCE, NIGHT, AI, AUDIO, MEDIA, POWER, DOCK,
+            INTERFACE,
+            WM,
+            BACKGROUND,
+            APPEARANCE,
+            NIGHT,
+            AI,
+            AUDIO,
+            MEDIA,
+            POWER,
+            DOCK,
+            NOTIFICATIONS,
         ] {
             if let Some(schema) = source.as_ref().and_then(|s| s.lookup(id, true)) {
                 settings.insert(id, gio::Settings::new(id));
@@ -116,12 +131,14 @@ impl Store {
                 eprintln!("[config] {id}: schema not installed — its keys are unavailable");
             }
         }
+        let compositor = read_compositor();
         Self {
             settings,
             schemas,
             home: glib::home_dir(),
             config: glib::user_config_dir(),
-            idle: std::cell::RefCell::new(read_idle()),
+            idle: std::cell::RefCell::new(compositor["idle"].clone()),
+            input: std::cell::RefCell::new(compositor["input"].clone()),
             idle_serial: Default::default(),
         }
     }
@@ -752,6 +769,7 @@ fn table() -> Vec<Key> {
     ];
     keys.extend(power_keys());
     keys.extend(dock_keys());
+    keys.extend(ordinary::keys());
     keys
 }
 
@@ -761,6 +779,9 @@ pub fn find(name: &str) -> Option<&'static Key> {
     keys().iter().find(|k| k.name == name)
 }
 pub fn available(st: &Store, key: &Key) -> bool {
+    if let Some(paths) = ordinary::input_paths(key.name) {
+        return ordinary::input_available(st, key, paths);
+    }
     if let Some(field) = idle_field(key.name) {
         return st.idle.borrow()[field].is_u64();
     }
@@ -1245,11 +1266,24 @@ fn write_wallpaper(st: &Store, edit: impl FnOnce(&mut Json)) -> Result<(), Strin
 }
 
 // Effective merged compositor values; Hyalo is the only TOML writer.
-pub fn read_idle() -> Json {
+pub fn read_compositor() -> Json {
     crate::hyalo::request(json!({"request":"config"}))
         .ok()
-        .map(|v| v["config"]["idle"].clone())
+        .map(|v| v["config"].clone())
         .unwrap_or(Json::Null)
+}
+pub fn read_idle() -> Json {
+    read_compositor()["idle"].clone()
+}
+pub fn compositor_key(name: &str) -> bool {
+    idle_field(name).is_some() || ordinary::input_paths(name).is_some()
+}
+pub fn input_changed(name: &str, before: &Json, after: &Json) -> bool {
+    ordinary::input_paths(name).is_some_and(|paths| {
+        paths
+            .iter()
+            .any(|p| ordinary::at(before, p) != ordinary::at(after, p))
+    })
 }
 pub fn idle_field(name: &str) -> Option<&'static str> {
     match name {
