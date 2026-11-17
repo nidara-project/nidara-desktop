@@ -10,6 +10,7 @@ mod identity;
 mod launch;
 mod layout;
 mod observation;
+mod refresh;
 mod search;
 mod store;
 mod theme;
@@ -1097,7 +1098,7 @@ impl Applications {
                 let app = s.app(&desktop_id, generation)?.clone();
                 let state = autostart::set(&app, enabled)?;
                 s.mark("autostart");
-                s.invalidate();
+                s.invalidate_autostart();
                 Ok(dict(&state))
             })
             .await

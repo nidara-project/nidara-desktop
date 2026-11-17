@@ -70,6 +70,13 @@ Daemon icon reads validate against `session/daemon/src/applications/icon_view.rs
 the atomically published icon metadata; do not put their pre/post-decode checks
 back on `Store::call`, behind synchronous catalogue refresh. Actor effects publish
 before reply; override writes withdraw/re-publish, and actor exit retires the view.
+Applications1 registry invalidations are domain-specific (#1127): GIO owns standard
+app/default notices; custom/missing targets use filtered, reused watches. Reuse must
+rearm a retired directory instance even when its pathname is unchanged. The 100 ms
+debounce is a select deadline, never a sleep in an actor branch. Only one filesystem
+candidate is read off-actor; stale generations are rejected and current H1/usage/effects
+remain with GLib. Never put icon-tree walks or whole-monitor rebuilds back on a window,
+launch, layout or default-handler path. Read applications/README.md and WINDOW-IDENTITY.md.
 The TS conventions below still apply to the remaining
 TS applications and frozen Hyprland source.
 

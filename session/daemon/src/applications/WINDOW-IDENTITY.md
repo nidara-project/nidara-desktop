@@ -48,3 +48,14 @@ Validation must exercise each tier, ambiguity/narrowing, parent cycles, browser
 exclusion, inherited markers, expiry/close/epoch boundaries, delayed workers and
 the dock/ResolveWindow common result. Removing a tier must break its positive
 case. Fixture evidence does not establish installed or physical-session behavior.
+
+Registry refresh (#1127) is independent of window observation. Opening a known app or
+receiving H1 does not invalidate the catalogue or artwork. Catalogue/default, artwork and
+autostart invalidations are read by one bounded worker; the actor handles H1 meanwhile.
+The 100 ms debounce is a pending deadline. Candidates have invalidation generations and
+merge only filesystem metadata into the latest actor state, preserving current usage,
+launches and window epochs. An unchanged catalogue keeps its identity index. Watch plans
+are targeted and reused, including next-component recovery of missing custom roots;
+GIO owns standard app/default notices and is rearmed by a query. See the README and
+contract section 3 for coverage limits and recovery. This changes registry scheduling,
+not the resolver tiers or the dock's separate pending-window safety net.

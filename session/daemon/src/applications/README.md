@@ -32,29 +32,39 @@ parsed executable basename in search, never for arbitrary argument matching.
 No child is started by the catalogue or a search.
 
 XDG_DATA_HOME and XDG_DATA_DIRS are authoritative; when the latter is unset,
-standard user/system, Flatpak and Snap export locations are included when
-present or previously observed. Explicit XDG_DATA_DIRS enables fully private
-profiles without traversing host exports. Watch the nearest existing ancestor
-for missing roots, all scanned directories, and atomic changes. Changes coalesce
-for 100 ms on the blocking GLib MainLoop. The bounded async job receiver wakes
-that context on demand and yields before each effect to service consent changes.
-A healthy, fully monitored catalogue has no periodic rescan or 5 ms loop. Failed
-scans/monitor installation use recovery backoff from 1 to 60 seconds; jobs do not
-reset its deadline. Recursive bounded icon watches and resolved asset parents
-cover artwork changes, including non-selected sizes. Icon traversal is bounded
-to 4096 directories/65536 entries/16 levels. Every icon root and each theme
-directly in it stay watched whatever the bounds: a theme's index.theme and
-icon-theme.cache live there and package updates rewrite that cache. A tree past
-the bounds (a normal /usr/share/icons with Papirus has ~7900 directories) is
-therefore watched at that level, never polled; a deeper change in a theme without
-a cache is only seen at the next real event (#1051). Combined installed directory
-watches are capped at 8192, with the recovery backoff if that cap is passed. The
-root-history directory also holds the usage state written every 30 s, so its
-watch counts only events naming the history file: the store never wakes itself
-with its own checkpoints (#1051). AppInfo/volume notifications
-cover default-handler/mount changes. A scan failure/degraded root preserves the previous complete
-in-process catalogue. Initial partial metadata is labelled incomplete. There is
-no empty-success claim or pruning on failed/partial/unmounted roots.
+standard user/system, Flatpak and Snap export locations are included. Unknown absent
+roots are healthy watch targets, so installing an exporter for the first time is
+observable too. Explicit XDG_DATA_DIRS enables fully private profiles without
+traversing host exports. GIO AppInfoMonitor supplies the standard catalogue/defaults
+notice; the worker's GAppInfo query rearms it after each change. Our additional roots
+and recursively parsed subdirectories retain their own watches. A missing target
+watches only its next required component, not unrelated siblings such as gvfs-metadata.
+There is no blanket watch of ~/.config or XDG_CONFIG_HOME.
+
+Catalogue/defaults, icons, autostart, layout and theme invalidate independently.
+The 100 ms coalescing deadline participates in the actor's select; no selected branch
+sleeps behind an incoming window. At most one read worker builds a filesystem candidate.
+Its invalidation generation must still match when the GLib owner accepts it; stale
+candidates are discarded and their domains coalesced again. The worker receives immutable
+metadata, never the Store, GSettings, monitors or mutable usage/launch/window state.
+The owner merges current usage/Unity/generations and publishes in a short step. H1/jobs
+continue during the read. Each effect still yields to consent notifications first.
+Changing a real app can update its selected-asset watches; a generic catalogue/default
+notice does not walk icon trees. Unchanged metadata does not rebuild the identity index.
+
+Monitors are reused; only changed target/rule sets are installed or removed. A retired
+directory monitor is rearmed even if a quick replacement leaves the same pathname. Icon
+roots/themes and resolved asset parents cover artwork changes, including non-selected
+sizes, absolute files and symlink targets. Traversal remains bounded to 4096 directories,
+65536 entries and 16 levels. Root/theme watches survive an incomplete walk, so a large
+Papirus tree does not enable periodic refresh (#1051). A deeper change without a theme
+cache beyond those bounds is still seen only at a subsequent real event. Installed
+watches remain capped at 8192. Actual monitor failures or degraded catalogue roots use
+recovery backoff from 1 to 60 seconds, scoped to affected domains; ordinary jobs do not
+reset its deadline. The history-file watch ignores usage checkpoints and their temporary
+files. AppInfo/volume notices preserve defaults and mount recovery. A failed/partial scan
+keeps the previous complete in-process catalogue; initial partial data is explicitly
+incomplete, never empty success or evidence to prune pins.
 
 A bounded, atomically replaced 0600 root-history map at
 `$XDG_STATE_HOME/nidara/applications-roots-v1.json` records previously observed
@@ -227,3 +237,18 @@ bounded reconnect backoff (1–30 s); Unity has no healthy polling. Nonzero usag
 decays/checkpoints every 30 s; ordinary committed-time writes coalesce at up to
 1 Hz. Baseline/new-marker transitions commit before publication.
 These new workloads are not covered by the historical A1 zero-tick sample.
+
+## Registry scheduling evidence (#1127)
+
+A small before/after run used the same private Hyalo/bus, identical fresh profiles,
+four desktop entries and the real icon trees. Dev binaries had debug/incremental disabled.
+For three unrelated-file/window cases, H1 receipt to identified WindowMatches changed
+from 681–728 ms (median 712) to 10–17 ms (median 14). A real artwork change still took
+>800 ms to audit off-actor, but its window answered in 10 ms before that audit ended.
+No registry reads started for the unrelated-file cases. The first cold case remains
+separate (506 → 118 ms); no cold-start or installed-session latency guarantee is inferred.
+Both versions recovered a missing root, atomic replacement and two consecutive changes.
+Raw traces, scripts and binary hashes are in the local `evidence-1127-applications-events`
+directory. The existing A1/A2/A3 fixtures and 148 daemon unit tests pass; no new CI job
+or checker was added. The short `a1127` worktree path lets the existing cursor socket
+test stay below SUN_LEN without exclusions or a test patch.
