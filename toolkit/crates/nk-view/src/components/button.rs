@@ -1,13 +1,29 @@
 // SPDX-License-Identifier: LGPL-3.0-or-later
 use super::*;
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub enum ButtonAppearance {
+    #[default]
+    Normal,
+    Default,
+    Destructive,
+}
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub struct Button {
+    #[serde(default)]
+    pub appearance: ButtonAppearance,
     pub label: String,
     pub style: nk_text::TextStyle,
     pub selected: bool,
     pub corner: Corner,
 }
 impl Component for Button {
+    fn ink(&self, look: ComponentLook<'_>, _: Interaction, _: bool) -> Option<Color> {
+        match self.appearance {
+            ButtonAppearance::Normal => None,
+            ButtonAppearance::Default => Some(look.tokens.button.primary.text),
+            ButtonAppearance::Destructive => Some(look.tokens.button.destructive.text),
+        }
+    }
     fn selected(&self) -> bool {
         self.selected
     }
@@ -18,6 +34,7 @@ impl Component for Button {
         let mut next = self.clone();
         match p {
             Configure::Marked(v) => next.selected = v,
+            Configure::ButtonAppearance(v) => next.appearance = v,
             Configure::Corner(v) => next.corner = v,
             _ => return None,
         };
@@ -57,12 +74,17 @@ impl Component for Button {
         // surface's own hover and pressed tones; no glass, nothing for Hyalo.
         let b = &tokens.button;
 
+        let appearance = match self.appearance {
+            ButtonAppearance::Normal => None,
+            ButtonAppearance::Default => Some(&b.primary),
+            ButtonAppearance::Destructive => Some(&b.destructive),
+        };
         let fill = if interaction.pressed {
-            b.pressed
+            appearance.map_or(b.pressed, |a| a.pressed)
         } else if interaction.hover {
-            b.hover
+            appearance.map_or(b.hover, |a| a.hover)
         } else {
-            b.background
+            appearance.map_or(b.background, |a| a.background)
         };
         let faded = |colour: nk_render::Color| {
             let a = if interaction.enabled {
@@ -77,7 +99,12 @@ impl Component for Button {
         // Each tone replaces the rest one, as the stylesheet's do.
         canvas.rounded_rect(rect(&r), radius, faded(fill));
         if b.border > 0. {
-            canvas.rounded_ring(rect(&r), radius, b.border, faded(b.border_color));
+            canvas.rounded_ring(
+                rect(&r),
+                radius,
+                b.border,
+                faded(appearance.map_or(b.border_color, |a| a.border)),
+            );
         }
         canvas.pop_clip();
     }

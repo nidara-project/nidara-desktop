@@ -183,6 +183,17 @@ for variant in component_variants:
     segmented = choices.get('segmented') or {}
     swatch = choices.get('swatch') or {}
     unit = lambda v: positive_number(v, True) and v <= 1
+    button = variant.get('button') or {}
+    primary = button.get('primary') or {}
+    destructive = button.get('destructive') or {}
+    if not (all(unit(primary.get(k)) for k in ('borderAlpha', 'hoverWhite', 'pressedBlack'))
+            and all(unit(destructive.get(k)) for k in ('restAlpha', 'borderAlpha', 'hoverAlpha', 'pressedAlpha'))):
+        fail.append('components: missing/invalid primary/destructive button state fractions')
+    for recipe in (primary, destructive):
+        for field in ('color', 'text'):
+            key = recipe.get(field)
+            if not isinstance(key, str) or not all(key in color_set['tokens'] for color_set in sets):
+                fail.append(f'components: missing primary/destructive button colour {field}: {key}')
     if not (all(positive_number(segmented.get(k), True) for k in ('paddingX', 'paddingY', 'border'))
             and positive_number(segmented.get('minContentHeight'))
             and all(unit(segmented.get(k)) for k in ('selectedHoverWhite', 'selectedPressedBlack', 'disabledOpacity'))

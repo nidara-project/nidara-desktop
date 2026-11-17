@@ -15,6 +15,12 @@ pub struct ControlsLayout {
     pub width: f64,
     pub height: f64,
 }
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub enum ControlsButtons {
+    #[default]
+    All,
+    Close,
+}
 #[derive(Clone, Copy, Debug)]
 pub enum WindowAction {
     Close,
@@ -51,6 +57,15 @@ impl Window {
             self.redraw();
         }
         true
+    }
+    pub fn set_window_control_buttons(&mut self, buttons: ControlsButtons) {
+        if let Some(proxy) = &self.controls.proxy {
+            proxy.set_buttons(match buttons {
+                ControlsButtons::All => nidara_window_controls_v1::Button::all(),
+                ControlsButtons::Close => nidara_window_controls_v1::Button::Close,
+            });
+            self.redraw();
+        }
     }
     pub fn window_controls_layout(&self) -> Option<ControlsLayout> {
         self.controls.layout

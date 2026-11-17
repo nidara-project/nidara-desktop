@@ -372,6 +372,20 @@ impl Component for EditableField {
             cx.effects.handled = true;
         }
     }
+    fn enter(&self, cx: &mut Input<'_>) {
+        let Some(s) = cx.state.as_deref().and_then(|s| s.downcast_ref::<State>()) else {
+            return;
+        };
+        let Some(e) = &s.editor else { return };
+        if e.preedit().is_some() || s.finished_composition {
+            cx.effects.handled = true;
+        } else if let Some(action) = &self.submit {
+            cx.effects.handled = true;
+            cx.effects.activate = true;
+            cx.effects.action = Some(action.clone());
+            cx.effects.value = Some(Value::Text(e.text().into()));
+        }
+    }
     fn key_event(&self, cx: &mut Input<'_>, key: &nk_wayland::Key) {
         if matches!(key.sym, 0xff09 | 0xfe20) {
             return;

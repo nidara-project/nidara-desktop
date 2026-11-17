@@ -1,12 +1,12 @@
 {
   "_": "The kit's catalogue (toolkit/CATALOG.md, #1079) and where each component stands. status: view = in nk-view, the kit's one way to build (VIEW.md §13); both = in nk-view and in nk-widgets, two copies to make one; widgets = only in nk-widgets, still to move; hand = drawn by hand in a surface, debt; missing = nowhere yet. page = the gallery page that shows it. A component counts as done only when its status is view and it has a page.",
-  "focusPage": {"page": "focus", "covers": "All nk-view focus outlines on and off glass; portal light/dark appearances; shared list.focus tokens"},
+  "focusPage": {"page": "focus", "covers": "All nk-view focus outlines on and off glass; portal light/dark appearances; shared components.focus tokens"},
   "groups": [
     {
       "name": "Windows and structure",
       "items": [
         {"name": "App window", "gtk": "Gtk.Window", "appkit": "NSWindow", "status": "both", "users": "Settings (nk-widgets), this gallery (nk-view FrameStyle)"},
-        {"name": "Dialog window", "gtk": "Gtk.Window (modal)", "appkit": "NSPanel (sheet)", "status": "widgets", "users": "Settings"},
+        {"name": "Dialog window", "gtk": "Gtk.Window (modal)", "appkit": "NSPanel (sheet)", "status": "both", "users": "Settings (DialogTree), this gallery (AppWindow)", "page": "dialog"},
         {"name": "Auxiliary window", "gtk": "Gtk.Window", "appkit": "NSPanel", "status": "missing", "users": ""},
         {"name": "Title bar", "gtk": "Gtk.HeaderBar", "appkit": "NSTitlebarAccessoryViewController", "status": "both", "users": "Settings (with search), this gallery (sidebar toggle, back and forward, title; no search yet)"},
         {"name": "Command strip", "gtk": "Gtk.ActionBar", "appkit": "NSToolbar", "status": "missing", "users": ""},
@@ -89,7 +89,7 @@
         {"name": "Level bar", "gtk": "Gtk.LevelBar", "appkit": "NSLevelIndicator", "status": "missing", "users": ""},
         {"name": "Badge", "gtk": "no equivalent", "appkit": "badge", "status": "hand", "users": "dock, CC"},
         {"name": "Inline feedback", "gtk": "Adw.Banner (not used)", "appkit": "inline alert", "status": "missing", "users": ""},
-        {"name": "Alert", "gtk": "Gtk.AlertDialog", "appkit": "NSAlert", "status": "widgets", "users": "Settings (fonts)"},
+        {"name": "Alert", "gtk": "Gtk.AlertDialog", "appkit": "NSAlert", "status": "both", "users": "Settings (old layer), this gallery (AppWindow)", "page": "dialog"},
         {"name": "File open and save", "gtk": "Gtk.FileDialog", "appkit": "NSOpenPanel / NSSavePanel", "status": "missing", "users": ""},
         {"name": "Colour", "gtk": "Gtk.ColorDialog", "appkit": "NSColorPanel", "status": "missing", "users": ""},
         {"name": "Font", "gtk": "Gtk.FontDialog", "appkit": "NSFontPanel", "status": "widgets", "users": "Settings"},

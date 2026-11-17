@@ -36,6 +36,7 @@ pub enum Request {
 }
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub enum Configure {
+    ButtonAppearance(crate::components::ButtonAppearance),
     Wash(crate::Wash),
     Marked(bool),
     On(bool),

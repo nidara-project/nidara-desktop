@@ -55,7 +55,7 @@ fn status_text(s: &str) -> &'static str {
 }
 
 /// Each page: its id (what the check and `--page` name), its title and its glyph.
-pub const PAGES: [(&str, &str, &str); 23] = [
+pub const PAGES: [(&str, &str, &str); 24] = [
     ("status", "Status", "nd-emblem-default"),
     ("button", "Button", "nd-hand"),
     ("switch", "Switch", "nd-light-mode"),
@@ -79,6 +79,7 @@ pub const PAGES: [(&str, &str, &str); 23] = [
     ("search", "Search", "nd-system-search"),
     ("list", "Long list", "nd-clipboard-list"),
     ("focus", "Focus", "nd-input-keyboard"),
+    ("dialog", "Dialog and alert", "nd-dialog-information"),
 ];
 
 /// What the view is built from: the page, and what the live samples hold.
@@ -109,6 +110,8 @@ pub struct Model {
     pub submitted: u32,
     pub selected_row: usize,
     pub list_opened: u32,
+    pub modal_answers: u32,
+    pub modal_result: String,
 }
 impl Default for Model {
     fn default() -> Self {
@@ -134,6 +137,8 @@ impl Default for Model {
             submitted: 0,
             selected_row: 0,
             list_opened: 0,
+            modal_answers: 0,
+            modal_result: "Nothing answered".into(),
         }
     }
 }
@@ -329,6 +334,7 @@ fn page(id: &str, m: &Model, cat: &Catalogue, t: &TypeScale, k: &Measures) -> Ve
         "search" => search_field(m, t),
         "list" => long_list(m, t, k),
         "focus" => focus_page(t, k),
+        "dialog" => dialogs(m, t),
         _ => vec![],
     }
 }
@@ -2150,6 +2156,39 @@ fn focus_page(t: &TypeScale, k: &Measures) -> Vec<Node> {
         ));
     }
     sections
+}
+
+fn dialogs(m: &Model, t: &TypeScale) -> Vec<Node> {
+    vec![section(
+        "dialogs",
+        "A modal window owned by this window",
+        t,
+        Node::column(
+            "dialogs/samples",
+            vec![
+                content_button("dialogs/open", "Open dialog", "dialog-open", t),
+                content_button("dialogs/alert", "Open alert", "alert-open", t),
+                content_button(
+                    "dialogs/destructive",
+                    "Open destructive alert",
+                    "alert-delete",
+                    t,
+                ),
+                content_button(
+                    "dialogs/invalid",
+                    "Reject destructive default",
+                    "dialog-invalid",
+                    t,
+                ),
+                Node::text(
+                    "dialogs/result",
+                    format!("Dialog answers: {} · {}", m.modal_answers, m.modal_result),
+                    t.style(Type::Body, Weight::Regular),
+                ),
+            ],
+        )
+        .gap(Space::S3),
+    )]
 }
 
 #[cfg(test)]

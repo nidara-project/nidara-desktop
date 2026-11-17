@@ -902,6 +902,7 @@ impl Node {
         .corner(Corner::Token(Radius::Sm));
         if let Kind::Control(c) = &mut n.kind {
             c.part = Some(Box::new(crate::Part::Button(crate::components::Button {
+                appearance: crate::components::ButtonAppearance::Normal,
                 label,
                 style,
                 selected: false,
@@ -1055,6 +1056,12 @@ impl Node {
         self
     }
     /// Gallery fixture: show a child of a composed choice row in a stable state.
+    pub fn button_appearance(mut self, appearance: crate::components::ButtonAppearance) -> Self {
+        if let Kind::Control(c) = &mut self.kind {
+            c.configure(crate::components::Configure::ButtonAppearance(appearance));
+        }
+        self
+    }
     pub fn sample_state(mut self, index: usize, shown: Shown) -> Self {
         if let Kind::Drawing(d) = &mut self.kind {
             *d.part = d

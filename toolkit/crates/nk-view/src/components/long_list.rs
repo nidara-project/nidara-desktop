@@ -479,6 +479,11 @@ impl Component for LongList {
     fn release(&self, cx: &mut Input<'_>, _at: (f64, f64)) {
         cx.effects.handled = true;
     }
+    fn enter(&self, cx: &mut Input<'_>) {
+        if self.activate.is_some() && self.count > 0 {
+            self.key(cx, crate::KeyInput::Activate);
+        }
+    }
     fn key_event(&self, cx: &mut Input<'_>, key: &nk_wayland::Key) {
         if key.sym == 0x20 {
             cx.effects.handled = true;

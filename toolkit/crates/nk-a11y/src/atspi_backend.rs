@@ -222,7 +222,7 @@ fn states(n: &Node) -> StateSet {
         (n.role == Role::Option, State::Selectable),
         (n.states.invalid, State::InvalidEntry),
         (n.actions.contains(&Action::SetText), State::Editable),
-        (n.role == Role::Dialog, State::Modal),
+        (n.role == Role::Dialog || n.states.modal, State::Modal),
     ] {
         if yes {
             s.insert(state);

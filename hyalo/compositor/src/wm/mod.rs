@@ -420,6 +420,22 @@ pub fn cascade(r: Rect, others: &[Rect], area: Rect, gaps_out: i32) -> Rect {
     p
 }
 
+/// Initial floating placement: a parented window is never cascaded away from its parent.
+fn place_floating(
+    size: Size<i32, Logical>,
+    parent: Option<Rect>,
+    area: Rect,
+    others: &[Rect],
+    gaps_out: i32,
+) -> Rect {
+    let r = clamp_floating(centered(size, parent.unwrap_or(area)), area);
+    if parent.is_some() {
+        r
+    } else {
+        cascade(r, others, area, gaps_out)
+    }
+}
+
 /// A box of `size` centred in `area`.
 pub fn centered(size: Size<i32, Logical>, area: Rect) -> Rect {
     Rectangle::new(
@@ -821,8 +837,7 @@ impl Hyalo {
             // A rule's `center`: the middle of the usable area, nothing else considered.
             clamp_floating(centered(framed, area), area)
         } else {
-            let float = clamp_floating(centered(framed, parent_rect.unwrap_or(area)), area);
-            cascade(float, &others, area, self.config.layout.gaps_out)
+            place_floating(framed, parent_rect, area, &others, self.config.layout.gaps_out)
         };
         let float = without_bar(float, bar);
         let near = self.wm.focused.filter(|f| self.wm.get(*f).is_some_and(|m| m.workspace == ws));
@@ -1746,4 +1761,24 @@ mod tests {
         // No room left: the original place.
         assert_eq!(cascade(r(1400, 600, 600, 400), &[r(1400, 600, 600, 400)], area, 4), r(1400, 600, 600, 400));
     }
+    #[test]
+    fn a_parented_window_stays_centred_even_if_it_covers_another_window() {
+        let area = r(0, 0, 2000, 1000);
+        let parent = r(500, 200, 1000, 600);
+        let size = Size::from((400, 240));
+        let expected = r(800, 380, 400, 240);
+        let covered = r(900, 400, 100, 100);
+        assert_eq!(
+            place_floating(size, Some(parent), area, &[covered], 4),
+            expected
+        );
+        // Ordinary floating windows retain the existing cascade.
+        assert_ne!(place_floating(size, None, area, &[covered], 4), expected);
+        let edge_parent = r(-200, -100, 500, 300);
+        assert_eq!(
+            place_floating(size, Some(edge_parent), area, &[], 4),
+            clamp_floating(centered(size, edge_parent), area)
+        );
+    }
+
 }
