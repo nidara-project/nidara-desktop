@@ -676,13 +676,17 @@ PY
     # Minimizing (#724): hidden with its dialog, its place given by the REAL dock, drawn
     # shrinking into it (pixels), back from a click on it, the app's own minimize, tiling,
     # reduce motion, the user's buttons. Clicks through HYALO_CONTROL.
-    if animations; then
+    # OFF since 2026-11-17 (owner, #1126 cause B): it failed 7 of 20 nights on five different
+    # assertions about the dock, and the dock changes again in #1127. Whether it comes back,
+    # rewritten for that dock, or goes, is decided when #1127 is done. HYALO_MINIMIZE_CHECK=true
+    # runs it by hand.
+    if animations && [ "${HYALO_MINIMIZE_CHECK:-false}" = true ]; then
         MINIMIZE_LOG=/tmp/hyalo/minimize "$REPO/scripts/ci/hyalo-minimize-check.sh" >/tmp/hyalo/minimize.log 2>&1 \
             || { log "FAIL: minimize"; cat /tmp/hyalo/minimize.log; exit 1; }
         nidara-hyalo msg do workspace 1 >/dev/null
         log "minimize OK ($(grep -c '^ok' /tmp/hyalo/minimize.log) steps: button, dialog, hidden, place, drawn, back, own request, tiling, reduce motion, buttons)"
     else
-        log "minimize SKIPPED on a PR: an animation check, nightly only (HYALO_ANIMATION_CHECKS)"
+        log "minimize SKIPPED: switched off until the dock work of #1127 is done (HYALO_MINIMIZE_CHECK)"
     fi
     # Opening and closing (#684): a window grows out of its middle and fades in; closing — its
     # window destroyed by its app, or the app killed — a picture of it shrinks and fades where
