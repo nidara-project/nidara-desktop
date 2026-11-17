@@ -29,6 +29,17 @@ log() { echo "[hyalo] $*"; }
 # run on main (HYALO_ANIMATION_CHECKS=true from ci.yml on schedule), which opens an issue when
 # one fails, and in any local run (unset: true); on a PR, not.
 animations() { [ "${HYALO_ANIMATION_CHECKS:-true}" = true ]; }
+# In CI this job is two that run side by side (#1126): `desktop` is everything but the real
+# input-method and reader matrices, `real` boots the same session and runs only those. With
+# both in one job the nightly run no longer fitted its ceiling. Unset (a local run, the cache
+# warmer): all of it in one, as before.
+PART="${HYALO_SMOKE_PART:-all}"
+case "$PART" in all|desktop|real) ;; *) echo "HYALO_SMOKE_PART must be all, desktop or real" >&2; exit 2 ;; esac
+desktop_part() { [ "$PART" != real ]; }
+real_part() { [ "$PART" != desktop ]; }
+# The long checks print their output when they end, so a job cut by its ceiling did not say
+# where it was. One line as each begins, with the seconds this phase has run.
+phase() { log "BEGIN $1 (at ${SECONDS}s)"; }
 
 phase_deps() {
     log "pacman deps…"
@@ -70,10 +81,14 @@ makepkg_rustflags() {
 phase_build() {
     cd "$REPO/hyalo"
     # The release build is the package's (phase_package); here what a package does not run.
-    log "cargo clippy -D warnings…"
-    cargo clippy --locked --all-targets -- -D warnings
-    log "cargo test…"
-    cargo test --locked
+    if desktop_part; then
+        log "cargo clippy -D warnings…"
+        cargo clippy --locked --all-targets -- -D warnings
+        log "cargo test…"
+        cargo test --locked
+    else
+        log "clippy and unit tests are the desktop part's"
+    fi
 
     # The native toolkit client: its build/lint/tests are the toolkit job;
     # its real input/material/IME pixel checks run below on this vkms Hyalo.
@@ -250,6 +265,7 @@ phase_boot() {
         NK_SETTINGS_IME_NIGHTLY="${HYALO_ANIMATION_CHECKS:-false}" \
         NK_GALLERY_NIGHTLY="${NK_GALLERY_NIGHTLY:-false}" \
         HYALO_ANIMATION_CHECKS="${HYALO_ANIMATION_CHECKS:-true}" \
+        HYALO_SMOKE_PART="$PART" \
         dbus-run-session -- bash "$REPO/scripts/ci/hyalo-smoke.sh" run
 }
 
@@ -398,6 +414,10 @@ phase_run() {
     python "$shell_check" ready "$shell_pid"
     python "$shell_check" panels
     log "Rust shell IPC and glass OK (bar, dock, CC and Apps)"
+
+    # From here to the pictures: the compositor's and the shell's own checks, the desktop
+    # part's. A function, left at this indent, only so that the `real` part can leave it out.
+    desktop_checks() {
 
     # The render's instruments (#766 A): the counters answer, and the debug overlay SETTLES — an
     # overlay that showed the damage it causes itself would redraw every frame for ever (it
@@ -656,13 +676,17 @@ PY
     # Minimizing (#724): hidden with its dialog, its place given by the REAL dock, drawn
     # shrinking into it (pixels), back from a click on it, the app's own minimize, tiling,
     # reduce motion, the user's buttons. Clicks through HYALO_CONTROL.
-    if animations; then
+    # OFF since 2026-11-17 (owner, #1126 cause B): it failed 7 of 20 nights on five different
+    # assertions about the dock, and the dock changes again in #1127. Whether it comes back,
+    # rewritten for that dock, or goes, is decided when #1127 is done. HYALO_MINIMIZE_CHECK=true
+    # runs it by hand.
+    if animations && [ "${HYALO_MINIMIZE_CHECK:-false}" = true ]; then
         MINIMIZE_LOG=/tmp/hyalo/minimize "$REPO/scripts/ci/hyalo-minimize-check.sh" >/tmp/hyalo/minimize.log 2>&1 \
             || { log "FAIL: minimize"; cat /tmp/hyalo/minimize.log; exit 1; }
         nidara-hyalo msg do workspace 1 >/dev/null
         log "minimize OK ($(grep -c '^ok' /tmp/hyalo/minimize.log) steps: button, dialog, hidden, place, drawn, back, own request, tiling, reduce motion, buttons)"
     else
-        log "minimize SKIPPED on a PR: an animation check, nightly only (HYALO_ANIMATION_CHECKS)"
+        log "minimize SKIPPED: switched off until the dock work of #1127 is done (HYALO_MINIMIZE_CHECK)"
     fi
     # Opening and closing (#684): a window grows out of its middle and fades in; closing — its
     # window destroyed by its app, or the app killed — a picture of it shrinks and fades where
@@ -780,6 +804,13 @@ PY
         log "night light: not verifiable on this display ($(echo "$reply" | jq -r '.error // .' 2>/dev/null))"
     fi
 
+    }
+    if desktop_part; then
+        desktop_checks
+    else
+        log "compositor and shell checks are the desktop part's"
+    fi
+
     # ── 3. Pictures for a person.
     sleep 4
     nidara-hyalo msg screenshot /tmp/hyalo/desktop.png >/dev/null \
@@ -787,17 +818,21 @@ PY
     file /tmp/hyalo/desktop.png | grep -q "PNG image" || { log "FAIL: no PNG"; exit 1; }
     log "screenshots taken"
 
-    # Toolkit phase 0 tests 1, 2 and 4: real window, committed material,
-    # virtual keyboard, scripted input method, clipboard; each oracle is broken
-    # independently and must fail for its own reason. Screenshots join artifacts.
-    NK_PHASE0_LOG=/tmp/hyalo/nk-phase0 python "$REPO/scripts/ci/nk-phase0-check.py" \
-        > /tmp/hyalo/nk-phase0.log 2>&1 \
-        || { cat /tmp/hyalo/nk-phase0.log; exit 1; }
-    cat /tmp/hyalo/nk-phase0.log
+    if desktop_part; then
+        phase "toolkit phase 0"
+        # Toolkit phase 0 tests 1, 2 and 4: real window, committed material,
+        # virtual keyboard, scripted input method, clipboard; each oracle is broken
+        # independently and must fail for its own reason. Screenshots join artifacts.
+        NK_PHASE0_LOG=/tmp/hyalo/nk-phase0 python "$REPO/scripts/ci/nk-phase0-check.py" \
+            > /tmp/hyalo/nk-phase0.log 2>&1 \
+            || { cat /tmp/hyalo/nk-phase0.log; exit 1; }
+        cat /tmp/hyalo/nk-phase0.log
+    fi
 
     # Gallery acceptance, including the long list, on the nightly or explicit dispatch.
     # No additional work on pull_request; required checks unchanged.
-    if [ "${NK_GALLERY_NIGHTLY:-false}" = true ]; then
+    if desktop_part && [ "${NK_GALLERY_NIGHTLY:-false}" = true ]; then
+        phase "gallery"
         local gallery_started=$SECONDS gallery_status=0
         NK_GALLERY_TEST=vkms NK_WIDGETS_BIN=/usr/bin/nidara-kit-gallery \
             NK_WIDGETS_LOG="$OUT/toolkit-gallery" NK_SETTINGS_DATA=/usr/share/nidara/settings-data \
@@ -813,7 +848,8 @@ PY
     fi
 
     # Settings SearchInput + actual font chooser View, nightly/manual only.
-    if [ "${NK_SETTINGS_IME_NIGHTLY:-false}" = true ]; then
+    if desktop_part && [ "${NK_SETTINGS_IME_NIGHTLY:-false}" = true ]; then
+        phase "Settings input method"
         NK_PHASE0_TEST=vkms NK_PHASE0_LOG="$REPO/toolkit/target/settings-ime-evidence" \
             NK_SETTINGS_DATA=/usr/share/nidara/settings-data NK_REAL_CONTROLS=1 \
             NK_FCITX5_SCALES="1 1.25" python "$REPO/scripts/ci/nk-settings-ime-check.py" \
@@ -821,23 +857,28 @@ PY
         cat "$OUT/settings-ime.log"
     fi
 
-    # Test 3: the direct AT-SPI provider, consumed through libatspi like Orca.
-    # Every oracle has a negative control; the controls (~2 of the check's ~3 min) run when
-    # the check or the test window's faults change and nightly (ci-scope full), not on
-    # every PR.
-    a11y_controls=1
-    [ "${NK_REAL_FULL:-true}" = false ] && { a11y_controls=0; log "AT-SPI controls left to the nightly run (ci-scope full=false)"; }
-    NK_A11Y_CONTROLS=$a11y_controls NK_PHASE0_LOG=/tmp/hyalo/nk-phase0 python "$REPO/scripts/ci/nk-a11y-check.py" \
-        > /tmp/hyalo/nk-a11y.log 2>&1 \
-        || { cat /tmp/hyalo/nk-a11y.log; exit 1; }
-    cat /tmp/hyalo/nk-a11y.log
+    if desktop_part; then
+        phase "AT-SPI provider"
+        # Test 3: the direct AT-SPI provider, consumed through libatspi like Orca.
+        # Every oracle has a negative control; the controls (~2 of the check's ~3 min) run when
+        # the check or the test window's faults change and nightly (ci-scope full), not on
+        # every PR.
+        a11y_controls=1
+        [ "${NK_REAL_FULL:-true}" = false ] && { a11y_controls=0; log "AT-SPI controls left to the nightly run (ci-scope full=false)"; }
+        NK_A11Y_CONTROLS=$a11y_controls NK_PHASE0_LOG=/tmp/hyalo/nk-phase0 python "$REPO/scripts/ci/nk-a11y-check.py" \
+            > /tmp/hyalo/nk-a11y.log 2>&1 \
+            || { cat /tmp/hyalo/nk-a11y.log; exit 1; }
+        cat /tmp/hyalo/nk-a11y.log
+    fi
 
     # Tests 2/3: real engines and real Orca, on this same vkms/tty compositor.
     # Run both even when one fails, so the two issue reports remain independent.
     # Short paths are mandatory: speech-dispatcher uses Unix sockets (108 bytes).
     # Skipped ONLY when CI's scope says the change touches nothing they use
     # (scripts/ci/ci-scope.sh, `gates`); unset — a local run, any doubt — runs them.
-    if [ "${NK_REAL_GATES:-true}" = false ]; then
+    if ! real_part; then
+        log "real IME/Orca gates are the real part's"
+    elif [ "${NK_REAL_GATES:-true}" = false ]; then
         log "real IME/Orca gates SKIPPED: nothing they use changed (ci-scope gates=false)"
         echo "Real fcitx5 and Orca gates skipped: nothing they use changed (scripts/ci/ci-scope.sh)." > "$OUT/real-gates-skipped.md"
     else
@@ -848,14 +889,17 @@ PY
             export NK_FCITX5_SCALES=1 NK_CHOICES_SCALES=1 NK_REAL_CONTROLS=0
             log "real IME/Orca: baseline at scale 1 only, controls and scale 1.25 left to the nightly run (ci-scope full=false)"
         fi
+        phase "real fcitx5"
         NK_PHASE0_TEST=vkms NK_PHASE0_LOG=/tmp/ni python "$REPO/scripts/ci/nk-fcitx5-check.py" \
             > /tmp/hyalo/nk-fcitx5.log 2>&1 || real_status=1
         cat /tmp/hyalo/nk-fcitx5.log
+        phase "real Orca"
         NK_PHASE0_TEST=vkms NK_PHASE0_LOG=/tmp/no HYALO_LOG="$hyalo_log" python "$REPO/scripts/ci/nk-orca-check.py" \
             > /tmp/hyalo/nk-orca.log 2>&1 || real_status=1
         cat /tmp/hyalo/nk-orca.log
         # The radio groups (#882) through libatspi, in the demo's --choices mode. Its evidence
         # goes beside the widgets' (disk, not tmpfs).
+        phase "choices and choices with Orca"
         mkdir -p "$REPO/toolkit/target/widgets-evidence"
         NK_WIDGETS_TEST=vkms NK_SETTINGS_DATA=/usr/share/nidara/settings-data \
             NK_WIDGETS_LOG="$REPO/toolkit/target/widgets-evidence" python "$REPO/scripts/ci/nk-choices-check.py" \
@@ -868,13 +912,16 @@ PY
         [ "$real_status" -eq 0 ] || { log "FAIL: real IME/Orca/choices gates; inspect toolkit-fcitx5, toolkit-orca, toolkit-choices-orca and widgets-evidence artifacts"; exit 1; }
     fi
 
-    # Phase 1 foundations beside phase 0. New evidence uses disk, not tmpfs.
-    mkdir -p "$REPO/toolkit/target/widgets-evidence"
-    NK_WIDGETS_TEST=vkms NK_SETTINGS_DATA=/usr/share/nidara/settings-data \
-        NK_WIDGETS_LOG="$REPO/toolkit/target/widgets-evidence" env -u NK_WIDGETS_STAGES python "$REPO/scripts/ci/nk-widgets-check.py" \
-        > "$REPO/toolkit/target/widgets-evidence/check.log" 2>&1 \
-        || { cat "$REPO/toolkit/target/widgets-evidence/check.log"; exit 1; }
-    cat "$REPO/toolkit/target/widgets-evidence/check.log"
+    if desktop_part; then
+        phase "widgets"
+        # Phase 1 foundations beside phase 0. New evidence uses disk, not tmpfs.
+        mkdir -p "$REPO/toolkit/target/widgets-evidence"
+        NK_WIDGETS_TEST=vkms NK_SETTINGS_DATA=/usr/share/nidara/settings-data \
+            NK_WIDGETS_LOG="$REPO/toolkit/target/widgets-evidence" env -u NK_WIDGETS_STAGES python "$REPO/scripts/ci/nk-widgets-check.py" \
+            > "$REPO/toolkit/target/widgets-evidence/check.log" 2>&1 \
+            || { cat "$REPO/toolkit/target/widgets-evidence/check.log"; exit 1; }
+        cat "$REPO/toolkit/target/widgets-evidence/check.log"
+    fi
 
     # ── 4. Every product process must still be alive, with no panic.
     kill -0 "$hyalo_pid" 2>/dev/null || { log "FAIL: Hyalo died"; exit 1; }
@@ -886,7 +933,7 @@ PY
     if grep -n "panicked" "$hyalo_log" "$shell_log" /tmp/hyalo/sessiond.log; then
         log "FAIL: Rust process panicked"; exit 1
     fi
-    log "HYALO SMOKE PASSED"
+    log "HYALO SMOKE PASSED (part: $PART, ${SECONDS}s)"
 }
 
 case "${1:-all}" in

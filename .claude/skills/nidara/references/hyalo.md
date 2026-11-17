@@ -2883,7 +2883,12 @@ an unapplied mutation, infrastructure failure or previous utterance as evidence.
   coverage uses the layer-placement probe. Unported TS checks are itemized in #1033.
 - CI's `hyalo` job (`scripts/ci/hyalo-smoke.sh`) runs clippy `-D warnings` and the unit tests,
   builds and installs THE PACKAGE (`phase_package`: makepkg -e in the checkout, pacman -U), then
-  boots the tty backend on vkms with the installed shell on it. 🔴 Never add a hand-copied
+  boots the tty backend on vkms with the installed shell on it. It is TWO jobs running side by
+  side (#1126), chosen by `HYALO_SMOKE_PART`: `desktop` (job `hyalo`: clippy, tests, the
+  compositor's and shell's checks, the toolkit's own) and `real` (job `hyalo-real`: the same
+  build and boot, then only real fcitx5, real Orca and the choices checks). Unset, as in a local
+  run, the script does all of it in one. A new check goes in the part it belongs to; a long
+  one prints `phase "name"` first, so a job cut by its ceiling says where it was. 🔴 Never add a hand-copied
   product file to the smoke: put it in the PKGBUILD, and the smoke gets it (a hand list here
   lacked the wallpapers, then the Settings portal — 2026-10-18). NOT a required check
   while Hyalo is a preview: it must never hold the merge queue for the desktop that ships.

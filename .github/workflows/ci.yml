@@ -622,6 +622,9 @@ jobs:
           HYALO_ANIMATION_CHECKS: ${{ github.event_name == 'schedule' || github.event_name == 'workflow_dispatch' }}
           # Gallery/list acceptance on scheduled or explicitly dispatched runs, never PRs.
           NK_GALLERY_NIGHTLY: ${{ github.event_name == 'schedule' || github.event_name == 'workflow_dispatch' }}
+          # Everything but the real input-method and reader matrices, which are the job below
+          # (#1126: both in one job no longer fitted the ceiling on the nightly run).
+          HYALO_SMOKE_PART: desktop
         run: |
           # CARGO_HOME inside the cached dir; no incremental state and no debuginfo in the
           # dev/test profiles (CI never debugs them): a cache several times smaller.
@@ -630,12 +633,76 @@ jobs:
             -e CARGO_HOME=/repo/hyalo/target/cargo-home -e CARGO_INCREMENTAL=0 \
             -e CARGO_PROFILE_DEV_DEBUG=0 -e CARGO_PROFILE_TEST_DEBUG=0 \
             -e NK_REAL_GATES -e NK_REAL_FULL -e HYALO_ANIMATION_CHECKS -e NK_GALLERY_NIGHTLY \
+            -e HYALO_SMOKE_PART \
             archlinux:latest bash /repo/scripts/ci/hyalo-smoke.sh
       - name: Upload screenshots + logs
         if: always()
         uses: actions/upload-artifact@v4
         with:
           name: hyalo-artifacts
+          path: hyalo-out/
+          if-no-files-found: ignore
+  # The other half of the job above (#1126): the same build and the same session booted on
+  # vkms, then only the real fcitx5 matrix, real Orca and the choices checks. They are more
+  # than half of the whole and ran after everything else; side by side each half fits. Not
+  # started at all when the change touches nothing they use (ci-scope `gates`).
+  hyalo-real:
+    name: Hyalo real input method and reader (fcitx5, Orca on vkms)
+    needs: scope
+    if: ${{ !cancelled() && needs.scope.outputs.code != 'false' && needs.scope.outputs.gates != 'false' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 75
+    steps:
+      - uses: actions/checkout@v4
+      - name: Load vkms (virtual KMS device)
+        run: scripts/ci/load-vkms.sh
+      # The two caches of the job above, restored by the same keys. Both jobs save under the
+      # run's key; the one that ends second finds it taken, which is a notice, not a failure.
+      - name: Restore the Rust build cache
+        uses: actions/cache@v4
+        with:
+          path: |
+            hyalo/target
+            session/target
+          key: hyalo-build-${{ runner.os }}-${{ hashFiles('hyalo/Cargo.lock', 'session/Cargo.lock') }}-${{ github.run_id }}
+          restore-keys: |
+            hyalo-build-${{ runner.os }}-${{ hashFiles('hyalo/Cargo.lock', 'session/Cargo.lock') }}-
+            hyalo-build-${{ runner.os }}-
+      - name: Restore toolkit test-window build cache
+        uses: actions/cache@v4
+        with:
+          path: toolkit/target
+          key: nk-phase0-arch-${{ hashFiles('toolkit/Cargo.lock') }}-${{ github.run_id }}
+          restore-keys: |
+            nk-phase0-arch-${{ hashFiles('toolkit/Cargo.lock') }}-
+            nk-phase0-arch-
+      - name: Build + boot (Arch container on vkms)
+        env:
+          # The real fcitx5/Orca matrices (~35 min) only when the change touches what they
+          # use; empty (scope failed) counts as true. See scripts/ci/ci-scope.sh.
+          NK_REAL_GATES: ${{ needs.scope.outputs.gates || 'true' }}
+          # Their controls and second scale only when the checks or their faults change.
+          NK_REAL_FULL: ${{ needs.scope.outputs.full || 'true' }}
+          # The animation checks and the gallery are the desktop part's: off here, so that
+          # the test windows only they use are not built either.
+          HYALO_ANIMATION_CHECKS: 'false'
+          NK_GALLERY_NIGHTLY: 'false'
+          HYALO_SMOKE_PART: real
+        run: |
+          # CARGO_HOME inside the cached dir; no incremental state and no debuginfo in the
+          # dev/test profiles (CI never debugs them): a cache several times smaller.
+          docker run --rm --privileged \
+            -v "$PWD:/repo" \
+            -e CARGO_HOME=/repo/hyalo/target/cargo-home -e CARGO_INCREMENTAL=0 \
+            -e CARGO_PROFILE_DEV_DEBUG=0 -e CARGO_PROFILE_TEST_DEBUG=0 \
+            -e NK_REAL_GATES -e NK_REAL_FULL -e HYALO_ANIMATION_CHECKS -e NK_GALLERY_NIGHTLY \
+            -e HYALO_SMOKE_PART \
+            archlinux:latest bash /repo/scripts/ci/hyalo-smoke.sh
+      - name: Upload screenshots + logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: hyalo-real-artifacts
           path: hyalo-out/
           if-no-files-found: ignore
       - name: Real fcitx5 and Orca assertion tables
@@ -1770,7 +1837,7 @@ jobs:
   # when the night fails, closed when it is green again. Only on the schedule.
   nightly-report:
     name: Nightly report
-    needs: [scope, styles, pkgbuild, typecheck, smoke, hyalo, widgets-gen, hypr-config, skill-docs, icons, agent-loop, toolkit, sessiond, installer-logic]
+    needs: [scope, styles, pkgbuild, typecheck, smoke, hyalo, hyalo-real, widgets-gen, hypr-config, skill-docs, icons, agent-loop, toolkit, sessiond, installer-logic]
     if: ${{ always() && github.event_name == 'schedule' }}
     runs-on: ubuntu-latest
     timeout-minutes: 5
