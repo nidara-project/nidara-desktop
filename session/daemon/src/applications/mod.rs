@@ -932,14 +932,14 @@ impl Applications {
         .await
         .map_err(|e| Error::Failed(e.to_string()))??;
         self.store
-            .call(move |s| {
+            .icon_write(move |s| {
                 s.epoch(epoch)?;
                 s.app(&desktop_id, generation)?;
                 s.authorize(&peer, Operation::AppIcon)?;
                 s.withdraw_icons();
                 icons::write_override(&desktop_id, &bytes)?;
                 s.icons_changed();
-                Ok(s.icon_revision)
+                Ok(())
             })
             .await
     }
@@ -954,7 +954,7 @@ impl Applications {
         let _admission = self.admit(&header)?;
         let peer = self.peer(&header, conn).await?;
         self.store
-            .call(move |s| {
+            .icon_write(move |s| {
                 s.epoch(epoch)?;
                 s.app(&desktop_id, generation)?;
                 s.authorize(&peer, Operation::AppIcon)?;
@@ -967,7 +967,7 @@ impl Applications {
                     Err(e) if e.kind() == std::io::ErrorKind::NotFound => {}
                     Err(e) => return Err(Error::Failed(e.to_string())),
                 }
-                Ok(s.icon_revision)
+                Ok(())
             })
             .await
     }

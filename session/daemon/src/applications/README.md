@@ -44,8 +44,10 @@ There is no blanket watch of ~/.config or XDG_CONFIG_HOME.
 Catalogue/defaults, icons, autostart, layout and theme invalidate independently.
 The 100 ms coalescing deadline participates in the actor's select; no selected branch
 sleeps behind an incoming window. At most one read worker builds a filesystem candidate.
-Its invalidation generation must still match when the GLib owner accepts it; stale
-candidates are discarded and their domains coalesced again. The worker receives immutable
+Every completed catalogue/default/autostart read is applied, including during a long
+burst; only domains marked since that read started are coalesced for another read.
+No unrelated invalidation can veto publication. Icon portions alone revalidate the
+captured theme/revision and selected app→icon map, rescheduling only their domain. The worker receives immutable
 metadata, never the Store, GSettings, monitors or mutable usage/launch/window state.
 The owner merges current usage/Unity/generations and publishes in a short step. H1/jobs
 continue during the read. Each effect still yields to consent notifications first.
@@ -55,6 +57,12 @@ Windows share its prepared version; collect/process never load it. Pending prepa
 waits off actor/H1 for the transaction lock and rechecks version/lock after reading.
 A stale lock delays preparation, never triggers deletion. An unavailable package database
 is attempted once per version; other resolver tiers remain available. See WINDOW-IDENTITY.md.
+Set/ResetIconOverride responds after that same reader has committed the post-write
+icon fingerprint baseline and published its revision. An old in-flight icon portion
+cannot settle a newer write. The 5-second wait is asynchronous; actor/H1 stay available.
+Audit failure/timeout reports that the write was applied but confirmation is uncertain.
+This prevents a delayed monitor of the acknowledged write from staling its first decode;
+external changes during a decode still invalidate it.
 Changing a real app can update its selected-asset watches; a generic catalogue/default
 notice does not walk icon trees. Unchanged metadata does not rebuild the identity index.
 
@@ -273,3 +281,22 @@ The raw six rounds/spans are in `preload-paired` and `preload-comparison.json`.
 The final daemon passes 151 unit tests and A1/A2/A3 integrations, plus workspace Clippy.
 New regressions cover a reused preloaded first-window index, idle version reload,
 an unavailable database and preparation waiting through a transaction.
+
+
+Review follow-up (#1134): the global dirty generation was removed. It discarded
+complete reads even for unrelated marks and starved publication under a continuous
+mixed-domain burst. The private before/after control adds the same 250 ms read delay
+to both binaries and writes catalogue/autostart every 40 ms for 3.2 seconds: the old
+version publishes zero intermediate catalogue states; the fix publishes 8 and 9 in
+two repeats, before the burst ends. Pending domains still drive the next read.
+
+The CI GetIcon Stale after SetIconOverride was also reproduced at the exact same
+call: its delayed filesystem audit revised the acknowledged artwork during decode.
+With the same additional 650 ms Sample decode delay and 250 ms read delay in both
+binaries, the previous head fails and the fixed version passes the complete A1
+walk twice. Set/Reset now await the existing reader's baseline publication, without
+blocking actor/H1 or relaxing post-decode checks. The uninstrumented version passes
+151 unit tests, A1/A2/A3 and workspace Clippy. Local scripts/binary hashes and logs
+are in `review-*`; instrumentation is absent from production and no CI checker changed.
+The package-preload latency figures above were measured at 188884a0 before this
+review follow-up, not remeasured or presented as a final-head latency guarantee.

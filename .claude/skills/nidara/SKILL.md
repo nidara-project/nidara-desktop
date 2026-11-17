@@ -74,8 +74,12 @@ Applications1 registry invalidations are domain-specific (#1127): GIO owns stand
 app/default notices; custom/missing targets use filtered, reused watches. Reuse must
 rearm a retired directory instance even when its pathname is unchanged. The 100 ms
 debounce is a select deadline, never a sleep in an actor branch. Only one filesystem
-candidate is read off-actor; stale generations are rejected and current H1/usage/effects
-remain with GLib. Never put icon-tree walks or whole-monitor rebuilds back on a window,
+candidate is read off-actor; apply each finished catalogue/default/autostart result
+and reread only domains dirtied since it started, so mixed/long bursts cannot starve
+publication. Icon portions alone revalidate the captured theme/revision and selected
+app→icon map. Current H1/usage/effects remain with GLib. Set/ResetIconOverride waits
+asynchronously for that same reader to commit its icon baseline before replying;
+do not acknowledge the file write then let its monitor invalidate an ensuing decode. Never put icon-tree walks or whole-monitor rebuilds back on a window,
 launch, layout or default-handler path. Read applications/README.md and WINDOW-IDENTITY.md.
 The TS conventions below still apply to the remaining
 TS applications and frozen Hyprland source.

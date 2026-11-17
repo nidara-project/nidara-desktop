@@ -55,6 +55,7 @@ pub struct Store {
     next_generation: u64,
     icon_fingerprint: String,
     asset_fingerprint: String,
+    icon_waiters: Vec<(u64, oneshot::Sender<Result<u64, Error>>)>,
     autostarts: Option<super::autostart::Index>,
     monitor_plans: BTreeMap<u32, refresh::Plan>,
     pins: Option<gio::Settings>,
@@ -179,6 +180,7 @@ impl Store {
             next_generation: 0,
             icon_fingerprint: String::new(),
             asset_fingerprint: String::new(),
+            icon_waiters: Vec::new(),
             autostarts: None,
             monitor_plans: BTreeMap::new(),
             pins,
@@ -327,7 +329,7 @@ impl Store {
     }
     fn read_input(&self, domains: u32) -> refresh::Input {
         refresh::Input {
-            generation: self.dirty.generation(),
+            icon_revision: self.icon_revision,
             domains,
             roots: self.roots.clone(),
             present: self.present.clone(),
@@ -348,6 +350,13 @@ impl Store {
                 self.mark("catalogue");
             }
         }
+        if domains & refresh::ICONS != 0 {
+            for (_, reply) in self.icon_waiters.drain(..) {
+                let _ = reply.send(Err(Error::Failed(
+                    "icon write applied; audit unavailable".into(),
+                )));
+            }
+        }
         eprintln!("Applications1 read worker: {error}");
     }
     fn apply_read(&mut self, result: refresh::Output) {
@@ -359,22 +368,9 @@ impl Store {
                 plans_changed = true;
             }
         };
-        let mut icons_changed = false;
-        if let Some((signature, watches)) = result.artwork {
-            icons_changed |=
-                !self.icon_fingerprint.is_empty() && self.icon_fingerprint != signature;
-            self.icon_fingerprint = signature;
-            plan(&mut self.monitor_plans, refresh::ICONS, watches);
-        }
-        if let Some((signature, watches)) = result.assets {
-            icons_changed |=
-                !self.asset_fingerprint.is_empty() && self.asset_fingerprint != signature;
-            self.asset_fingerprint = signature;
-            plan(&mut self.monitor_plans, refresh::ASSETS, watches);
-        }
-        if icons_changed {
-            self.icons_changed();
-        }
+        // Catalogue/default/autostart results always make progress. Only icon
+        // audits depend on mutable theme/override context captured by the reader.
+        let icon_context = result.icon_revision == self.icon_revision && result.theme == self.theme;
         if let Some((index, watches)) = result.autostart {
             self.autostarts = Some(index);
             plan(&mut self.monitor_plans, refresh::AUTOSTART, watches);
@@ -411,6 +407,38 @@ impl Store {
             }
             self.apply_catalogue(scan);
         }
+        let mut icons_changed = false;
+        let mut settled = false;
+        if icon_context {
+            if let Some((signature, watches)) = result.artwork {
+                icons_changed |=
+                    !self.icon_fingerprint.is_empty() && self.icon_fingerprint != signature;
+                self.icon_fingerprint = signature;
+                plan(&mut self.monitor_plans, refresh::ICONS, watches);
+                settled = true;
+            }
+            if let Some(refresh::Assets {
+                signature,
+                watches,
+                apps,
+            }) = result.assets
+            {
+                if apps == refresh::icon_ids(&self.apps) {
+                    icons_changed |=
+                        !self.asset_fingerprint.is_empty() && self.asset_fingerprint != signature;
+                    self.asset_fingerprint = signature;
+                    plan(&mut self.monitor_plans, refresh::ASSETS, watches);
+                } else {
+                    settled = false;
+                    self.dirty.mark(refresh::ICONS);
+                }
+            }
+            if icons_changed {
+                self.icons_changed();
+            }
+        } else if result.artwork.is_some() || result.assets.is_some() {
+            self.dirty.mark(refresh::ICONS);
+        }
         if let Some(default) = result.default
             && self.default != default
         {
@@ -423,6 +451,18 @@ impl Store {
         {
             self.monitor_failed =
                 refresh::sync(&mut self.monitors, &self.monitor_plans, &self.dirty);
+        }
+        if settled {
+            // Complete acknowledged writes only after their filesystem baseline
+            // and new metadata are committed, never inside the blocking reader.
+            self.publish_icons();
+            for (revision, reply) in std::mem::take(&mut self.icon_waiters) {
+                if revision <= result.icon_revision {
+                    let _ = reply.send(Ok(self.icon_revision));
+                } else if !reply.is_closed() {
+                    self.icon_waiters.push((revision, reply));
+                }
+            }
         }
     }
     fn apply_catalogue(&mut self, scan: catalogue::Scan) {
@@ -554,6 +594,27 @@ impl Handle {
             icon_view,
         )
     }
+    /// Writes are acknowledged after the existing single reader has committed
+    /// the corresponding icon baseline. The actor/H1 keep serving other jobs.
+    pub async fn icon_write(
+        &self,
+        write: impl FnOnce(&mut Store) -> Result<(), Error> + Send + 'static,
+    ) -> Result<u64, Error> {
+        let reply = self
+            .call(move |s| {
+                write(s)?;
+                let (tx, rx) = oneshot::channel();
+                s.icon_waiters.retain(|(_, tx)| !tx.is_closed());
+                s.icon_waiters.push((s.icon_revision, tx));
+                s.dirty.mark(refresh::ICONS);
+                Ok(rx)
+            })
+            .await?;
+        tokio::time::timeout(Duration::from_secs(5), reply)
+            .await
+            .map_err(|_| Error::Timeout("icon write applied; audit result uncertain".into()))?
+            .map_err(|_| Error::Unavailable("icon audit worker exited".into()))?
+    }
     pub async fn call<T: Send + 'static>(
         &self,
         f: impl FnOnce(&mut Store) -> Result<T, Error> + Send + 'static,
@@ -639,8 +700,7 @@ pub async fn spawn() -> Result<(Handle, Arc<Notify>), Error> {
                             result=completed=>{
                                 let (domains,_)=work.take().expect("completed read");
                                 match result {
-                                    Ok(candidate) if candidate.generation==dirty.generation()=>store.apply_read(candidate),
-                                    Ok(_)=>pending|=domains,
+                                    Ok(candidate)=>store.apply_read(candidate),
                                     Err(e)=>{store.read_failed(domains,&e.to_string());}
                                 }
                                 store.publish_icons();

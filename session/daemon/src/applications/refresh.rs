@@ -10,7 +10,7 @@ use std::{
     rc::Rc,
     sync::{
         Arc,
-        atomic::{AtomicU32, AtomicU64, Ordering},
+        atomic::{AtomicU32, Ordering},
     },
 };
 use tokio::sync::Notify;
@@ -26,21 +26,14 @@ pub const ASSETS: u32 = 64; // watch-plan group, not an invalidation domain
 pub struct Dirty {
     pub wake: Notify,
     bits: AtomicU32,
-    generation: AtomicU64,
 }
 impl Dirty {
     pub fn mark(&self, bits: u32) {
-        if bits & (READ | THEME) != 0 {
-            self.generation.fetch_add(1, Ordering::AcqRel);
-        }
         self.bits.fetch_or(bits, Ordering::AcqRel);
         self.wake.notify_one();
     }
     pub fn take(&self) -> u32 {
         self.bits.swap(0, Ordering::AcqRel)
-    }
-    pub fn generation(&self) -> u64 {
-        self.generation.load(Ordering::Acquire)
     }
 }
 // None means every direct child of this *actual target directory*. Missing
@@ -90,25 +83,32 @@ pub fn file(plan: &mut Plan, target: &Path, domain: u32) {
     }
 }
 pub struct Input {
-    pub generation: u64,
+    pub icon_revision: u64,
     pub domains: u32,
     pub roots: Vec<PathBuf>,
     pub present: BTreeMap<PathBuf, String>,
     pub snapshot: Option<Arc<icon_view::Snapshot>>,
     pub theme: String,
 }
+pub struct Assets {
+    pub signature: String,
+    pub watches: Plan,
+    pub apps: Vec<(String, String)>,
+}
 pub struct Output {
-    pub generation: u64,
+    pub icon_revision: u64,
+    pub theme: String,
     pub catalogue: Option<(catalogue::Scan, BTreeMap<PathBuf, String>, Plan)>,
     pub artwork: Option<(String, Plan)>,
-    pub assets: Option<(String, Plan)>,
+    pub assets: Option<Assets>,
     pub autostart: Option<(autostart::Index, Plan)>,
     pub default: Option<String>,
 }
 pub fn read(input: Input) -> Output {
     let _span = icon_cache::span("registry-read", "registry", 0);
     let mut out = Output {
-        generation: input.generation,
+        icon_revision: input.icon_revision,
+        theme: input.theme.clone(),
         catalogue: None,
         artwork: None,
         assets: None,
@@ -187,7 +187,11 @@ pub fn read(input: Input) -> Output {
                 }
             }
         }
-        out.assets = Some((catalogue::hash(signatures.as_bytes()), plan));
+        out.assets = Some(Assets {
+            signature: catalogue::hash(signatures.as_bytes()),
+            watches: plan,
+            apps: icon_ids(apps),
+        });
     }
     if input.domains & AUTOSTART != 0 {
         let mut plan = Plan::new();
@@ -207,6 +211,11 @@ pub fn read(input: Input) -> Output {
         );
     }
     out
+}
+pub fn icon_ids(apps: &BTreeMap<String, catalogue::App>) -> Vec<(String, String)> {
+    apps.iter()
+        .map(|(id, app)| (id.clone(), app.icon.clone()))
+        .collect()
 }
 type Rules = BTreeMap<u32, Option<BTreeSet<OsString>>>;
 pub struct Monitor {
@@ -452,18 +461,17 @@ mod tests {
         .unwrap();
     }
     #[test]
-    fn read_generations_reject_changed_inputs_but_keep_live_layout_effects_independent() {
+    fn invalidations_during_a_read_remain_pending_without_requeueing_other_domains() {
         let dirty = Dirty::default();
         dirty.mark(CATALOGUE);
-        let generation = dirty.generation();
-        assert_eq!(dirty.take(), CATALOGUE);
-        dirty.mark(LAYOUT);
-        assert_eq!(dirty.generation(), generation);
-        dirty.mark(THEME);
-        assert_ne!(dirty.generation(), generation);
-        assert_eq!(dirty.take(), LAYOUT | THEME);
-        let generation = dirty.generation();
-        dirty.mark(AUTOSTART);
-        assert_ne!(dirty.generation(), generation);
+        assert_eq!(dirty.take(), CATALOGUE); // the one reader now owns this work
+        for _ in 0..100 {
+            dirty.mark(AUTOSTART);
+        }
+        assert_eq!(dirty.take(), AUTOSTART); // completed catalogue still applies
+        dirty.mark(CATALOGUE | THEME);
+        dirty.mark(ICONS);
+        assert_eq!(dirty.take(), CATALOGUE | THEME | ICONS);
+        assert_eq!(dirty.take(), 0);
     }
 }

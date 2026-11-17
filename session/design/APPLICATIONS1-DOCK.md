@@ -214,7 +214,10 @@ files and a window opening never trigger a registry or artwork reconstruction.
 
 Coalesce bursts for 100 ms using a pending deadline, never a sleep inside the actor's
 selected branch. Filesystem reads run as at most one bounded candidate in flight,
-with invalidation generations rejecting stale results. The private #1127 baseline
+applying every completed catalogue/default/autostart result and preserving only the
+invalidations received since its start for the next read. A mark from another domain
+must not veto that progress. Only the icon-audit portions revalidate theme/revision
+and their selected app→icon map; a mismatch reschedules icons alone. The private #1127 baseline
 measured ~1.2 ms for four desktop entries but >800 ms for the icon audit, justifying
 that worker for costly real artwork changes too. GSettings, GIO monitors, live usage,
 window observations and publication stay with the GLib owner. Apply only the requested
@@ -277,7 +280,13 @@ queues behind the actor's synchronous catalogue/disk refresh. The last committed
 view remains usable while the next catalogue is built; the new view is published
 before acknowledging an actor effect or emitting its change. Override file
 writes first withdraw the view (Busy), then republish on success or failure before
-replying, so readers cannot return uncommitted artwork. Actor exit retires the
+replying, so readers cannot return uncommitted artwork. Set/ResetIconOverride
+acknowledges only after the same single filesystem reader has committed its post-write
+fingerprint baseline and published the resulting icon revision; its own delayed monitor
+event must not invalidate the first acknowledged decode. This wait is asynchronous,
+with a 5-second uncertain-result timeout, and leaves actor/H1 serving other jobs.
+A failed audit reports an uncertain applied write; ordinary decodes retain strict
+post-decode freshness checks. Actor exit retires the
 view (Unavailable). A post-decode check uses the latest published epoch/revision,
 app generation or layout membership, never the captured old Arc. This view is
 for icon reads, not a substitute for current usage/window/launch snapshots.
