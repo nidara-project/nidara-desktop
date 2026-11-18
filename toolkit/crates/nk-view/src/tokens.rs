@@ -213,6 +213,8 @@ pub struct Look {
     /// (`--nidara-accent-fg`): a sidebar's selected entry (D1).
     pub accent: Color,
     pub accent_fg: Color,
+    /// Selected row tint (`--nidara-state-selected`).
+    pub selected: Color,
     /// A disabled control's text and glyphs (`--nidara-text-disabled`).
     pub disabled: Color,
 }
@@ -234,6 +236,7 @@ impl Look {
             surface: token("--nidara-surface")?,
             accent: token("--nidara-accent")?,
             accent_fg: token("--nidara-accent-fg")?,
+            selected: token("--nidara-state-selected")?,
             disabled: token("--nidara-text-disabled")?,
         })
     }

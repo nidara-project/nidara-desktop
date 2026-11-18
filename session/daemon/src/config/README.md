@@ -102,7 +102,7 @@ existing monitor also refreshes `[workspaces]`.
 
 ## Performance profile (#1103)
 
-`profile.rs` serves `power.profile`, a segmented choice among the profiles
+`profile.rs` serves `power.profile`, a single-selection list of the profiles
 power-profiles-daemon advertises. Its home is PPD's `ActiveProfile`, the property TS set
 with `powerprofilesctl`, read and written on the system bus. Power1 sees such a write as
 a manual choice and the automatic saver stands aside (`power/README.md`).

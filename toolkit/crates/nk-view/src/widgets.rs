@@ -889,6 +889,108 @@ impl From<SettingRow> for Node {
         n
     }
 }
+/// One selectable row in a [ListBox].
+#[must_use]
+pub struct ListBoxOption {
+    title: String,
+    icon: Option<String>,
+}
+impl ListBoxOption {
+    pub fn new(title: impl Into<String>) -> Self {
+        Self {
+            title: title.into(),
+            icon: None,
+        }
+    }
+    pub fn icon(mut self, name: impl Into<String>) -> Self {
+        self.icon = Some(name.into());
+        self
+    }
+}
+
+/// A short, single-selection list for the inside of a group. Up and Down move focus;
+/// activating a row reports its index. The caller supplies the current selection.
+#[must_use]
+pub struct ListBox {
+    key: Key,
+    name: String,
+    action: String,
+    options: Vec<ListBoxOption>,
+    style: TextStyle,
+    selected: Option<usize>,
+    enabled: bool,
+}
+impl ListBox {
+    pub fn new(
+        key: impl Into<Key>,
+        name: impl Into<String>,
+        action: impl Into<String>,
+        options: Vec<ListBoxOption>,
+        style: TextStyle,
+    ) -> Self {
+        Self {
+            key: key.into(),
+            name: name.into(),
+            action: action.into(),
+            options,
+            style,
+            selected: None,
+            enabled: true,
+        }
+    }
+    pub fn selected(mut self, index: Option<usize>) -> Self {
+        self.selected = index;
+        self
+    }
+    pub fn enabled(mut self, on: bool) -> Self {
+        self.enabled = on;
+        self
+    }
+}
+impl From<ListBox> for Node {
+    fn from(list: ListBox) -> Self {
+        let rows = list
+            .options
+            .into_iter()
+            .enumerate()
+            .map(|(index, option)| {
+                let key = format!("{}/{index}", list.key.0);
+                let selected = list.selected == Some(index);
+                let mut row = SettingRow::new(key.clone(), option.title, list.style.clone())
+                    .action(&list.action)
+                    .role(Role::Option)
+                    .enabled(list.enabled)
+                    .marked(selected);
+                let ink = if list.enabled {
+                    Ink::Primary
+                } else {
+                    Ink::Disabled
+                };
+                row.row.leading = option
+                    .icon
+                    .map(|name| Node::icon(format!("{key}/icon"), name, 20.).ink(ink));
+                if selected {
+                    row = row.trailing(
+                        Node::icon(format!("{key}/check"), "nd-emblem-default", 16.).ink(ink),
+                    );
+                }
+                let mut node = Node::from(row).value(Value::Index(index));
+                if let Kind::Control(c) = &mut node.kind
+                    && let Some(Part::Surface(surface)) = c.part.as_deref_mut()
+                {
+                    surface.selection_group = Some(list.key.clone());
+                }
+                node
+            })
+            .collect();
+        let mut node = Node::column(list.key, rows);
+        if let Kind::Stack(stack) = &mut node.kind {
+            stack.list_name = Some(list.name);
+        }
+        node
+    }
+}
+
 /// An entry of a window's sidebar: a page the app can show (`Gtk.StackSidebar`'s row). The
 /// selected one is filled with the accent.
 #[must_use]

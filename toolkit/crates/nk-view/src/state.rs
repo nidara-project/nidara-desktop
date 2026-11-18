@@ -1378,8 +1378,8 @@ impl ViewState {
     }
 
     /// Tab and Shift+Tab move focus through every enabled control in tree order, revealed or
-    /// not, a radio group being one stop; Enter or Space activates the focused one; on a radio
-    /// the arrows choose the group's next or previous one.
+    /// not, with one stop per choice group. Enter or Space activates the focused control.
+    /// Arrows choose within radio groups and move focus within lists.
     pub fn key(&mut self, k: KeyInput) -> Option<Activated> {
         let before = self.focus.clone();
         let result = self.key_inner(k);
@@ -1419,29 +1419,41 @@ impl ViewState {
             .focus
             .as_ref()
             .and_then(|f| order.iter().position(|&i| &self.placed[i].key == f));
-        // A radio group: plain radios join their neighbours in `order`; each segmented
-        // choice or swatch row is a group of its own.
-        let radio = |j: usize| !matches!(self.membership(order[j]), Membership::None);
+        // Adjacent radios and named choices each share a single Tab stop.
+        let grouped = |j: usize| !matches!(self.membership(order[j]), Membership::None);
         let joined = |j: usize| match (self.membership(order[j]), self.membership(order[j + 1])) {
             (Membership::Adjacent { .. }, Membership::Adjacent { .. }) => true,
-            (Membership::Named { key: a, .. }, Membership::Named { key: b, .. }) => a == b,
+            (Membership::Named { key: a, .. }, Membership::Named { key: b, .. })
+            | (Membership::List { key: a, .. }, Membership::List { key: b, .. }) => a == b,
             _ => false,
         };
         let run = |j: usize| {
             let (mut a, mut b) = (j, j);
-            while a > 0 && radio(a - 1) && joined(a - 1) {
+            while a > 0 && grouped(a - 1) && joined(a - 1) {
                 a -= 1;
             }
-            while b + 1 < order.len() && radio(b + 1) && joined(b) {
+            while b + 1 < order.len() && grouped(b + 1) && joined(b) {
                 b += 1;
             }
             a..=b
         };
         match k {
             KeyInput::Left | KeyInput::Right | KeyInput::Up | KeyInput::Down => {
-                // The arrows move a group's choice, as a click on the next radio would.
-                let a = at.filter(|&a| radio(a))?;
+                // A list moves focus. A radio group also changes its choice.
+                let a = at.filter(|&a| grouped(a))?;
                 let g = run(a);
+                if matches!(self.membership(order[a]), Membership::List { .. }) {
+                    let next = match k {
+                        KeyInput::Up if a > *g.start() => a - 1,
+                        KeyInput::Down if a < *g.end() => a + 1,
+                        _ => return None,
+                    };
+                    let i = order[next];
+                    self.focus = Some(self.placed[i].key.clone());
+                    self.focus_visible = true;
+                    self.scroll_to_focus(i);
+                    return None;
+                }
                 let (first, n) = (*g.start(), g.end() - g.start() + 1);
                 let step = if matches!(k, KeyInput::Left | KeyInput::Up) {
                     n - 1
@@ -1459,10 +1471,10 @@ impl ViewState {
                 })
             }
             KeyInput::Tab | KeyInput::ShiftTab => {
-                // A radio group is one stop: its chosen radio, else its first.
+                // A choice group is one stop: its chosen item, else its first.
                 let stops: Vec<usize> = (0..order.len())
                     .filter(|&j| {
-                        if !radio(j) {
+                        if !grouped(j) {
                             return true;
                         }
                         let g = run(j);
@@ -1471,6 +1483,7 @@ impl ViewState {
                                 self.membership(order[r]),
                                 Membership::Adjacent { selected: true }
                                     | Membership::Named { selected: true, .. }
+                                    | Membership::List { selected: true, .. }
                             )
                         }) {
                             Some(chosen) => chosen == j,
@@ -1480,7 +1493,7 @@ impl ViewState {
                     .collect();
                 let n = stops.len();
                 let here = at.map(|a| {
-                    let g = if radio(a) { run(a) } else { a..=a };
+                    let g = if grouped(a) { run(a) } else { a..=a };
                     stops.iter().position(|s| g.contains(s)).unwrap_or(0)
                 });
                 let next = match (here, k) {
@@ -1883,6 +1896,7 @@ impl ViewState {
             let p = &self.placed[i];
             let mut children = Vec::<SemanticChild>::new();
             let mut node = match &p.what {
+                What::ListBox(name) => nk_a11y::Node::new(0, nk_a11y::Role::ListBox, name.clone()),
                 What::Pane(_) => nk_a11y::Node::new(0, nk_a11y::Role::Panel, ""),
                 What::Scroll { .. } => nk_a11y::Node::new(0, nk_a11y::Role::ScrollPane, ""),
                 What::Control(c) => {
@@ -1918,7 +1932,12 @@ impl ViewState {
                 height: p.rect[3],
             };
             let parent = std::iter::successors(p.parent, |&q| self.placed[q].parent)
-                .filter(|&q| matches!(self.placed[q].what, What::Pane(_) | What::Scroll { .. }))
+                .filter(|&q| {
+                    matches!(
+                        self.placed[q].what,
+                        What::Pane(_) | What::Scroll { .. } | What::ListBox(_)
+                    )
+                })
                 .find_map(|q| ids.get(&q).copied())
                 .unwrap_or(root_id);
             nodes
@@ -1976,7 +1995,7 @@ impl ViewState {
         p.alpha > 0.
             && !p.presentation
             && match &p.what {
-                What::Pane(_) | What::Scroll { .. } | What::Control(_) => true,
+                What::Pane(_) | What::Scroll { .. } | What::Control(_) | What::ListBox(_) => true,
                 What::Text { .. } => p.control.is_none(),
                 _ => false,
             }

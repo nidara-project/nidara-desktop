@@ -232,6 +232,7 @@ pub fn intersect(a: Rect, b: Rect) -> Option<Rect> {
 #[derive(Clone, Debug)]
 pub enum What {
     Stack,
+    ListBox(String),
     Pane(Corner),
     /// A group's card: painted by the view, never glass.
     Group,
@@ -717,7 +718,7 @@ impl Layouter<'_> {
     fn place(&mut self, n: &Node, m: &Measure, r: Rect, ctx: Ctx, out: &mut Vec<Placed>) {
         let index = out.len();
         let what = match &n.kind {
-            Kind::Stack(_) => What::Stack,
+            Kind::Stack(s) => s.list_name.clone().map_or(What::Stack, What::ListBox),
             Kind::Pane(p) => What::Pane(p.corner),
             Kind::Group(_) => What::Group,
             Kind::Text(t) => What::Text {

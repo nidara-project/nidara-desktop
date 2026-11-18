@@ -127,6 +127,7 @@ pub enum Membership {
     None,
     Adjacent { selected: bool },
     Named { key: Key, selected: bool },
+    List { key: Key, selected: bool },
 }
 /// A component may own its selected mark, so its enclosing glass control must not add
 /// another selected wash or draw the focus ring through the mark.

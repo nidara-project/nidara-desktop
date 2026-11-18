@@ -73,6 +73,7 @@ pub struct SettingRow {
     /// own (`switch_control`, a button, a slider). In an activatable one: what it shows, drawn
     /// only (`Node::switch`, a mark, a chevron), since the row is then the control.
     pub trailing: Option<Node>,
+    pub leading: Option<Node>,
     /// The row responds as a whole and reports this action (GNOME's activatable row). Off by
     /// default: the control in it responds, not the row (owner, 2026-11-12).
     pub action: Option<String>,
@@ -230,6 +231,8 @@ impl Padding {
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub struct Stack {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub list_name: Option<String>,
     pub axis: Axis,
     pub gap: Option<Space>,
     pub padding: Padding,
@@ -543,6 +546,7 @@ impl Node {
         Self::new(
             key,
             Kind::Stack(Stack {
+                list_name: None,
                 axis,
                 gap: None,
                 padding: Padding::default(),
@@ -696,7 +700,8 @@ impl Node {
                 .ink(ink(Ink::Dim)),
             );
         }
-        let mut line = vec![Self::column(format!("{}/text", key.0), text).grow()];
+        let mut line: Vec<_> = row.leading.into_iter().collect();
+        line.push(Self::column(format!("{}/text", key.0), text).grow());
         if let Some(t) = row.trailing {
             debug_assert!(
                 row.action.is_none() || !t.holds_control(),

@@ -137,8 +137,28 @@ pub(super) fn keys() -> Vec<Key> {
         },
         set: Some(put),
         ui: Some(|st| {
-            json!({"i18n": "settings.power.group.profile", "control": "segmented",
-                "options": options_i18n(&names(st), "settings.power.profile")})
+            let order = ["performance", "balanced", "power-saver"];
+            let mut profiles = names(st);
+            profiles.sort_by_key(|profile| {
+                order
+                    .iter()
+                    .position(|name| name == profile)
+                    .unwrap_or(order.len())
+            });
+            let options: Vec<_> = profiles
+                .iter()
+                .map(|profile| {
+                    let mut option = json!({
+                        "value": profile,
+                        "i18n": format!("settings.power.profile.{profile}"),
+                    });
+                    if order.contains(&profile.as_str()) {
+                        option["icon"] = json!(format!("nd-power-profile-{profile}"));
+                    }
+                    option
+                })
+                .collect();
+            json!({"i18n": "settings.power.group.profile", "control": "listbox", "options": options})
         }),
         watch: &[],
         file: false,

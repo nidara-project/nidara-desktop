@@ -5,6 +5,8 @@ use crate::{Corner, Role, Wash};
 pub struct Surface {
     pub wash: Wash,
     pub marked: bool,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub selection_group: Option<Key>,
     pub on: bool,
     pub surface: bool,
     pub accent: bool,
@@ -16,6 +18,7 @@ impl Default for Surface {
         Self {
             wash: Wash::Glass,
             marked: false,
+            selection_group: None,
             on: false,
             surface: false,
             accent: false,
@@ -87,7 +90,12 @@ impl Component for Surface {
         self.marked
     }
     fn group(&self, cx: &Read<'_>) -> Membership {
-        if cx.role == Some(Role::Radio) {
+        if let Some(key) = &self.selection_group {
+            Membership::List {
+                key: key.clone(),
+                selected: self.marked,
+            }
+        } else if cx.role == Some(Role::Radio) {
             Membership::Adjacent {
                 selected: self.marked,
             }
@@ -120,6 +128,8 @@ impl Component for Surface {
         let on_well = |w| well.map_or(w, |s| over(w, s));
         let (priority, wash) = if self.on {
             (0, wash_of(tokens.look.on))
+        } else if self.marked && self.selection_group.is_some() {
+            (0, wash_of(tokens.look.selected))
         } else if self.marked && self.accent {
             (0, wash_of(tokens.look.accent))
         } else if cx.interaction.pressed {
@@ -140,6 +150,9 @@ impl Component for Surface {
         }
     }
     fn semantics(&self, cx: &Read<'_>, n: &mut nk_a11y::Node, _: &mut Vec<SemanticChild>) {
+        if self.selection_group.is_some() {
+            n.states.selected = self.marked;
+        }
         n.states.checked =
             matches!(cx.role, Some(Role::Toggle | Role::Check | Role::Radio)) && self.marked;
     }

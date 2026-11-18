@@ -1402,7 +1402,7 @@ struct Ppd(String);
 impl Ppd {
     #[zbus(property)]
     fn profiles(&self) -> Vec<HashMap<String, OwnedValue>> {
-        ["power-saver", "balanced"]
+        ["power-saver", "balanced", "performance"]
             .into_iter()
             .map(|s| HashMap::from([("Profile".into(), Value::from(s).try_into().unwrap())]))
             .collect()
@@ -1439,9 +1439,17 @@ async fn the_performance_profile_is_power_profiles_daemons() {
     assert_eq!(key["value"], "balanced");
     assert_eq!(
         key["values"],
-        serde_json::json!(["power-saver", "balanced"])
+        serde_json::json!(["power-saver", "balanced", "performance"])
     );
-    assert_eq!(key["ui"]["control"], "segmented");
+    assert_eq!(key["ui"]["control"], "listbox");
+    assert_eq!(
+        key["ui"]["options"],
+        serde_json::json!([
+            {"value": "performance", "i18n": "settings.power.profile.performance", "icon": "nd-power-profile-performance"},
+            {"value": "balanced", "i18n": "settings.power.profile.balanced", "icon": "nd-power-profile-balanced"},
+            {"value": "power-saver", "i18n": "settings.power.profile.power-saver", "icon": "nd-power-profile-power-saver"},
+        ])
+    );
     let apply = |mode: &'static str| {
         let conn = conn.clone();
         async move {
@@ -1462,7 +1470,7 @@ async fn the_performance_profile_is_power_profiles_daemons() {
     assert_eq!(iface.get().await.0, "power-saver", "PPD is the home");
     // Not advertised here: refused, never sent.
     assert_eq!(
-        error_name(apply("performance").await.unwrap_err()),
+        error_name(apply("turbo").await.unwrap_err()),
         "org.nidara.Config1.Error.Invalid"
     );
     // Another writer (powerprofilesctl, the CC): PPD's signal refreshes Config1.

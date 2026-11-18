@@ -162,6 +162,11 @@ impl Gallery {
             "check" => self.model.check = !self.model.check,
             "row-open" => self.model.opened += 1,
             "row-flip" => self.model.row_on = !self.model.row_on,
+            "profile-select" => {
+                if let Some(nk::Value::Index(index)) = a.value {
+                    self.model.profile = index;
+                }
+            }
             "toggle" => self.model.toggle = !self.model.toggle,
             "switch" => self.model.switch = !self.model.switch,
             "reveal" => self.model.open = !self.model.open,
