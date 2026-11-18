@@ -37,6 +37,7 @@ the tree with `.into()`. The setters every piece has (`grow`, `width`, `height`,
 | A value in a range; one at a setting row's end | `nk::Slider` (`nk::SliderRange`), `nk::SliderEnd` |
 | Text the kit edits; text the app edits; search | `nk::Entry`, `nk::Field`, `nk::SearchEntry` |
 | A header that shows what follows; a long list | `nk::Expander`, `nk::ListView` |
+| Font preview and modal chooser | `nk::FontButton`, `nk::FontDialog` with `nk::FontChoice` |
 | Single-selection list inside a group | `nk::ListBox`, `nk::ListBoxOption` |
 | Settings' row; a sidebar's page; a menu's row | `nk::SettingRow`, `nk::SidebarEntry`, `nk::MenuItem` |
 

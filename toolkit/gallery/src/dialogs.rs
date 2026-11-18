@@ -111,7 +111,21 @@ impl Gallery {
         );
         let parent = |host: &AppWindow| Self::page(host, model, catalogue, colors, at, history_len);
         let cancel = button("cancel", "Cancel", false, true, false);
+        let mut font_choice = None;
         let result = match kind {
+            "font-open" => {
+                font_choice = nk::FontDialog::new(model.font.clone()).choose(
+                    &mut self.window,
+                    window,
+                    &launcher,
+                    || appearance(&self.portal, &self.exports),
+                    parent,
+                )?;
+                Ok(match &font_choice {
+                    Some(font) => DialogAnswer::Button(font.caption()),
+                    None => DialogAnswer::Cancel,
+                })
+            }
             "dialog-open" => {
                 let mut draft = Draft {
                     portal: &self.portal,
@@ -187,6 +201,9 @@ impl Gallery {
             Err(error) if kind == "dialog-invalid" => format!("Rejected: {error}"),
             Err(error) => return Err(error),
         };
+        if let Some(font) = font_choice {
+            self.model.font = font;
+        }
         self.model.modal_answers += 1;
         eprintln!("DIALOG_RESULT {}", self.model.modal_result);
         self.rebuild();

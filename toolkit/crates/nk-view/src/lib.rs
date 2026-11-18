@@ -14,6 +14,9 @@ mod state;
 mod tokens;
 mod view;
 
+mod font_dialog;
+pub use font_dialog::{FontChoice, FontDialog, FontDialogLabels, FontSize};
+pub use nk_text::FontFace;
 mod frame;
 mod window;
 pub use frame::{BACK, Band, FORWARD, FrameStyle, SIDEBAR, Sidebar};
@@ -37,10 +40,10 @@ pub mod node {
 }
 mod widgets;
 pub use widgets::{
-    Button, CheckButton, Column, DropDown, Entry, Expander, Field, FieldState, Grid, Group, Image,
-    Label, ListBox, ListBoxOption, ListView, MenuItem, Overlay, Pane, Placeholder, Revealer, Row,
-    Scroll, SearchEntry, Segmented, SettingRow, SidebarEntry, Slider, SliderEnd, SliderRange, Slot,
-    Spacer, Swatches, Switch, Widget, prelude,
+    Button, CheckButton, Column, DropDown, Entry, Expander, Field, FieldState, FontButton, Grid,
+    Group, Image, Label, ListBox, ListBoxOption, ListView, MenuItem, Overlay, Pane, Placeholder,
+    Revealer, Row, Scroll, SearchEntry, Segmented, SettingRow, SidebarEntry, Slider, SliderEnd,
+    SliderRange, Slot, Spacer, Swatches, Switch, Widget, prelude,
 };
 pub use window::{
     Alert, AppWindow, CONTENT, Dialog, DialogAnswer, DialogButton, DialogContent, DialogUpdate,

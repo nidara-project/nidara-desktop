@@ -337,6 +337,9 @@ impl AppWindow {
         }
     }
 
+    pub(crate) fn font_catalogue(&self) -> Option<Box<dyn nk_text::FontCatalogue>> {
+        self.text.font_catalogue()
+    }
     pub fn look(&self) -> &WindowLook {
         &self.look
     }

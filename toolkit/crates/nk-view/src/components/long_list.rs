@@ -24,7 +24,7 @@ struct Row {
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub struct LongList {
     pub count: usize,
-    pub selected: usize,
+    pub selected: Option<usize>,
     pub row_height: f64,
     pub activate: Option<String>,
     first: usize,
@@ -99,7 +99,7 @@ impl LongList {
     pub fn new(count: usize, selected: usize, row_height: f64) -> Self {
         Self {
             count,
-            selected,
+            selected: Some(selected),
             row_height,
             activate: None,
             first: 0,
@@ -117,7 +117,7 @@ impl LongList {
         let Some((offset, height)) =
             window.filter(|(o, h)| o.is_finite() && h.is_finite() && *h > 0.)
         else {
-            let start = self.selected.min(self.count - 1);
+            let start = self.current(None).unwrap_or_default();
             return start..start + 1;
         };
         let start = (offset.max(0.) / self.row_height).floor() as usize;
@@ -148,8 +148,7 @@ impl LongList {
                 }
             })
             .collect();
-        self.selected_item = self.count.checked_sub(1).map(|last| {
-            let selected = self.selected.min(last);
+        self.selected_item = self.current(None).map(|selected| {
             self.rows
                 .iter()
                 .find(|r| r.index == selected)
@@ -171,13 +170,11 @@ impl LongList {
     }
     fn current(&self, state: Option<&dyn Any>) -> Option<usize> {
         let last = self.count.checked_sub(1)?;
-        Some(
-            state
-                .and_then(|s| s.downcast_ref::<State>())
-                .and_then(|s| s.pending)
-                .unwrap_or(self.selected)
-                .min(last),
-        )
+        state
+            .and_then(|s| s.downcast_ref::<State>())
+            .and_then(|s| s.pending)
+            .or(self.selected)
+            .map(|index| index.min(last))
     }
     fn row_rect(&self, read: &Read<'_>, item: &RowInfo) -> Option<Rect> {
         read.part(&item_suffix(&item.key)).map(|p| p.rect)
@@ -237,7 +234,7 @@ impl LongList {
             .find(|r| r.index == index)
             .map(|r| &r.item)
             .or_else(|| {
-                (self.count > 0 && self.selected.min(self.count - 1) == index)
+                (self.current(None) == Some(index))
                     .then_some(self.selected_item.as_ref())
                     .flatten()
             })
@@ -246,10 +243,8 @@ impl LongList {
 impl Component for LongList {
     fn focus_outline(&self, cx: &Read<'_>) -> Option<FocusOutline> {
         let viewport = self.viewport(cx)?.0;
-        let bounds = if self.count == 0 {
-            viewport
-        } else {
-            let selected = self.current(cx.state)?;
+        let selected = self.current(cx.state);
+        let bounds = if let Some(selected) = selected {
             let row = self.rows.iter().find(|row| row.index == selected)?;
             let r = self.row_rect(cx, &row.item)?;
             let inset = cx.look.tokens.list.inset;
@@ -259,11 +254,13 @@ impl Component for LongList {
                 (r[2] - 2. * inset).max(0.),
                 (r[3] - 2. * inset).max(0.),
             ]
+        } else {
+            viewport
         };
         let mut outline = FocusOutline::rounded(bounds, cx.look.tokens.radii.px(crate::Radius::Sm));
-        // Rows must not escape the scrolling viewport. An empty list has no
-        // scrolling content: its ring surrounds the viewport itself.
-        outline.clip = (self.count > 0).then_some(viewport);
+        // Clip a focused row to the viewport. Without a selection the ring
+        // surrounds the viewport itself.
+        outline.clip = selected.map(|_| viewport);
         Some(outline)
     }
     fn state(&self) -> Option<Box<dyn Any>> {
@@ -304,7 +301,7 @@ impl Component for LongList {
                 return Err("list selection reuses another item's key".into());
             }
         } else if self.selected_item.is_some() {
-            return Err("empty list has a selection".into());
+            return Err("list without a selection has selection metadata".into());
         }
         Ok(())
     }
@@ -491,13 +488,14 @@ impl Component for LongList {
     }
     fn key(&self, cx: &mut Input<'_>, key: crate::KeyInput) {
         use crate::KeyInput::*;
-        let Some(current) = self.current(cx.state.as_deref()) else {
+        if self.count == 0 {
             cx.effects.handled = matches!(
                 key,
                 Up | Down | Home | End | LineStart | LineEnd | PageUp | PageDown | Activate
             );
             return;
-        };
+        }
+        let current = self.current(cx.state.as_deref());
         let page = cx
             .context
             .as_ref()
@@ -506,15 +504,15 @@ impl Component for LongList {
                 (r[3] / self.row_height).floor().max(1.) as usize
             });
         let index = match key {
-            Up => current.saturating_sub(1),
-            Down => current.saturating_add(1).min(self.count - 1),
+            Up => current.map_or(0, |i| i.saturating_sub(1)),
+            Down => current.map_or(0, |i| (i + 1).min(self.count - 1)),
             Home | LineStart => 0,
             End | LineEnd => self.count - 1,
-            PageUp => current.saturating_sub(page),
-            PageDown => current.saturating_add(page).min(self.count - 1),
+            PageUp => current.map_or(0, |i| i.saturating_sub(page)),
+            PageDown => current.map_or(0, |i| i.saturating_add(page).min(self.count - 1)),
             Activate => {
                 cx.effects.handled = true;
-                if let Some(action) = &self.activate {
+                if let (Some(action), Some(current)) = (&self.activate, current) {
                     cx.effects.activate = true;
                     cx.effects.action = Some(action.clone());
                     cx.effects.value = Some(Value::Index(current));
