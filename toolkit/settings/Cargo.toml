@@ -9,7 +9,7 @@ license.workspace = true
 publish.workspace = true
 
 [dependencies]
-nk-view = { path = "../crates/nk-view" }
+nidara-kit = { path = "../crates/nidara-kit" }
 nk-a11y = { path = "../crates/nk-a11y" }
 nk-render = { path = "../crates/nk-render" }
 nk-text = { path = "../crates/nk-text", features = ["system-fonts"] }

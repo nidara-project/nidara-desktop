@@ -7,9 +7,9 @@
 mod dialogs;
 mod pages;
 
+use nk::{Activated, AppWindow, BACK, FORWARD, Glyphs, Labels, Page, WindowLook};
 use nk_platform::{exports::Exports, portal::Portal};
 use nk_text::{FontSet, ParleyBackend};
-use nk_view::{Activated, AppWindow, BACK, FORWARD, Glyphs, Labels, Page, WindowLook};
 use nk_wayland::{Application, Event, Frame, Material, Options, Result, Window, WindowBackground};
 use pages::{Catalogue, Model, PAGES};
 use std::{path::PathBuf, sync::Arc, time::Instant};
@@ -30,7 +30,7 @@ struct Gallery {
     inert: bool,
     fault: Option<String>,
     paste_replies: usize,
-    dialog_request: Option<(nk_view::Key, String)>,
+    dialog_request: Option<(nk::Key, String)>,
 }
 
 impl Gallery {
@@ -53,9 +53,9 @@ impl Gallery {
                 colors,
                 glyph: look.frame.icon,
                 row_height: look.tokens.row_height,
-                list_window: host.scroll_window(&nk_view::LongList::scroll_key(&"ll/live".into())),
+                list_window: host.scroll_window(&nk::ListView::scroll_key(&"ll/live".into())),
                 disabled_list_window: host
-                    .scroll_window(&nk_view::LongList::scroll_key(&"ll/disabled".into())),
+                    .scroll_window(&nk::ListView::scroll_key(&"ll/disabled".into())),
             },
         );
         Page {
@@ -120,7 +120,7 @@ impl Gallery {
             eprintln!("CONTROL_APPLIED inert");
             return;
         }
-        if let Some(nk_view::Value::Index(i)) = &a.value {
+        if let Some(nk::Value::Index(i)) = &a.value {
             if a.key.0 == format!("sw/live/g/{i}") {
                 self.model.accent = *i;
                 return self.rebuild();
@@ -140,7 +140,7 @@ impl Gallery {
                 return;
             }
             "list-select" => {
-                if let Some(nk_view::Value::Index(index)) = a.value {
+                if let Some(nk::Value::Index(index)) = a.value {
                     self.model.selected_row = index;
                 }
             }
@@ -148,12 +148,12 @@ impl Gallery {
                 self.model.list_opened += 1;
             }
             "entry-edit" => {
-                if let Some(nk_view::Value::Text(text)) = a.value {
+                if let Some(nk::Value::Text(text)) = a.value {
                     self.model.entry = text;
                 }
             }
             "search-edit" => {
-                if let Some(nk_view::Value::Text(text)) = a.value {
+                if let Some(nk::Value::Text(text)) = a.value {
                     self.model.search = text;
                 }
             }
@@ -166,27 +166,27 @@ impl Gallery {
             "switch" => self.model.switch = !self.model.switch,
             "reveal" => self.model.open = !self.model.open,
             "disclosure" => {
-                if let Some(nk_view::Value::Bool(expanded)) = a.value {
+                if let Some(nk::Value::Bool(expanded)) = a.value {
                     self.model.expanded = expanded;
                 }
             }
             "slider" => {
-                if let Some(v) = a.value.as_ref().and_then(nk_view::Value::number) {
+                if let Some(v) = a.value.as_ref().and_then(nk::Value::number) {
                     self.model.slider = v;
                 }
             }
             "speed" => {
-                if let Some(v) = a.value.as_ref().and_then(nk_view::Value::number) {
+                if let Some(v) = a.value.as_ref().and_then(nk::Value::number) {
                     self.model.speed = v as usize;
                 }
             }
             "bright" => {
-                if let Some(v) = a.value.as_ref().and_then(nk_view::Value::number) {
+                if let Some(v) = a.value.as_ref().and_then(nk::Value::number) {
                     self.model.bright = v;
                 }
             }
             "tile" => {
-                if let Some(v) = a.value.as_ref().and_then(nk_view::Value::number) {
+                if let Some(v) = a.value.as_ref().and_then(nk::Value::number) {
                     self.model.tile = v;
                 }
             }

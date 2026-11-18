@@ -125,7 +125,7 @@ impl LongList {
         start.saturating_sub(1).min(self.count)..end.saturating_add(1).min(self.count)
     }
     /// Query metadata for visible rows (+ the selection), build only the requested range.
-    pub fn node<S: ListSource + ?Sized>(
+    pub(crate) fn node<S: ListSource + ?Sized>(
         mut self,
         key: impl Into<Key>,
         name: impl Into<String>,

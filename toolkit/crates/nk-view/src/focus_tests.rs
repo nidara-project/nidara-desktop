@@ -2,7 +2,7 @@
 use super::*;
 use crate::components::{Disclosure, EditableField, Search};
 use crate::tests::{backend, tokens, types};
-use crate::{Corner, Node, Padding, Shown, Slider, Space, Type, Weight};
+use crate::{Corner, Node, Padding, Shown, Space, Type, Weight, view::Slider};
 fn cases() -> Vec<(&'static str, Node, &'static str)> {
     let style = types().style(Type::Body, Weight::Regular);
     vec![
@@ -35,7 +35,7 @@ fn cases() -> Vec<(&'static str, Node, &'static str)> {
             "dropdown",
             Node::dropdown(
                 "c",
-                crate::Dropdown {
+                crate::view::Dropdown {
                     options: vec!["One".into()],
                     chosen: 0,
                     disabled: false,
@@ -49,7 +49,7 @@ fn cases() -> Vec<(&'static str, Node, &'static str)> {
             "segment",
             Node::segmented(
                 "c",
-                crate::Segmented {
+                crate::view::Segmented {
                     options: vec!["A".into(), "B".into(), "C".into()],
                     chosen: 0,
                     disabled: false,
@@ -64,7 +64,7 @@ fn cases() -> Vec<(&'static str, Node, &'static str)> {
             "swatch",
             Node::swatches(
                 "c",
-                crate::Swatches {
+                crate::view::Swatches {
                     colors: vec![("Blue".into(), nk_render::rgba(0, 136, 255, 255))],
                     chosen: 0,
                     disabled: false,
@@ -86,7 +86,7 @@ fn cases() -> Vec<(&'static str, Node, &'static str)> {
                 "c",
                 "Display",
                 "noop",
-                crate::Field {
+                crate::view::Field {
                     shown: "Text".into(),
                     caret: 0,
                     anchor: 0,
@@ -126,7 +126,7 @@ fn cases() -> Vec<(&'static str, Node, &'static str)> {
         ),
         (
             "selected-list",
-            crate::LongList::new(3, 1, 32.)
+            crate::components::LongList::new(3, 1, 32.)
                 .node("c", "List", "noop", Some((0., 96.)), &Records)
                 .height(96.),
             "c",
@@ -147,7 +147,7 @@ fn cases() -> Vec<(&'static str, Node, &'static str)> {
         ),
         (
             "empty-list",
-            crate::LongList::new(0, 0, 32.)
+            crate::components::LongList::new(0, 0, 32.)
                 .node("c", "List", "noop", None, &Empty)
                 .height(40.),
             "c",

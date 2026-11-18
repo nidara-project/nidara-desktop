@@ -1,8 +1,8 @@
 // SPDX-License-Identifier: LGPL-3.0-or-later
 //! Uninstalled AppWindow entry, alongside the old nk-settings window (#1103 7a).
+use nk::{AppWindow, Glyphs, Labels, WindowLook};
 use nk_settings::{client::Client, exports::Exports, portal::Portal, view_settings::Model};
 use nk_text::{FontSet, ParleyBackend};
-use nk_view::{AppWindow, Glyphs, Labels, WindowLook};
 use nk_wayland::{Application, Event, Frame, Material, Options, Result, Window, WindowBackground};
 use std::{path::PathBuf, sync::Arc, time::Instant};
 struct Settings {
@@ -29,7 +29,7 @@ impl Settings {
         })?;
         Ok(())
     }
-    fn actions(&mut self, actions: Vec<nk_view::Activated>) -> Result<()> {
+    fn actions(&mut self, actions: Vec<nk::Activated>) -> Result<()> {
         self.dirty |= !actions.is_empty();
         for a in actions {
             let dragging = self.pointer_down && self.host.captured() == Some(&a.key);

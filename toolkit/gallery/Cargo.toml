@@ -13,7 +13,7 @@ name = "nidara-kit-gallery"
 path = "src/main.rs"
 
 [dependencies]
-nk-view = { path = "../crates/nk-view" }
+nidara-kit = { path = "../crates/nidara-kit" }
 nk-text = { path = "../crates/nk-text", features = ["system-fonts"] }
 nk-render = { path = "../crates/nk-render" }
 nk-a11y = { path = "../crates/nk-a11y" }

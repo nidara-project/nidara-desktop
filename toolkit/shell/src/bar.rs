@@ -1002,7 +1002,7 @@ impl Bar {
         );
     }
     /// What an activation in the centre asks for.
-    fn nc_view_act(&mut self, a: nk_view::Activated, serial: Option<u32>, w: &mut Window) {
+    fn nc_view_act(&mut self, a: nk::Activated, serial: Option<u32>, w: &mut Window) {
         let Some(act) = self.nc_view.activated(&a) else {
             return;
         };
@@ -1041,7 +1041,7 @@ impl Bar {
         }
     }
     fn nc_view_key(&mut self, key: &nk_wayland::Key, w: &mut Window) {
-        use nk_view::KeyInput as K;
+        use nk::KeyInput as K;
         let input = match key.sym {
             0xff09 if key.shift => K::ShiftTab,
             0xff09 => K::Tab,

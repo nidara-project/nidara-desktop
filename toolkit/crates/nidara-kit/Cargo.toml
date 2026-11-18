@@ -1,0 +1,16 @@
+[package]
+name = "nidara-kit"
+description = "Nidara's toolkit: the one way an app or the shell builds its interface"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+publish.workspace = true
+
+[lib]
+# Apps write `nk::Button`, as gtk-rs apps write `gtk::Button` (#1079).
+name = "nk"
+
+[dependencies]
+nk-view = { path = "../nk-view" }
+nk-text = { path = "../nk-text" }

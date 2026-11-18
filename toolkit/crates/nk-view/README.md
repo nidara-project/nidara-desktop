@@ -60,10 +60,10 @@ The wheel moves the innermost region under the pointer (a detent is the viewport
 the 2/3, as GTK's; `ScrollBy::from` an `nk-wayland` scroll event takes its detents), Page Up and Page Down move 0.9 of a page, Ctrl+Home and Ctrl+End go to the
 ends, and Tab onto a control out of view scrolls it in. On a rebuild, a scrolled region keeps
 its first pane in view where it was. Rows outside `window(key)` are left unbuilt, as
-`Node::placeholder(key, height)` at the height they had. The bar is `nk-widgets`' `ScrollBar`,
+`nk::Placeholder::new(key, height)` at the height they had. The bar is `nk-widgets`' `ScrollBar`,
 the one the native Settings draws, from `tokens/scrollbar.json`.
 
-**Overlay.** `Node::overlay(key, base).layer(across, down, inset, child)` places layers over a
+**Overlay.** `nk::Overlay::new(key, base).layer(across, down, inset, child)` places layers over a
 base, as `Gtk.Overlay`: the base alone gives the size; each layer is aligned on each axis
 within it and kept an inset (spacing tokens) from its edges. Layers come after the base: over
 it for the pointer, after it in the Tab order, painted over it. The NC's close over a card's

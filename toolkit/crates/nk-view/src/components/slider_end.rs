@@ -4,7 +4,7 @@ use crate::{Align, Ink};
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub struct SliderRow {
     pub owner: Key,
-    pub end: crate::SliderEnd,
+    pub end: crate::view::SliderEnd,
 }
 impl Component for SliderRow {
     fn contains_controls(&self) -> bool {

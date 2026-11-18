@@ -24,11 +24,12 @@ impl ListSource for Source<'_> {
     }
     fn build(&self, index: usize, key: &Key) -> Node {
         self.built.set(self.built.get() + 1);
-        Node::text(
+        Label::new(
             format!("{}/label", key.0),
             format!("Record {}", index + 1),
             self.types.style(Type::Body, Weight::Regular),
         )
+        .into()
     }
 }
 fn ms(d: Duration) -> f64 {
@@ -71,7 +72,7 @@ fn main() -> Result<(), String> {
             };
             if mode == "scroll" {
                 state.scroll_region(
-                    &LongList::scroll_key(&"records".into()),
+                    &ListView::scroll_key(&"records".into()),
                     ScrollBy::Pixels(height * 0.75),
                 );
             }
@@ -98,13 +99,11 @@ fn main() -> Result<(), String> {
             let mut passes = 0;
             loop {
                 let b = Instant::now();
-                let node = LongList::new(5000, selected, height).node(
-                    "records",
-                    "Records",
-                    "select",
-                    state.window(&LongList::scroll_key(&"records".into())),
-                    &source,
-                );
+                let node: Node = ListView::new(
+                    "records", "Records", "select", &source, 5000, selected, height,
+                )
+                .window(state.window(&ListView::scroll_key(&"records".into())))
+                .into();
                 build += b.elapsed();
                 state.layout(
                     &node,

@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: LGPL-3.0-or-later
 //! The ordinary renderer's Config1 binding and all-or-nothing page admission.
+use nk::Activated;
 use nk_settings::{
     Value,
     client::Editor,
@@ -8,7 +9,6 @@ use nk_settings::{
     session::{ApplyError, Command, Raw, Session},
     view_settings::{Model, ordinary},
 };
-use nk_view::Activated;
 use serde_json::json;
 use std::{
     path::PathBuf,
@@ -58,7 +58,7 @@ fn fixture(release: bool) -> (Fake, Exports, Model) {
         model,
     )
 }
-fn action(name: &str, value: Option<nk_view::Value>) -> Activated {
+fn action(name: &str, value: Option<nk::Value>) -> Activated {
     Activated {
         key: "test".into(),
         action: name.into(),
@@ -102,7 +102,7 @@ fn switch_segment_and_dropdown_use_the_same_session_and_keep_unknown_values() {
     m.activate(action("set:switch", None), false, &mut f, &e, now)
         .unwrap();
     m.activate(
-        action("set:segment:1", Some(nk_view::Value::Index(1))),
+        action("set:segment:1", Some(nk::Value::Index(1))),
         false,
         &mut f,
         &e,
@@ -110,7 +110,7 @@ fn switch_segment_and_dropdown_use_the_same_session_and_keep_unknown_values() {
     )
     .unwrap();
     m.activate(
-        action("set:dropdown", Some(nk_view::Value::Index(1))),
+        action("set:dropdown", Some(nk::Value::Index(1))),
         false,
         &mut f,
         &e,
@@ -131,7 +131,7 @@ fn release_slider_never_writes_a_drag_and_commits_the_final_scaled_value() {
     let (mut f, e, mut m) = fixture(true);
     let now = Instant::now();
     m.activate(
-        action("set:slider", Some(nk_view::Value::Number(30.))),
+        action("set:slider", Some(nk::Value::Number(30.))),
         true,
         &mut f,
         &e,
@@ -139,7 +139,7 @@ fn release_slider_never_writes_a_drag_and_commits_the_final_scaled_value() {
     )
     .unwrap();
     m.activate(
-        action("set:slider", Some(nk_view::Value::Number(70.))),
+        action("set:slider", Some(nk::Value::Number(70.))),
         true,
         &mut f,
         &e,
@@ -149,7 +149,7 @@ fn release_slider_never_writes_a_drag_and_commits_the_final_scaled_value() {
     m.flush(&mut f, &e, now + Duration::from_secs(10)).unwrap();
     assert!(f.sent.is_empty());
     m.activate(
-        action("set:slider", Some(nk_view::Value::Number(70.))),
+        action("set:slider", Some(nk::Value::Number(70.))),
         false,
         &mut f,
         &e,
@@ -164,7 +164,7 @@ fn debounce_sends_only_the_latest_value_and_navigation_cancels_held_work() {
     let now = Instant::now();
     for (ms, n) in [(0, 30.), (20, 70.)] {
         m.activate(
-            action("set:slider", Some(nk_view::Value::Number(n))),
+            action("set:slider", Some(nk::Value::Number(n))),
             true,
             &mut f,
             &e,
@@ -180,7 +180,7 @@ fn debounce_sends_only_the_latest_value_and_navigation_cancels_held_work() {
     assert_eq!(f.sent, vec![("slider".into(), Value::Number(0.7))]);
     let (mut f, e, mut m) = fixture(false);
     m.activate(
-        action("set:slider", Some(nk_view::Value::Number(70.))),
+        action("set:slider", Some(nk::Value::Number(70.))),
         true,
         &mut f,
         &e,
@@ -194,12 +194,12 @@ fn debounce_sends_only_the_latest_value_and_navigation_cancels_held_work() {
     m.flush(&mut f, &e, now + Duration::from_secs(1)).unwrap();
     assert!(f.sent.is_empty());
     assert!(
-        m.activate(action(nk_view::BACK, None), false, &mut f, &e, now)
+        m.activate(action(nk::BACK, None), false, &mut f, &e, now)
             .unwrap()
     );
     assert_eq!(m.selected(), Some("one"));
     assert!(
-        m.activate(action(nk_view::FORWARD, None), false, &mut f, &e, now)
+        m.activate(action(nk::FORWARD, None), false, &mut f, &e, now)
             .unwrap()
     );
     assert_eq!(m.selected(), Some("two"));
@@ -216,7 +216,7 @@ fn owner_loss_and_hidden_or_insensitive_rows_never_send_pending_values() {
         *sensitive_when = Some(predicate);
     }
     m.activate(
-        action("set:slider", Some(nk_view::Value::Number(70.))),
+        action("set:slider", Some(nk::Value::Number(70.))),
         false,
         &mut f,
         &e,
@@ -227,7 +227,7 @@ fn owner_loss_and_hidden_or_insensitive_rows_never_send_pending_values() {
     assert!(f.sent.is_empty());
     let (mut f, e, mut m) = fixture(false);
     m.activate(
-        action("set:slider", Some(nk_view::Value::Number(70.))),
+        action("set:slider", Some(nk::Value::Number(70.))),
         true,
         &mut f,
         &e,

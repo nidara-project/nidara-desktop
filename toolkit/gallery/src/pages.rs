@@ -2,10 +2,10 @@
 //! The gallery's view (VIEW.md §13.3): a sidebar of pages and the current page, every piece
 //! of it a kit node. A page shows one component in each of its states side by side, with
 //! the catalogue entries it answers and their GTK and AppKit equivalents.
-use nk_view::{
-    Align, Cell, Corner, Dropdown, DropdownStyle, Field, Ink, Justify, Node, Padding, Radius, Role,
-    Segmented, SettingRow, Shown, SidebarEntry, Slider, SliderEnd, Space, Swatches, Type,
-    TypeScale, Wash, Weight,
+use nk::prelude::*;
+use nk::{
+    Align, Cell, Corner, DropdownStyle, Ink, Justify, Node, Padding, Radius, Role, Shown, Space,
+    Type, TypeScale, Wash, Weight,
 };
 use serde::Deserialize;
 
@@ -158,30 +158,29 @@ pub fn view(m: &Model, cat: &Catalogue, t: &TypeScale, k: &Measures) -> View {
         .iter()
         .enumerate()
         .map(|(i, (id, title, glyph))| {
-            Node::sidebar_entry(
+            nk::SidebarEntry::new(
                 format!("nav/{id}"),
-                SidebarEntry {
-                    title: (*title).into(),
-                    glyph: (*glyph).into(),
-                    action: format!("page:{id}"),
-                    selected: m.page == i,
-                    style: t.style(Type::Body, Weight::Regular),
-                },
+                *title,
+                *glyph,
+                format!("page:{id}"),
+                t.style(Type::Body, Weight::Regular),
                 k.glyph,
             )
+            .selected(m.page == i)
+            .into()
         })
         .collect();
     // The sidebar's list; the window's frame (nk-view FrameStyle) puts it in its glass.
-    let sidebar = Node::scroll(
+    let sidebar = nk::Scroll::new(
         "side/scroll",
-        Node::column("side/pages", nav)
+        nk::Column::new("side/pages", nav)
             .gap(Space::S1)
             .padding(Padding::all(Space::S2)),
     );
     let (id, title, _) = PAGES[m.page.min(PAGES.len() - 1)];
     let mut body = vec![header(id, cat, t)];
     body.extend(page(id, m, cat, t, k));
-    let content = Node::column(format!("page/{id}"), body)
+    let content = nk::Column::new(format!("page/{id}"), body)
         .gap(Space::S5)
         .padding(Padding {
             top: None,
@@ -190,8 +189,8 @@ pub fn view(m: &Model, cat: &Catalogue, t: &TypeScale, k: &Measures) -> View {
             left: Some(Space::S6),
         });
     View {
-        sidebar,
-        content,
+        sidebar: sidebar.into(),
+        content: content.into(),
         title,
     }
 }
@@ -206,7 +205,7 @@ pub struct View {
 /// What a page answers in the catalogue; its title is the band's.
 fn header(id: &str, cat: &Catalogue, t: &TypeScale) -> Node {
     let items = cat.on_page(id);
-    let mut lines = vec![];
+    let mut lines: Vec<Node> = vec![];
     if !items.is_empty() {
         let names = items.iter().map(|i| i.name.as_str()).collect::<Vec<_>>();
         let gtk = items.iter().map(|i| i.gtk.as_str()).collect::<Vec<_>>();
@@ -222,88 +221,101 @@ fn header(id: &str, cat: &Catalogue, t: &TypeScale) -> Node {
             ("status", statuses.join(" · ")),
         ] {
             lines.push(
-                Node::text(
+                nk::Label::new(
                     format!("head/{k}"),
                     text,
                     t.style(Type::Small, Weight::Regular),
                 )
                 .ink(Ink::Secondary)
-                .lines(3),
+                .lines(3)
+                .into(),
             );
         }
     }
-    Node::column("head", lines).gap(Space::S1)
+    nk::Column::new("head", lines).gap(Space::S1).into()
 }
 
 /// One labelled section, as Settings' groups: the caption over a card on the window's
 /// background (not glass: glass is for what lies over content), holding what it shows.
 fn section(key: &str, caption: &str, t: &TypeScale, child: Node) -> Node {
-    Node::column(
+    nk::Column::new(
         format!("s/{key}"),
         vec![
-            Node::text(
+            nk::Label::new(
                 format!("s/{key}/cap"),
                 caption,
                 t.style(Type::Caption, Weight::Semibold),
             )
-            .ink(Ink::Secondary),
-            Node::group(
+            .ink(Ink::Secondary)
+            .into(),
+            nk::Group::new(
                 format!("s/{key}/card"),
-                Node::column(format!("s/{key}/col"), vec![child]).padding(Padding::all(Space::S4)),
-            ),
+                nk::Column::new(format!("s/{key}/col"), vec![child])
+                    .padding(Padding::all(Space::S4)),
+            )
+            .into(),
         ],
     )
     .gap(Space::S2)
+    .into()
 }
 
 /// A sample with its state named under it.
 fn sample(key: &str, label: &str, t: &TypeScale, child: Node) -> Node {
-    Node::column(
+    nk::Column::new(
         format!("{key}/sample"),
         vec![
             child,
-            Node::text(
+            nk::Label::new(
                 format!("{key}/caption"),
                 label,
                 t.style(Type::Caption, Weight::Regular),
             )
-            .ink(Ink::Dim),
+            .ink(Ink::Dim)
+            .into(),
         ],
     )
     .gap(Space::S2)
     .align(Align::Center)
+    .into()
 }
 
 fn row(key: &str, children: Vec<Node>) -> Node {
-    Node::row(key, children).gap(Space::S5).align(Align::Center)
+    nk::Row::new(key, children)
+        .gap(Space::S5)
+        .align(Align::Center)
+        .into()
 }
 
 /// A button in a page's content: the kit's own, no glass under it (VIEW.md §13.2).
-fn content_button(key: &str, text: &str, action: &str, t: &TypeScale) -> Node {
-    Node::button(key, text, action, t.style(Type::Small, Weight::Medium))
+fn content_button(key: &str, text: &str, action: &str, t: &TypeScale) -> nk::Button {
+    nk::Button::new(key, text, action, t.style(Type::Small, Weight::Medium))
 }
 
 /// A button over content is glass (VIEW.md §13.2): a pill of it around the control, so
 /// Hyalo draws its hover, press and on.
-fn on_glass(control: Node) -> Node {
-    let control = control.corner(Corner::Pill);
-    Node::pane(format!("{}/glass", control.key.0), Corner::Pill, control)
+fn on_glass(control: nk::Button) -> Node {
+    let control: Node = control.corner(Corner::Pill).into();
+    nk::Pane::new(format!("{}/glass", control.key.0), Corner::Pill, control).into()
 }
 
 /// A text button as the NC builds one today (VIEW.md §13: the kit's own button function is
 /// #1079 step 3).
-fn button(key: &str, text: &str, action: &str, t: &TypeScale) -> Node {
-    Node::control(
+fn button(key: &str, text: &str, action: &str, t: &TypeScale) -> nk::Button {
+    nk::Button::with_child(
         key,
         text,
         action,
-        Node::row(
+        nk::Row::new(
             format!("{key}/row"),
-            vec![Node::text(
-                format!("{key}/text"),
-                text,
-                t.style(Type::Body, Weight::Medium),
-            )],
+            vec![
+                nk::Label::new(
+                    format!("{key}/text"),
+                    text,
+                    t.style(Type::Body, Weight::Medium),
+                )
+                .into(),
+            ],
         )
         .padding(Padding::symmetric(Space::S1, Space::S2)),
     )
@@ -355,8 +367,11 @@ fn status(cat: &Catalogue, t: &TypeScale) -> Vec<Node> {
         count("hand"),
         count("missing"),
     );
-    let mut out =
-        vec![Node::text("st/summary", summary, t.style(Type::Body, Weight::Regular)).lines(3)];
+    let mut out: Vec<Node> = vec![
+        nk::Label::new("st/summary", summary, t.style(Type::Body, Weight::Regular))
+            .lines(3)
+            .into(),
+    ];
     for (gi, g) in cat.groups.iter().enumerate() {
         let rows = g
             .items
@@ -364,15 +379,16 @@ fn status(cat: &Catalogue, t: &TypeScale) -> Vec<Node> {
             .enumerate()
             .map(|(ii, i)| {
                 let k = format!("st/{gi}/{ii}");
-                Node::row(
+                nk::Row::new(
                     k.clone(),
                     vec![
-                        Node::text(
+                        nk::Label::new(
                             format!("{k}/name"),
                             &i.name,
                             t.style(Type::Body, Weight::Medium),
-                        ),
-                        Node::text(
+                        )
+                        .into(),
+                        nk::Label::new(
                             format!("{k}/gtk"),
                             if i.users.is_empty() {
                                 format!("{} · {}", i.gtk, i.appkit)
@@ -383,8 +399,9 @@ fn status(cat: &Catalogue, t: &TypeScale) -> Vec<Node> {
                         )
                         .ink(Ink::Dim)
                         .lines(1)
-                        .grow(),
-                        Node::text(
+                        .grow()
+                        .into(),
+                        nk::Label::new(
                             format!("{k}/status"),
                             status_text(&i.status),
                             t.style(Type::Small, Weight::Semibold),
@@ -393,30 +410,34 @@ fn status(cat: &Catalogue, t: &TypeScale) -> Vec<Node> {
                             Ink::Primary
                         } else {
                             Ink::Secondary
-                        }),
+                        })
+                        .into(),
                     ],
                 )
                 .gap(Space::S3)
                 .align(Align::Center)
             })
+            .map(Node::from)
             .collect();
         out.push(section(
             &format!("st{gi}"),
             &g.name,
             t,
-            Node::column(format!("st/{gi}"), rows).gap(Space::S2),
+            nk::Column::new(format!("st/{gi}"), rows)
+                .gap(Space::S2)
+                .into(),
         ));
     }
     out
 }
 
 fn buttons(m: &Model, t: &TypeScale) -> Vec<Node> {
-    let in_page = |k: &str, label: &str, f: &dyn Fn(Node) -> Node| {
+    let in_page = |k: &str, label: &str, f: &dyn Fn(nk::Button) -> nk::Button| {
         sample(
             &format!("b/p/{k}"),
             label,
             t,
-            f(content_button(&format!("b/p/{k}"), "Browse", "noop", t)),
+            f(content_button(&format!("b/p/{k}"), "Browse", "noop", t)).into(),
         )
     };
     let page = row(
@@ -429,7 +450,7 @@ fn buttons(m: &Model, t: &TypeScale) -> Vec<Node> {
             in_page("off", "Disabled", &|n| n.enabled(false)),
         ],
     );
-    let state = |k: &str, label: &str, f: &dyn Fn(Node) -> Node| {
+    let state = |k: &str, label: &str, f: &dyn Fn(nk::Button) -> nk::Button| {
         sample(
             &format!("b/{k}"),
             label,
@@ -459,13 +480,13 @@ fn buttons(m: &Model, t: &TypeScale) -> Vec<Node> {
                 "b/icon",
                 "Icon only",
                 t,
-                on_glass(Node::control(
+                on_glass(nk::Button::with_child(
                     "b/icon",
                     "Search",
                     "noop",
-                    Node::row(
+                    nk::Row::new(
                         "b/icon/row",
-                        vec![Node::icon("b/icon/glyph", "nd-system-search", 16.)],
+                        vec![nk::Image::new("b/icon/glyph", "nd-system-search", 16.).into()],
                     )
                     .padding(Padding::all(Space::S2)),
                 )),
@@ -479,7 +500,7 @@ fn buttons(m: &Model, t: &TypeScale) -> Vec<Node> {
                 "b/count",
                 &format!("Pressed {} times", m.presses),
                 t,
-                content_button("b/count", "Press me", "press", t),
+                content_button("b/count", "Press me", "press", t).into(),
             ),
             sample(
                 "b/toggle",
@@ -499,10 +520,10 @@ fn buttons(m: &Model, t: &TypeScale) -> Vec<Node> {
     );
     // A row of a group has no glass under it: its states are the view's to paint (VIEW.md
     // §13.2), from the same tokens Hyalo uses on glass.
-    let in_group = |k: &str, label: &str, f: &dyn Fn(Node) -> Node| {
-        f(button(&format!("b/g/{k}"), label, "noop", t).corner(Corner::Token(Radius::Md)))
+    let in_group = |k: &str, label: &str, f: &dyn Fn(nk::Button) -> nk::Button| -> Node {
+        f(button(&format!("b/g/{k}"), label, "noop", t).corner(Corner::Token(Radius::Md))).into()
     };
-    let grouped = Node::column(
+    let grouped = nk::Column::new(
         "b/grouped",
         vec![
             in_group("rest", "Rest", &|n| n),
@@ -517,7 +538,7 @@ fn buttons(m: &Model, t: &TypeScale) -> Vec<Node> {
     .gap(Space::S1);
     vec![
         section("b-page", "In a page (no glass)", t, page),
-        section("b-grouped", "Rows in a group (no glass)", t, grouped),
+        section("b-grouped", "Rows in a group (no glass)", t, grouped.into()),
         section(
             "b-states",
             "Over content (glass: a window's band, a toolbar over a page)",
@@ -537,93 +558,73 @@ fn switch_row(
     on: bool,
     action: &str,
     t: &TypeScale,
-    f: &dyn Fn(Node) -> Node,
+    f: &dyn Fn(nk::Switch) -> nk::Switch,
 ) -> Node {
-    let switch = f(Node::switch_control(
-        format!("{key}/switch"),
-        label,
-        action,
-        on,
-    ));
-    let disabled = matches!(&switch.kind, nk_view::Kind::Control(c) if !c.enabled);
-    Node::setting_row(
-        key,
-        SettingRow {
-            trailing: Some(switch),
-            disabled,
-            ..setting(label, None, t)
-        },
-    )
+    let switch: Node = f(nk::Switch::new(format!("{key}/switch"), label, action, on)).into();
+    let disabled = matches!(&switch.kind, nk::Kind::Control(c) if !c.enabled);
+    setting(key, label, None, t)
+        .trailing(switch)
+        .enabled(!disabled)
+        .into()
 }
 
 /// A setting row's text in the kit's styles: the title in the body, the second line small.
-fn setting(title: &str, subtitle: Option<&str>, t: &TypeScale) -> SettingRow {
-    SettingRow {
-        title: title.into(),
-        title_style: t.style(Type::Body, Weight::Regular),
-        subtitle: subtitle.map(Into::into),
-        subtitle_style: t.style(Type::Small, Weight::Regular),
-        ..Default::default()
+fn setting(
+    key: impl Into<nk::Key>,
+    title: &str,
+    subtitle: Option<&str>,
+    t: &TypeScale,
+) -> nk::SettingRow {
+    let row = nk::SettingRow::new(key, title, t.style(Type::Body, Weight::Regular));
+    match subtitle {
+        Some(sub) => row.subtitle(sub, t.style(Type::Small, Weight::Regular)),
+        None => row,
     }
 }
 
 fn rows(m: &Model, t: &TypeScale) -> Vec<Node> {
-    let chevron = |k: &str| Node::icon(format!("{k}/chevron"), "nd-pan-end", 16.);
-    let plain = Node::column(
+    let chevron = |k: &str| nk::Image::new(format!("{k}/chevron"), "nd-pan-end", 16.);
+    let plain = nk::Column::new(
         "rw/plain",
         vec![
-            Node::setting_row("rw/p/title", setting("Title only", None, t)),
-            Node::setting_row(
+            setting("rw/p/title", "Title only", None, t).into(),
+            setting(
                 "rw/p/sub",
-                setting(
-                    "With a second line",
-                    Some("What the setting does, in a word or two"),
-                    t,
-                ),
-            ),
-            Node::setting_row(
+                "With a second line",
+                Some("What the setting does, in a word or two"),
+                t,
+            )
+            .into(),
+            setting(
                 "rw/p/switch",
-                SettingRow {
-                    trailing: Some(Node::switch_control(
-                        "rw/p/switch/sw",
-                        "Ending in a switch",
-                        "noop",
-                        true,
-                    )),
-                    ..setting("Ending in a switch", Some("Only the switch responds"), t)
-                },
-            ),
-            Node::setting_row(
-                "rw/p/button",
-                SettingRow {
-                    trailing: Some(content_button("rw/p/button/b", "Browse", "noop", t)),
-                    ..setting("Ending in a button", None, t)
-                },
-            ),
-            Node::setting_row(
-                "rw/p/off",
-                SettingRow {
-                    trailing: Some(
-                        Node::switch_control("rw/p/off/sw", "Disabled", "noop", false)
-                            .enabled(false),
-                    ),
-                    disabled: true,
-                    ..setting("Disabled", Some("Its text says so too"), t)
-                },
-            ),
+                "Ending in a switch",
+                Some("Only the switch responds"),
+                t,
+            )
+            .trailing(nk::Switch::new(
+                "rw/p/switch/sw",
+                "Ending in a switch",
+                "noop",
+                true,
+            ))
+            .into(),
+            setting("rw/p/button", "Ending in a button", None, t)
+                .trailing(content_button("rw/p/button/b", "Browse", "noop", t))
+                .into(),
+            setting("rw/p/off", "Disabled", Some("Its text says so too"), t)
+                .trailing(nk::Switch::new("rw/p/off/sw", "Disabled", "noop", false).enabled(false))
+                .enabled(false)
+                .into(),
         ],
     );
-    let activatable = |k: &str, label: &str, f: &dyn Fn(Node) -> Node| {
-        f(Node::setting_row(
-            format!("rw/a/{k}"),
-            SettingRow {
-                trailing: Some(chevron(&format!("rw/a/{k}"))),
-                action: Some("noop".into()),
-                ..setting(label, None, t)
-            },
-        ))
-    };
-    let states = Node::column(
+    let activatable =
+        |k: &str, label: &str, f: &dyn Fn(nk::SettingRow) -> nk::SettingRow| -> Node {
+            f(setting(format!("rw/a/{k}"), label, None, t)
+                .trailing(chevron(&format!("rw/a/{k}")))
+                .action("noop"))
+            .into()
+        };
+    let states = nk::Column::new(
         "rw/act",
         vec![
             activatable("rest", "Rest", &|n| n),
@@ -633,28 +634,25 @@ fn rows(m: &Model, t: &TypeScale) -> Vec<Node> {
             activatable("off", "Disabled", &|n| n.enabled(false)),
         ],
     );
-    let live = Node::column(
+    let live = nk::Column::new(
         "rw/live",
         vec![
-            Node::setting_row(
-                "rw/live/open",
-                SettingRow {
-                    trailing: Some(chevron("rw/live/open")),
-                    action: Some("row-open".into()),
-                    ..setting("Displays", Some("Opens its page"), t)
-                },
-            ),
-            Node::setting_row(
+            setting("rw/live/open", "Displays", Some("Opens its page"), t)
+                .trailing(chevron("rw/live/open"))
+                .action("row-open")
+                .into(),
+            setting(
                 "rw/live/flip",
-                SettingRow {
-                    trailing: Some(Node::switch("rw/live/flip/sw", m.row_on)),
-                    action: Some("row-flip".into()),
-                    ..setting("Bluetooth", Some("The whole row flips it"), t)
-                },
+                "Bluetooth",
+                Some("The whole row flips it"),
+                t,
             )
+            .trailing(nk::Switch::drawn("rw/live/flip/sw", m.row_on))
+            .action("row-flip")
             .role(Role::Toggle)
-            .marked(m.row_on),
-            Node::text(
+            .marked(m.row_on)
+            .into(),
+            nk::Label::new(
                 "rw/live/said",
                 format!(
                     "Try it: opened {} times, Bluetooth {}",
@@ -663,7 +661,8 @@ fn rows(m: &Model, t: &TypeScale) -> Vec<Node> {
                 ),
                 t.style(Type::Small, Weight::Regular),
             )
-            .ink(Ink::Secondary),
+            .ink(Ink::Secondary)
+            .into(),
         ],
     );
     vec![
@@ -671,15 +670,15 @@ fn rows(m: &Model, t: &TypeScale) -> Vec<Node> {
             "rw-plain",
             "Not activatable (the default): only its control responds",
             t,
-            plain,
+            plain.into(),
         ),
         section(
             "rw-act",
             "Activatable (the app's choice): the whole row responds, painted by the kit",
             t,
-            states,
+            states.into(),
         ),
-        section("rw-live", "Try it", t, live),
+        section("rw-live", "Try it", t, live.into()),
     ]
 }
 
@@ -705,7 +704,7 @@ fn switches(m: &Model, t: &TypeScale) -> Vec<Node> {
             "sw-states",
             "States (only the switch responds; the row does not)",
             t,
-            Node::column("sw/states", rows).gap(Space::S1),
+            nk::Column::new("sw/states", rows).gap(Space::S1).into(),
         ),
         section(
             "sw-live",
@@ -718,28 +717,31 @@ fn switches(m: &Model, t: &TypeScale) -> Vec<Node> {
 
 /// A checkbox or a radio and its label (VIEW.md §13.5): the mark responds, the label names
 /// it and does not. `f` sets the mark's state for the samples.
-fn mark_row(key: &str, label: &str, mark: Node, t: &TypeScale) -> Node {
-    let enabled = !matches!(&mark.kind, nk_view::Kind::Control(c) if !c.enabled);
-    let text = Node::text(
+fn mark_row(key: &str, label: &str, mark: impl Into<Node>, t: &TypeScale) -> Node {
+    let mark = mark.into();
+    let enabled = !matches!(&mark.kind, nk::Kind::Control(c) if !c.enabled);
+    let text = nk::Label::new(
         format!("{key}/text"),
         label,
         t.style(Type::Body, Weight::Regular),
     )
     .ink(if enabled { Ink::Primary } else { Ink::Disabled })
     .grow();
-    Node::row(key, vec![mark, text])
+    nk::Row::new(key, vec![mark, text.into()])
         .gap(Space::S2)
         .align(Align::Center)
         .padding(Padding::symmetric(Space::S2, Space::S2))
+        .into()
 }
 
 fn checks(m: &Model, t: &TypeScale) -> Vec<Node> {
-    let states = |kind: &str, make: &dyn Fn(String, &str, bool) -> Node| {
-        let one = |k: &str, label: &str, on: bool, f: &dyn Fn(Node) -> Node| {
-            let key = format!("{kind}/{k}");
-            mark_row(&key, label, f(make(format!("{key}/mark"), label, on)), t)
-        };
-        Node::column(
+    let states = |kind: &str, make: &dyn Fn(String, &str, bool) -> nk::CheckButton| {
+        let one =
+            |k: &str, label: &str, on: bool, f: &dyn Fn(nk::CheckButton) -> nk::CheckButton| {
+                let key = format!("{kind}/{k}");
+                mark_row(&key, label, f(make(format!("{key}/mark"), label, on)), t)
+            };
+        nk::Column::new(
             format!("{kind}/states"),
             vec![
                 one("off", "Off", false, &|n| n),
@@ -753,8 +755,9 @@ fn checks(m: &Model, t: &TypeScale) -> Vec<Node> {
         )
         .gap(Space::S1)
     };
-    let checkbox = |key: String, label: &str, on: bool| Node::check_control(key, label, "noop", on);
-    let radio = |key: String, label: &str, on: bool| Node::radio_control(key, label, "noop", on);
+    let checkbox =
+        |key: String, label: &str, on: bool| nk::CheckButton::new(key, label, "noop", on);
+    let radio = |key: String, label: &str, on: bool| nk::CheckButton::radio(key, label, "noop", on);
     let options = ["Small", "Medium", "Large"];
     let group = options
         .iter()
@@ -763,28 +766,30 @@ fn checks(m: &Model, t: &TypeScale) -> Vec<Node> {
             mark_row(
                 &format!("ck/live/r{i}"),
                 label,
-                Node::radio_control(
+                nk::CheckButton::radio(
                     format!("ck/live/r{i}/mark"),
                     *label,
                     format!("choice:{i}"),
                     m.choice == i,
                 )
-                .value(nk_view::Value::Index(i)),
+                .value(nk::Value::Index(i)),
                 t,
             )
         })
         .collect();
-    let live = Node::column(
+    let live = nk::Column::new(
         "ck/live",
         vec![
             mark_row(
                 "ck/live/check",
                 "Show hidden files",
-                Node::check_control("ck/live/check/mark", "Show hidden files", "check", m.check),
+                nk::CheckButton::new("ck/live/check/mark", "Show hidden files", "check", m.check),
                 t,
             ),
-            Node::column("ck/live/group", group).gap(Space::S1),
-            Node::text(
+            nk::Column::new("ck/live/group", group)
+                .gap(Space::S1)
+                .into(),
+            nk::Label::new(
                 "ck/live/said",
                 format!(
                     "Try it: hidden files {}, size {}",
@@ -793,7 +798,8 @@ fn checks(m: &Model, t: &TypeScale) -> Vec<Node> {
                 ),
                 t.style(Type::Small, Weight::Regular),
             )
-            .ink(Ink::Secondary),
+            .ink(Ink::Secondary)
+            .into(),
         ],
     )
     .gap(Space::S2);
@@ -802,15 +808,15 @@ fn checks(m: &Model, t: &TypeScale) -> Vec<Node> {
             "ck-check",
             "Checkbox (only the box responds; the label does not)",
             t,
-            states("ck/c", &checkbox),
+            states("ck/c", &checkbox).into(),
         ),
         section(
             "ck-radio",
             "Radio (one Tab stop per group; the arrows move the choice)",
             t,
-            states("ck/r", &radio),
+            states("ck/r", &radio).into(),
         ),
-        section("ck-live", "Try it", t, live),
+        section("ck-live", "Try it", t, live.into()),
     ]
 }
 
@@ -819,27 +825,22 @@ pub const SPEEDS: [&str; 3] = ["Slow", "Normal", "Fast"];
 
 fn dropdowns(m: &Model, t: &TypeScale, dd: &DropdownStyle) -> Vec<Node> {
     let speeds = || SPEEDS.map(String::from).to_vec();
-    let one = |k: &str, label: &str, f: &dyn Fn(Node) -> Node, disabled: bool| {
-        let key = format!("dd/s/{k}");
-        Node::setting_row(
-            key.clone(),
-            SettingRow {
-                trailing: Some(f(Node::dropdown(
+    let one =
+        |k: &str, label: &str, f: &dyn Fn(nk::DropDown) -> nk::DropDown, disabled: bool| -> Node {
+            let key = format!("dd/s/{k}");
+            setting(key.clone(), label, None, t)
+                .trailing(f(nk::DropDown::new(
                     format!("{key}/d"),
-                    Dropdown {
-                        name: label.into(),
-                        options: speeds(),
-                        chosen: 1,
-                        action: "noop".into(),
-                        disabled,
-                    },
-                ))),
-                disabled,
-                ..setting(label, None, t)
-            },
-        )
-    };
-    let states = Node::column(
+                    label,
+                    "noop",
+                    speeds(),
+                    1,
+                )
+                .enabled(!disabled)))
+                .enabled(!disabled)
+                .into()
+        };
+    let states = nk::Column::new(
         "dd/states",
         vec![
             one("rest", "Rest", &|n| n, false),
@@ -850,13 +851,20 @@ fn dropdowns(m: &Model, t: &TypeScale, dd: &DropdownStyle) -> Vec<Node> {
         ],
     );
     // The open list's rows as its popup shows them, on the same panel glass.
-    let row = |k: &str, label: &str, chosen: bool, f: &dyn Fn(Node) -> Node| {
-        f(Node::menu_row(format!("dd/m/{k}"), label, "noop", chosen))
-    };
-    let list = Node::pane(
+    let row =
+        |k: &str, label: &str, chosen: bool, f: &dyn Fn(nk::MenuItem) -> nk::MenuItem| -> Node {
+            f(nk::MenuItem::new(
+                format!("dd/m/{k}"),
+                label,
+                "noop",
+                chosen,
+            ))
+            .into()
+        };
+    let list = nk::Pane::new(
         "dd/menu",
         Corner::Fixed(dd.menu.radius.round() as u32),
-        Node::column(
+        nk::Column::new(
             "dd/menu/rows",
             vec![
                 row("rest", "Rest", false, &|n| n),
@@ -873,35 +881,30 @@ fn dropdowns(m: &Model, t: &TypeScale, dd: &DropdownStyle) -> Vec<Node> {
         .padding(Padding::all(Space::S2)),
     )
     .width(280.);
-    let live = Node::column(
+    let live = nk::Column::new(
         "dd/live",
         vec![
-            Node::setting_row(
+            setting(
                 "dd/live/row",
-                SettingRow {
-                    trailing: Some(Node::dropdown(
-                        "dd/live/d",
-                        Dropdown {
-                            name: "Animation speed".into(),
-                            options: speeds(),
-                            chosen: m.speed,
-                            action: "speed".into(),
-                            disabled: false,
-                        },
-                    )),
-                    ..setting(
-                        "Animation speed",
-                        Some("Click, or Enter, Space or an arrow, to open its list"),
-                        t,
-                    )
-                },
-            ),
-            Node::text(
+                "Animation speed",
+                Some("Click, or Enter, Space or an arrow, to open its list"),
+                t,
+            )
+            .trailing(nk::DropDown::new(
+                "dd/live/d",
+                "Animation speed",
+                "speed",
+                speeds(),
+                m.speed,
+            ))
+            .into(),
+            nk::Label::new(
                 "dd/live/said",
                 format!("Try it: speed {}", SPEEDS[m.speed.min(SPEEDS.len() - 1)]),
                 t.style(Type::Small, Weight::Regular),
             )
-            .ink(Ink::Secondary),
+            .ink(Ink::Secondary)
+            .into(),
         ],
     )
     .gap(Space::S2);
@@ -910,15 +913,15 @@ fn dropdowns(m: &Model, t: &TypeScale, dd: &DropdownStyle) -> Vec<Node> {
             "dd-states",
             "Dropdown (the list opens over the window; the app hears only the choice)",
             t,
-            states,
+            states.into(),
         ),
         section(
             "dd-list",
             "Its list (the pointer or the keyboard in the accent; the chosen one ticked)",
             t,
-            Node::row("dd/list/row", vec![list]),
+            nk::Row::new("dd/list/row", vec![list.into()]).into(),
         ),
-        section("dd-live", "Try it", t, live),
+        section("dd-live", "Try it", t, live.into()),
     ]
 }
 
@@ -926,7 +929,7 @@ fn dropdowns(m: &Model, t: &TypeScale, dd: &DropdownStyle) -> Vec<Node> {
 pub const SIZES: [&str; 3] = ["Small", "Medium", "Large"];
 
 /// A segmented choice with `shown` forced on some of its segments, for the states page.
-fn segments_shown(mut n: Node, shown: &[(usize, Shown)]) -> Node {
+fn segments_shown(mut n: nk::Segmented, shown: &[(usize, Shown)]) -> nk::Segmented {
     for (index, shown) in shown {
         n = n.sample_state(*index, *shown);
     }
@@ -935,31 +938,19 @@ fn segments_shown(mut n: Node, shown: &[(usize, Shown)]) -> Node {
 
 fn segmenteds(m: &Model, t: &TypeScale) -> Vec<Node> {
     let sizes = || SIZES.map(String::from).to_vec();
-    let one = |k: &str, label: &str, shown: &[(usize, Shown)], disabled: bool| {
+    let one = |k: &str, label: &str, shown: &[(usize, Shown)], disabled: bool| -> Node {
         let key = format!("sg/s/{k}");
-        Node::setting_row(
-            key.clone(),
-            SettingRow {
-                trailing: Some(segments_shown(
-                    Node::segmented(
-                        format!("{key}/g"),
-                        Segmented {
-                            name: label.into(),
-                            options: sizes(),
-                            chosen: 1,
-                            action: "noop".into(),
-                            disabled,
-                        },
-                    ),
-                    shown,
-                )),
-                disabled,
-                ..setting(label, None, t)
-            },
-        )
+        setting(key.clone(), label, None, t)
+            .trailing(segments_shown(
+                nk::Segmented::new(format!("{key}/g"), label, "noop", sizes(), 1)
+                    .enabled(!disabled),
+                shown,
+            ))
+            .enabled(!disabled)
+            .into()
     };
     // Each state on the first segment and on the chosen one, side by side.
-    let states = Node::column(
+    let states = nk::Column::new(
         "sg/states",
         vec![
             one("rest", "Rest", &[], false),
@@ -979,35 +970,30 @@ fn segmenteds(m: &Model, t: &TypeScale) -> Vec<Node> {
             one("disabled", "Disabled", &[], true),
         ],
     );
-    let live = Node::column(
+    let live = nk::Column::new(
         "sg/live",
         vec![
-            Node::setting_row(
+            setting(
                 "sg/live/row",
-                SettingRow {
-                    trailing: Some(Node::segmented(
-                        "sg/live/g",
-                        Segmented {
-                            name: "Dock size".into(),
-                            options: sizes(),
-                            chosen: m.size,
-                            action: "size".into(),
-                            disabled: false,
-                        },
-                    )),
-                    ..setting(
-                        "Dock size",
-                        Some("Click, or Tab to it and move the choice with the arrows"),
-                        t,
-                    )
-                },
-            ),
-            Node::text(
+                "Dock size",
+                Some("Click, or Tab to it and move the choice with the arrows"),
+                t,
+            )
+            .trailing(nk::Segmented::new(
+                "sg/live/g",
+                "Dock size",
+                "size",
+                sizes(),
+                m.size,
+            ))
+            .into(),
+            nk::Label::new(
                 "sg/live/said",
                 format!("Try it: dock size {}", SIZES[m.size.min(SIZES.len() - 1)]),
                 t.style(Type::Small, Weight::Regular),
             )
-            .ink(Ink::Secondary),
+            .ink(Ink::Secondary)
+            .into(),
         ],
     )
     .gap(Space::S2);
@@ -1016,9 +1002,9 @@ fn segmenteds(m: &Model, t: &TypeScale) -> Vec<Node> {
             "sg-states",
             "Segmented choice (the first segment and the chosen one in each state)",
             t,
-            states,
+            states.into(),
         ),
-        section("sg-live", "Try it", t, live),
+        section("sg-live", "Try it", t, live.into()),
     ]
 }
 
@@ -1046,7 +1032,7 @@ pub fn colors_from(export: &serde_json::Value) -> Result<Vec<(String, nk_render:
                 .as_str()
                 .filter(|s| !s.is_empty())
                 .ok_or_else(|| format!("colors.json: no accent name {key}"))?;
-            let color = nk_view::parse_color(
+            let color = nk::parse_color(
                 value
                     .as_str()
                     .ok_or_else(|| format!("colors.json: no accent colour {key}"))?,
@@ -1056,30 +1042,19 @@ pub fn colors_from(export: &serde_json::Value) -> Result<Vec<(String, nk_render:
         .collect()
 }
 fn swatches(m: &Model, t: &TypeScale, colors: &[(String, nk_render::Color)]) -> Vec<Node> {
-    let one = |key: &str, name: &str, disabled: bool, shown: &[(usize, Shown)]| {
-        let mut samples = Node::swatches(
-            format!("sw/{key}/g"),
-            Swatches {
-                name: name.into(),
-                colors: colors.to_vec(),
-                chosen: 0,
-                action: "noop".into(),
-                disabled,
-            },
-        );
+    let one = |key: &str, name: &str, disabled: bool, shown: &[(usize, Shown)]| -> Node {
+        let mut samples =
+            nk::Swatches::new(format!("sw/{key}/g"), name, "noop", colors.to_vec(), 0)
+                .enabled(!disabled);
         for (index, shown) in shown {
             samples = samples.sample_state(*index, *shown);
         }
-        Node::setting_row(
-            format!("sw/{key}"),
-            SettingRow {
-                trailing: Some(samples),
-                disabled,
-                ..setting(name, None, t)
-            },
-        )
+        setting(format!("sw/{key}"), name, None, t)
+            .trailing(samples)
+            .enabled(!disabled)
+            .into()
     };
-    let states = Node::column(
+    let states = nk::Column::new(
         "sw/states",
         vec![
             one("rest", "Rest", false, &[]),
@@ -1100,30 +1075,24 @@ fn swatches(m: &Model, t: &TypeScale, colors: &[(String, nk_render::Color)]) -> 
         ],
     );
     let chosen = m.accent.min(colors.len().saturating_sub(1));
-    let live = Node::column(
+    let live = nk::Column::new(
         "sw/live",
         vec![
-            Node::setting_row(
+            setting(
                 "sw/live/row",
-                SettingRow {
-                    trailing: Some(Node::swatches(
-                        "sw/live/g",
-                        Swatches {
-                            name: "Accent colour".into(),
-                            colors: colors.to_vec(),
-                            chosen,
-                            action: "accent".into(),
-                            disabled: false,
-                        },
-                    )),
-                    ..setting(
-                        "Accent colour",
-                        Some("Choose a colour, or use Tab and the arrow keys"),
-                        t,
-                    )
-                },
-            ),
-            Node::text(
+                "Accent colour",
+                Some("Choose a colour, or use Tab and the arrow keys"),
+                t,
+            )
+            .trailing(nk::Swatches::new(
+                "sw/live/g",
+                "Accent colour",
+                "accent",
+                colors.to_vec(),
+                chosen,
+            ))
+            .into(),
+            nk::Label::new(
                 "sw/live/said",
                 format!(
                     "Try it: accent {}",
@@ -1134,26 +1103,28 @@ fn swatches(m: &Model, t: &TypeScale, colors: &[(String, nk_render::Color)]) -> 
                 ),
                 t.style(Type::Small, Weight::Regular),
             )
-            .ink(Ink::Secondary),
+            .ink(Ink::Secondary)
+            .into(),
         ],
     )
     .gap(Space::S2);
     vec![
-        section("sw-states", "Swatches in every state", t, states),
-        section("sw-live", "Try it", t, live),
+        section("sw-states", "Swatches in every state", t, states.into()),
+        section("sw-live", "Try it", t, live.into()),
     ]
 }
 
 fn sliders(m: &Model, t: &TypeScale) -> Vec<Node> {
     let line = |k: &str, label: &str, s: Node| {
-        Node::row(
+        nk::Row::new(
             format!("sl/{k}/line"),
             vec![
-                Node::text(
+                nk::Label::new(
                     format!("sl/{k}/label"),
                     label,
                     t.style(Type::Body, Weight::Regular),
-                ),
+                )
+                .into(),
                 s.grow(),
             ],
         )
@@ -1161,26 +1132,26 @@ fn sliders(m: &Model, t: &TypeScale) -> Vec<Node> {
         .align(Align::Center)
     };
     let s = |k: &str, v: f64| {
-        Node::slider(
+        nk::Slider::new(
             format!("sl/{k}"),
             k,
             "noop",
-            Slider::new(0., 100., 1., v).unit(" %"),
+            nk::SliderRange::new(0., 100., 1., v).unit(" %"),
         )
     };
-    let states = Node::column(
+    let states = nk::Column::new(
         "sl/states",
         vec![
-            line("min", "At 0", s("min", 0.)),
-            line("mid", "At 50", s("mid", 50.)),
-            line("max", "At 100", s("max", 100.)),
-            line("hover", "Hover", s("hover", 30.).shown(Shown::Hover)),
-            line("focus", "Focus", s("focus", 70.).shown(Shown::Focus)),
-            line("off", "Disabled", s("off", 50.).enabled(false)),
+            line("min", "At 0", s("min", 0.).into()).into(),
+            line("mid", "At 50", s("mid", 50.).into()).into(),
+            line("max", "At 100", s("max", 100.).into()).into(),
+            line("hover", "Hover", s("hover", 30.).shown(Shown::Hover).into()).into(),
+            line("focus", "Focus", s("focus", 70.).shown(Shown::Focus).into()).into(),
+            line("off", "Disabled", s("off", 50.).enabled(false).into()).into(),
         ],
     )
     .gap(Space::S3);
-    let tile = Node::grid(
+    let tile = nk::Grid::new(
         "sl/tile",
         2,
         96.,
@@ -1188,38 +1159,44 @@ fn sliders(m: &Model, t: &TypeScale) -> Vec<Node> {
         vec![Cell {
             at: (0, 0),
             span: (1, 1),
-            child: Node::pane(
+            child: nk::Pane::new(
                 "sl/tile/pane",
                 Corner::Token(Radius::Lg),
-                Node::slider(
+                nk::Slider::new(
                     "sl/tile/slider",
                     "Brightness",
                     "tile",
-                    Slider::new(0., 100., 1., m.tile).fill(),
+                    nk::SliderRange::new(0., 100., 1., m.tile).fill(),
                 )
                 .corner(Corner::Token(Radius::Lg)),
-            ),
+            )
+            .into(),
         }],
     );
     vec![
-        section("sl-states", "States", t, states),
+        section("sl-states", "States", t, states.into()),
         section(
             "sl-live",
             &format!("Try it: {:.0} %", m.slider),
             t,
-            Node::column(
+            nk::Column::new(
                 "sl/live/col",
-                vec![line(
-                    "live",
-                    "Volume",
-                    Node::slider(
-                        "sl/live",
+                vec![
+                    line(
+                        "live",
                         "Volume",
-                        "slider",
-                        Slider::new(0., 100., 1., m.slider).unit(" %"),
-                    ),
-                )],
-            ),
+                        nk::Slider::new(
+                            "sl/live",
+                            "Volume",
+                            "slider",
+                            nk::SliderRange::new(0., 100., 1., m.slider).unit(" %"),
+                        )
+                        .into(),
+                    )
+                    .into(),
+                ],
+            )
+            .into(),
         ),
         section(
             "sl-rows",
@@ -1227,40 +1204,36 @@ fn sliders(m: &Model, t: &TypeScale) -> Vec<Node> {
             t,
             slider_rows(m, t),
         ),
-        section("sl-tile", "Tile slider (the CC's)", t, tile),
+        section("sl-tile", "Tile slider (the CC's)", t, tile.into()),
     ]
 }
 
 /// Settings' slider rows (VIEW.md §13.7): the kit's slider and its value at a row's end,
 /// with its glyphs when it has them; the row itself does not respond.
 fn slider_rows(m: &Model, t: &TypeScale) -> Node {
-    let row = |k: &str, title: &str, action: &str, value: f64, icons: bool, disabled: bool| {
-        let key = format!("sl/r/{k}");
-        Node::setting_row(
-            key.clone(),
-            SettingRow {
-                trailing: Some(Node::slider_end(
-                    format!("{key}/slider"),
-                    SliderEnd {
-                        name: title.into(),
-                        action: action.into(),
-                        slider: Slider::new(0., 100., 1., value).unit(" %"),
-                        value_style: t.style(Type::Body, Weight::Regular),
-                        icons: icons.then(|| {
-                            [
-                                "nd-display-brightness-low".into(),
-                                "nd-display-brightness".into(),
-                            ]
-                        }),
-                        disabled,
-                    },
-                )),
-                disabled,
-                ..setting(title, None, t)
-            },
-        )
-    };
-    Node::column(
+    let row =
+        |k: &str, title: &str, action: &str, value: f64, icons: bool, disabled: bool| -> Node {
+            let key = format!("sl/r/{k}");
+            let mut end = nk::SliderEnd::new(
+                format!("{key}/slider"),
+                title,
+                action,
+                nk::SliderRange::new(0., 100., 1., value).unit(" %"),
+                t.style(Type::Body, Weight::Regular),
+            )
+            .enabled(!disabled);
+            if icons {
+                end = end.icons([
+                    "nd-display-brightness-low".into(),
+                    "nd-display-brightness".into(),
+                ]);
+            }
+            setting(key.clone(), title, None, t)
+                .trailing(end)
+                .enabled(!disabled)
+                .into()
+        };
+    nk::Column::new(
         "sl/rows",
         vec![
             row("plain", "Plain", "noop", 30., false, false),
@@ -1268,15 +1241,16 @@ fn slider_rows(m: &Model, t: &TypeScale) -> Node {
             row("off", "Disabled", "noop", 60., true, true),
         ],
     )
+    .into()
 }
 
 fn fields(t: &TypeScale) -> Vec<Node> {
     let f = |k: &str, shown: &str, caret: usize, anchor: usize, secret: bool| {
-        Node::field(
+        nk::Field::new(
             format!("f/{k}"),
             k,
             "noop",
-            Field {
+            nk::FieldState {
                 shown: shown.into(),
                 caret,
                 anchor,
@@ -1286,14 +1260,15 @@ fn fields(t: &TypeScale) -> Vec<Node> {
         )
     };
     let line = |k: &str, label: &str, field: Node| {
-        Node::row(
+        nk::Row::new(
             format!("f/{k}/line"),
             vec![
-                Node::text(
+                nk::Label::new(
                     format!("f/{k}/label"),
                     label,
                     t.style(Type::Body, Weight::Regular),
-                ),
+                )
+                .into(),
                 field.grow(),
             ],
         )
@@ -1302,49 +1277,54 @@ fn fields(t: &TypeScale) -> Vec<Node> {
     };
     let text = "Nidara";
     let dots = "••••••";
-    let states = Node::column(
+    let states = nk::Column::new(
         "f/states",
         vec![
-            line("empty", "Empty", f("empty", "", 0, 0, false)),
-            line("text", "With text", f("text", text, 6, 6, false)),
+            line("empty", "Empty", f("empty", "", 0, 0, false).into()).into(),
+            line("text", "With text", f("text", text, 6, 6, false).into()).into(),
             line(
                 "focus",
                 "Focus",
-                f("focus", text, 6, 6, false).shown(Shown::Focus),
-            ),
-            line("secret", "Password", f("secret", dots, 18, 18, true)),
+                f("focus", text, 6, 6, false).shown(Shown::Focus).into(),
+            )
+            .into(),
+            line("secret", "Password", f("secret", dots, 18, 18, true).into()).into(),
             line(
                 "off",
                 "Disabled",
-                f("off", text, 6, 6, false).enabled(false),
-            ),
+                f("off", text, 6, 6, false).enabled(false).into(),
+            )
+            .into(),
         ],
     )
     .gap(Space::S3);
     vec![
-        section("f-states", "States", t, states),
-        Node::text(
+        section("f-states", "States", t, states.into()),
+        nk::Label::new(
             "f/note",
             "Typing into a field belongs to its owner today (VIEW.md §12.2); one field for the kit is #1079 step 2.",
             t.style(Type::Small, Weight::Regular),
         )
         .ink(Ink::Secondary)
-        .lines(3),
+        .lines(3).into(),
     ]
 }
 
 fn glass(t: &TypeScale) -> Vec<Node> {
     let card = |k: &str, label: &str, corner: Corner, opacity: f64| {
-        Node::pane(
+        nk::Pane::new(
             format!("g/{k}"),
             corner,
-            Node::column(
+            nk::Column::new(
                 format!("g/{k}/col"),
-                vec![Node::text(
-                    format!("g/{k}/text"),
-                    label,
-                    t.style(Type::Body, Weight::Medium),
-                )],
+                vec![
+                    nk::Label::new(
+                        format!("g/{k}/text"),
+                        label,
+                        t.style(Type::Body, Weight::Medium),
+                    )
+                    .into(),
+                ],
             )
             .padding(Padding::all(Space::S5)),
         )
@@ -1359,12 +1339,17 @@ fn glass(t: &TypeScale) -> Vec<Node> {
         ("pill", "Pill", Corner::Pill),
     ];
     vec![
-        Node::row(
+        nk::Row::new(
             "g/corners",
-            corners.iter().map(|(k, l, c)| card(k, l, *c, 1.)).collect(),
+            corners
+                .iter()
+                .map(|(k, l, c)| card(k, l, *c, 1.))
+                .map(Node::from)
+                .collect(),
         )
-        .gap(Space::S4),
-        Node::row(
+        .gap(Space::S4)
+        .into(),
+        nk::Row::new(
             "g/opacity",
             [
                 ("o100", "Formed 100 %", 1.),
@@ -1373,9 +1358,11 @@ fn glass(t: &TypeScale) -> Vec<Node> {
             ]
             .iter()
             .map(|(k, l, o)| card(k, l, Corner::Token(Radius::Lg), *o))
+            .map(Node::from)
             .collect(),
         )
-        .gap(Space::S4),
+        .gap(Space::S4)
+        .into(),
     ]
 }
 
@@ -1394,7 +1381,7 @@ fn text(t: &TypeScale) -> Vec<Node> {
         .iter()
         .enumerate()
         .map(|(i, (ty, name))| {
-            Node::row(
+            nk::Row::new(
                 format!("t/{i}"),
                 [
                     (Weight::Regular, "Regular"),
@@ -1404,17 +1391,19 @@ fn text(t: &TypeScale) -> Vec<Node> {
                 ]
                 .iter()
                 .map(|(w, wn)| {
-                    Node::text(
+                    nk::Label::new(
                         format!("t/{i}/{wn}"),
                         format!("{name} {wn}"),
                         t.style(*ty, *w),
                     )
                 })
+                .map(Node::from)
                 .collect(),
             )
             .gap(Space::S4)
             .align(Align::FirstLine)
         })
+        .map(Node::from)
         .collect();
     let inks = row(
         "t/inks",
@@ -1425,13 +1414,14 @@ fn text(t: &TypeScale) -> Vec<Node> {
         ]
         .iter()
         .map(|(ink, n)| {
-            Node::text(
+            nk::Label::new(
                 format!("t/ink/{n}"),
                 *n,
                 t.style(Type::Body, Weight::Regular),
             )
             .ink(*ink)
         })
+        .map(Node::from)
         .collect(),
     );
     let long = "Text from outside is wrapped to the lines it is given and ends in an ellipsis; \
@@ -1442,14 +1432,16 @@ fn text(t: &TypeScale) -> Vec<Node> {
             "t-scale",
             "Type scale × weight",
             t,
-            Node::column("t/scale", scale).gap(Space::S2),
+            nk::Column::new("t/scale", scale).gap(Space::S2).into(),
         ),
         section("t-inks", "Inks", t, inks),
         section(
             "t-lines",
             "Wrapped to two lines",
             t,
-            Node::text("t/long", long, t.style(Type::Body, Weight::Regular)).lines(2),
+            nk::Label::new("t/long", long, t.style(Type::Body, Weight::Regular))
+                .lines(2)
+                .into(),
         ),
     ]
 }
@@ -1469,18 +1461,19 @@ fn icons(t: &TypeScale) -> Vec<Node> {
     let rows = sizes
         .iter()
         .map(|s| {
-            let mut items = vec![
-                Node::text(
+            let mut items: Vec<Node> = vec![
+                nk::Label::new(
                     format!("i/{s}/label"),
                     format!("{s:.0} px"),
                     t.style(Type::Small, Weight::Regular),
                 )
-                .ink(Ink::Dim),
+                .ink(Ink::Dim)
+                .into(),
             ];
             items.extend(
                 names
                     .iter()
-                    .map(|n| Node::icon(format!("i/{s}/{n}"), *n, *s)),
+                    .map(|n| nk::Image::new(format!("i/{s}/{n}"), *n, *s).into()),
             );
             row(&format!("i/{s}"), items)
         })
@@ -1498,7 +1491,9 @@ fn icons(t: &TypeScale) -> Vec<Node> {
                 &format!("i/ink/{n}"),
                 n,
                 t,
-                Node::icon(format!("i/ink/{n}"), "nd-ai", 24.).ink(*ink),
+                nk::Image::new(format!("i/ink/{n}"), "nd-ai", 24.)
+                    .ink(*ink)
+                    .into(),
             )
         })
         .collect(),
@@ -1508,7 +1503,7 @@ fn icons(t: &TypeScale) -> Vec<Node> {
             "i-sizes",
             "Interface glyphs (nd-) by size",
             t,
-            Node::column("i/sizes", rows).gap(Space::S3),
+            nk::Column::new("i/sizes", rows).gap(Space::S3).into(),
         ),
         section("i-inks", "Inks", t, inks),
     ]
@@ -1516,41 +1511,47 @@ fn icons(t: &TypeScale) -> Vec<Node> {
 
 /// A small card for the layout samples: a group, not glass.
 fn block(key: &str, label: &str, t: &TypeScale) -> Node {
-    Node::group(
+    nk::Group::new(
         key,
-        Node::column(
+        nk::Column::new(
             format!("{key}/col"),
-            vec![Node::text(
-                format!("{key}/text"),
-                label,
-                t.style(Type::Small, Weight::Medium),
-            )],
+            vec![
+                nk::Label::new(
+                    format!("{key}/text"),
+                    label,
+                    t.style(Type::Small, Weight::Medium),
+                )
+                .into(),
+            ],
         )
         .padding(Padding::symmetric(Space::S2, Space::S3)),
     )
+    .into()
 }
 
 fn layout(t: &TypeScale) -> Vec<Node> {
-    let mut out = vec![];
+    let mut out: Vec<Node> = vec![];
     for (i, s) in Space::ALL.iter().enumerate() {
         let name = format!("{s:?}");
         out.push(
-            Node::row(
+            nk::Row::new(
                 format!("l/gap/{i}"),
                 vec![
-                    Node::text(
+                    nk::Label::new(
                         format!("l/gap/{i}/label"),
                         format!("Gap {name}"),
                         t.style(Type::Small, Weight::Regular),
                     )
-                    .ink(Ink::Dim),
+                    .ink(Ink::Dim)
+                    .into(),
                     block(&format!("l/gap/{i}/a"), "A", t),
                     block(&format!("l/gap/{i}/b"), "B", t),
                     block(&format!("l/gap/{i}/c"), "C", t),
                 ],
             )
             .gap(*s)
-            .align(Align::Center),
+            .align(Align::Center)
+            .into(),
         );
     }
     for (k, j) in [
@@ -1559,7 +1560,7 @@ fn layout(t: &TypeScale) -> Vec<Node> {
         ("end", Justify::End),
     ] {
         out.push(
-            Node::row(
+            nk::Row::new(
                 format!("l/j/{k}"),
                 vec![
                     block(&format!("l/j/{k}/a"), &format!("Justify {k}"), t),
@@ -1567,75 +1568,80 @@ fn layout(t: &TypeScale) -> Vec<Node> {
                 ],
             )
             .gap(Space::S2)
-            .justify(j),
+            .justify(j)
+            .into(),
         );
     }
     out.push(
-        Node::row(
+        nk::Row::new(
             "l/spacer",
             vec![
                 block("l/spacer/a", "Start", t),
-                Node::spacer("l/spacer/gap"),
+                nk::Spacer::new("l/spacer/gap").into(),
                 block("l/spacer/b", "A spacer between", t),
             ],
         )
-        .gap(Space::S2),
+        .gap(Space::S2)
+        .into(),
     );
     out
 }
 
 fn scroll(t: &TypeScale) -> Vec<Node> {
-    let mut out = vec![Node::text(
+    let mut out: Vec<Node> = vec![nk::Label::new(
         "sc/note",
         "This page is the scroll region: the content scrolls under the wheel, Page Up and Page Down, Ctrl+Home and Ctrl+End, and its bar shows while it moves.",
         t.style(Type::Body, Weight::Regular),
     )
-    .lines(3)];
+    .lines(3)
+    .into()];
     out.extend((1..=30).map(|i| block(&format!("sc/{i}"), &format!("Row {i}"), t)));
     out
 }
 
 fn overlay(t: &TypeScale) -> Vec<Node> {
-    let base = Node::group(
+    let base = nk::Group::new(
         "o/base",
-        Node::column(
+        nk::Column::new(
             "o/base/col",
             vec![
-                Node::text(
+                nk::Label::new(
                     "o/base/text",
                     "The base gives the size",
                     t.style(Type::Body, Weight::Medium),
-                ),
-                Node::text(
+                )
+                .into(),
+                nk::Label::new(
                     "o/base/room",
                     "Layers lie over it, placed by alignment and inset.",
                     t.style(Type::Small, Weight::Regular),
                 )
                 .ink(Ink::Secondary)
-                .reserve(5),
+                .reserve(5)
+                .into(),
             ],
         )
         .padding(Padding::all(Space::S5)),
     );
     // What lies over the base is glass, as anything over content is.
     let tag = |k: &str, glyph: &str| {
-        Node::pane(
+        nk::Pane::new(
             format!("o/{k}/glass"),
             Corner::Pill,
-            Node::control(
+            nk::Button::with_child(
                 format!("o/{k}"),
                 k,
                 "noop",
-                Node::row(
+                nk::Row::new(
                     format!("o/{k}/row"),
-                    vec![Node::icon(format!("o/{k}/icon"), glyph, 16.)],
+                    vec![nk::Image::new(format!("o/{k}/icon"), glyph, 16.).into()],
                 )
                 .padding(Padding::all(Space::S1)),
             )
             .corner(Corner::Pill),
         )
     };
-    let layered = Node::overlay("o/overlay", base)
+    let layered = nk::Overlay::new("o/overlay", base)
         .layer(
             Align::End,
             Align::Start,
@@ -1655,13 +1661,14 @@ fn overlay(t: &TypeScale) -> Vec<Node> {
             tag("centre", "nd-ai"),
         );
     vec![
-        layered,
-        Node::text(
+        layered.into(),
+        nk::Label::new(
             "o/note",
             "Layers placed by alignment and inset, as the CC's remove marks are.",
             t.style(Type::Small, Weight::Regular),
         )
-        .ink(Ink::Secondary),
+        .ink(Ink::Secondary)
+        .into(),
     ]
 }
 
@@ -1672,7 +1679,7 @@ fn grid(t: &TypeScale) -> Vec<Node> {
         child: block(&format!("gr/{k}"), &format!("{}×{}", span.0, span.1), t),
     };
     vec![
-        Node::grid(
+        nk::Grid::new(
             "gr/grid",
             4,
             72.,
@@ -1686,93 +1693,94 @@ fn grid(t: &TypeScale) -> Vec<Node> {
                 tile("f", (3, 1), (1, 1)),
                 tile("g", (3, 2), (1, 1)),
             ],
-        ),
-        Node::text(
+        )
+        .into(),
+        nk::Label::new(
             "gr/note",
             "Square cells; where each tile goes is the surface's to decide (VIEW.md §12.4).",
             t.style(Type::Small, Weight::Regular),
         )
-        .ink(Ink::Secondary),
+        .ink(Ink::Secondary)
+        .into(),
     ]
 }
 
 fn reveal(m: &Model, t: &TypeScale) -> Vec<Node> {
     vec![
-        Node::row(
+        nk::Row::new(
             "r/toggle/line",
-            vec![content_button(
-                "r/toggle",
-                if m.open { "Close" } else { "Open" },
-                "reveal",
-                t,
-            )],
-        ),
-        Node::reveal(
+            vec![
+                content_button(
+                    "r/toggle",
+                    if m.open { "Close" } else { "Open" },
+                    "reveal",
+                    t,
+                )
+                .into(),
+            ],
+        )
+        .into(),
+        nk::Revealer::new(
             "r/reveal",
             m.open,
-            Node::group(
+            nk::Group::new(
                 "r/pane",
-                Node::column(
+                nk::Column::new(
                     "r/col",
                     vec![
-                        Node::text(
+                        nk::Label::new(
                             "r/title",
                             "Revealed",
                             t.style(Type::Subtitle, Weight::Semibold),
-                        ),
-                        Node::text(
+                        )
+                        .into(),
+                        nk::Label::new(
                             "r/body",
                             "It unrolls downward in place, and what is under it moves with it.",
                             t.style(Type::Body, Weight::Regular),
                         )
-                        .lines(2),
+                        .lines(2)
+                        .into(),
                     ],
                 )
                 .gap(Space::S2)
                 .padding(Padding::all(Space::S5)),
             ),
-        ),
+        )
+        .into(),
         block("r/below", "Below the reveal", t),
     ]
 }
 
 fn disclosures(m: &Model, t: &TypeScale) -> Vec<Node> {
-    use nk_view::components::Disclosure;
-    let sample = |key: &str, label: &str, open: bool| {
-        Disclosure {
-            label: label.into(),
-            expanded: open,
-        }
-        .header(key, "noop")
-    };
-    let states = Node::column(
+    let sample = |key: &str, label: &str, open: bool| nk::Expander::new(key, label, "noop", open);
+    let states = nk::Column::new(
         "d/states",
         vec![
-            sample("d/closed", "Closed", false),
-            sample("d/open", "Expanded", true),
-            sample("d/hover", "Hover", false).shown(Shown::Hover),
-            sample("d/press", "Pressed", true).shown(Shown::Press),
-            sample("d/focus", "Focus", false).shown(Shown::Focus),
-            sample("d/disabled", "Disabled", false).enabled(false),
+            sample("d/closed", "Closed", false).into(),
+            sample("d/open", "Expanded", true).into(),
+            sample("d/hover", "Hover", false).shown(Shown::Hover).into(),
+            sample("d/press", "Pressed", true)
+                .shown(Shown::Press)
+                .into(),
+            sample("d/focus", "Focus", false).shown(Shown::Focus).into(),
+            sample("d/disabled", "Disabled", false)
+                .enabled(false)
+                .into(),
         ],
     );
-    let live = Disclosure {
-        label: "Advanced".into(),
-        expanded: m.expanded,
-    }
-    .node(
-        "d/live",
-        "disclosure",
-        Node::column(
+    let live = nk::Expander::new("d/live", "Advanced", "disclosure", m.expanded).child(
+        nk::Column::new(
             "d/details",
             vec![
-                Node::text(
+                nk::Label::new(
                     "d/explanation",
                     "The model owns expansion; the component reports its new value.",
                     t.style(Type::Body, Weight::Regular),
                 )
-                .lines(2),
-                content_button("d/child", "Revealed action", "press", t),
+                .lines(2)
+                .into(),
+                content_button("d/child", "Revealed action", "press", t).into(),
             ],
         )
         .gap(Space::S3)
@@ -1783,108 +1791,105 @@ fn disclosures(m: &Model, t: &TypeScale) -> Vec<Node> {
             "d/live-section",
             "Try it: click the whole header, Enter or Space",
             t,
-            live,
+            live.into(),
         ),
-        section("d/state-section", "States", t, states),
+        section("d/state-section", "States", t, states.into()),
     ]
 }
 
 fn entries(m: &Model, t: &TypeScale) -> Vec<Node> {
-    use nk_view::components::EditableField;
-    let field = |key: &str, text: &str| EditableField::new(text).node(key, "Sample text", "noop");
-    let mut live = EditableField::new(m.entry.clone());
-    live.placeholder = "Write here".into();
-    live.submit = Some("entry-submit".into());
+    let field = |key: &str, text: &str| nk::Entry::new(key, "Sample text", "noop", text);
+    let live = nk::Entry::new("e/input", "Editable text", "entry-edit", m.entry.clone())
+        .placeholder("Write here")
+        .submit("entry-submit");
     vec![
         section(
             "entry-live",
             "Try it: type, compose, select and paste",
             t,
-            Node::column(
+            nk::Column::new(
                 "e/live",
                 vec![
-                    live.node("e/input", "Editable text", "entry-edit"),
-                    Node::text(
+                    live.into(),
+                    nk::Label::new(
                         "e/value",
                         format!("Value: {}", m.entry),
                         t.style(Type::Body, Weight::Regular),
                     )
-                    .lines(2),
-                    Node::text(
+                    .lines(2)
+                    .into(),
+                    nk::Label::new(
                         "e/submitted",
                         format!("Submitted: {}", m.submitted),
                         t.style(Type::Body, Weight::Regular),
-                    ),
+                    )
+                    .into(),
                 ],
             )
-            .gap(Space::S3),
+            .gap(Space::S3)
+            .into(),
         ),
         section(
             "entry-states",
             "States",
             t,
-            Node::column(
+            nk::Column::new(
                 "e/states",
                 vec![
-                    field("e/empty", ""),
-                    field("e/text", "Nidara"),
-                    field("e/focus", "Keyboard focus").shown(Shown::Focus),
-                    field("e/disabled", "Disabled").enabled(false),
+                    field("e/empty", "").into(),
+                    field("e/text", "Nidara").into(),
+                    field("e/focus", "Keyboard focus")
+                        .shown(Shown::Focus)
+                        .into(),
+                    field("e/disabled", "Disabled").enabled(false).into(),
                 ],
             )
-            .gap(Space::S3),
+            .gap(Space::S3)
+            .into(),
         ),
     ]
 }
 fn search_field(m: &Model, t: &TypeScale) -> Vec<Node> {
-    use nk_view::components::{EditableField, Search};
-    let mut field = EditableField::new(m.search.clone());
-    field.placeholder = "Search the catalogue".into();
-    field.submit = Some("search-submit".into());
     let mut out = vec![section(
         "search-live",
         "Try it: Escape clears before it leaves; the clear control returns focus",
         t,
-        Node::column(
+        nk::Column::new(
             "q/live",
             vec![
-                Search {
-                    shown: None,
-                    field,
-                    name: "Search text".into(),
-                    changed: "search-edit".into(),
-                    clear_label: "Clear search".into(),
-                    disabled: false,
-                }
-                .node("q/search"),
-                Node::text(
+                nk::SearchEntry::new(
+                    "q/search",
+                    "Search text",
+                    "search-edit",
+                    m.search.clone(),
+                    "Clear search",
+                )
+                .placeholder("Search the catalogue")
+                .submit("search-submit")
+                .into(),
+                nk::Label::new(
                     "q/value",
                     format!("Query: {}", m.search),
                     t.style(Type::Body, Weight::Regular),
                 )
-                .lines(2),
+                .lines(2)
+                .into(),
             ],
         )
-        .gap(Space::S3),
+        .gap(Space::S3)
+        .into(),
     )];
-    let specimen = |key: &str, name: &str, value: &str, disabled| {
-        let mut field = EditableField::new(value);
-        field.placeholder = "Search".into();
-        Search {
-            shown: None,
-            field,
-            name: name.into(),
-            changed: "noop".into(),
-            clear_label: format!("Clear {name}"),
-            disabled,
-        }
-        .node(key)
+    let specimen = |key: &str, name: &str, value: &str, disabled: bool| -> Node {
+        nk::SearchEntry::new(key, name, "noop", value, format!("Clear {name}"))
+            .placeholder("Search")
+            .enabled(!disabled)
+            .into()
     };
     out.push(section(
         "search-states",
         "States",
         t,
-        Node::column(
+        nk::Column::new(
             "q/states",
             vec![
                 specimen("q/empty", "Empty search", "", false),
@@ -1892,40 +1897,40 @@ fn search_field(m: &Model, t: &TypeScale) -> Vec<Node> {
                 specimen("q/disabled", "Disabled search", "Nidara", true),
             ],
         )
-        .gap(Space::S3),
+        .gap(Space::S3)
+        .into(),
     ));
     out
 }
 
 struct Records<'a>(&'a TypeScale);
-impl nk_view::ListSource for Records<'_> {
-    fn item(&self, index: usize) -> nk_view::RowInfo {
-        nk_view::RowInfo {
+impl nk::ListSource for Records<'_> {
+    fn item(&self, index: usize) -> nk::RowInfo {
+        nk::RowInfo {
             key: format!("record-{index}").into(),
             name: format!("Record {}", index + 1),
         }
     }
-    fn build(&self, index: usize, key: &nk_view::Key) -> Node {
-        Node::text(
+    fn build(&self, index: usize, key: &nk::Key) -> Node {
+        nk::Label::new(
             format!("{}/label", key.0),
             format!("Record {}", index + 1),
             self.0.style(Type::Body, Weight::Regular),
         )
+        .into()
     }
 }
 fn long_list(m: &Model, t: &TypeScale, k: &Measures) -> Vec<Node> {
     let source = Records(t);
-    let mut list = nk_view::LongList::new(5000, m.selected_row, k.row_height);
-    list.activate = Some("list-open".into());
     vec![
         section(
             "long-list",
             "5,000 records · arrows, Home/End, Page Up/Down · Enter or double click opens",
             t,
-            Node::column(
+            nk::Column::new(
                 "ll/sample",
                 vec![
-                    Node::text(
+                    nk::Label::new(
                         "ll/value",
                         format!(
                             "Selected: {} · Opened: {}",
@@ -1933,36 +1938,61 @@ fn long_list(m: &Model, t: &TypeScale, k: &Measures) -> Vec<Node> {
                             m.list_opened
                         ),
                         t.style(Type::Body, Weight::Regular),
-                    ),
-                    list.node("ll/live", "Records", "list-select", k.list_window, &source)
-                        .height(k.row_height * 6.),
+                    )
+                    .into(),
+                    nk::ListView::new(
+                        "ll/live",
+                        "Records",
+                        "list-select",
+                        &source,
+                        5000,
+                        m.selected_row,
+                        k.row_height,
+                    )
+                    .window(k.list_window)
+                    .activate("list-open")
+                    .height(k.row_height * 6.)
+                    .into(),
                 ],
             )
-            .gap(Space::S2),
+            .gap(Space::S2)
+            .into(),
         ),
         section(
             "long-list-states",
             "Disabled and empty",
             t,
-            Node::column(
+            nk::Column::new(
                 "ll/states",
                 vec![
-                    nk_view::LongList::new(20, 2, k.row_height)
-                        .node(
-                            "ll/disabled",
-                            "Disabled records",
-                            "noop",
-                            k.disabled_list_window,
-                            &source,
-                        )
-                        .height(k.row_height * 2.)
-                        .enabled(false),
-                    nk_view::LongList::new(0, 0, k.row_height)
-                        .node("ll/empty", "Empty records", "noop", None, &source)
-                        .height(k.row_height),
+                    nk::ListView::new(
+                        "ll/disabled",
+                        "Disabled records",
+                        "noop",
+                        &source,
+                        20,
+                        2,
+                        k.row_height,
+                    )
+                    .window(k.disabled_list_window)
+                    .height(k.row_height * 2.)
+                    .enabled(false)
+                    .into(),
+                    nk::ListView::new(
+                        "ll/empty",
+                        "Empty records",
+                        "noop",
+                        &source,
+                        0,
+                        0,
+                        k.row_height,
+                    )
+                    .height(k.row_height)
+                    .into(),
                 ],
             )
-            .gap(Space::S2),
+            .gap(Space::S2)
+            .into(),
         ),
     ]
 }
@@ -1970,177 +2000,173 @@ fn long_list(m: &Model, t: &TypeScale, k: &Measures) -> Vec<Node> {
 /// The same outline on every component, in the portal's light or dark appearance.
 /// Background panes never change the controls' shape or add an interactive wrapper.
 fn focus_page(t: &TypeScale, k: &Measures) -> Vec<Node> {
-    use nk_view::components::{Disclosure, EditableField, Search};
     let mut sections = vec![];
     for glass in [false, true] {
         let prefix = if glass { "focus/glass" } else { "focus/page" };
         let key = |name: &str| format!("{prefix}/{name}");
         let name = |name: &str| format!("{name} {}", if glass { "on glass" } else { "off glass" });
-        let focused = |node: Node| node.shown(Shown::Focus);
-        let segment = Node::column(
+        let segment = nk::Column::new(
             key("segment-samples"),
             (0..3)
                 .map(|index| {
-                    Node::segmented(
+                    nk::Segmented::new(
                         key(&format!("segments{index}")),
-                        Segmented {
-                            options: vec!["Start".into(), "Middle".into(), "End".into()],
-                            chosen: 1,
-                            disabled: false,
-                            action: "noop".into(),
-                            name: name(&format!("Segment {index}")),
-                        },
+                        name(&format!("Segment {index}")),
+                        "noop",
+                        vec!["Start".into(), "Middle".into(), "End".into()],
+                        1,
                     )
                     .sample_state(index, Shown::Focus)
+                    .into()
                 })
                 .collect(),
         )
         .gap(Space::S3);
         // colors_from validates a non-empty, complete named export before the page exists.
         let color = k.colors.first().expect("validated accent palette").1;
-        let swatches = Node::swatches(
+        let swatches = nk::Swatches::new(
             key("swatches"),
-            Swatches {
-                colors: vec![(name("Swatch"), color)],
-                chosen: 0,
-                disabled: false,
-                action: "noop".into(),
-                name: name("Swatches"),
-            },
+            name("Swatches"),
+            "noop",
+            vec![(name("Swatch"), color)],
+            0,
         )
         .sample_state(0, Shown::Focus);
-        let samples = vec![
-            focused(content_button(&key("button"), &name("Button"), "noop", t)),
-            focused(button(&key("capsule"), &name("Capsule"), "noop", t)),
-            Node::switch_control(key("switch"), name("Switch"), "noop", true).shown(Shown::Focus),
-            focused(Node::check_control(
-                key("check"),
-                name("Checkbox"),
-                "noop",
-                true,
-            )),
-            focused(Node::radio_control(
-                key("radio"),
-                name("Radio"),
-                "noop",
-                true,
-            )),
-            focused(Node::dropdown(
+        let samples: Vec<Node> = vec![
+            content_button(&key("button"), &name("Button"), "noop", t)
+                .shown(Shown::Focus)
+                .into(),
+            button(&key("capsule"), &name("Capsule"), "noop", t)
+                .shown(Shown::Focus)
+                .into(),
+            nk::Switch::new(key("switch"), name("Switch"), "noop", true)
+                .shown(Shown::Focus)
+                .into(),
+            nk::CheckButton::new(key("check"), name("Checkbox"), "noop", true)
+                .shown(Shown::Focus)
+                .into(),
+            nk::CheckButton::radio(key("radio"), name("Radio"), "noop", true)
+                .shown(Shown::Focus)
+                .into(),
+            nk::DropDown::new(
                 key("dropdown"),
-                Dropdown {
-                    options: vec!["Option".into()],
-                    chosen: 0,
-                    disabled: false,
-                    action: "noop".into(),
-                    name: name("Dropdown"),
-                },
-            )),
-            segment,
-            swatches,
-            focused(
-                Node::slider(
-                    key("slider"),
-                    name("Slider"),
-                    "noop",
-                    Slider::new(0., 100., 1., 50.),
-                )
-                .width(240.),
-            ),
-            focused(Node::field(
+                name("Dropdown"),
+                "noop",
+                vec!["Option".into()],
+                0,
+            )
+            .shown(Shown::Focus)
+            .into(),
+            segment.into(),
+            swatches.into(),
+            nk::Slider::new(
+                key("slider"),
+                name("Slider"),
+                "noop",
+                nk::SliderRange::new(0., 100., 1., 50.),
+            )
+            .width(240.)
+            .shown(Shown::Focus)
+            .into(),
+            nk::Field::new(
                 key("display"),
                 name("Display field"),
                 "noop",
-                Field {
+                nk::FieldState {
                     shown: "Nidara".into(),
                     caret: 0,
                     anchor: 0,
                     secret: false,
                 },
                 t.style(Type::Body, Weight::Regular),
-            )),
-            focused(
-                Disclosure {
-                    label: name("Disclosure"),
-                    expanded: false,
-                }
-                .header(key("disclosure"), "noop"),
-            ),
-            focused(
-                EditableField::new("Nidara")
-                    .node(key("entry"), name("Editable field"), "noop")
-                    .width(240.),
-            ),
-            Search {
-                shown: None,
-                field: EditableField::new("Nidara"),
-                name: name("Search"),
-                changed: "noop".into(),
-                clear_label: name("Clear search"),
-                disabled: false,
-            }
-            .node(key("search"))
+            )
+            .shown(Shown::Focus)
+            .into(),
+            nk::Expander::new(key("disclosure"), name("Disclosure"), "noop", false)
+                .shown(Shown::Focus)
+                .into(),
+            nk::Entry::new(key("entry"), name("Editable field"), "noop", "Nidara")
+                .width(240.)
+                .shown(Shown::Focus)
+                .into(),
+            nk::SearchEntry::new(
+                key("search"),
+                name("Search"),
+                "noop",
+                "Nidara",
+                name("Clear search"),
+            )
             .width(240.)
-            .sample_state(0, Shown::Focus),
-            Search {
-                field: EditableField::new("Nidara"),
-                name: name("Search clear"),
-                changed: "noop".into(),
-                clear_label: name("Clear button"),
-                disabled: false,
-                shown: None,
-            }
-            .node(key("search-clear"))
+            .sample_state(0, Shown::Focus)
+            .into(),
+            nk::SearchEntry::new(
+                key("search-clear"),
+                name("Search clear"),
+                "noop",
+                "Nidara",
+                name("Clear button"),
+            )
             .width(240.)
-            .sample_state(1, Shown::Focus),
-            focused(
-                Node::sidebar_entry(
-                    key("sidebar"),
-                    SidebarEntry {
-                        title: name("Sidebar entry"),
-                        glyph: "nd-preferences-system".into(),
-                        action: "noop".into(),
-                        selected: false,
-                        style: t.style(Type::Body, Weight::Regular),
-                    },
-                    k.glyph,
-                )
-                .width(240.),
-            ),
+            .sample_state(1, Shown::Focus)
+            .into(),
+            nk::SidebarEntry::new(
+                key("sidebar"),
+                name("Sidebar entry"),
+                "nd-preferences-system",
+                "noop",
+                t.style(Type::Body, Weight::Regular),
+                k.glyph,
+            )
+            .width(240.)
+            .shown(Shown::Focus)
+            .into(),
             // Reference: menu focus is its accent selection, without a ring.
-            focused(Node::menu_row(key("menu"), name("Menu row"), "noop", false).width(240.)),
-            focused(
-                nk_view::LongList::new(3, 0, k.row_height)
-                    .node(
-                        key("list"),
-                        name("List"),
-                        "noop",
-                        Some((0., k.row_height * 2.)),
-                        &Records(t),
-                    )
-                    .height(k.row_height * 2.)
-                    .width(240.),
-            ),
-            focused(
-                nk_view::LongList::new(0, 0, k.row_height)
-                    .node(key("empty"), name("Empty list"), "noop", None, &Records(t))
-                    .height(k.row_height)
-                    .width(240.),
-            ),
-            focused(
-                content_button(&key("disabled"), &name("Disabled, no ring"), "noop", t)
-                    .enabled(false),
-            ),
+            nk::MenuItem::new(key("menu"), name("Menu row"), "noop", false)
+                .width(240.)
+                .shown(Shown::Focus)
+                .into(),
+            nk::ListView::new(
+                key("list"),
+                name("List"),
+                "noop",
+                &Records(t),
+                3,
+                0,
+                k.row_height,
+            )
+            .window(Some((0., k.row_height * 2.)))
+            .height(k.row_height * 2.)
+            .width(240.)
+            .shown(Shown::Focus)
+            .into(),
+            nk::ListView::new(
+                key("empty"),
+                name("Empty list"),
+                "noop",
+                &Records(t),
+                0,
+                0,
+                k.row_height,
+            )
+            .height(k.row_height)
+            .width(240.)
+            .shown(Shown::Focus)
+            .into(),
+            content_button(&key("disabled"), &name("Disabled, no ring"), "noop", t)
+                .enabled(false)
+                .shown(Shown::Focus)
+                .into(),
         ];
         let rows = samples
             .into_iter()
             .enumerate()
             .map(|(i, node)| {
-                let body = Node::row(key(&format!("cell{i}")), vec![node])
+                let body = nk::Row::new(key(&format!("cell{i}")), vec![node])
                     .padding(Padding::all(Space::S3));
                 if glass {
-                    Node::pane(key(&format!("pane{i}")), Corner::Token(Radius::Sm), body)
+                    nk::Pane::new(key(&format!("pane{i}")), Corner::Token(Radius::Sm), body).into()
                 } else {
-                    body
+                    body.into()
                 }
             })
             .collect();
@@ -2152,7 +2178,7 @@ fn focus_page(t: &TypeScale, k: &Measures) -> Vec<Node> {
                 "Off glass · solid accent, width 2 px, gap 2 px"
             },
             t,
-            Node::column(key("samples"), rows).gap(Space::S2),
+            nk::Column::new(key("samples"), rows).gap(Space::S2).into(),
         ));
     }
     sections
@@ -2163,31 +2189,35 @@ fn dialogs(m: &Model, t: &TypeScale) -> Vec<Node> {
         "dialogs",
         "A modal window owned by this window",
         t,
-        Node::column(
+        nk::Column::new(
             "dialogs/samples",
             vec![
-                content_button("dialogs/open", "Open dialog", "dialog-open", t),
-                content_button("dialogs/alert", "Open alert", "alert-open", t),
+                content_button("dialogs/open", "Open dialog", "dialog-open", t).into(),
+                content_button("dialogs/alert", "Open alert", "alert-open", t).into(),
                 content_button(
                     "dialogs/destructive",
                     "Open destructive alert",
                     "alert-delete",
                     t,
-                ),
+                )
+                .into(),
                 content_button(
                     "dialogs/invalid",
                     "Reject destructive default",
                     "dialog-invalid",
                     t,
-                ),
-                Node::text(
+                )
+                .into(),
+                nk::Label::new(
                     "dialogs/result",
                     format!("Dialog answers: {} · {}", m.modal_answers, m.modal_result),
                     t.style(Type::Body, Weight::Regular),
-                ),
+                )
+                .into(),
             ],
         )
-        .gap(Space::S3),
+        .gap(Space::S3)
+        .into(),
     )]
 }
 
@@ -2223,7 +2253,7 @@ mod tests {
     }
 
     /// The dropdown as `toolkit/tokens/dropdown.json` gives it, its colours any.
-    fn dropdown() -> nk_view::DropdownStyle {
+    fn dropdown() -> nk::DropdownStyle {
         let file: serde_json::Value =
             serde_json::from_str(include_str!("../../tokens/dropdown.json")).unwrap();
         let grey = "#808080";
@@ -2246,11 +2276,11 @@ mod tests {
             "scss": {"space-1": "4px", "space-2": "8px", "space-3": "12px", "space-4": "16px",
                 "space-5": "20px", "space-6": "24px", "space-8": "32px", "space-10": "40px"},
             "ts": {"RADIUS": {"xs": 6, "sm": 10, "md": 16, "lg": 24, "xl": 32}}});
-        nk_view::dropdown_from(
+        nk::dropdown_from(
             &file["default"],
             &set,
-            &nk_view::Radii::from_static(&statics).unwrap(),
-            &nk_view::Spacing::from_static(&statics).unwrap(),
+            &nk::Radii::from_static(&statics).unwrap(),
+            &nk::Spacing::from_static(&statics).unwrap(),
         )
         .unwrap()
     }

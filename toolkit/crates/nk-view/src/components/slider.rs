@@ -4,7 +4,7 @@ use super::*;
 const FILL_INK: crate::Ink = crate::Ink::Primary;
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub struct SliderControl {
-    pub range: crate::Slider,
+    pub range: crate::view::Slider,
     pub surface: Surface,
 }
 #[derive(Default)]
