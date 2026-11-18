@@ -232,7 +232,12 @@ The page rule is recursive and all-or-nothing: no page/browser/header builder,
 custom group, custom/decoration item or unknown/missing Describe control may slip
 through. Pages are selected by that rule, never by a list of page names.
 
-Texts, labels, fonts, geometry and appearance come from the exported manifest,
+Pages come from the app's own list, `pages.json` (built in). It was copied from the
+TypeScript manifest on 18-11 and has its own life since: the owner froze the TS list, and
+its Power page now names the native idle keys, with suspend split into battery and
+AC rows. A `format: duration` dropdown words its seconds with `settings.power.time.*`,
+and a number key's options are compared and applied as numbers.
+Texts, labels, fonts, geometry and appearance come from that list,
 locale/Describe and portal/WindowLook. As in the old renderer, a failed write
 replaces a row's subtitle until a later change. A Failed+Changed reply batch must
 restore the canonical value **and** keep the failure. Footer predicates and item

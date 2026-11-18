@@ -1041,6 +1041,11 @@ async fn power_homes_and_effective_compositor_settings() {
     assert_eq!(schema["keys"]["power.power-button-action"]["value"], "menu");
     assert_eq!(schema["keys"]["power.lid-action-on-ac"]["value"], "suspend");
     assert_eq!(schema["keys"]["power.screen-off-seconds"]["value"], 300.0);
+    // Settings' Power page draws these as the TS rows did: a dropdown of durations.
+    let ui = &schema["keys"]["power.suspend-ac-seconds"]["ui"];
+    assert_eq!(ui["control"], "dropdown");
+    assert_eq!(ui["format"], "duration");
+    assert_eq!(ui["options"][0]["value"], "0");
     let (revision, value): (u64, OwnedValue) = call(
         &conn,
         "Apply",

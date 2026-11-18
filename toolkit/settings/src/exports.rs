@@ -1,7 +1,8 @@
 // SPDX-License-Identifier: LGPL-3.0-or-later
-//! The Settings app's export: its pages (`manifest.json`) on top of the strings and the tokens
-//! every Nidara program reads (`nk_platform::exports`, #1072). Installed under
-//! `/usr/share/nidara/settings-data/`.
+//! The Settings app's data: its OWN pages (`pages.json`, built in) on top of the strings and the
+//! tokens every Nidara program reads (`nk_platform::exports`, #1072), installed under
+//! `/usr/share/nidara/settings-data/`. The page list is this app's, not the TypeScript Settings'
+//! (owner, 18-11): the exported `manifest.json` is that frozen app's and is not read here.
 
 use crate::manifest::{self, Page};
 pub use nk_platform::exports::{INSTALLED, Tokens, VERSION, locale, read};
@@ -22,7 +23,7 @@ impl Exports {
     pub fn load(root: &Path) -> Result<Self, String> {
         let data = nk_platform::exports::Exports::load(root)?;
         Ok(Self {
-            pages: manifest::parse(&read(root, "manifest.json")?)?,
+            pages: pages()?,
             data,
         })
     }
@@ -43,6 +44,13 @@ impl DerefMut for Exports {
     fn deref_mut(&mut self) -> &mut Self::Target {
         &mut self.data
     }
+}
+
+/// The app's own page list.
+pub fn pages() -> Result<Vec<Page>, String> {
+    let json = serde_json::from_str(include_str!("../pages.json"))
+        .map_err(|e| format!("pages.json: {e}"))?;
+    manifest::parse(&json)
 }
 
 pub fn open_size(exports: &Exports) -> Result<(u32, u32), String> {
@@ -71,6 +79,17 @@ mod tests {
 
     /// Against the real export, when it has been generated (`node --experimental-strip-types
     /// scripts/export-settings-data.mjs` and `export-tokens.mjs`); CI's toolkit job does.
+    /// The app's own list names the native service's keys, never the TS Settings' ones.
+    #[test]
+    fn power_names_the_native_idle_keys() {
+        let pages = pages().unwrap();
+        let power = pages.iter().find(|p| p.id == "power").unwrap();
+        let text = format!("{:?}", power.groups);
+        assert!(text.contains("power.suspend-battery-seconds"), "{text}");
+        assert!(text.contains("power.suspend-ac-seconds"), "{text}");
+        assert!(!text.contains("\"power.suspend\""), "{text}");
+    }
+
     #[test]
     fn reads_the_generated_pages() {
         let root = std::env::var_os("NK_SETTINGS_DATA")

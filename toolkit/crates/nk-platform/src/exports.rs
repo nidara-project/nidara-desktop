@@ -4,8 +4,8 @@
 //! `scripts/export-tokens.mjs`). Installed under `/usr/share/nidara/settings-data/`.
 //!
 //! A `version` other than this build's is a start-up error, never read as if it were this one.
-//! The Settings app's pages (`manifest.json`) are its own: `nk_settings::exports` reads them on
-//! top of this.
+//! The Settings app's pages are its own (`toolkit/settings/pages.json`, built into it):
+//! `nk_settings::exports` adds them on top of this.
 
 use crate::portal::Appearance;
 use serde_json::Value as Json;

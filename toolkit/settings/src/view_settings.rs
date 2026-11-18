@@ -553,14 +553,25 @@ fn choices(
     kind: &str,
     shown: Option<&Value>,
 ) -> Result<Vec<(String, Value)>, String> {
-    let mut options = if kind == "dropdown" {
-        row_values::dropdown_options(entry, shown.and_then(Value::as_text).unwrap_or_default())?
+    let current = shown.map(Value::predicate_text).unwrap_or_default();
+    let mut options: Vec<(String, Value)> = if kind == "dropdown" {
+        row_values::dropdown_options(entry, &current)?
             .into_iter()
             .map(|(value, label)| (label, Value::Text(value)))
             .collect()
     } else {
         row_values::choice_options(key, entry, kind)?
     };
+    // A number key's options are written as text in the schema: compare and apply numbers.
+    if entry["type"] == "number" {
+        for (_, v) in &mut options {
+            if let Value::Text(t) = v
+                && let Ok(n) = t.parse::<f64>()
+            {
+                *v = Value::Number(n);
+            }
+        }
+    }
 
     if let Some(value) = shown
         && !options.iter().any(|(_, v)| v == value)

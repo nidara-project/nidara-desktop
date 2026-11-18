@@ -496,7 +496,9 @@ Display/secret fields keep their owner's editing, never this editor or its IME c
 See VIEW.md §17 before extending the field; layer hosts/multiline/numeric remain later work.
 Settings' uninstalled `nidara-settings-view` (#1103 7a) is the ordinary-page
 AppWindow entry beside the old `nk-settings`. Its recursive admission rule reads
-manifest + Config1 control metadata; never list pages by name or fabricate keys
+its OWN page list (`toolkit/settings/pages.json`, built in; owner 18-11: the exported
+TS `manifest.json` is frozen and no longer read) + Config1 control metadata; edit pages
+there, naming the native keys; never list pages by name or fabricate keys
 missing from the native service. Step 7b adds the fourteen native Notifications,
 Accessibility and Input keys: reuse their existing GSettings homes and Hyalo settings
 IPC, never write a second configuration file. Verify the merged values after an Input

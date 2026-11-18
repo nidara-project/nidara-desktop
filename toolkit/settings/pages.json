@@ -1,0 +1,568 @@
+[
+ {
+  "id": "network",
+  "kind": "browser",
+  "label": "settings.network.title",
+  "icon": "nd-preferences-system-network",
+  "builder": "network",
+  "reason": "Object browser for physical network interfaces, Wi-Fi access points, and VPN connections."
+ },
+ {
+  "id": "bluetooth",
+  "kind": "browser",
+  "label": "settings.bluetooth.title",
+  "icon": "nd-bluetooth-active",
+  "builder": "bluetooth",
+  "reason": "Object browser for dynamic Bluetooth adapter state and device discovery/pairing lifecycles."
+ },
+ {
+  "id": "appearance",
+  "kind": "preference",
+  "label": "settings.appearance.title",
+  "icon": "nd-preferences-desktop-theme",
+  "groupStart": true,
+  "groups": [
+   {
+    "i18n": "settings.appearance.group.base-style",
+    "items": [
+     "appearance.darkMode"
+    ]
+   },
+   {
+    "i18n": "settings.appearance.group.wallpaper",
+    "items": [
+     {
+      "decoration": "wallpaperPreview"
+     },
+     {
+      "decoration": "wallpaperGallery",
+      "note": "Bundled wallpapers gallery. Only rendered if getBundledWallpapers() returns items; when empty, row is hidden (visible = false). Wallpaper.connect('changed') subscription is unconditional outside this check."
+     },
+     "wallpaper.transition",
+     {
+      "custom": "wallpaperPicker",
+      "i18n": "settings.appearance.image"
+     }
+    ]
+   },
+   {
+    "i18n": "settings.appearance.group.theme",
+    "items": [
+     {
+      "custom": "accentPicker",
+      "i18n": "settings.appearance.accent",
+      "key": "appearance.accent"
+     }
+    ]
+   },
+   {
+    "i18n": "settings.appearance.group.windows",
+    "items": [
+     {
+      "key": "appearance.windowBackground",
+      "note": "Windows are NOT part of the interface's glass (owner, 2026-09-30). One choice (owner, 2026-10-18): opaque (default), tinted, translucent — each one opacity and one blur (WINDOW_BACKGROUNDS), drawn by the compositor (toolkit/PHASE1.md D6). It replaced the transparency and blur switches: a window that lets anything through is always blurred. Solid while reduce transparency is on.",
+      "sensitiveWhen": {
+       "key": "accessibility.reduceTransparency",
+       "in": [
+        "false"
+       ]
+      }
+     },
+     {
+      "key": "appearance.windowControls",
+      "note": "The side of the window controls the compositor draws over our windows' headers (#708 point 5, owner 2026-10-03): right by default (the Linux/Windows convention), left as an option. Only where the compositor draws them (Hyalo, `caps.windowControls`)."
+     }
+    ]
+   },
+   {
+    "i18n": "settings.appearance.group.night-light",
+    "items": [
+     {
+      "key": "nightlight.enabled",
+      "sensitiveWhen": {
+       "key": "nightlight.scheduleEnabled",
+       "in": [
+        "false"
+       ]
+      }
+     },
+     "nightlight.temperature",
+     "nightlight.scheduleEnabled",
+     {
+      "decoration": "nightScheduleTimes",
+      "visibleWhen": {
+       "key": "nightlight.scheduleEnabled",
+       "in": [
+        "true"
+       ]
+      }
+     }
+    ]
+   },
+   {
+    "i18n": "settings.appearance.group.resources",
+    "items": [
+     "appearance.gtkTheme",
+     "appearance.iconTheme",
+     "appearance.interfaceIconTheme",
+     "appearance.cursorTheme"
+    ]
+   },
+   {
+    "i18n": "settings.appearance.group.fonts",
+    "items": [
+     {
+      "custom": "interfaceFont",
+      "i18n": "settings.appearance.interface-font"
+     },
+     {
+      "custom": "monoFont",
+      "i18n": "settings.appearance.mono-font"
+     }
+    ]
+   }
+  ]
+ },
+ {
+  "id": "display",
+  "kind": "browser",
+  "label": "settings.display.title",
+  "icon": "nd-video-display",
+  "builder": "display",
+  "reason": "Object browser for dynamically connected physical monitors, layouts, and mode enumeration."
+ },
+ {
+  "id": "audio",
+  "kind": "browser",
+  "label": "settings.audio.title",
+  "icon": "nd-audio-speakers",
+  "builder": "audio",
+  "reason": "Object browser for dynamic PipeWire audio endpoints and per-application volume streams."
+ },
+ {
+  "id": "bar",
+  "kind": "preference",
+  "label": "settings.bar.title",
+  "icon": "nd-bar",
+  "groups": [
+   {
+    "i18n": "settings.bar.group.items",
+    "custom": "barItems",
+    "reaches": [
+     "region.timeFormat",
+     "region.dateFormat",
+     "region.showSeconds"
+    ]
+   },
+   {
+    "i18n": "settings.bar.group.apps",
+    "custom": "barApps"
+   }
+  ]
+ },
+ {
+  "id": "dock",
+  "kind": "preference",
+  "label": "settings.dock.title",
+  "icon": "nd-dock",
+  "groups": [
+   {
+    "i18n": "settings.dock.group.position",
+    "items": [
+     "dock.position"
+    ]
+   },
+   {
+    "i18n": "settings.dock.group.geometry",
+    "items": [
+     "dock.iconSize"
+    ]
+   },
+   {
+    "i18n": "settings.dock.group.effects",
+    "items": [
+     "dock.magnification",
+     {
+      "key": "dock.maxIconSize",
+      "sensitiveWhen": {
+       "key": "dock.magnification",
+       "in": [
+        "true"
+       ]
+      }
+     }
+    ]
+   },
+   {
+    "i18n": "settings.dock.group.behavior",
+    "items": [
+     "dock.indicators",
+     "dock.autoHide",
+     {
+      "key": "dock.hideDelay",
+      "sensitiveWhen": {
+       "key": "dock.autoHide",
+       "in": [
+        "true"
+       ]
+      }
+     }
+    ]
+   }
+  ]
+ },
+ {
+  "id": "desktop",
+  "kind": "preference",
+  "label": "settings.desktop.title",
+  "icon": "nd-window-floating",
+  "groups": [
+   {
+    "i18n": "settings.desktop.group.default",
+    "items": [
+     "workspaces.defaultMode"
+    ]
+   },
+   {
+    "i18n": "settings.desktop.group.workspaces",
+    "items": [
+     "workspaces.workspace1Mode",
+     "workspaces.workspace2Mode",
+     "workspaces.workspace3Mode",
+     "workspaces.workspace4Mode",
+     "workspaces.workspace5Mode"
+    ]
+   }
+  ]
+ },
+ {
+  "id": "widgets",
+  "kind": "browser",
+  "label": "settings.widgets.title",
+  "icon": "nd-preferences-system",
+  "builder": "widgets",
+  "reason": "Object browser for dynamic widget registry placement (bar vs control center) and subpage settings."
+ },
+ {
+  "id": "gaming",
+  "kind": "preference",
+  "label": "settings.gaming.title",
+  "icon": "nd-input-gaming",
+  "groups": [
+   {
+    "i18n": "settings.gaming.group.wallpaper",
+    "items": [
+     "gaming.wallpaperMode",
+     {
+      "decoration": "customWallpaperPreview",
+      "visibleWhen": {
+       "key": "gaming.wallpaperMode",
+       "in": [
+        "custom"
+       ]
+      }
+     },
+     {
+      "custom": "customWallpaperPicker",
+      "i18n": "settings.gaming.custom-wallpaper",
+      "visibleWhen": {
+       "key": "gaming.wallpaperMode",
+       "in": [
+        "custom"
+       ]
+      }
+     }
+    ]
+   },
+   {
+    "i18n": "settings.gaming.group.performance",
+    "items": [
+     "gaming.performanceProfile"
+    ]
+   },
+   {
+    "i18n": "settings.gaming.group.notifications",
+    "items": [
+     "gaming.silenceNotifications"
+    ]
+   }
+  ]
+ },
+ {
+  "id": "notifications",
+  "kind": "preference",
+  "label": "settings.notif.title",
+  "icon": "nd-preferences-system-notifications",
+  "groups": [
+   {
+    "i18n": "",
+    "note": "Headerless group, first on the page: this is the same bit the Control Center's focus tile flips. Popup behaviour follows below.",
+    "items": [
+     "notifications.doNotDisturb"
+    ]
+   },
+   {
+    "i18n": "settings.notif.group.popups",
+    "items": [
+     "notifications.popupTimeout"
+    ]
+   }
+  ]
+ },
+ {
+  "id": "accessibility",
+  "kind": "preference",
+  "label": "settings.accessibility.title",
+  "icon": "nd-preferences-desktop-accessibility",
+  "groups": [
+   {
+    "i18n": "settings.accessibility.group.vision",
+    "items": [
+     "accessibility.textScale",
+     "accessibility.cursorSize",
+     "accessibility.reduceTransparency"
+    ]
+   },
+   {
+    "i18n": "settings.accessibility.group.motion",
+    "items": [
+     "accessibility.reduceMotion"
+    ]
+   }
+  ]
+ },
+ {
+  "id": "apps",
+  "kind": "browser",
+  "label": "settings.apps.section",
+  "icon": "nd-view-grid",
+  "builder": "apps",
+  "reason": "Navigation hub for app management subpages (default apps, icon associations, autostart)."
+ },
+ {
+  "id": "input",
+  "kind": "preference",
+  "label": "settings.input.title",
+  "icon": "nd-input-keyboard",
+  "groupStart": true,
+  "groups": [
+   {
+    "i18n": "settings.input.mouse.group",
+    "items": [
+     "input.mouse.speed",
+     "input.mouse.accel",
+     "input.mouse.natural"
+    ]
+   },
+   {
+    "i18n": "settings.input.touchpad.group",
+    "items": [
+     "input.touchpad.natural",
+     "input.touchpad.tap"
+    ]
+   },
+   {
+    "i18n": "settings.input.keyboard.group",
+    "items": [
+     "input.keyboard.layout",
+     "input.keyboard.numlock",
+     "input.keyboard.repeatDelay",
+     "input.keyboard.repeatRate"
+    ]
+   }
+  ]
+ },
+ {
+  "id": "power",
+  "kind": "preference",
+  "label": "settings.power.title",
+  "icon": "nd-battery",
+  "groups": [
+   {
+    "i18n": "settings.power.group.profile",
+    "note": "The profile group is an entire custom group: selection_mode = SINGLE, rows use NidaraRow directly and are NOT indexed in search, and updates follow onPageShown with a syncing flag to avoid spurious daemon writes.",
+    "custom": "performanceProfiles"
+   },
+   {
+    "i18n": "settings.power.group.idle",
+    "footer": "settings.power.lock-note",
+    "items": [
+     "power.screen-off-seconds",
+     "power.lock-seconds",
+     "power.suspend-battery-seconds",
+     "power.suspend-ac-seconds"
+    ]
+   }
+  ]
+ },
+ {
+  "id": "region",
+  "kind": "preference",
+  "label": "settings.region.title",
+  "icon": "nd-preferences-system-time",
+  "groups": [
+   {
+    "i18n": "settings.region.tz.group",
+    "items": [
+     {
+      "custom": "timezoneActive",
+      "i18n": "settings.region.tz.active"
+     },
+     {
+      "custom": "timezoneChange",
+      "i18n": "settings.region.tz.change"
+     }
+    ]
+   },
+   {
+    "i18n": "settings.region.locale.group",
+    "note": "This group holds TWO DIFFERENT SCOPES: Language writes /etc/locale.conf (system-wide), Regional format writes ~/.config/environment.d/nidara-locale.conf (user only). Greeter has its own picker; /etc/locale.conf is only its fallback.",
+    "items": [
+     {
+      "custom": "systemLanguage",
+      "i18n": "settings.region.locale.lang"
+     },
+     {
+      "custom": "regionalFormat",
+      "i18n": "settings.region.locale.regional"
+     }
+    ]
+   }
+  ]
+ },
+ {
+  "id": "users",
+  "kind": "browser",
+  "label": "settings.users.title",
+  "icon": "nd-avatar-default",
+  "builder": "users",
+  "reason": "Object browser for system user accounts via AccountsService D-Bus and administration actions."
+ },
+ {
+  "id": "ai",
+  "kind": "preference",
+  "label": "settings.ai.title",
+  "icon": "nd-ai",
+  "groups": [
+   {
+    "i18n": "settings.ai.brain.group",
+    "footer": "settings.ai.brain.group.scope",
+    "note": "Assistant — the built-in conversational agent's brain (BYOK). Order of groups follows risk escalation (desktop, files, other apps). Footers name the audience/scope.",
+    "items": [
+     "ai.brainProvider",
+     {
+      "custom": "brainModel",
+      "i18n": "settings.ai.brain.model",
+      "key": "ai.brainModel",
+      "note": "Model row: free text + an optional catalog fetched from the provider. The entry stays the source of truth; dropdown fills it. Index 0 is a placeholder that rests on choose-model."
+     },
+     {
+      "custom": "brainEndpoint",
+      "i18n": "settings.ai.brain.endpoint",
+      "note": "Custom endpoint entry for providers with editableEndpoint. Visibility is controlled dynamically in builder by provider capabilities."
+     },
+     {
+      "custom": "apiKey",
+      "i18n": "settings.ai.brain.key",
+      "note": "API key stored in DE keyring (libsecret) keyed by provider. Writes are async so password dialog doesn't freeze the GTK main loop. Status reported in UI."
+     }
+    ]
+   },
+   {
+    "i18n": "settings.ai.group.signal",
+    "footer": "settings.ai.group.signal.scope",
+    "note": "While it works — the signal, not a permission. Reaches outside the shell (Hyprland decoration:glow).",
+    "items": [
+     "ai.assistantGlow"
+    ]
+   },
+   {
+    "i18n": "settings.ai.group.access",
+    "footer": "settings.ai.group.access.scope",
+    "items": [
+     "ai.allowConfigWrite",
+     "ai.allowScreenshot",
+     "ai.allowWindowClose"
+    ]
+   },
+   {
+    "i18n": "settings.ai.group.files",
+    "footer": "settings.ai.group.files.scope",
+    "note": "Daemon-local (bin/nidara-agent), not an IPC action: external MCP clients bring their own file tools.",
+    "items": [
+     "ai.allowFileRead",
+     "ai.allowFileWrite"
+    ]
+   },
+   {
+    "i18n": "settings.ai.group.other-apps",
+    "footer": "settings.ai.group.other-apps.scope",
+    "note": "Other apps — the computer-use layer (reaches OUTSIDE the shell).",
+    "items": [
+     "ai.allowComputerUse",
+     "ai.allowComputerControl"
+    ]
+   },
+   {
+    "i18n": "settings.ai.group.mcp",
+    "footer": "settings.ai.group.mcp.scope",
+    "items": [
+     "ai.allowMcp",
+     {
+      "custom": "mcpConnectPath",
+      "i18n": "settings.ai.connect-agent"
+     }
+    ]
+   },
+   {
+    "i18n": "settings.ai.group.surface",
+    "items": [
+     {
+      "custom": "exposedSettings",
+      "i18n": "settings.ai.exposed-settings"
+     },
+     {
+      "custom": "stateRead",
+      "i18n": "settings.ai.state-read",
+      "note": "The value is 'always', and it has to be said. Read-only fact about the agent surface."
+     }
+    ]
+   }
+  ]
+ },
+ {
+  "id": "about",
+  "kind": "info",
+  "label": "settings.about.title",
+  "icon": "nd-dialog-information",
+  "builder": "about",
+  "reason": "System diagnostics and hardware information display with live updates trigger."
+ },
+ {
+  "id": "apps/default",
+  "kind": "browser",
+  "parent": "apps",
+  "label": "settings.defaultapps.title",
+  "subtitle": "settings.defaultapps.subtitle",
+  "builder": "defaultApps",
+  "reason": "Object browser for the installed applications that can claim each default handler."
+ },
+ {
+  "id": "apps/icons",
+  "kind": "browser",
+  "parent": "apps",
+  "label": "settings.apps.title",
+  "subtitle": "settings.apps.subtitle",
+  "builder": "appIcons",
+  "reason": "Object browser for every installed application, each drilling into its own icon override."
+ },
+ {
+  "id": "apps/autostart",
+  "kind": "browser",
+  "parent": "apps",
+  "label": "settings.autostart.title",
+  "subtitle": "settings.autostart.subtitle",
+  "builder": "autostart",
+  "reason": "Object browser for the user's autostart entries, which are files on disk rather than settings."
+ }
+]

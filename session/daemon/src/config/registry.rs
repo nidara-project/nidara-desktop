@@ -1306,6 +1306,12 @@ pub fn idle_field(name: &str) -> Option<&'static str> {
         _ => None,
     }
 }
+/// An idle time as a choice of durations, the TS rows' options; `0` reads as "Never". The
+/// client words each option from `settings.power.time.*` (`format: duration`).
+fn idle_ui(i18n: &str, seconds: &[u32]) -> Json {
+    json!({"i18n": i18n, "control": "dropdown", "format": "duration",
+        "options": seconds.iter().map(|s| json!({"value": s.to_string()})).collect::<Vec<_>>()})
+}
 fn power_keys() -> Vec<Key> {
     vec![
         Key {
@@ -1334,7 +1340,7 @@ fn power_keys() -> Vec<Key> {
                     .fetch_add(1, std::sync::atomic::Ordering::SeqCst);
                 result
             }),
-            ui: None,
+            ui: Some(|_| idle_ui("settings.power.screen-off", &[0, 120, 300, 600, 1200, 1800])),
             watch: &[],
             file: false,
         },
@@ -1364,7 +1370,7 @@ fn power_keys() -> Vec<Key> {
                     .fetch_add(1, std::sync::atomic::Ordering::SeqCst);
                 result
             }),
-            ui: None,
+            ui: Some(|_| idle_ui("settings.power.lock", &[0, 300, 600, 1800, 3600, 7200])),
             watch: &[],
             file: false,
         },
@@ -1396,7 +1402,12 @@ fn power_keys() -> Vec<Key> {
                     .fetch_add(1, std::sync::atomic::Ordering::SeqCst);
                 result
             }),
-            ui: None,
+            ui: Some(|_| {
+                idle_ui(
+                    "settings.power.suspend-battery",
+                    &[0, 900, 1800, 3600, 7200, 10800],
+                )
+            }),
             watch: &[],
             file: false,
         },
@@ -1426,7 +1437,12 @@ fn power_keys() -> Vec<Key> {
                     .fetch_add(1, std::sync::atomic::Ordering::SeqCst);
                 result
             }),
-            ui: None,
+            ui: Some(|_| {
+                idle_ui(
+                    "settings.power.suspend-ac",
+                    &[0, 900, 1800, 3600, 7200, 10800],
+                )
+            }),
             watch: &[],
             file: false,
         },
