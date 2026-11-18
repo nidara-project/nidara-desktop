@@ -135,7 +135,7 @@ impl Gallery {
             }
         }
         match action {
-            "dialog-open" | "alert-open" | "alert-delete" | "dialog-invalid" => {
+            "dialog-open" | "alert-open" | "alert-delete" | "dialog-invalid" | "font-open" => {
                 self.dialog_request = Some((a.key, action.to_owned()));
                 return;
             }

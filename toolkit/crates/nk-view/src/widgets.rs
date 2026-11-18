@@ -15,7 +15,7 @@ use crate::view::{
     Align, Cell, Corner, Ink, Justify, Key, Kind, Node, Padding, Role, Shown, SliderEnd as EndSpec,
     Wash,
 };
-use crate::{Part, Value};
+use crate::{FontChoice, Part, Value};
 use nk_text::TextStyle;
 
 /// What every piece of the kit can be asked, whatever it is.
@@ -293,6 +293,25 @@ impl Button {
         /// Gallery fixture: a stable appearance.
         button_appearance(appearance: ButtonAppearance);
     }
+}
+widget!(
+    /// A pill displaying the current family and size in its own font.
+    FontButton
+);
+impl FontButton {
+    pub fn new(key: impl Into<Key>, font: &FontChoice, action: impl Into<String>) -> Self {
+        Self(
+            Button::new(
+                key,
+                font.caption(),
+                action,
+                font.text_style(TextStyle::default()),
+            )
+            .corner(Corner::Pill)
+            .into(),
+        )
+    }
+    control_setters!();
 }
 widget!(
     /// An on/off switch (`Gtk.Switch`): only the switch responds, never its row.
@@ -776,6 +795,11 @@ impl<'a, S: ListSource + ?Sized> ListView<'a, S> {
     }
     pub fn enabled(mut self, on: bool) -> Self {
         self.enabled = on;
+        self
+    }
+    /// The currently selected row, or none when a filter hides it.
+    pub fn selected(mut self, index: Option<usize>) -> Self {
+        self.list.selected = index;
         self
     }
     /// The part of the list in view, `(offset, height)`, from `Host::scroll_window` with

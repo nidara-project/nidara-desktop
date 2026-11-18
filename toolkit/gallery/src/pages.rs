@@ -111,6 +111,7 @@ pub struct Model {
     pub submitted: u32,
     pub selected_row: usize,
     pub list_opened: u32,
+    pub font: nk::FontChoice,
     pub modal_answers: u32,
     pub modal_result: String,
 }
@@ -139,6 +140,7 @@ impl Default for Model {
             submitted: 0,
             selected_row: 0,
             list_opened: 0,
+            font: nk::FontChoice::new("Inter Variable", nk::FontSize::Points(11.)),
             modal_answers: 0,
             modal_result: "Nothing answered".into(),
         }
@@ -2213,6 +2215,9 @@ fn dialogs(m: &Model, t: &TypeScale) -> Vec<Node> {
             "dialogs/samples",
             vec![
                 content_button("dialogs/open", "Open dialog", "dialog-open", t).into(),
+                setting("dialogs/font-row", "Font", None, t)
+                    .trailing(nk::FontButton::new("dialogs/font", &m.font, "font-open"))
+                    .into(),
                 content_button("dialogs/alert", "Open alert", "alert-open", t).into(),
                 content_button(
                     "dialogs/destructive",

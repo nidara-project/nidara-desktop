@@ -71,7 +71,83 @@ impl ParleyBackend {
         })
     }
 }
+fn face_name(face: &ttf_parser::Face<'_>, id: u16) -> Option<String> {
+    let mut names = face
+        .names()
+        .into_iter()
+        .filter(|n| n.name_id == id && n.is_unicode());
+    names
+        .clone()
+        .find(|n| n.language() == ttf_parser::Language::English_UnitedStates)
+        .or_else(|| names.next())
+        .and_then(|n| n.to_string())
+        .filter(|name| !name.trim().is_empty())
+}
+
 impl TextBackend for ParleyBackend {
+    fn font_families(&mut self, monospace_only: bool) -> Vec<crate::FontFamily> {
+        use crate::{FontFace, FontFamily, Slant};
+        use ttf_parser::name_id::{SUBFAMILY, TYPOGRAPHIC_SUBFAMILY};
+
+        let names: Vec<_> = self
+            .font_context
+            .collection
+            .family_names()
+            .map(str::to_owned)
+            .collect();
+        let mut families = Vec::new();
+        for name in names {
+            let Some(family) = self.font_context.collection.family_by_name(&name) else {
+                continue;
+            };
+            let default = family.default_font_index();
+            // Keep catalogue reads local to this family. Opening the dialog should not
+            // populate the shaper's retained cache with every installed font file.
+            let mut sources = parley::fontique::SourceCache::default();
+            let mut faces = Vec::new();
+            for font in family.default_font().into_iter().chain(
+                family
+                    .fonts()
+                    .iter()
+                    .enumerate()
+                    .filter_map(|(i, font)| (i != default).then_some(font)),
+            ) {
+                let Some(bytes) = font.load(Some(&mut sources)) else {
+                    continue;
+                };
+                let Ok(face) = ttf_parser::Face::parse(bytes.data(), font.index()) else {
+                    continue;
+                };
+                if monospace_only && !face.is_monospaced() {
+                    continue;
+                }
+                let entry = FontFace {
+                    name: face_name(&face, TYPOGRAPHIC_SUBFAMILY)
+                        .or_else(|| face_name(&face, SUBFAMILY))
+                        .unwrap_or_else(|| {
+                            format!("{} {} {}", font.width(), font.weight(), font.style())
+                        }),
+                    weight: font.weight().value(),
+                    width: font.width().percentage(),
+                    slant: match font.style() {
+                        parley::FontStyle::Normal => Slant::Normal,
+                        parley::FontStyle::Italic => Slant::Italic,
+                        parley::FontStyle::Oblique(_) => Slant::Oblique,
+                    },
+                };
+                if !faces.iter().any(|f: &FontFace| {
+                    f.weight == entry.weight && f.width == entry.width && f.slant == entry.slant
+                }) {
+                    faces.push(entry);
+                }
+            }
+            if !faces.is_empty() {
+                families.push(FontFamily { name, faces });
+            }
+        }
+        families.sort_by_cached_key(|family| family.name.to_lowercase());
+        families
+    }
     fn fork(&self) -> Result<Box<dyn TextBackend>> {
         Ok(Box::new(Self::create(
             self.fonts.clone(),

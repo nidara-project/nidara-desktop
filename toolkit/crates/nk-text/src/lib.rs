@@ -178,7 +178,37 @@ pub struct ClusterBox {
     pub caret: Rect,
 }
 
+/// A named face and its matching attributes in the text backend.
+#[derive(Clone, Debug, PartialEq)]
+pub struct FontFace {
+    pub name: String,
+    pub weight: f32,
+    pub width: f32,
+    pub slant: Slant,
+}
+impl Default for FontFace {
+    fn default() -> Self {
+        Self {
+            name: "Regular".into(),
+            weight: 400.,
+            width: 100.,
+            slant: Slant::Normal,
+        }
+    }
+}
+
+#[derive(Clone, Debug)]
+pub struct FontFamily {
+    pub name: String,
+    /// The first face is the backend's default for the family.
+    pub faces: Vec<FontFace>,
+}
+
 pub trait TextBackend {
+    /// Named families from the same collection used for shaping.
+    fn font_families(&mut self, _monospace_only: bool) -> Vec<FontFamily> {
+        Vec::new()
+    }
     /// An independent retained editor using the same font source and engine policy.
     fn fork(&self) -> Result<Box<dyn TextBackend>> {
         Err("text backend cannot create a retained editor".into())
