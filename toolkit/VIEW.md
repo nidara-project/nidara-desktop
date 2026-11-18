@@ -914,7 +914,10 @@ option with an arrow; a setting row ends with it (§13.6).
   `dropdown.trigger`'s tone inside its border, lighter under the pointer and darker while
   pressed; its focus ring is the shared external outline (§13.4). Its label is the chosen option after the
   `labelMargin`, the arrow (`nd-pan-down`) at the end inside the padding. It is **as wide as its
-  widest option** (`Node::room`), so a choice never moves what lies beside it. Disabled, its fill
+  widest option** (`Node::room`) when that width fits. Under constraint its single-line
+  label gives up reserved room and ellipsizes, keeping the arrow in the row; the
+  same available width is kept for every selection. Full labels remain in the
+  options and semantic tree. Disabled, its fill
   is at `disabledOpacity` and what it holds in `Ink::Disabled`.
 - **Its list is the window's** (`AppWindow`). Activated (a click, Enter, Space, Up or Down, or a
   reader), the trigger does not report: the window opens its list in a popup

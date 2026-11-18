@@ -54,7 +54,10 @@ The separate private nested-Hyalo run reads actual effective configuration after
 pointer, layout and repeat writes, checks GSettings and notifications homes, and
 waits for the existing cursor follower to update Hyalo. The unchanged AppWindow
 entry is opened against this real 57-key service, with four eligible pages and no
-simulated Config1 keys. Its appearance portal is the existing private fixture.
+simulated Config1 keys. Its appearance portal is the existing private fixture. Both scales, 1 and 1.25,
+are captured; the keyboard selector is revealed with PageDown and checked for
+nonempty geometry contained within the window. A focus request alone was not
+sufficient evidence of visibility in this run.
 The driver starts during compositor initialization and must wait for the first
 successful IPC reply before checking capabilities.
 
@@ -62,9 +65,9 @@ A nested winit backend does not prove libinput behavior on physical hardware,
 notification delivery in the installed shell, real portal propagation, or Orca.
 Those acceptance checks remain pending; the installed session is untouched.
 
-The real XKB catalogue also exposes an existing 7a editor layout limit:
-`Dropdown::body` reserves the widest option through `.room(options)`, and the
-ordinary SettingRow does not bound that trailing control. Long XKB descriptions
-can widen the Devices page beyond its viewport. This service change does not
-alter toolkit layout; native Input UI acceptance remains blocked on bounding the
-trigger while preserving complete option labels and accessible names.
+The real XKB catalogue exposed a 7a layout limit: a dropdown reserved the widest
+option without allowing it to shrink. Its trigger now uses the existing
+single-line fitting mechanism: reserved room stays stable when it fits and gives
+way within a constrained row. Only the closed painted label is ellipsized; full
+options and accessible names are retained. A two-scale, two-width regression
+checks containment, stable selection geometry and complete semantic options.

@@ -56,6 +56,7 @@ impl Component for Dropdown {
                     cx.look.types.style(t.font.0, t.font.1),
                 )
                 .room(self.options.clone())
+                .lines(1)
                 .grow(),
                 Node::spacer(cx.key("gap")).width(t.arrow_gap),
                 Node::icon(cx.key("arrow"), t.arrow.clone(), t.arrow_size).ink(crate::Ink::Dim),

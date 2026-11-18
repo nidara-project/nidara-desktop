@@ -503,7 +503,9 @@ IPC, never write a second configuration file. Verify the merged values after an 
 write, including both pointer and touchpad fields for unified controls. The existing
 compositor monitor reads idle/input together and guards stale reads with one serial.
 Read session/daemon/src/config/README.md for homes, followers, keyboard catalogue and
-physical-session limits; toolkit/settings/README.md distinguishes 7a fixture evidence
+physical-session limits. A dropdown reserves its widest option only within its available
+row width: keep its single-line shrink/ellipsis and complete semantic options when
+changing its body. toolkit/settings/README.md distinguishes 7a fixture evidence
 from 7b native-service checks. Reuse Session/Client,
 the shared Editor and row_values conversions. Failed+Changed in one reply batch
 keeps the failure after restoring the canonical value. Cancel unsent slider intent
