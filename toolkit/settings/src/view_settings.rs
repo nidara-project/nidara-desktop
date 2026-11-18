@@ -21,7 +21,7 @@ pub fn ordinary(page: &Page, session: &Session) -> bool {
             Item::Key { key, .. } => s.store().and_then(|s| s.key(key)).is_some_and(|k| {
                 matches!(
                     k.entry["ui"]["control"].as_str(),
-                    Some("toggle" | "segmented" | "preset" | "slider" | "dropdown")
+                    Some("toggle" | "segmented" | "preset" | "slider" | "dropdown" | "listbox")
                 )
             }),
             Item::Disclosure { items, .. } => items.iter().all(|i| supported(i, s)),
@@ -222,7 +222,7 @@ impl Model {
                     .and_then(Value::as_bool)
                     .unwrap_or(false),
             ),
-            "segmented" | "preset" | "dropdown" => {
+            "segmented" | "preset" | "dropdown" | "listbox" => {
                 let mut choices = choices(&key, entry, kind, editor.session().shown(&key))?;
                 let index = match a.value {
                     Some(nk::Value::Index(i)) => i,
@@ -450,6 +450,45 @@ impl Model {
                     let name = format!("key/{key}");
                     let action = format!("set:{key}");
                     let kind = ui["control"].as_str().unwrap_or_default();
+                    if kind == "listbox" {
+                        let choices = choices(key, &entry.entry, kind, shown)?;
+                        let selected = choices.iter().position(|(_, v)| Some(v) == shown);
+                        let options = choices
+                            .into_iter()
+                            .enumerate()
+                            .map(|(i, (label, _))| {
+                                let option = nk::ListBoxOption::new(label);
+                                match ui["options"][i]["icon"].as_str() {
+                                    Some(icon) => option.icon(icon),
+                                    None => option,
+                                }
+                            })
+                            .collect();
+                        nodes.push(
+                            nk::ListBox::new(
+                                name,
+                                title,
+                                action,
+                                options,
+                                types.style(Type::Body, Weight::Regular),
+                            )
+                            .selected(selected)
+                            .enabled(!disabled)
+                            .into(),
+                        );
+                        if let Some(subtitle) = subtitle {
+                            nodes.push(
+                                nk::Label::new(
+                                    format!("{id}/subtitle"),
+                                    subtitle,
+                                    types.style(Type::Small, Weight::Regular),
+                                )
+                                .ink(Ink::Dim)
+                                .into(),
+                            );
+                        }
+                        continue;
+                    }
                     // What a reader says after the control's name: its row's second line.
                     let said = subtitle.unwrap_or_default();
                     let control: Node = match kind {

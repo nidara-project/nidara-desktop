@@ -35,6 +35,7 @@ fn glass() -> serde_json::Value {
 pub(crate) fn tokens() -> Tokens {
     let set = json!({"tokens": {"--nidara-text": "#ffffff", "--nidara-text-secondary": "rgba(255, 255, 255, 0.8)",
         "--nidara-text-dim": "rgba(255, 255, 255, 0.6)", "--nidara-accent": "#0088FF",
+        "--nidara-state-selected": "rgba(0, 136, 255, 0.22)",
         "--nidara-surface-raised": "rgba(255, 255, 255, 0.24)", "--nidara-on": "#ffffff",
         "--nidara-surface": "rgba(255, 255, 255, 0.08)", "--nidara-border": "rgba(255, 255, 255, 0.2)",
         "--nidara-thumb": "#ffffff", "--nidara-text-disabled": "rgba(255, 255, 255, 0.3)",
@@ -3635,6 +3636,7 @@ fn setting(
         subtitle: subtitle.map(Into::into),
         subtitle_style: style(12.),
         trailing,
+        leading: None,
         action: action.map(Into::into),
         disabled: false,
     }
@@ -5950,4 +5952,55 @@ fn modal_focus_lease_requires_the_same_shown_enabled_component_instance() {
         !state.restore_focus(&lease),
         "a recycled key is a new component"
     );
+}
+
+#[test]
+fn list_box_moves_focus_before_activating_and_publishes_one_selected_row() {
+    let list = |selected| {
+        crate::ListBox::new(
+            "profiles",
+            "Power profile",
+            "choose",
+            ["Performance", "Balanced", "Power Saver"]
+                .into_iter()
+                .map(crate::ListBoxOption::new)
+                .collect(),
+            style(14.),
+        )
+        .selected(Some(selected))
+        .into()
+    };
+    let selected_names = |view: &mut ViewState| {
+        use nk_a11y::Role;
+        let tree = view.semantics(nk_a11y::Node::new(1, Role::Window, "Settings"), 2);
+        let list = tree
+            .nodes
+            .values()
+            .find(|n| n.role == Role::ListBox)
+            .unwrap();
+        assert_eq!(list.children.len(), 3);
+        assert!(
+            list.children
+                .iter()
+                .all(|id| tree.nodes[id].role == Role::Option)
+        );
+        tree.selected_children(list.id)
+            .iter()
+            .map(|id| tree.nodes[id].name.clone())
+            .collect::<Vec<_>>()
+    };
+    let mut view = laid(&list(1), (400., 200.), 1.);
+    view.key(KeyInput::Tab);
+    assert_eq!(view.focus(), Some(&Key::from("profiles/1")));
+    assert!(view.key(KeyInput::Down).is_none());
+    assert_eq!(view.focus(), Some(&Key::from("profiles/2")));
+    assert_eq!(selected_names(&mut view), ["Balanced"]);
+    let action = view.key(KeyInput::Activate).unwrap();
+    assert_eq!(action.action, "choose");
+    let Some(Value::Index(index)) = action.value else {
+        panic!("expected a row index")
+    };
+    assert_eq!(index, 2);
+    let mut rebuilt = laid(&list(index), (400., 200.), 1.);
+    assert_eq!(selected_names(&mut rebuilt), ["Power Saver"]);
 }

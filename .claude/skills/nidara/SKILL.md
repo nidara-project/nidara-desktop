@@ -420,6 +420,9 @@ A slider row is a setting row ending in `nk::SliderEnd`
 (§13.7): measures from `range.slider`, its value in room for its widest text (`nk::Label::room`).
 A window's sidebar is built of `nk::SidebarEntry` (§13.8): the selected one in the ACCENT
 (D1, a control's `accent` flag), never the neutral grey wash.
+`nk::ListBox` is the short single-selection list inside a `Group`: Up/Down move focus,
+Enter/Space choose a row and report its index, and the caller supplies the selected index.
+Settings' Power profiles use this control and the exported selected-row tint.
 `nk::DropDown` (§13.9) is only the TRIGGER:
 `AppWindow` opens its list as a popup and reports the dropdown's action only on a choice (read
 the index with `AppWindow::value`). Outside an `AppWindow` nothing opens it — a surface hosting a

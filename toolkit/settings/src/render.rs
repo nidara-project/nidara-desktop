@@ -415,7 +415,7 @@ impl Rendered {
                         let (row, switch) = tree.row(group, &title, Kind::Switch { checked })?;
                         (row, Control::Toggle(switch))
                     }
-                    "segmented" | "preset" => {
+                    "segmented" | "preset" | "listbox" => {
                         let options =
                             crate::row_values::choice_options(key, &entry.entry, control)?;
                         let (row, choices) = choice_row(

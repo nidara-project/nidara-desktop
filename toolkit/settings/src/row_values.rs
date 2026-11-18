@@ -12,7 +12,7 @@ pub struct SliderSpec {
     pub commit_on_release: bool,
     pub debounce: Duration,
 }
-/// A radio group's options: the schema's `ui.options` (segmented) or `ui.presets` (preset).
+/// A choice group's options: the schema's `ui.options` or `ui.presets`.
 pub fn choice_options(
     key: &str,
     entry: &serde_json::Value,
@@ -33,7 +33,7 @@ pub fn choice_options(
     }
     ui["options"]
         .as_array()
-        .ok_or_else(|| format!("{key}: a segmented row without options"))?
+        .ok_or_else(|| format!("{key}: a choice group without options"))?
         .iter()
         .map(|o| {
             let value = o["value"]

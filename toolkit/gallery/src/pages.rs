@@ -92,6 +92,7 @@ pub struct Model {
     /// The activatable rows' samples: a page opened, a setting flipped by its whole row.
     pub opened: u32,
     pub row_on: bool,
+    pub profile: usize,
     /// The radio group's choice.
     pub choice: usize,
     /// The live dropdown's choice.
@@ -122,6 +123,7 @@ impl Default for Model {
             bright: 70.,
             opened: 0,
             row_on: false,
+            profile: 1,
             choice: 1,
             speed: 1,
             size: 1,
@@ -679,6 +681,24 @@ fn rows(m: &Model, t: &TypeScale) -> Vec<Node> {
             states.into(),
         ),
         section("rw-live", "Try it", t, live.into()),
+        section(
+            "rw-profiles",
+            "Power profile",
+            t,
+            nk::ListBox::new(
+                "rw/profiles",
+                "Power profile",
+                "profile-select",
+                vec![
+                    nk::ListBoxOption::new("Performance").icon("nd-power-profile-performance"),
+                    nk::ListBoxOption::new("Balanced").icon("nd-power-profile-balanced"),
+                    nk::ListBoxOption::new("Power Saver").icon("nd-power-profile-power-saver"),
+                ],
+                t.style(Type::Body, Weight::Regular),
+            )
+            .selected(Some(m.profile))
+            .into(),
+        ),
     ]
 }
 
