@@ -605,6 +605,7 @@ if os.path.exists(os.path.join(os.environ['HOME'], 'awww-refuse')):
         "'TestCursor'",
     );
     env.gsettings_set("org.gnome.desktop.interface", "cursor-size", "32");
+    env.gsettings_set("org.gnome.desktop.interface", "enable-animations", "false");
     env.gsettings_set("org.nidara.night-light", "enabled", "true");
     env.gsettings_set("org.nidara.night-light", "temperature", "4300");
     let image = env.dir.join("an image;literal.png");
@@ -628,6 +629,13 @@ if os.path.exists(os.path.join(os.environ['HOME'], 'awww-refuse')):
     wait_for_config(&conn).await;
     let cursor = json!({"request":"settings","patch":{"cursor":{"theme":"TestCursor","size":32}}});
     peer.expect(cursor.clone()).await;
+    let reduce = json!({"request":"settings","patch":{"animations":{"enabled":false}}});
+    let restore = json!({"request":"settings","patch":{"animations":{"enabled":null}}});
+    peer.expect(reduce.clone()).await;
+    // Another writer changes the existing GSettings home; restoring removes the key.
+    env.gsettings_set("org.gnome.desktop.interface", "enable-animations", "true");
+    peer.expect(restore.clone()).await;
+
     peer.expect(json!({"request":"night_light","temperature":4300}))
         .await;
     eventually("initial GTK values and preserved keys", || {
@@ -793,6 +801,13 @@ if os.path.exists(os.path.join(os.environ['HOME'], 'awww-refuse')):
     peer.refuse
         .store(false, std::sync::atomic::Ordering::Relaxed);
     peer.expect(expected).await;
+    // Discard earlier motion requests so each assertion proves a fresh reload/reconnect.
+    let clear_motion = || {
+        let mut pending = peer.pending.lock().unwrap();
+        pending.extend(peer.requests.try_iter());
+        pending.retain(|v| v["patch"].get("animations").is_none());
+    };
+    clear_motion();
     // Hotplug restates output-dependent effects; reconnect also restores the cursor.
     let mut stream = peer.events.recv_timeout(Duration::from_secs(2)).unwrap();
     stream
@@ -800,11 +815,21 @@ if os.path.exists(os.path.join(os.environ['HOME'], 'awww-refuse')):
         .unwrap();
     peer.expect(json!({"request":"night_light","temperature":null}))
         .await;
+    peer.expect(restore.clone()).await;
+    env.gsettings_set("org.gnome.desktop.interface", "enable-animations", "false");
+    peer.expect(reduce.clone()).await;
+    clear_motion();
+    stream
+        .write_all(b"{\"event\":\"outputs_changed\",\"outputs\":[]}\n")
+        .unwrap();
+    peer.expect(reduce.clone()).await;
+    clear_motion();
     drop(stream);
     peer.expect(json!({"request":"settings","patch":{"cursor":{"theme":"TestCursor","size":48}}}))
         .await;
     peer.expect(json!({"request":"night_light","temperature":null}))
         .await;
+    peer.expect(reduce).await;
     // A no-op must not rewrite the INI or reapply wallpaper after it has settled.
     tokio::time::sleep(Duration::from_millis(100)).await;
     let file = env.dir.join("config/gtk-4.0/settings.ini");

@@ -146,6 +146,7 @@ fn keyboards() -> &'static Vec<(String, String)> {
 }
 fn key(
     name: &'static str,
+    desc: &'static str,
     kind: Kind,
     get: fn(&Store) -> Value,
     set: Write,
@@ -153,7 +154,7 @@ fn key(
 ) -> Key {
     Key {
         name,
-        desc: "Ordinary desktop preference; written to its existing home.",
+        desc,
         kind,
         writable: true,
         needs: &[],
@@ -182,6 +183,7 @@ fn named(i18n: &str, values: &[&str]) -> Json {
 pub(super) fn keys() -> Vec<Key> {
     let mut dnd = key(
         "notifications.doNotDisturb",
+        "Do Not Disturb: suppress notification popups (critical ones still show). Persists across sessions until turned off.",
         Kind::Boolean,
         |s| Value::Bool(s.s(NOTIFICATIONS).boolean("do-not-disturb")),
         |s, v| put_bool(s, NOTIFICATIONS, "do-not-disturb", v),
@@ -191,6 +193,7 @@ pub(super) fn keys() -> Vec<Key> {
     dnd.watch = &[(NOTIFICATIONS, "do-not-disturb")];
     let mut timeout = key(
         "notifications.popupTimeout",
+        "Seconds a notification popup stays on screen.",
         number(2., 15.),
         |s| Value::Number(s.s(NOTIFICATIONS).int("popup-timeout") as f64),
         |s, v| put_int(s, NOTIFICATIONS, "popup-timeout", v),
@@ -200,6 +203,7 @@ pub(super) fn keys() -> Vec<Key> {
     timeout.watch = &[(NOTIFICATIONS, "popup-timeout")];
     let mut scale = key(
         "accessibility.textScale",
+        "Text scale factor (0.75 to 1.50).",
         number(0.75, 1.5),
         |s| Value::Number(s.s(INTERFACE).double("text-scaling-factor")),
         |s, v| {
@@ -219,6 +223,7 @@ pub(super) fn keys() -> Vec<Key> {
     scale.watch = &[(INTERFACE, "text-scaling-factor")];
     let mut cursor = key(
         "accessibility.cursorSize",
+        "Cursor size in pixels (16 to 96).",
         number(16., 96.),
         |s| Value::Number(s.s(INTERFACE).int("cursor-size") as f64),
         |s, v| put_int(s, INTERFACE, "cursor-size", v),
@@ -233,6 +238,7 @@ pub(super) fn keys() -> Vec<Key> {
     cursor.watch = &[(INTERFACE, "cursor-size")];
     let mut motion = key(
         "accessibility.reduceMotion",
+        "Reduce motion: overlays appear without their pop, dock icons snap instead of springing, and the compositor's window/workspace animations are switched off.",
         Kind::Boolean,
         |s| Value::Bool(!s.s(INTERFACE).boolean("enable-animations")),
         |s, v| {
@@ -249,6 +255,7 @@ pub(super) fn keys() -> Vec<Key> {
     motion.watch = &[(INTERFACE, "enable-animations")];
     let mut accel = key(
         "input.mouse.accel",
+        "Pointer acceleration profile: 'adaptive' or 'flat'.",
         Kind::Enum,
         |s| input_value(s, "input.mouse.accel"),
         |s, v| put_input(s, "input.mouse.accel", v),
@@ -257,6 +264,7 @@ pub(super) fn keys() -> Vec<Key> {
     accel.values = Some(|_| owned(&["adaptive", "flat"]));
     let mut layout = key(
         "input.keyboard.layout",
+        "Keyboard layout: an xkb layout code, optionally '-' and a variant — 'us', 'us-colemak', 'de-nodeadkeys'. The whole xkb catalogue is offered (/usr/share/X11/xkb/rules/base.lst). This is the GRAPHICAL layout only: it never touches the text console, which the installer sets.",
         Kind::Enum,
         |s| input_value(s, "input.keyboard.layout"),
         |s, v| put_input(s, "input.keyboard.layout", v),
@@ -273,6 +281,7 @@ pub(super) fn keys() -> Vec<Key> {
         layout,
         key(
             "input.mouse.speed",
+            "Pointer sensitivity (-1.0 to 1.0).",
             number(-1., 1.),
             |s| input_value(s, "input.mouse.speed"),
             |s, v| put_input(s, "input.mouse.speed", v),
@@ -285,6 +294,7 @@ pub(super) fn keys() -> Vec<Key> {
         ),
         key(
             "input.mouse.natural",
+            "Invert mouse scroll direction (natural scrolling).",
             Kind::Boolean,
             |s| input_value(s, "input.mouse.natural"),
             |s, v| put_input(s, "input.mouse.natural", v),
@@ -292,6 +302,7 @@ pub(super) fn keys() -> Vec<Key> {
         ),
         key(
             "input.touchpad.natural",
+            "Invert touchpad scroll direction (natural scrolling).",
             Kind::Boolean,
             |s| input_value(s, "input.touchpad.natural"),
             |s, v| put_input(s, "input.touchpad.natural", v),
@@ -299,6 +310,7 @@ pub(super) fn keys() -> Vec<Key> {
         ),
         key(
             "input.touchpad.tap",
+            "Tap touchpad to click.",
             Kind::Boolean,
             |s| input_value(s, "input.touchpad.tap"),
             |s, v| put_input(s, "input.touchpad.tap", v),
@@ -306,6 +318,7 @@ pub(super) fn keys() -> Vec<Key> {
         ),
         key(
             "input.keyboard.numlock",
+            "Enable NumLock on boot.",
             Kind::Boolean,
             |s| input_value(s, "input.keyboard.numlock"),
             |s, v| put_input(s, "input.keyboard.numlock", v),
@@ -313,6 +326,7 @@ pub(super) fn keys() -> Vec<Key> {
         ),
         key(
             "input.keyboard.repeatDelay",
+            "Keyboard repeat delay in milliseconds before repeating keys.",
             number(100., 2000.),
             |s| input_value(s, "input.keyboard.repeatDelay"),
             |s, v| put_input(s, "input.keyboard.repeatDelay", v),
@@ -325,6 +339,7 @@ pub(super) fn keys() -> Vec<Key> {
         ),
         key(
             "input.keyboard.repeatRate",
+            "Keyboard repeat rate in characters per second.",
             number(1., 100.),
             |s| input_value(s, "input.keyboard.repeatRate"),
             |s, v| put_input(s, "input.keyboard.repeatRate", v),

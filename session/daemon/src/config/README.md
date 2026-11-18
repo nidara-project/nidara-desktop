@@ -11,7 +11,7 @@ AI policy and installation are outside this step.
 | `notifications.popupTimeout` | Same schema, `popup-timeout`, 2–15 seconds, nearest integer | Same preference watch, banner timeout |
 | `accessibility.textScale` | `org.gnome.desktop.interface/text-scaling-factor`, .75–1.5, two decimal places | Settings portal appearance; nk-platform/AppWindow |
 | `accessibility.cursorSize` | Same schema, `cursor-size`, 16–96 px, nearest integer | Existing Config1 GTK/cursor follower → Hyalo |
-| `accessibility.reduceMotion` | Same schema, inverse of `enable-animations` | Rust shell preferences and toolkit motion policy |
+| `accessibility.reduceMotion` | Same schema, inverse of `enable-animations` | Rust shell/toolkit motion policy and Config1 follower → Hyalo animations |
 | `input.mouse.speed` | Hyalo `input.pointer.accel_speed` **and** `input.touchpad.accel_speed`, −1–1 | Hyalo backend input reconfiguration |
 | `input.mouse.accel` | Both `accel_profile` fields, `adaptive` or `flat` | Same |
 | `input.mouse.natural` | Hyalo `input.pointer.natural_scroll`, bool | Same |
@@ -39,6 +39,14 @@ corresponding key unavailable, without inventing an effective value.
 
 The existing compositor monitor reads idle and input in one request. Its shared
 serial guard prevents an older read from overwriting a completed local write.
+The reduce-motion lane uses the existing effect/reset machinery: apply at startup,
+on home changes, after compositor reload/hotplug and on reconnect. Reducing writes
+`animations.enabled: false`; restoring removes the override with `null`, preserving
+lower/user-layer choices instead of forcing animations on. Hyalo's idempotent merge
+prevents feedback from its own reload notification. The lane retains existing retry
+and error deduplication behavior. Each key's Describe description matches the TS
+registry, including these behavior details.
+
 GSettings changes use the existing key watches; cursor-size now uses its registry
 watch to publish the existing follower snapshot rather than adding another watch.
 
