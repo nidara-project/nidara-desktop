@@ -464,7 +464,8 @@ impl HyaloPeer {
         let config = Arc::new(std::sync::Mutex::new(if input.is_null() {
             serde_json::Value::Null
         } else {
-            serde_json::json!({"input":input})
+            serde_json::json!({"input":input,
+                "workspaces":{"default_mode":"floating","modes":{}}})
         }));
         let ignore_input = Arc::new(AtomicBool::new(false));
         let (cfg, ignore) = (config.clone(), ignore_input.clone());
@@ -498,6 +499,28 @@ impl HyaloPeer {
                                     for (section, fields) in sections {
                                         for (key, v) in fields.as_object().unwrap() {
                                             config["input"][section][key] = v.clone();
+                                        }
+                                    }
+                                }
+                                // Hyalo's merge: a `null` mode leaves the layer.
+                                if !ignore.load(Ordering::Relaxed)
+                                    && let Some(w) = value["patch"]["workspaces"].as_object()
+                                {
+                                    if let Some(d) = w.get("default_mode") {
+                                        config["workspaces"]["default_mode"] = d.clone();
+                                    }
+                                    for (ws, mode) in w
+                                        .get("modes")
+                                        .and_then(|m| m.as_object())
+                                        .into_iter()
+                                        .flatten()
+                                    {
+                                        let modes =
+                                            config["workspaces"]["modes"].as_object_mut().unwrap();
+                                        if mode.is_null() {
+                                            modes.remove(ws);
+                                        } else {
+                                            modes.insert(ws.clone(), mode.clone());
                                         }
                                     }
                                 }
@@ -1278,6 +1301,93 @@ async fn ordinary_pages_share_homes_and_hyalo_is_the_only_input_writer() {
         assert!(n < 79, "external Hyalo input change was not observed");
         tokio::time::sleep(Duration::from_millis(50)).await;
     }
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn workspace_modes_live_in_hyalo_and_settings_wins_over_a_runtime_toggle() {
+    use serde_json::json;
+    let mut env = setup();
+    let peer = HyaloPeer::with_input(env.dir.join("hyalo.sock"), json!({}));
+    env.start();
+    let conn = connect(&env.address).await;
+    wait_for_config(&conn).await;
+    let (_, _, raw): (u64, u64, String) = call(&conn, "Snapshot", &()).await.unwrap();
+    let schema: serde_json::Value = serde_json::from_str(&raw).unwrap();
+    assert_eq!(
+        schema["keys"]["workspaces.defaultMode"]["value"],
+        "floating"
+    );
+    assert_eq!(
+        schema["keys"]["workspaces.workspace3Mode"]["value"],
+        "default"
+    );
+    assert_eq!(
+        schema["keys"]["workspaces.workspace3Mode"]["ui"]["control"],
+        "segmented"
+    );
+    let apply = |key: &'static str, mode: &'static str| {
+        let conn = conn.clone();
+        async move {
+            call::<(u64, OwnedValue)>(
+                &conn,
+                "Apply",
+                &(key, OwnedValue::try_from(Value::from(mode)).unwrap()),
+            )
+            .await
+        }
+    };
+    // One workspace: our layer holds its mode, and its runtime mode is cleared.
+    let (_, v) = apply("workspaces.workspace3Mode", "tiling").await.unwrap();
+    assert_eq!(String::try_from(v).unwrap(), "tiling");
+    assert_eq!(
+        peer.config.lock().unwrap()["workspaces"]["modes"]["3"],
+        "tiling"
+    );
+    peer.expect(json!({"request":"do","command":"set-workspace-mode 3 default"}))
+        .await;
+    // The default: every workspace that follows it is cleared, never the one set apart.
+    apply("workspaces.defaultMode", "tiling").await.unwrap();
+    assert_eq!(
+        peer.config.lock().unwrap()["workspaces"]["default_mode"],
+        "tiling"
+    );
+    for n in [1, 2, 4, 5] {
+        peer.expect(json!({"request":"do","command":format!("set-workspace-mode {n} default")}))
+            .await;
+    }
+    // Back to "default" takes the workspace out of the layer.
+    let (_, v) = apply("workspaces.workspace3Mode", "default").await.unwrap();
+    assert_eq!(String::try_from(v).unwrap(), "default");
+    assert!(
+        peer.config.lock().unwrap()["workspaces"]["modes"]
+            .get("3")
+            .is_none()
+    );
+    assert_eq!(
+        error_name(
+            apply("workspaces.defaultMode", "stacked")
+                .await
+                .unwrap_err()
+        ),
+        "org.nidara.Config1.Error.Invalid"
+    );
+    // The user's own layer wins: reported, not claimed.
+    peer.ignore_input
+        .store(true, std::sync::atomic::Ordering::Relaxed);
+    assert_eq!(
+        error_name(
+            apply("workspaces.workspace1Mode", "floating")
+                .await
+                .unwrap_err()
+        ),
+        "org.nidara.Config1.Error.Failed"
+    );
+    peer.ignore_input
+        .store(false, std::sync::atomic::Ordering::Relaxed);
+    assert!(
+        !env.dir.join("config/nidara/hyalo-settings.toml").exists(),
+        "sessiond must never write Hyalo's settings file"
+    );
 }
 
 #[tokio::test(flavor = "multi_thread")]

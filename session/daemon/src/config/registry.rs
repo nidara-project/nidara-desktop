@@ -13,6 +13,8 @@
 //!
 //! Lives on the GLib thread (`store.rs`): a `gio::Settings` is not `Send`.
 
+#[path = "desktop.rs"]
+mod desktop;
 #[path = "ordinary.rs"]
 mod ordinary;
 
@@ -105,6 +107,7 @@ pub struct Store {
     config: PathBuf,
     pub idle: std::cell::RefCell<Json>,
     pub input: std::cell::RefCell<Json>,
+    pub workspaces: std::cell::RefCell<Json>,
     pub idle_serial: std::sync::Arc<std::sync::atomic::AtomicU64>,
 }
 impl Store {
@@ -139,6 +142,7 @@ impl Store {
             config: glib::user_config_dir(),
             idle: std::cell::RefCell::new(compositor["idle"].clone()),
             input: std::cell::RefCell::new(compositor["input"].clone()),
+            workspaces: std::cell::RefCell::new(compositor["workspaces"].clone()),
             idle_serial: Default::default(),
         }
     }
@@ -770,6 +774,7 @@ fn table() -> Vec<Key> {
     keys.extend(power_keys());
     keys.extend(dock_keys());
     keys.extend(ordinary::keys());
+    keys.extend(desktop::keys());
     keys
 }
 
@@ -781,6 +786,9 @@ pub fn find(name: &str) -> Option<&'static Key> {
 pub fn available(st: &Store, key: &Key) -> bool {
     if let Some(paths) = ordinary::input_paths(key.name) {
         return ordinary::input_available(st, key, paths);
+    }
+    if desktop::is_key(key.name) {
+        return desktop::available(st);
     }
     if let Some(field) = idle_field(key.name) {
         return st.idle.borrow()[field].is_u64();
@@ -1276,7 +1284,7 @@ pub fn read_idle() -> Json {
     read_compositor()["idle"].clone()
 }
 pub fn compositor_key(name: &str) -> bool {
-    idle_field(name).is_some() || ordinary::input_paths(name).is_some()
+    idle_field(name).is_some() || ordinary::input_paths(name).is_some() || desktop::is_key(name)
 }
 pub fn input_changed(name: &str, before: &Json, after: &Json) -> bool {
     ordinary::input_paths(name).is_some_and(|paths| {
@@ -1284,6 +1292,9 @@ pub fn input_changed(name: &str, before: &Json, after: &Json) -> bool {
             .iter()
             .any(|p| ordinary::at(before, p) != ordinary::at(after, p))
     })
+}
+pub fn workspaces_changed(name: &str, before: &Json, after: &Json) -> bool {
+    desktop::changed(name, before, after)
 }
 pub fn idle_field(name: &str) -> Option<&'static str> {
     match name {

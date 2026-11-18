@@ -79,3 +79,23 @@ single-line fitting mechanism: reserved room stays stable when it fits and gives
 way within a constrained row. Only the closed painted label is ellipsized; full
 options and accessible names are retained. A two-scale, two-width regression
 checks containment, stable selection geometry and complete semantic options.
+
+## Workspace modes (#1103, 7c)
+
+`desktop.rs` adds the Desktop page's six keys: `workspaces.defaultMode`
+(`floating`/`tiling`) and `workspaces.workspace1Mode`–`workspace5Mode`
+(`default`/`floating`/`tiling`). Their home is Hyalo's settings layer, `[workspaces]`
+`default_mode` and `modes`, the same patch as `saveWorkspaceModes` in
+`hyalo-settings.ts`; `default` writes `null`, which takes the workspace out of the
+layer. TS also kept a copy in its own `workspaces` file. Nothing reads that copy in the
+Hyalo session, so it is not a home here.
+
+Hyalo reorganizes the windows of each workspace whose configured mode changed. A mode
+toggled at runtime (`set-workspace-mode`, the keybinding) would hide that change, so after
+a write the service sends `set-workspace-mode N default` for each affected workspace:
+- for a single workspace's key, that workspace;
+- for the default, every workspace that follows it.
+
+A mode chosen in Settings therefore wins over a runtime toggle, as `pushAll` did in TS.
+The read-back and the `Failed` reply when the user's layer wins work as for Input; the
+existing monitor also refreshes `[workspaces]`.
