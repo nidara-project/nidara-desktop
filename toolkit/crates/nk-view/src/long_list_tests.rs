@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: LGPL-3.0-or-later
+use crate::components::LongList;
 use crate::{components::*, *};
 use std::{cell::RefCell, time::Instant};
 #[derive(Default)]

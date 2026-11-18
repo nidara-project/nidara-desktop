@@ -372,6 +372,15 @@ dereference to the platform's `Exports` and `Styles`. `toolkit/CONTRACT.md` → 
 
 ### Shell views (nk-view)
 
+🔑 **Write `nk::`, never `Node::` (#1079, owner 2026-11-18).** Apps and the shell depend on the
+`nidara-kit` package (`toolkit/crates/nidara-kit`, lib name `nk`) and build with its types:
+`nk::Row`/`nk::Column` (not `Box`), `nk::Label`, `nk::Image`, `nk::Button` (`with_child` for any
+content), `nk::Switch`, `nk::CheckButton`, `nk::DropDown`, `nk::Segmented`, `nk::Slider`,
+`nk::Scroll`, `nk::Expander`, `nk::ListView`, `nk::SettingRow`… (table in `VIEW.md`, "How an app
+writes it"). One form: `new` + setters + `.into()` into a `Vec<Node>`; `use nk::prelude::*` for
+`grow`/`width`/`height`. `Node`'s constructors are crate-private. A new component is born as an
+`nk::` type in `crates/nk-view/src/widgets.rs`, never as a `Node::` function.
+
 New shell surfaces and ports are built on `toolkit/crates/nk-view` (#1048), not by placing,
 hit-testing and painting by hand. Its contract is `toolkit/VIEW.md` and its README covers the
 API. Gaps, corners and motion are tokens read from `tokens/static.json` (`Space`, `Radius`, the
@@ -386,41 +395,41 @@ lays a view in part of its surface; `semantic_keys` + `request` answer a reader;
 several cards off in turn and reports once. The NC is the first consumer and the only NC:
 `toolkit/shell/src/nc_view.rs` (#1048), separate glass cards with the calendar as one more;
 `nc.rs` keeps only the month shown, the bulk-dismissal targets and the age and group names.
-`Node::slider` is the Settings slider's rules (one `ValueRange`); `Node::field` only SHOWS a
+`nk::Slider` is the Settings slider's rules (one `ValueRange`); `nk::Field` only SHOWS a
 field (the owner edits it, and a secret reaches the view as bullets, never its text);
-`Node::slot` is room the surface paints itself (`VIEW.md` §12). The CC's detail pages are the
+`nk::Slot::new` is room the surface paints itself (`VIEW.md` §12). The CC's detail pages are the
 second consumer: `ccdetail.rs` keeps the model and ccauth's secret editing, and its rows act on
 release, like every nk-view control (`toolkit/shell/CC.md`). The CC's grid is the third:
-`Node::grid` places tiles on cells the editor computes; a control can be `on` (white, content
+`nk::Grid::new` places tiles on cells the editor computes; a control can be `on` (white, content
 in the accent), a `surface` well, or `keys_only` (Tab and readers, no pointer); `Slider::fill`
 is the 1×2 tile slider. Edit mode is the fourth: `ccedit.rs` builds the panel and the size menu as two
-views (`Node::layer_at` places a badge or the menu at a point, `Node::opacity` dims a free cell)
+views (`nk::Overlay::layer_at` places a badge or the menu at a point, `nk::Pane::opacity` dims a free cell)
 and keeps the model; the panel's scroll region places the grid, so the grid view calls
 `set_slides(false)`: a moved pane must not slide away from glass it does not move.
-`Node::switch(key, on)` is the native switch (`components.json` `switch`, 44×24), drawn only:
+`nk::Switch::drawn(key, on)` is the native switch (`components.json` `switch`, 44×24), drawn only:
 the row around it is the control (`Role::Toggle`, `marked(on)`). It slides over `base`/`ease`
 both ways, faded at `disabledOpacity` while its row is disabled (`VIEW.md` §12.6). A setting
 that is on or off ends its row with one; a choice among several keeps its mark slot.
-`Node::check_control` / `Node::radio_control` are the CheckButton (`components.json` `check`,
+`nk::CheckButton::new` / `nk::CheckButton::radio` are the CheckButton (`components.json` `check`,
 `VIEW.md` §13.5): the mark is the control, its label is not; off glass, so nk-view paints every
 state; the radios next to each other are one group, one Tab stop, the arrows moving the choice.
-`Node::setting_row(key, SettingRow { .. })` is Settings' row (`VIEW.md` §13.6): at least
+`nk::SettingRow` is Settings' row (`VIEW.md` §13.6): at least
 `ROW_HEIGHT.single` (`row_floor`), NOT activatable unless the app gives it an `action` — then the
-whole row is the control and what it ends with must be drawn only (a chevron, `Node::switch`).
-A slider row is a setting row ending in `Node::slider_end(key, SliderEnd { .. })`
-(§13.7): measures from `range.slider`, its value in room for its widest text (`Node::room`).
-A window's sidebar is built of `Node::sidebar_entry` (§13.8): the selected one in the ACCENT
+whole row is the control and what it ends with must be drawn only (a chevron, `nk::Switch::drawn`).
+A slider row is a setting row ending in `nk::SliderEnd`
+(§13.7): measures from `range.slider`, its value in room for its widest text (`nk::Label::room`).
+A window's sidebar is built of `nk::SidebarEntry` (§13.8): the selected one in the ACCENT
 (D1, a control's `accent` flag), never the neutral grey wash.
-`Node::dropdown(key, Dropdown { .. })` (§13.9) is only the TRIGGER:
+`nk::DropDown` (§13.9) is only the TRIGGER:
 `AppWindow` opens its list as a popup and reports the dropdown's action only on a choice (read
 the index with `AppWindow::value`). Outside an `AppWindow` nothing opens it — a surface hosting a
 `ViewState` itself must open the list as `AppWindow::open_menu` does. It is a combo box with its
 options for readers even closed.
-`Node::segmented(key, Segmented { .. })` (§13.10) is a row of RADIOS:
+`nk::Segmented` (§13.10) is a row of RADIOS:
 segment `n` reports `"{action}:{n}"` and the arrows move the choice. Plain radios next to each
 other are one group to the keys; a segmented choice is always a group of its own (its named group
 uses the row key), so rows of them may follow one another.
-`Node::swatches(key, Swatches { .. })` (§13.11) uses the same group rule:
+`nk::Swatches` (§13.11) uses the same group rule:
 coloured radios, named by the palette and described by the group, one Tab stop, arrow choices
 reporting `"{action}:{n}"`. It paints off glass; the selected band and outer keyboard focus ring
 are separate. Read every measure, tone and disabled opacity from `choices.swatch`; the gallery
@@ -543,7 +552,7 @@ narrow mode, the band moving the window, Escape, the reader (`nk_a11y::bridge::B
 paint. Never wire layers, a frame or a sidebar by hand in an app: that is what made the
 gallery's sidebar opaque while Settings' was glass (2026-11-13).
 **Glass only for what lies over content** (sidebar, menu, popover, tooltip, button); a page's
-section is `Node::group`, not a pane. A button IN a page's content is `Node::button` (no glass:
+section is `nk::Group`, not a pane. A button IN a page's content is `nk::Button` (no glass:
 Settings' row button from `button.json`, painted by nk-view); only one OVER content (the band, a
 toolbar over a page) is a control in a pane. A ROW of a group has no glass either, and nk-view
 paints its hover, press and marked wash itself (Hyalo draws washes

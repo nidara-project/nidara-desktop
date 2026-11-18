@@ -13,7 +13,7 @@ struct State {
 }
 impl Disclosure {
     /// Just the header, for a standalone row or a gallery state specimen.
-    pub fn header(self, key: impl Into<Key>, action: impl Into<String>) -> Node {
+    pub(crate) fn header(self, key: impl Into<Key>, action: impl Into<String>) -> Node {
         let key = key.into();
         let mut node = Node::control(
             key.clone(),
@@ -26,19 +26,6 @@ impl Disclosure {
             c.part = Some(Box::new(Part::Disclosure(self)));
         }
         node
-    }
-    /// The header and its controlled content. Only the application changes the model;
-    /// activation reports a Bool and the next rebuild retargets the header and Reveal.
-    pub fn node(self, key: impl Into<Key>, action: impl Into<String>, content: Node) -> Node {
-        let key = key.into();
-        let open = self.expanded;
-        Node::column(
-            key.clone(),
-            vec![
-                self.header(format!("{}/header", key.0), action),
-                Node::reveal(format!("{}/content", key.0), open, content),
-            ],
-        )
     }
     fn current(&self, state: Option<&dyn Any>) -> bool {
         state

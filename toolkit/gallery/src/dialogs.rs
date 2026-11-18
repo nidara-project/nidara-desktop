@@ -1,9 +1,9 @@
 // SPDX-License-Identifier: LGPL-3.0-or-later
 //! Dialog samples use the public host; the app owns only its draft and responses.
 use super::*;
-use nk_view::{
-    Alert, Dialog, DialogAnswer, DialogButton, DialogContent, DialogUpdate, Key, ListSource,
-    LongList, Node, RowInfo, Space, Type, Value, Weight,
+use nk::{
+    Alert, Dialog, DialogAnswer, DialogButton, DialogContent, DialogUpdate, Key, ListSource, Node,
+    RowInfo, Space, Type, Value, Weight,
 };
 fn button(id: &str, label: &str, default: bool, cancel: bool, destructive: bool) -> DialogButton {
     DialogButton {
@@ -26,7 +26,7 @@ fn appearance(portal: &Portal, exports: &Exports) -> Result<DialogUpdate> {
         DialogUpdate::default()
     })
 }
-struct Rows<'a>(&'a nk_view::TypeScale);
+struct Rows<'a>(&'a nk::TypeScale);
 impl ListSource for Rows<'_> {
     fn item(&self, index: usize) -> RowInfo {
         RowInfo {
@@ -35,11 +35,12 @@ impl ListSource for Rows<'_> {
         }
     }
     fn build(&self, index: usize, key: &Key) -> Node {
-        Node::text(
+        nk::Label::new(
             format!("{}/label", key.0),
             format!("Choice {}", index + 1),
             self.0.style(Type::Body, Weight::Regular),
         )
+        .into()
     }
 }
 struct Draft<'a> {
@@ -53,32 +54,33 @@ impl DialogContent for Draft<'_> {
     fn content(&mut self, host: &AppWindow) -> Node {
         let look = host.look();
         let source = Rows(&look.types);
-        let mut list = LongList::new(5000, self.selected, look.tokens.row_height);
-        list.activate = Some("draft-open".into());
-        Node::column(
+        nk::Column::new(
             "draft/content",
             vec![
-                nk_view::components::EditableField::new(self.text.clone()).node(
-                    "draft/name",
-                    "Name",
-                    "draft-name",
-                ),
-                list.node(
+                nk::Entry::new("draft/name", "Name", "draft-name", self.text.clone()).into(),
+                nk::ListView::new(
                     "draft/list",
                     "Dialog choices",
                     "draft-select",
-                    host.scroll_window(&LongList::scroll_key(&"draft/list".into())),
                     &source,
+                    5000,
+                    self.selected,
+                    look.tokens.row_height,
                 )
-                .height(look.tokens.row_height * 4.),
-                Node::text(
+                .window(host.scroll_window(&nk::ListView::scroll_key(&"draft/list".into())))
+                .activate("draft-open")
+                .height(look.tokens.row_height * 4.)
+                .into(),
+                nk::Label::new(
                     "draft/opened",
                     format!("Rows opened: {}", self.opened),
                     look.types.style(Type::Small, Weight::Regular),
-                ),
+                )
+                .into(),
             ],
         )
         .gap(Space::S3)
+        .into()
     }
     fn activated(&mut self, a: Activated) -> Result<()> {
         match (a.action.as_str(), a.value) {

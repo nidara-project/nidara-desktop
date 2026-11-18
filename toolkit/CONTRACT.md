@@ -722,7 +722,9 @@ it means for the toolkit:
 ## nk-view — shared views and components (#1048, #1079, #1103)
 
 Apps and shell surfaces share the view vocabulary, layout, interaction, semantics and paint:
-`VIEW.md`. `AppWindow` hosts application views; the notification centre and Control Center
+`VIEW.md`. They build with the public `nk` API (package `nidara-kit`, `crates/nidara-kit`):
+`nk::Button`, `nk::Row`, `nk::SettingRow`… (VIEW.md, "How an app writes it"). `Node`'s
+constructors are the kit's own and not public. `AppWindow` hosts application views; the notification centre and Control Center
 host `ViewState` on shell surfaces. Built in `crates/nk-view` (its README).
 
 Steps 1–2 of #1103 put content buttons, range controls, dropdown/menu rows, display fields,

@@ -15,6 +15,33 @@ budget counts in. Animation, scrolling, overlay, tile grid, gestures, tooltip an
 later contracts, except animation, the swipe, scrolling and the overlay, which §6 to §9 add.
 The rest are not in it (§10).
 
+## How an app writes it: the `nk` API (#1079, owner 2026-11-18)
+
+An app or the shell depends on the `nidara-kit` package and writes `nk::` (as gtk-rs apps write
+`gtk::`). Every piece is a type named for what it is, GTK's name where GTK has the same piece,
+and built one way: `new` with what it cannot do without, chained setters for the rest, and into
+the tree with `.into()`. The setters every piece has (`grow`, `width`, `height`, `row_floor`,
+`presentational`) are the `nk::Widget` trait's: `use nk::prelude::*;`.
+
+| Piece | Type |
+|---|---|
+| One beside the other, one under the other | `nk::Row`, `nk::Column` |
+| Over a base | `nk::Overlay` |
+| Tiles on cells; a scrolled region; open and close in place | `nk::Grid`, `nk::Scroll`, `nk::Revealer` |
+| Settings' card; a piece of glass | `nk::Group`, `nk::Pane` |
+| Room; a row not built; room the app paints | `nk::Spacer`, `nk::Placeholder`, `nk::Slot` |
+| Text; a glyph | `nk::Label`, `nk::Image` |
+| A button (labelled, or `with_child` anything) | `nk::Button` |
+| On/off; checkbox or radio | `nk::Switch`, `nk::CheckButton` |
+| One of several; one of a few; colour samples | `nk::DropDown`, `nk::Segmented`, `nk::Swatches` |
+| A value in a range; one at a setting row's end | `nk::Slider` (`nk::SliderRange`), `nk::SliderEnd` |
+| Text the kit edits; text the app edits; search | `nk::Entry`, `nk::Field`, `nk::SearchEntry` |
+| A header that shows what follows; a long list | `nk::Expander`, `nk::ListView` |
+| Settings' row; a sidebar's page; a menu's row | `nk::SettingRow`, `nk::SidebarEntry`, `nk::MenuItem` |
+
+`Node` stays the tree's one value (what `AppWindow` and `ViewState` take), but its constructors
+are the kit's own: the rest of this file names the public types.
+
 ## Why
 
 > **Superseded in part by #1079 (owner, 2026-11-12).** There is one kit, for apps and shell, with
@@ -309,7 +336,7 @@ centre's list used, over GTK's `ScrolledWindow`.
   (§6). At the top, new content pushes the list down, as it always did.
 - **Only what shows is built.** `ViewState::window(key)` gives a region's offset and its
   viewport's height. The surface builds the rows that overlap it and puts a
-  `Node::placeholder(key, height)` for each other row, at the height `ViewState::rect` gave
+  `nk::Placeholder::new(key, height)` for each other row, at the height `ViewState::rect` gave
   for it when it was built. Nothing unbuilt is shaped. This is what B3.2's index does today
   for up to 2,000 records.
 - **The bar** is the kit's one scroll bar, `nk-widgets`' `ScrollBar`, which the native Settings
@@ -347,7 +374,7 @@ banner's action column at its right edge.
 - **With the rest.** A layer is part of whatever holds its overlay: it is in the same pane,
   reveals and scroll region, and a swipe or a slide moves it with its card.
 
-A view written as `Node::overlay(key, base).layer(across, down, inset, child)`. The `Stack(Z)`
+A view written as `nk::Overlay::new(key, base).layer(across, down, inset, child)`. The `Stack(Z)`
 this file used to keep room for is this node: a stack lays its children out along an axis,
 and an overlay does not.
 
@@ -458,7 +485,7 @@ missing, and this section adds them.
 
 ### 12.1 Slider
 
-`Node::slider(key, name, range, value, action)`: a control holding a value. The range is
+`nk::Slider::new(key, name, action, SliderRange::new(min, max, step, value))`: a control holding a value. The range is
 `nk-widgets`' `ValueRange` (min, max, step, how the value is said, "4500 K"), the one the native
 Settings slider holds. Its stepping, clamping and keys move out of `Tree` into a model both use,
 as the scroll bar did (§8), so there is one slider and its rules are written once:
@@ -480,7 +507,7 @@ as the scroll bar did (§8), so there is one slider and its rules are written on
 
 ### 12.2 Text field
 
-`Node::field(key, name, action, Field { shown, caret, anchor, secret })`: one line of text being
+`nk::Field::new(key, name, action, FieldState { shown, caret, anchor, secret }, style)`: one line of text being
 typed. nk-view **shows** it (its text, the caret and the selection), focuses it, gives the input
 method the caret's rect and gives readers the field. It does **not edit** it: the text belongs to
 whoever owns it, which edits it with its own rules. In Settings that is `nk-text`'s `Editor`; in
@@ -502,7 +529,7 @@ the CC does not rewrite them.
 
 ### 12.3 Painted slot
 
-`Node::slot(key, size)`: room the surface draws in itself, for what is neither text nor glyph:
+`nk::Slot::new(key, size)`: room the surface draws in itself, for what is neither text nor glyph:
 an app's or a notice's picture (the NC does this today by key, `nc_view.rs` `artwork`), the
 battery ring, the resource gauges, a media cover, a clipboard thumbnail. `nk-view` places it,
 clips it and gives its opacity (§6, §7); the surface paints it after the view, at that opacity
@@ -510,7 +537,7 @@ clips it and gives its opacity (§6, §7); the surface paints it after the view,
 
 ### 12.4 Tile grid (piece 7)
 
-`Node::grid(key, columns, unit, gap, tiles)`: cells of `unit` with `gap` between them, each tile a
+`nk::Grid::new(key, columns, unit, gap, tiles)`: cells of `unit` with `gap` between them, each tile a
 child at `(column, row)` spanning `(width, height)` cells. Today: 4 columns of 76, gaps of 20, at
 most 8 rows; sizes 1×1, 2×1, 1×2, 2×2 and 4×1 (`cclayout.rs`).
 
@@ -542,15 +569,15 @@ in the owner's session with their OK.
 
 ### 12.6 Switch
 
-`Node::switch(key, on)`: the on/off switch a row ends with where TS had a `Gtk.Switch`
+`nk::Switch::drawn(key, on)`: the on/off switch a row ends with where TS had a `Gtk.Switch`
 (Ethernet, Wi-Fi, Bluetooth power, Night Light and its schedule, recording audio). A row that
 picks one of several things keeps its check mark (§12.3); a switch is for a setting that is
 on or off.
 
 - **The switch is the control, not its row** (owner, 2026-11-12, #1079). A setting row is
-  `Node::row` holding its text and `Node::switch_control(key, name, action, on)`: a control
+  `nk::Row` holding its text and `nk::Switch::new(key, name, action, on)`: a control
   (`Role::Toggle`, `marked(on)`, pill corner) that holds the drawn track
-  (`Node::switch(key/track, on)`). Only the switch takes hover, press and the click; the
+  (`nk::Switch::drawn(key/track, on)`). Only the switch takes hover, press and the click; the
   row's text does nothing, and takes `Ink::Disabled` itself when the switch is disabled, since
   the row is not a control. Tab stops on the switch, and a reader hears one toggle button named
   by the row (`name`) with its checked state, as GTK says a switch. A row that activates as a
@@ -584,7 +611,7 @@ hand is the view's.
   on the panel under it would never show. Without layers the grid view (§12.4) draws them,
   as before. A tile held by the pointer follows it from its press offset; the others are
   laid on the preview's cells.
-- **Free cells** are panes on the grid at **opacity 0.16**: `Node::pane(...).opacity(o)`
+- **Free cells** are panes on the grid at **opacity 0.16**: `nk::Pane::new(...).opacity(o)`
   forms a pane's glass and content at `o`, multiplied with a reveal's or a swipe's.
 - **The remove badge** (`e:x:<id>`, a 28 circle) is a layer at a point (§9) over the tile's
   top-right corner, 25 in and 3 above, on removable tiles only.
@@ -686,12 +713,12 @@ reference. What it does:
   sidebar plus content, closes it and opens it over the page instead, where Escape or a
   choice closes it again.
 - **Glass is for what lies over content** (owner, 2026-11-12): a sidebar, a menu, a popover, a
-  tooltip, a button. A section of a page is a **group** (`Node::group`), Settings' card on the
+  tooltip, a button. A section of a page is a **group** (`nk::Group`), Settings' card on the
   window's background (`--nidara-surface`, `common.groupRadius`), with its caption above it.
   A row of a group has no glass, and the view paints its states (§4, "Off glass").
 - **Two kinds of button, by where they lie.** Over content (a window's band, a toolbar over a
   page) a button is glass: a control in a pane, whose hover and press Hyalo draws. In a page's
-  content it is `Node::button` (`Part::Button`), Settings' row button from `components.json`
+  content it is `nk::Button` (`Part::Button`), Settings' row button from `components.json`
   `button` (`toolkit/tokens/button.json`): the surface fill, a 1 px border, the `sm` corner, the
   label in 14 × 5 of padding and at least 32 tall, hover and pressed in the surface's own tones
   (each replaces the rest one), faded to `disabledOpacity` while disabled, and the accent ring
@@ -793,7 +820,7 @@ decides the rest. Each component has three layers, kept apart:
 
 | Component | Mechanism | Properties | Tokens |
 |---|---|---|---|
-| Button | its shape; release activates | in content (`Node::button`) or over content (glass); destructive; default | `button` |
+| Button | its shape; release activates | in content (`nk::Button`) or over content (glass); destructive; default | `button` |
 | Toggle button | each click flips; on = white glass, accent ink | — | glass `states` |
 | Checkbox | the box and its text; Space | checked / unchecked / mixed | `choices` |
 | Radio | the circle and its text; the group is one Tab stop, arrows choose | chosen | `choices` |
@@ -827,13 +854,13 @@ decides the rest. Each component has three layers, kept apart:
 
 ### 13.5 Checkbox and radio
 
-`Node::check_control(key, name, action, on)` and `Node::radio_control(key, name, action,
-chosen)`: a `Gtk.CheckButton`, alone or grouped. Put the control first in a `Node::row` with its
+`nk::CheckButton::new(key, name, action, on)` and `nk::CheckButton::radio(key, name, action,
+chosen)`: a `Gtk.CheckButton`, alone or grouped. Put the control first in a `nk::Row` with its
 label after it, as a settings page does.
 
 - **The mark is the control, not its row** (owner, 2026-11-12, as the switch's, §12.6). The
   control (`Role::Check` or `Role::Radio`, `marked(on)`) holds the drawn mark
-  (`Node::check(key/mark, on)` or `Node::radio(key/mark, chosen)`); only it takes hover, press
+  (`nk::CheckButton::drawn(key/mark, on)` or `nk::CheckButton::radio_drawn(key/mark, chosen)`); only it takes hover, press
   and the click. The label does nothing and takes `Ink::Disabled` itself when the control is
   disabled. A reader hears one check box or radio button, named by the row, with its checked
   state.
@@ -857,11 +884,12 @@ Not carried yet: the mixed (indeterminate) checkbox; no surface asks for it.
 
 ### 13.6 Setting row
 
-`Node::setting_row(key, SettingRow { title, subtitle, trailing, action, disabled, .. })`:
+`nk::SettingRow::new(key, title, style)`, with `.subtitle(..)`, `.trailing(..)`, `.action(..)`
+and `.enabled(..)`:
 Settings' row (`Gtk.ListBoxRow` in a boxed list), its title, an optional second line under it
 in `Ink::Dim`, and what it ends with.
 
-- **Its size is the kit's.** At least `ROW_HEIGHT.single` tall (`Node::row_floor`, from
+- **Its size is the kit's.** At least `ROW_HEIGHT.single` tall (`row_floor()`, from
   `static.json`), taller when its text is, with `space-3` round its content and its text
   centred; the second line under the title.
 - **Not activatable by default** (owner, 2026-11-12). The row is then no control: what it ends
@@ -870,21 +898,21 @@ in `Ink::Dim`, and what it ends with.
 - **Activatable is the app's choice** (`action`, as GNOME's `activatable`). The row is then one
   control named by its title and described by its second line, at the `sm` corner; off glass,
   the view paints its hover and press (§13.2). What it ends with is drawn only (a chevron,
-  `Node::switch`, a mark): a control inside a control would be two things to press, and the
+  `nk::Switch::drawn`, a mark): a control inside a control would be two things to press, and the
   builder refuses it in debug builds. A row that flips a setting it shows takes
   `Role::Toggle` and `marked(on)`, so a reader hears a toggle.
 
 ### 13.7 Slider row
 
-A setting row (§13.6) that ends in `Node::slider_end(key, SliderEnd { name, action, slider,
-value_style, icons, disabled })`: Settings' slider row (`NidaraSliderRow`).
+A setting row (§13.6) that ends in `nk::SliderEnd::new(key, name, action, range, value_style)`
+(with `.icons(..)` and `.enabled(..)`): Settings' slider row (`NidaraSliderRow`).
 
 - **The slider at the kit's width** (`range.slider.width`), its value after it at `valueGap`,
   and, when it has them, a glyph either side of it (`icons`: the lesser end's, the greater
   end's, as Brightness has) at `iconSize`, `iconGap` away, its ink at `iconOpacity`
-  (`Node::alpha`). All of it from the exported `range.slider`, read into `SliderStyle`.
+  (`nk::Image::alpha`). All of it from the exported `range.slider`, read into `SliderStyle`.
 - **The value never moves the slider.** Its text is laid out as wide as the widest of the
-  range's ends (`Node::room`), so 5 % and 100 % take the same room.
+  range's ends (`nk::Label::room`), so 5 % and 100 % take the same room.
 - **The row does not respond**; the slider does (§13.6). A reader finds one slider named by the
   row's title, and the value as text. `disabled` disables the slider and puts the value and the
   glyphs in `Ink::Disabled`; the row's own `disabled` does its title.
@@ -893,7 +921,7 @@ value_style, icons, disabled })`: Settings' slider row (`NidaraSliderRow`).
 
 ### 13.8 Sidebar entry
 
-`Node::sidebar_entry(key, SidebarEntry { title, glyph, action, selected, style }, glyph_size)`:
+`nk::SidebarEntry::new(key, title, glyph, action, style, glyph_size).selected(..)`:
 a page a window's sidebar offers (`Gtk.StackSidebar`'s row), its glyph at the frame's glyph size
 (`FrameStyle::icon`) and its title, in the kit's padding at the `sm` corner.
 
@@ -907,14 +935,14 @@ a page a window's sidebar offers (`Gtk.StackSidebar`'s row), its glyph at the fr
 
 ### 13.9 Dropdown
 
-`Node::dropdown(key, Dropdown { name, options, chosen, action, disabled })`: one choice of several (`Gtk.DropDown`, `NSPopUpButton`), shown closed as the chosen
+`nk::DropDown::new(key, name, action, options, chosen)`: one choice of several (`Gtk.DropDown`, `NSPopUpButton`), shown closed as the chosen
 option with an arrow; a setting row ends with it (§13.6).
 
 - **The trigger is off glass** (§13.2, `Part::Dropdown`): the view fills it with
   `dropdown.trigger`'s tone inside its border, lighter under the pointer and darker while
   pressed; its focus ring is the shared external outline (§13.4). Its label is the chosen option after the
   `labelMargin`, the arrow (`nd-pan-down`) at the end inside the padding. It is **as wide as its
-  widest option** (`Node::room`) when that width fits. Under constraint its single-line
+  widest option** (`nk::Label::room`) when that width fits. Under constraint its single-line
   label gives up reserved room and ellipsizes, keeping the arrow in the row; the
   same available width is kept for every selection. Full labels remain in the
   options and semantic tree. Disabled, its fill
@@ -925,7 +953,7 @@ option with an arrow; a setting row ends with it (§13.6).
   scrolling when it must; activated again, it closes. The list grabs with the serial of the
   press or key that opened it; a reader opens it with no grab, and the keys then still go to the
   list while it is open.
-- **The list's rows** (`Node::menu_row`, `Part::MenuRow`, `Role::Option`) are on Settings'
+- **The list's rows** (`nk::MenuItem`, `Part::MenuRow`, `Role::Option`) are on Settings'
   panel glass by the popup's short side, with `dropdown.menu`'s border drawn round it and,
   without the compositor's glass (D5), `background` under it. The row under the pointer or the
   keyboard is filled with the accent and drawn in its foreground (the one place the accent marks
@@ -954,7 +982,7 @@ for neither.
 
 ### 13.10 Segmented choice
 
-`Node::segmented(key, Segmented { name, options, chosen, action, disabled })`: one choice of a few, all shown side by side, the chosen one in the
+`nk::Segmented::new(key, name, action, options, chosen)`: one choice of a few, all shown side by side, the chosen one in the
 accent (GTK's linked toggle buttons, `NSSegmentedControl`); a setting row ends with it (§13.6).
 Settings' dock size and gaming mode presets are this.
 
@@ -982,7 +1010,7 @@ Not carried yet: segments with icons, and a segment disabled alone; Settings ask
 
 ### 13.11 Colour swatches
 
-`Node::swatches(key, Swatches { name, colors, chosen, action, disabled })`
+`nk::Swatches::new(key, name, action, colors, chosen)`
 shows named `(String, Color)` samples as circles. The application supplies the palette and
 rebuilds with the chosen index; the gallery reads its palette and names from exported
 `colors.json` (`accentOrder`, `accents` and `accentNames`), retaining the product order.
@@ -1090,7 +1118,7 @@ No CI or harness edits are part of this conversion.
 `Activated { key, action, value }` carries `Value::{Bool, Number, Index, Text}` when present.
 Action strings stay compatible; the gallery reads values instead of parsing numeric suffixes
 or asking `window.value`. A plain/surface control can attach an application payload with
-`Node::value`; intrinsic range/selection values remain component-owned. Legacy `value`,
+``.value(..)` on a control`; intrinsic range/selection values remain component-owned. Legacy `value`,
 `slid`, `choose`, `choice`, `set_expanded` and option-id accessors are thin trait-based adapters,
 without per-component state on ViewState. Semantic item targets also retain component type,
 so an old item ID cannot address a new component at the same key.

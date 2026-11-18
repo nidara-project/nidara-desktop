@@ -8,10 +8,7 @@ use crate::{
     row_values,
     session::{ApplyError, Notice, Session},
 };
-use nk_view::{
-    Activated, AppWindow, BACK, Dropdown, FORWARD, Ink, Node, Padding, Segmented, SettingRow,
-    SidebarEntry, Slider, SliderEnd, Space, Type, Weight,
-};
+use nk::{Activated, AppWindow, BACK, FORWARD, Ink, Node, Padding, Space, Type, Weight};
 use std::{
     collections::BTreeMap,
     time::{Duration, Instant},
@@ -194,7 +191,7 @@ impl Model {
             _ => {}
         }
         if let Some(key) = a.action.strip_prefix("disclosure:") {
-            if let Some(nk_view::Value::Bool(open)) = a.value {
+            if let Some(nk::Value::Bool(open)) = a.value {
                 self.open.insert(key.into(), open);
             }
             return Ok(false);
@@ -228,7 +225,7 @@ impl Model {
             "segmented" | "preset" | "dropdown" => {
                 let mut choices = choices(&key, entry, kind, editor.session().shown(&key))?;
                 let index = match a.value {
-                    Some(nk_view::Value::Index(i)) => i,
+                    Some(nk::Value::Index(i)) => i,
                     _ => return Ok(false),
                 };
                 if index >= choices.len() {
@@ -237,7 +234,7 @@ impl Model {
                 choices.remove(index).1
             }
             "slider" => {
-                let Some(n) = a.value.as_ref().and_then(nk_view::Value::number) else {
+                let Some(n) = a.value.as_ref().and_then(nk::Value::number) else {
                     return Ok(false);
                 };
                 let spec = row_values::slider(&key, entry)?;
@@ -303,7 +300,7 @@ impl Model {
         host: &AppWindow,
         session: &Session,
         e: &Exports,
-    ) -> Result<nk_view::Page, String> {
+    ) -> Result<nk::Page, String> {
         let types = &host.look().types;
         let body = || types.style(Type::Body, Weight::Regular);
         let small = || types.style(Type::Small, Weight::Regular);
@@ -312,72 +309,81 @@ impl Model {
             .iter()
             .filter(|p| ordinary(p, session))
             .map(|p| {
-                Ok(Node::sidebar_entry(
+                Ok(nk::SidebarEntry::new(
                     format!("page/{}", p.id),
-                    SidebarEntry {
-                        title: e.text(&p.label)?.to_owned(),
-                        glyph: p
-                            .icon
-                            .as_deref()
-                            .unwrap_or("nd-settings")
-                            .trim_end_matches("-symbolic")
-                            .into(),
-                        action: format!("page:{}", p.id),
-                        selected: self.selected() == Some(p.id.as_str()),
-                        style: body(),
-                    },
+                    e.text(&p.label)?.to_owned(),
+                    p.icon
+                        .as_deref()
+                        .unwrap_or("nd-settings")
+                        .trim_end_matches("-symbolic"),
+                    format!("page:{}", p.id),
+                    body(),
                     host.look().frame.icon,
-                ))
+                )
+                .selected(self.selected() == Some(p.id.as_str()))
+                .into())
             })
             .collect::<Result<Vec<_>, String>>()?;
         let page = self.selected().and_then(|id| e.page(id));
-        let mut content = Vec::new();
+        let mut content: Vec<Node> = Vec::new();
         if let Some(status) = &self.status {
-            content.push(Node::text("settings-status", status, body()));
+            content.push(nk::Label::new("settings-status", status, body()).into());
         }
         if let Some(p) = page {
             for (i, g) in p.groups.iter().enumerate() {
                 let id = format!("{}/{i}", p.id);
                 if let Some(label) = g.i18n.as_ref().filter(|label| !label.is_empty()) {
-                    content.push(Node::text(
-                        format!("{id}/title"),
-                        e.text(label)?,
-                        types.style(Type::Body, Weight::Medium),
-                    ));
+                    content.push(
+                        nk::Label::new(
+                            format!("{id}/title"),
+                            e.text(label)?,
+                            types.style(Type::Body, Weight::Medium),
+                        )
+                        .into(),
+                    );
                 }
-                content.push(Node::group(
-                    format!("{id}/group"),
-                    Node::column(
-                        format!("{id}/rows"),
-                        self.items(&g.items, &id, host, session, e)?,
-                    ),
-                ));
+                content.push(
+                    nk::Group::new(
+                        format!("{id}/group"),
+                        nk::Column::new(
+                            format!("{id}/rows"),
+                            self.items(&g.items, &id, host, session, e)?,
+                        ),
+                    )
+                    .into(),
+                );
                 if let Some(footer) = g
                     .footer
                     .as_ref()
                     .filter(|_| g.footer_when.as_ref().is_none_or(|p| p.holds(session)))
                 {
                     content.push(
-                        Node::text(format!("{id}/footer"), e.text(footer)?, small()).ink(Ink::Dim),
+                        nk::Label::new(format!("{id}/footer"), e.text(footer)?, small())
+                            .ink(Ink::Dim)
+                            .into(),
                     );
                 }
             }
         } else {
-            content.push(Node::text(
-                "loading",
-                e.text(if session.store().is_none() {
-                    "settings.native.loading"
-                } else {
-                    "settings.native.unavailable"
-                })?,
-                body(),
-            ));
+            content.push(
+                nk::Label::new(
+                    "loading",
+                    e.text(if session.store().is_none() {
+                        "settings.native.loading"
+                    } else {
+                        "settings.native.unavailable"
+                    })?,
+                    body(),
+                )
+                .into(),
+            );
         }
-        Ok(nk_view::Page {
-            sidebar: Node::column("settings-sidebar", sidebar),
-            content: Node::column("settings-content", content)
+        Ok(nk::Page {
+            sidebar: nk::Column::new("settings-sidebar", sidebar).into(),
+            content: nk::Column::new("settings-content", content)
                 .gap(Space::S3)
-                .padding(Padding::all(Space::S3)),
+                .padding(Padding::all(Space::S3))
+                .into(),
             title: page
                 .map(|p| e.text(&p.label))
                 .transpose()?
@@ -401,15 +407,17 @@ impl Model {
             let id = format!("{prefix}/{i}");
             match item {
                 Item::Disclosure { i18n, items } => nodes.push(
-                    nk_view::components::Disclosure {
-                        label: e.text(i18n)?.to_owned(),
-                        expanded: self.open.get(&id).copied().unwrap_or(true),
-                    }
-                    .node(
+                    nk::Expander::new(
                         id.clone(),
+                        e.text(i18n)?.to_owned(),
                         format!("disclosure:{id}"),
-                        Node::column(format!("{id}/items"), self.items(items, &id, host, s, e)?),
-                    ),
+                        self.open.get(&id).copied().unwrap_or(true),
+                    )
+                    .child(nk::Column::new(
+                        format!("{id}/items"),
+                        self.items(items, &id, host, s, e)?,
+                    ))
+                    .into(),
                 ),
                 Item::Key {
                     key,
@@ -442,14 +450,18 @@ impl Model {
                     let name = format!("key/{key}");
                     let action = format!("set:{key}");
                     let kind = ui["control"].as_str().unwrap_or_default();
-                    let control = match kind {
-                        "toggle" => Node::switch_control(
+                    // What a reader says after the control's name: its row's second line.
+                    let said = subtitle.unwrap_or_default();
+                    let control: Node = match kind {
+                        "toggle" => nk::Switch::new(
                             name,
                             title,
                             action,
                             shown.and_then(Value::as_bool).unwrap_or(false),
                         )
-                        .enabled(!disabled),
+                        .enabled(!disabled)
+                        .description(said)
+                        .into(),
                         "segmented" | "preset" | "dropdown" => {
                             let choices = choices(key, &entry.entry, kind, shown)?;
                             let chosen = choices
@@ -458,32 +470,19 @@ impl Model {
                                 .unwrap_or(0);
                             let options = choices.into_iter().map(|(label, _)| label).collect();
                             if kind == "dropdown" {
-                                Node::dropdown(
-                                    name,
-                                    Dropdown {
-                                        name: title.into(),
-                                        options,
-                                        chosen,
-                                        action,
-                                        disabled,
-                                    },
-                                )
+                                nk::DropDown::new(name, title, action, options, chosen)
+                                    .enabled(!disabled)
+                                    .description(said)
+                                    .into()
                             } else {
-                                Node::segmented(
-                                    name,
-                                    Segmented {
-                                        name: title.into(),
-                                        options,
-                                        chosen,
-                                        action,
-                                        disabled,
-                                    },
-                                )
+                                nk::Segmented::new(name, title, action, options, chosen)
+                                    .enabled(!disabled)
+                                    .into()
                             }
                         }
                         "slider" => {
                             let spec = row_values::slider(key, &entry.entry)?;
-                            let mut slider = Slider::new(
+                            let mut slider = nk::SliderRange::new(
                                 spec.min.into(),
                                 spec.max.into(),
                                 spec.step.into(),
@@ -509,37 +508,29 @@ impl Model {
                                         .map_err(|_| format!("{key}: expected two icons"))
                                 })
                                 .transpose()?;
-                            Node::slider_end(
+                            let end = nk::SliderEnd::new(
                                 name,
-                                SliderEnd {
-                                    name: title.into(),
-                                    action,
-                                    slider,
-                                    value_style: types.style(Type::Small, Weight::Regular),
-                                    icons,
-                                    disabled,
-                                },
+                                title,
+                                action,
+                                slider,
+                                types.style(Type::Small, Weight::Regular),
                             )
+                            .enabled(!disabled);
+                            match icons {
+                                Some(icons) => end.icons(icons).into(),
+                                None => end.into(),
+                            }
                         }
                         _ => return Err(format!("{key}: unsupported ordinary row")),
                     };
-                    let control = if let Some(subtitle) = subtitle {
-                        control.description(subtitle)
-                    } else {
-                        control
-                    };
-                    nodes.push(Node::setting_row(
-                        id,
-                        SettingRow {
-                            title: title.into(),
-                            subtitle: subtitle.map(str::to_owned),
-                            title_style: types.style(Type::Body, Weight::Regular),
-                            subtitle_style: types.style(Type::Small, Weight::Regular),
-                            trailing: Some(control),
-                            disabled,
-                            ..Default::default()
-                        },
-                    ));
+                    let mut row =
+                        nk::SettingRow::new(id, title, types.style(Type::Body, Weight::Regular))
+                            .trailing(control)
+                            .enabled(!disabled);
+                    if let Some(subtitle) = subtitle {
+                        row = row.subtitle(subtitle, types.style(Type::Small, Weight::Regular));
+                    }
+                    nodes.push(row.into());
                 }
                 _ => return Err("custom item reached ordinary page".into()),
             }

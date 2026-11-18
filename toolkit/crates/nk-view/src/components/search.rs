@@ -13,7 +13,7 @@ pub struct Search {
     pub shown: Option<(usize, crate::Shown)>,
 }
 impl Search {
-    pub fn node(self, key: impl Into<Key>) -> Node {
+    pub(crate) fn node(self, key: impl Into<Key>) -> Node {
         Node::drawing(key, Part::Search(self))
     }
 }

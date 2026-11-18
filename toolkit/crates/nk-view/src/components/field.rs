@@ -2,7 +2,7 @@
 use super::*;
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub struct DisplayField {
-    pub field: crate::Field,
+    pub field: crate::view::Field,
     pub style: nk_text::TextStyle,
     pub surface: Surface,
 }

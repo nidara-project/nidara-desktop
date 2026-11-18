@@ -6,7 +6,7 @@
 //! state regions), the semantics, and the content paint. The surface keeps only its model
 //! and what an `Activated` means.
 pub mod components;
-pub use components::{ListSource, LongList, RowInfo};
+pub use components::{ListSource, RowInfo};
 mod host;
 mod layout;
 mod motion;
@@ -28,9 +28,19 @@ pub use tokens::{
     swatch_from, switch_from,
 };
 pub use view::{
-    Align, Axis, Cell, Control, Corner, Dropdown, Field, Grid, Group, Icon, Ink, Justify, Key,
-    Kind, Layer, Node, Overlay, Padding, Pane, Reveal, Role, Scroll, Segmented, SettingRow, Shown,
-    SidebarEntry, Slider, SliderEnd, Stack, Swatches, Text, Wash,
+    Align, Axis, Cell, Corner, Ink, Justify, Key, Kind, Layer, Node, Padding, Role, Shown, Wash,
+};
+/// What a node holds, by kind: for code that reads a built tree (tests, semantics), never for
+/// building one.
+pub mod node {
+    pub use crate::view::{Control, Grid, Group, Icon, Overlay, Pane, Reveal, Scroll, Stack, Text};
+}
+mod widgets;
+pub use widgets::{
+    Button, CheckButton, Column, DropDown, Entry, Expander, Field, FieldState, Grid, Group, Image,
+    Label, ListView, MenuItem, Overlay, Pane, Placeholder, Revealer, Row, Scroll, SearchEntry,
+    Segmented, SettingRow, SidebarEntry, Slider, SliderEnd, SliderRange, Slot, Spacer, Swatches,
+    Switch, Widget, prelude,
 };
 pub use window::{
     Alert, AppWindow, CONTENT, Dialog, DialogAnswer, DialogButton, DialogContent, DialogUpdate,
@@ -40,7 +50,7 @@ pub use window::{
 #[cfg(test)]
 mod tests;
 
-pub use components::{ButtonAppearance, Check, ComponentLook, Drawing, Part, Switch};
+pub use components::{ButtonAppearance, ComponentLook, Drawing, Part};
 
 pub use components::{Host, HostRequest, Value};
 

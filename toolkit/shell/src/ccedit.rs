@@ -5,7 +5,8 @@
 //! the grid and the widgets to add, the error, Edit/Done) and the size menu. They place,
 //! hit-test, focus, wash and paint what the editor did by hand.
 use super::*;
-use nk_view::{Corner, Ink, Key, Node, Padding, Role, ScrollBy, Space, Wash};
+use nk::prelude::*;
+use nk::{Corner, Ink, Key, Node, Padding, Role, ScrollBy, Space, Wash};
 
 const SEMANTIC_BASE: u64 = 1 << 48;
 /// Where the panel's and the menu's washes start: past the detail's, the grid's and the
@@ -63,16 +64,16 @@ pub struct Editor {
     pub accent: [f64; 4],
     /// The scroll region's offset, as last laid out or asked.
     offset: f64,
-    view: nk_view::ViewState,
-    menu_view: nk_view::ViewState,
+    view: nk::ViewState,
+    menu_view: nk::ViewState,
     /// The menu on the panel's surface; its view is laid out `menu_shift` up and left of it
     /// (its own layer's origin in Hyalo, nothing without layers).
     menu_rect: Option<[f64; 4]>,
     menu_shift: (f64, f64),
-    tokens: Option<nk_view::Tokens>,
-    types: Option<nk_view::TypeScale>,
-    last: nk_view::Frame,
-    menu_last: nk_view::Frame,
+    tokens: Option<nk::Tokens>,
+    types: Option<nk::TypeScale>,
+    last: nk::Frame,
+    menu_last: nk::Frame,
     /// A focus asked for before its control was laid out, and whether it shows its ring.
     want: Option<(Target, bool)>,
     /// The button the pointer pressed, acting on release over itself.
@@ -80,10 +81,10 @@ pub struct Editor {
 }
 impl Default for Editor {
     fn default() -> Self {
-        let mut view = nk_view::ViewState::new(VIEW_REGIONS);
+        let mut view = nk::ViewState::new(VIEW_REGIONS);
         // The editor places the tiles' glass; the view's panes stay where they are laid.
         view.set_slides(false);
-        let mut menu_view = nk_view::ViewState::new(MENU_REGIONS);
+        let mut menu_view = nk::ViewState::new(MENU_REGIONS);
         menu_view.set_slides(false);
         Self {
             active: false,
@@ -255,56 +256,62 @@ impl Editor {
             ..base.clone()
         };
         let label = |key: &str, t: String| {
-            Node::row(
+            nk::Row::new(
                 format!("{key}/row"),
-                vec![Node::text(format!("{key}/t"), t, style.clone()).lines(1)],
+                vec![
+                    nk::Label::new(format!("{key}/t"), t, style.clone())
+                        .lines(1)
+                        .into(),
+                ],
             )
             .padding(Padding::symmetric(Space::S2, Space::S2))
         };
         let tiles: Vec<layout::Tile> = self.tiles.iter().map(|p| p.tile).collect();
-        let content = if self.active {
+        let content: Node = if self.active {
             let mut cells = vec![];
             let occ = layout::occupancy(&tiles, &[]);
             for y in 0..layout::ROWS {
                 for x in 0..layout::COLS {
                     if occ.free(x, y, Size::Single) {
-                        cells.push(nk_view::Cell {
+                        cells.push(nk::Cell {
                             at: (x as usize, y as usize),
                             span: (1, 1),
-                            child: Node::pane(
+                            child: nk::Pane::new(
                                 format!("e:f:{x}:{y}"),
                                 Corner::Pill,
-                                Node::spacer(format!("e:f:{x}:{y}/s")),
+                                nk::Spacer::new(format!("e:f:{x}:{y}/s")),
                             )
-                            .opacity(0.16),
+                            .opacity(0.16)
+                            .into(),
                         });
                     }
                 }
             }
             for t in &tiles {
                 let (w, h) = t.size.cells();
-                cells.push(nk_view::Cell {
+                cells.push(nk::Cell {
                     at: (t.x as usize, t.y as usize),
                     span: (w as usize, h as usize),
-                    child: Node::control(
+                    child: nk::Button::with_child(
                         format!("e:t:{}", t.id),
                         translate(look, name_key(t.id), t.id),
                         "tile",
-                        Node::spacer(format!("e:t:{}/s", t.id)),
+                        nk::Spacer::new(format!("e:t:{}/s", t.id)),
                     )
                     // In Hyalo the tile's own layer draws it and its focus (§12.7).
                     .wash(Wash::None)
-                    .corner(corner_of(t.size)),
+                    .corner(corner_of(t.size))
+                    .into(),
                 });
             }
-            let grid = Node::grid(
+            let grid = nk::Grid::new(
                 GRID,
                 layout::COLS as usize,
                 layout::UNIT,
                 layout::GAP,
                 cells,
             );
-            let mut over = Node::overlay("e:o", grid);
+            let mut over = nk::Overlay::new("e:o", grid);
             if self.menu.is_none() {
                 for t in tiles
                     .iter()
@@ -315,14 +322,14 @@ impl Editor {
                     over = over.layer_at(
                         r[0] + r[2] - 25.,
                         r[1] - 3.,
-                        Node::pane(
+                        nk::Pane::new(
                             format!("{key}/pane"),
                             Corner::Pill,
-                            Node::control(
+                            nk::Button::with_child(
                                 key.clone(),
                                 "×",
                                 "remove",
-                                Node::slot(format!("{key}/s"), BADGE),
+                                nk::Slot::new(format!("{key}/s"), BADGE),
                             )
                             .enabled(!self.pending),
                         ),
@@ -332,13 +339,13 @@ impl Editor {
             let rows: Vec<Node> = self
                 .addable(status)
                 .into_iter()
-                .map(|m| {
+                .map(|m| -> Node {
                     let key = format!("e:a:{}", m.id);
                     if self.menu.is_some() {
                         // While the menu is open it and Done are the only controls; the rows
                         // keep their room so nothing under them moves.
                         let h = self.view.rect(&key.as_str().into()).map_or(32., |r| r[3]);
-                        return Node::placeholder(key, h);
+                        return nk::Placeholder::new(key, h).into();
                     }
                     let fits = layout::add(&self.stored, &|id| available(id, status), m.id, None)
                         .is_some();
@@ -347,47 +354,56 @@ impl Editor {
                         translate(look, "cc.grid.add", "Add"),
                         translate(look, name_key(m.id), m.id)
                     );
-                    Node::pane(
+                    nk::Pane::new(
                         format!("{key}/pane"),
                         Corner::Pill,
-                        Node::control(key.clone(), text.clone(), "add", label(&key, text))
+                        nk::Button::with_child(key.clone(), text.clone(), "add", label(&key, text))
                             .enabled(fits && !self.pending),
                     )
+                    .into()
                 })
                 .collect();
-            Node::column(
+            nk::Column::new(
                 "e:c",
-                vec![over, Node::column("e:add", rows).gap(Space::S1)],
+                vec![
+                    over.into(),
+                    nk::Column::new("e:add", rows).gap(Space::S1).into(),
+                ],
             )
             .gap(Space::S6)
+            .into()
         } else {
-            Node::placeholder(GRID, self.grid_height(&tiles))
+            nk::Placeholder::new(GRID, self.grid_height(&tiles)).into()
         };
         let toggle = if self.active {
             translate(look, "cc.grid.done", "Done")
         } else {
             translate(look, "cc.grid.edit", "Edit")
         };
-        let mut column = vec![Node::scroll(SCROLL, content).grow()];
+        let mut column: Vec<Node> = vec![nk::Scroll::new(SCROLL, content).grow().into()];
         if !self.error.is_empty() {
             column.push(
-                Node::text("e:err", self.error_text(look), style.clone())
+                nk::Label::new("e:err", self.error_text(look), style.clone())
                     .lines(2)
-                    .reserve(2),
+                    .reserve(2)
+                    .into(),
             );
         }
-        column.push(Node::pane(
-            "e:done/pane",
-            Corner::Pill,
-            Node::control(DONE, toggle.clone(), "toggle", label(DONE, toggle))
-                .role(Role::Toggle)
-                .marked(self.active)
-                .enabled(!self.pending),
-        ));
-        let panel = Node::column("e", column).gap(Space::S3);
+        column.push(
+            nk::Pane::new(
+                "e:done/pane",
+                Corner::Pill,
+                nk::Button::with_child(DONE, toggle.clone(), "toggle", label(DONE, toggle))
+                    .role(Role::Toggle)
+                    .marked(self.active)
+                    .enabled(!self.pending),
+            )
+            .into(),
+        );
+        let panel = nk::Column::new("e", column).gap(Space::S3);
         let menu = self.menu.and_then(|id| {
             let meta = layout::meta_of(id)?;
-            let mut rows = vec![];
+            let mut rows: Vec<Node> = vec![];
             for size in meta.supported {
                 let key = format!("e:z:{}", size.stored());
                 let name = self.label(Target::Size(id, *size), look);
@@ -400,10 +416,14 @@ impl Editor {
                 } else {
                     name.clone()
                 };
-                let mut lines = vec![Node::text(format!("{key}/t"), shown, style.clone()).lines(1)];
+                let mut lines: Vec<Node> = vec![
+                    nk::Label::new(format!("{key}/t"), shown, style.clone())
+                        .lines(1)
+                        .into(),
+                ];
                 if !fits {
                     lines.push(
-                        Node::text(
+                        nk::Label::new(
                             format!("{key}/why"),
                             Self::full_text(look),
                             TextStyle {
@@ -412,37 +432,33 @@ impl Editor {
                             },
                         )
                         .lines(1)
-                        .ink(Ink::Dim),
+                        .ink(Ink::Dim)
+                        .into(),
                     );
                 }
                 rows.push(
-                    Node::control(
+                    nk::Button::with_child(
                         key.clone(),
                         name,
                         "size",
-                        Node::column(format!("{key}/c"), lines)
+                        nk::Column::new(format!("{key}/c"), lines)
                             .padding(Padding::symmetric(Space::S1, Space::S2)),
                     )
                     .marked(checked)
-                    .enabled(fits),
+                    .enabled(fits)
+                    .into(),
                 );
             }
             if !meta.fixed {
                 let name = translate(look, "cc.menu.remove", "Remove");
-                rows.push(Node::control(
-                    "e:zx",
-                    name.clone(),
-                    "remove",
-                    label("e:zx", name),
-                ));
+                rows.push(
+                    nk::Button::with_child("e:zx", name.clone(), "remove", label("e:zx", name))
+                        .into(),
+                );
             }
-            Some(Node::pane(
-                "e:menu",
-                Corner::Fixed(16),
-                Node::column("e:m", rows),
-            ))
+            Some(nk::Pane::new("e:menu", Corner::Fixed(16), nk::Column::new("e:m", rows)).into())
         });
-        (panel, menu)
+        (panel.into(), menu)
     }
 
     /// Lays the views out: the panel in its rect, the menu under its tile, kept in the
@@ -451,7 +467,7 @@ impl Editor {
     pub(super) fn lay_out(
         &mut self,
         views: (Node, Option<Node>),
-        look: nk_view::ComponentLook<'_>,
+        look: nk::ComponentLook<'_>,
         text: &mut dyn TextBackend,
         scale: f64,
     ) {
@@ -934,10 +950,10 @@ impl Editor {
     /// The controls laid out and enabled, in the order they are laid: the panel's, then the
     /// menu's.
     fn enabled(&self) -> Vec<Target> {
-        let of = |s: &nk_view::ViewState, menu: bool| -> Vec<Target> {
+        let of = |s: &nk::ViewState, menu: bool| -> Vec<Target> {
             s.placed()
                 .iter()
-                .filter(|n| matches!(&n.what, nk_view::What::Control(c) if c.enabled))
+                .filter(|n| matches!(&n.what, nk::What::Control(c) if c.enabled))
                 .filter_map(|n| target_of(&n.key, menu, self.menu))
                 .collect()
         };
@@ -1081,9 +1097,9 @@ impl Editor {
         }
         // Each control of either view, as laid out.
         let mut controls: Vec<(Target, bool, bool)> = vec![];
-        let mut collect = |s: &nk_view::ViewState, menu: bool| {
+        let mut collect = |s: &nk::ViewState, menu: bool| {
             for n in s.placed() {
-                if let nk_view::What::Control(c) = &n.what
+                if let nk::What::Control(c) = &n.what
                     && let Some(t) = target_of(&n.key, menu, self.menu)
                     && !matches!(t, Target::Tile(_))
                 {
@@ -1203,18 +1219,18 @@ fn intersects(a: [f64; 4], b: [f64; 4]) -> bool {
     a[0] < b[0] + b[2] && a[0] + a[2] > b[0] && a[1] < b[1] + b[3] && a[1] + a[3] > b[1]
 }
 /// The innermost enabled control a view has under `p`, as it hit-tests.
-fn hit(s: &nk_view::ViewState, p: (f64, f64)) -> Option<Key> {
+fn hit(s: &nk::ViewState, p: (f64, f64)) -> Option<Key> {
     s.placed()
         .iter()
         .rfind(|n| match &n.what {
-            nk_view::What::Control(c) => {
+            nk::What::Control(c) => {
                 c.enabled && c.pointer && n.visible().is_some_and(|r| inside(r, p))
             }
             _ => false,
         })
         .map(|n| n.key.clone())
 }
-fn base_rect(c: &mut Canvas, p: &nk_view::FramePane, base: Color) {
+fn base_rect(c: &mut Canvas, p: &nk::FramePane, base: Color) {
     if let Some(clip) = p.clip {
         c.clip(rect(clip));
     }
@@ -1229,12 +1245,7 @@ fn base_rect(c: &mut Canvas, p: &nk_view::FramePane, base: Color) {
 }
 impl Editor {
     /// A frame's panes as the CC's glass. In Hyalo the badges are on the tiles' own layers.
-    fn groups(
-        &self,
-        frame: &nk_view::Frame,
-        tokens: &serde_json::Value,
-        reduce: bool,
-    ) -> Vec<Group> {
+    fn groups(&self, frame: &nk::Frame, tokens: &serde_json::Value, reduce: bool) -> Vec<Group> {
         let Some(first) = frame.panes.first() else {
             return vec![];
         };
@@ -1248,7 +1259,7 @@ impl Editor {
             .filter(|p| !(self.layered && p.key.0.starts_with("e:x:")))
             .cloned()
             .collect();
-        nk_view::Frame {
+        nk::Frame {
             panes,
             states: vec![],
         }

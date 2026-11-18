@@ -1162,19 +1162,27 @@ name = "nidara-corner"
 version = "0.1.0"
 
 [[package]]
+name = "nidara-kit"
+version = "0.1.0"
+dependencies = [
+ "nk-text",
+ "nk-view",
+]
+
+[[package]]
 name = "nidara-shell"
 version = "0.1.0"
 dependencies = [
  "gio",
  "glib",
  "image",
+ "nidara-kit",
  "nidara-shell-ipc",
  "nk-a11y",
  "nk-icons",
  "nk-platform",
  "nk-render",
  "nk-text",
- "nk-view",
  "nk-wayland",
  "nk-widgets",
  "png 0.18.1",
@@ -1205,12 +1213,12 @@ dependencies = [
 name = "nk-gallery"
 version = "0.1.0"
 dependencies = [
+ "nidara-kit",
  "nk-a11y",
  "nk-icons",
  "nk-platform",
  "nk-render",
  "nk-text",
- "nk-view",
  "nk-wayland",
  "serde",
  "serde_json",
@@ -1268,12 +1276,12 @@ dependencies = [
  "image",
  "jpeg-decoder",
  "libc",
+ "nidara-kit",
  "nk-a11y",
  "nk-icons",
  "nk-platform",
  "nk-render",
  "nk-text",
- "nk-view",
  "nk-wayland",
  "nk-widgets",
  "serde",

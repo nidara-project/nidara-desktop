@@ -1,5 +1,9 @@
 // SPDX-License-Identifier: LGPL-3.0-or-later
 use super::*;
+use crate::components::Switch;
+use crate::view::{
+    Dropdown, Field, Segmented, SettingRow, SidebarEntry, Slider, SliderEnd, Swatches,
+};
 use nk_text::{FontSet, ParleyBackend, TextStyle};
 use serde_json::json;
 use std::sync::Arc;
@@ -5655,15 +5659,9 @@ fn semantic_keys_bind_the_actual_component_role_and_retire_old_bindings() {
 }
 
 fn disclosure(open: bool) -> Node {
-    crate::components::Disclosure {
-        label: "Advanced".into(),
-        expanded: open,
-    }
-    .node(
-        "detail",
-        "detail-toggle",
-        Node::button("detail-child", "Child", "child", style(14.)),
-    )
+    crate::Expander::new("detail", "Advanced", "detail-toggle", open)
+        .child(Node::button("detail-child", "Child", "child", style(14.)))
+        .into()
 }
 #[test]
 fn disclosure_header_uses_settings_measures_and_clicks_across_the_whole_row() {

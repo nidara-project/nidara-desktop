@@ -23,7 +23,7 @@ impl EditableField {
             escape_clears: false,
         }
     }
-    pub fn node(
+    pub(crate) fn node(
         self,
         key: impl Into<Key>,
         name: impl Into<String>,

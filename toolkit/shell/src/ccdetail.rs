@@ -2,6 +2,7 @@
 //! Same-surface detail views. Row identities follow backend paths, never list positions.
 use super::*;
 use crate::menu::Label;
+use nk::prelude::*;
 use serde_json::Value;
 
 #[derive(Clone, Debug, PartialEq)]
@@ -205,12 +206,12 @@ pub struct Detail {
     pub auth_ready: bool,
     pub form: Option<crate::ccauth::Form>,
     /// The rows' layout, hover, press, focus, held slider and scroll: nk-view's (#1048).
-    pub state: nk_view::ViewState,
-    pub tokens: Option<nk_view::Tokens>,
-    types: Option<nk_view::TypeScale>,
+    pub state: nk::ViewState,
+    pub tokens: Option<nk::Tokens>,
+    types: Option<nk::TypeScale>,
     appearance: Option<nk_platform::portal::Appearance>,
     /// What the last painted frame declared: `states` reads it after `paint`.
-    last: nk_view::Frame,
+    last: nk::Frame,
     /// Switches the user moved, by row key: the state asked for and when. A switch shows it,
     /// and its next click asks for the other, until the service reports it or `PENDING`
     /// passes (VIEW.md §12.6); a stale snapshot never turns a click into a repeat.
@@ -222,10 +223,10 @@ pub(super) const PENDING: std::time::Duration = std::time::Duration::from_secs(6
 const LIST: &str = "list";
 /// Ids for the view's few regions, under the CC's other washes.
 const REGIONS: u32 = 100000;
-fn row_key(id: u64) -> nk_view::Key {
-    nk_view::Key::from(format!("r{id}"))
+fn row_key(id: u64) -> nk::Key {
+    nk::Key::from(format!("r{id}"))
 }
-fn row_of(key: &nk_view::Key) -> Option<u64> {
+fn row_of(key: &nk::Key) -> Option<u64> {
     key.0.strip_prefix('r')?.split('/').next()?.parse().ok()
 }
 /// A row's slider value as it reads: a time of day as hours and minutes.
@@ -263,11 +264,11 @@ impl Detail {
             scale: 1.,
             auth_ready: false,
             form: None,
-            state: nk_view::ViewState::new(REGIONS),
+            state: nk::ViewState::new(REGIONS),
             tokens: None,
             types: None,
             appearance: None,
-            last: nk_view::Frame::default(),
+            last: nk::Frame::default(),
             pending: HashMap::new(),
         }
     }
@@ -281,7 +282,7 @@ impl Detail {
         };
         if self.appearance.as_ref() != Some(&look.appearance) {
             self.appearance = Some(look.appearance.clone());
-            self.types = nk_view::TypeScale::load(&look.exports, &look.appearance)
+            self.types = nk::TypeScale::load(&look.exports, &look.appearance)
                 .map_err(|e| eprintln!("nidara-shell: the view has no type scale: {e}"))
                 .ok();
             self.tokens = crate::nc_view::tokens(&look.exports, &look.appearance)
@@ -402,20 +403,20 @@ impl Detail {
     }
 
     /// The view: one control per row, in a region that scrolls when the output is short.
-    fn view(&self, style: &TextStyle, labels: &[String], remove: &str) -> nk_view::Node {
-        use nk_view::{Corner, Ink, Node, Padding, Radius, Role, Space};
+    fn view(&self, style: &TextStyle, labels: &[String], remove: &str) -> nk::Node {
+        use nk::{Corner, Ink, Node, Padding, Radius, Role, Space};
         let body = sized(style, TEXT);
         let small = sized(style, SMALL);
         let rows = self
             .rows
             .iter()
             .zip(labels)
-            .map(|(row, label)| {
+            .map(|(row, label)| -> Node {
                 let key = row_key(row.id);
                 let id = row.id;
                 let k = move |part: &str| format!("r{id}/{part}");
                 let enabled = row.action.is_some();
-                let title = Node::text(k("label"), label.clone(), body.clone()).lines(1);
+                let title = nk::Label::new(k("label"), label.clone(), body.clone()).lines(1);
                 if let Some((min, max, current)) = row.value {
                     // A slider row: its name and value over its track; the track is the control.
                     let step = if matches!(
@@ -426,26 +427,32 @@ impl Detail {
                     } else {
                         1.
                     };
-                    let head = Node::row(
+                    let head = nk::Row::new(
                         k("head"),
                         vec![
-                            title.grow(),
-                            Node::text(k("value"), value_text(&row.action, current), small.clone())
-                                .ink(Ink::Secondary),
+                            title.grow().into(),
+                            nk::Label::new(
+                                k("value"),
+                                value_text(&row.action, current),
+                                small.clone(),
+                            )
+                            .ink(Ink::Secondary)
+                            .into(),
                         ],
                     )
                     .gap(Space::S2);
-                    let slider = Node::slider(
+                    let slider = nk::Slider::new(
                         key,
                         label.clone(),
                         "row",
-                        nk_view::Slider::new(min, max, step, current),
+                        nk::SliderRange::new(min, max, step, current),
                     )
                     .enabled(enabled)
                     .description(row.description.clone());
-                    return Node::column(k("slot"), vec![head, slider])
+                    return nk::Column::new(k("slot"), vec![head.into(), slider.into()])
                         .gap(Space::S1)
-                        .padding(Padding::symmetric(Space::S2, Space::S2));
+                        .padding(Padding::symmetric(Space::S2, Space::S2))
+                        .into();
                 }
                 if let Some(Action::SecretFocus(index)) = row.action {
                     // A secret field: its bullets only (VIEW.md §12.2).
@@ -463,11 +470,11 @@ impl Detail {
                             )
                         })
                         .unwrap_or_default();
-                    let field = Node::field(
+                    let field = nk::Field::new(
                         k("field"),
                         label.clone(),
                         "submit",
-                        nk_view::Field {
+                        nk::FieldState {
                             shown,
                             caret,
                             anchor,
@@ -475,16 +482,17 @@ impl Detail {
                         },
                         small.clone(),
                     );
-                    return Node::column(k("slot"), vec![title, field])
+                    return nk::Column::new(k("slot"), vec![title.into(), field.into()])
                         .gap(Space::S1)
-                        .padding(Padding::symmetric(Space::S2, Space::S3));
+                        .padding(Padding::symmetric(Space::S2, Space::S3))
+                        .into();
                 }
-                let mut line = vec![];
+                let mut line: Vec<Node> = vec![];
                 if row.checked.is_some() && !row.switch {
-                    line.push(Node::slot(k("check"), 10.));
+                    line.push(nk::Slot::new(k("check"), 10.).into());
                 }
                 if row.thumbnail.is_some() {
-                    line.push(Node::slot(k("thumb"), 32.));
+                    line.push(nk::Slot::new(k("thumb"), 32.).into());
                 }
                 // A switch row: only the switch responds (VIEW.md §12.6); the row is not a
                 // control, so its text takes the disabled ink itself.
@@ -494,15 +502,16 @@ impl Detail {
                 } else {
                     title
                 };
-                let mut text = vec![title];
+                let mut text: Vec<Node> = vec![title.into()];
                 if !row.description.is_empty() {
                     text.push(
-                        Node::text(k("sub"), row.description.clone(), small.clone())
+                        nk::Label::new(k("sub"), row.description.clone(), small.clone())
                             .lines(1)
-                            .ink(Ink::Secondary),
+                            .ink(Ink::Secondary)
+                            .into(),
                     );
                 }
-                line.push(Node::column(k("text"), text).grow());
+                line.push(nk::Column::new(k("text"), text).grow().into());
                 let clip_row = matches!(
                     row.action,
                     Some(Action::Clipboard {
@@ -513,48 +522,52 @@ impl Detail {
                 );
                 if let (true, Some(on)) = (switch_row, row.checked) {
                     line.push(
-                        Node::switch_control(key.clone(), label.clone(), "row", on)
+                        nk::Switch::new(key.clone(), label.clone(), "row", on)
                             .enabled(enabled)
-                            .description(row.description.clone()),
+                            .description(row.description.clone())
+                            .into(),
                     );
-                    return Node::row(k("line"), line)
+                    return nk::Row::new(k("line"), line)
                         .gap(Space::S2)
-                        .align(nk_view::Align::Center)
-                        .padding(Padding::symmetric(Space::S3, Space::S2));
+                        .align(nk::Align::Center)
+                        .padding(Padding::symmetric(Space::S3, Space::S2))
+                        .into();
                 }
                 if clip_row {
                     line.push(
-                        Node::control(
+                        nk::Button::with_child(
                             k("remove"),
                             remove,
                             "remove",
-                            Node::text(k("x"), "×", body.clone()),
+                            nk::Label::new(k("x"), "×", body.clone()),
                         )
-                        .corner(Corner::Pill),
+                        .corner(Corner::Pill)
+                        .into(),
                     );
                 }
-                let control = Node::control(
+                let control = nk::Button::with_child(
                     key,
                     label.clone(),
                     "row",
-                    Node::row(k("line"), line)
+                    nk::Row::new(k("line"), line)
                         .gap(Space::S2)
-                        .align(nk_view::Align::Center)
+                        .align(nk::Align::Center)
                         .padding(Padding::symmetric(Space::S3, Space::S2)),
                 )
                 .corner(Corner::Token(Radius::Md))
                 .enabled(enabled)
                 .description(row.description.clone());
                 match row.checked {
-                    Some(on) => control.role(Role::Toggle).marked(on),
-                    None => control,
+                    Some(on) => control.role(Role::Toggle).marked(on).into(),
+                    None => control.into(),
                 }
             })
             .collect();
-        Node::scroll(
+        nk::Scroll::new(
             LIST,
-            Node::column("rows", rows).padding(Padding::all(Space::S4)),
+            nk::Column::new("rows", rows).padding(Padding::all(Space::S4)),
         )
+        .into()
     }
 
     /// Lays the rows out in `panel`: as tall as they are, up to the output's bottom, where
@@ -618,7 +631,7 @@ impl Detail {
     }
     /// Back to the first row, as a new question arrives.
     pub fn to_top(&mut self) {
-        self.state.key(nk_view::KeyInput::Home);
+        self.state.key(nk::KeyInput::Home);
     }
 
     /// The secret field nk-view focused is the form's.
@@ -638,16 +651,16 @@ impl Detail {
         self.rows.iter().find(|r| r.id == id)
     }
     /// The control a row's focus lands on: a secret row's field, else the row.
-    fn focus_key(&self, id: u64) -> Option<nk_view::Key> {
+    fn focus_key(&self, id: u64) -> Option<nk::Key> {
         let row = self.row(id)?;
         Some(match row.action {
-            Some(Action::SecretFocus(_)) => nk_view::Key::from(format!("r{id}/field")),
+            Some(Action::SecretFocus(_)) => nk::Key::from(format!("r{id}/field")),
             _ => row_key(id),
         })
     }
 
     pub fn key(&mut self, key: &nk_wayland::Key) -> Option<Action> {
-        use nk_view::KeyInput as K;
+        use nk::KeyInput as K;
         let input = match key.sym {
             0xff09 if key.shift => K::ShiftTab,
             0xff09 | 0xff54 => K::Tab,
@@ -735,7 +748,7 @@ impl Detail {
         );
         true
     }
-    pub fn scroll(&mut self, by: nk_view::ScrollBy) -> bool {
+    pub fn scroll(&mut self, by: nk::ScrollBy) -> bool {
         self.state.scroll(by)
     }
     /// The list's offset into its rows.
@@ -748,7 +761,7 @@ impl Detail {
             .placed()
             .iter()
             .rev()
-            .filter(|pl| matches!(pl.what, nk_view::What::Control(_)) && pl.alpha > 0.)
+            .filter(|pl| matches!(pl.what, nk::What::Control(_)) && pl.alpha > 0.)
             .find(|pl| pl.visible().is_some_and(|v| inside(v, p)))
             .and_then(|pl| row_of(&pl.key))
     }
@@ -777,7 +790,7 @@ impl Detail {
         a.and_then(|a| self.activated(&a))
     }
     /// What an activation of the view asks for.
-    fn activated(&mut self, a: &nk_view::Activated) -> Option<Action> {
+    fn activated(&mut self, a: &nk::Activated) -> Option<Action> {
         let id = row_of(&a.key)?;
         match a.action.as_str() {
             "remove" => self.named(id, "Remove"),
@@ -1982,7 +1995,7 @@ mod tests {
                 assert!(d.focused().is_some());
                 // The wheel scrolls the list under the pointer.
                 d.motion((100., 100.));
-                assert!(d.scroll(nk_view::ScrollBy::Steps(1.)));
+                assert!(d.scroll(nk::ScrollBy::Steps(1.)));
                 assert!(d.offset() > 0.);
             }
         }
@@ -2032,7 +2045,7 @@ mod tests {
         let progress = |d: &Detail| {
             let key = format!("r{id}/track").into();
             match d.state.placed().iter().find(|p| p.key == key) {
-                Some(p) if matches!(&p.what, nk_view::What::Drawing(part) if matches!(part.as_ref(),nk_view::Part::Switch(_))) => {
+                Some(p) if matches!(&p.what, nk::What::Drawing(part) if matches!(part.as_ref(),nk::Part::Switch(_))) => {
                     p.progress.unwrap()
                 }
                 w => panic!("no switch: {w:?}"),

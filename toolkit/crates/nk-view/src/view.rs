@@ -533,10 +533,10 @@ impl Node {
         self.presentation = true;
         self
     }
-    pub fn row(key: impl Into<Key>, children: Vec<Node>) -> Self {
+    pub(crate) fn row(key: impl Into<Key>, children: Vec<Node>) -> Self {
         Self::stack(key, Axis::Horizontal, children)
     }
-    pub fn column(key: impl Into<Key>, children: Vec<Node>) -> Self {
+    pub(crate) fn column(key: impl Into<Key>, children: Vec<Node>) -> Self {
         Self::stack(key, Axis::Vertical, children)
     }
     fn stack(key: impl Into<Key>, axis: Axis, children: Vec<Node>) -> Self {
@@ -552,7 +552,7 @@ impl Node {
             }),
         )
     }
-    pub fn pane(key: impl Into<Key>, corner: Corner, child: Node) -> Self {
+    pub(crate) fn pane(key: impl Into<Key>, corner: Corner, child: Node) -> Self {
         Self::new(
             key,
             Kind::Pane(Pane {
@@ -563,7 +563,7 @@ impl Node {
         )
     }
     /// A group: a card on the window's background, not glass (see `Kind::Group`).
-    pub fn group(key: impl Into<Key>, child: Node) -> Self {
+    pub(crate) fn group(key: impl Into<Key>, child: Node) -> Self {
         Self::new(
             key,
             Kind::Group(Group {
@@ -571,7 +571,7 @@ impl Node {
             }),
         )
     }
-    pub fn text(key: impl Into<Key>, text: impl Into<String>, style: TextStyle) -> Self {
+    pub(crate) fn text(key: impl Into<Key>, text: impl Into<String>, style: TextStyle) -> Self {
         Self::new(
             key,
             Kind::Text(Text {
@@ -585,7 +585,7 @@ impl Node {
             }),
         )
     }
-    pub fn icon(key: impl Into<Key>, name: impl Into<String>, size: f64) -> Self {
+    pub(crate) fn icon(key: impl Into<Key>, name: impl Into<String>, size: f64) -> Self {
         Self::new(
             key,
             Kind::Icon(Icon {
@@ -596,7 +596,7 @@ impl Node {
             }),
         )
     }
-    pub fn reveal(key: impl Into<Key>, open: bool, child: Node) -> Self {
+    pub(crate) fn reveal(key: impl Into<Key>, open: bool, child: Node) -> Self {
         Self::new(
             key,
             Kind::Reveal(Reveal {
@@ -606,7 +606,7 @@ impl Node {
         )
     }
     /// `base` with no layers yet; `layer` adds them, the last drawn on top.
-    pub fn overlay(key: impl Into<Key>, base: Node) -> Self {
+    pub(crate) fn overlay(key: impl Into<Key>, base: Node) -> Self {
         Self::new(
             key,
             Kind::Overlay(Overlay {
@@ -616,7 +616,7 @@ impl Node {
         )
     }
     /// A grid of `columns` cells of `unit`, `gap` apart, holding `cells` (VIEW.md §12.4).
-    pub fn grid(
+    pub(crate) fn grid(
         key: impl Into<Key>,
         columns: usize,
         unit: f64,
@@ -633,7 +633,7 @@ impl Node {
             }),
         )
     }
-    pub fn scroll(key: impl Into<Key>, child: Node) -> Self {
+    pub(crate) fn scroll(key: impl Into<Key>, child: Node) -> Self {
         Self::new(
             key,
             Kind::Scroll(Scroll {
@@ -643,20 +643,20 @@ impl Node {
     }
     /// Room the surface paints in itself, `size` square: a picture, a mark, a gauge
     /// (VIEW.md §12.3). Placed, clipped and faded as any node; never a control.
-    pub fn slot(key: impl Into<Key>, size: f64) -> Self {
+    pub(crate) fn slot(key: impl Into<Key>, size: f64) -> Self {
         Self::icon(key, "", size)
     }
     /// An on/off switch (VIEW.md §12.6), at the tokens' size. It is drawn only: put it in a
     /// control with `Role::Toggle` and `marked(on)`, which is what is pressed and said.
     /// A switch as drawn, for a control that holds one (`switch_control`, or a row an app
     /// makes activatable as a whole).
-    pub fn switch(key: impl Into<Key>, on: bool) -> Self {
-        Self::drawing(key, crate::Part::Switch(crate::Switch { on }))
+    pub(crate) fn switch(key: impl Into<Key>, on: bool) -> Self {
+        Self::drawing(key, crate::Part::Switch(crate::components::Switch { on }))
     }
     /// A switch (VIEW.md §12.6): only the switch responds, never the row it sits in. `name`
     /// is what its row says, so a reader calls the switch by it; `action` is reported on each
     /// flip. Off glass its hover and press are the view's, on its own pill.
-    pub fn switch_control(
+    pub(crate) fn switch_control(
         key: impl Into<Key>,
         name: impl Into<String>,
         action: impl Into<String>,
@@ -675,7 +675,7 @@ impl Node {
     /// (`action`), the row is one control named by its title and described by its second
     /// line, with the view's hover and press off glass; set its role and `marked` as for any
     /// control (a row that flips a switch it shows is `Role::Toggle`, `marked(on)`).
-    pub fn setting_row(key: impl Into<Key>, row: SettingRow) -> Self {
+    pub(crate) fn setting_row(key: impl Into<Key>, row: SettingRow) -> Self {
         let key = key.into();
         let ink = |normal| if row.disabled { Ink::Disabled } else { normal };
         let mut text = vec![
@@ -730,7 +730,7 @@ impl Node {
     /// kit's width, its glyphs either side of it when it has them, and its value after it in
     /// room for its widest text, so the slider never moves as the value changes. Measures are
     /// `style`'s, the exported `range.slider`.
-    pub fn slider_end(key: impl Into<Key>, end: SliderEnd) -> Self {
+    pub(crate) fn slider_end(key: impl Into<Key>, end: SliderEnd) -> Self {
         let owner = key.into();
         Self::drawing(
             format!("{}/end", owner.0),
@@ -741,7 +741,7 @@ impl Node {
     /// `glyph_size` (the frame's, `FrameStyle::icon`) and its title, in the kit's padding. The
     /// selected one is filled with the accent and drawn in the accent's foreground (D1); a
     /// reader hears a toggle, checked when it is the page shown.
-    pub fn sidebar_entry(key: impl Into<Key>, entry: SidebarEntry, glyph_size: f64) -> Self {
+    pub(crate) fn sidebar_entry(key: impl Into<Key>, entry: SidebarEntry, glyph_size: f64) -> Self {
         let key = key.into();
         let k = |part: &str| format!("{}/{part}", key.0);
         let line = Self::row(
@@ -781,14 +781,17 @@ impl Node {
         }
     }
     /// A checkbox's mark as drawn, for a control that holds one (`check_control`).
-    pub fn check(key: impl Into<Key>, on: bool) -> Self {
-        Self::drawing(key, crate::Part::Check(crate::Check { on, radio: false }))
-    }
-    /// A radio's mark as drawn, for a control that holds one (`radio_control`).
-    pub fn radio(key: impl Into<Key>, chosen: bool) -> Self {
+    pub(crate) fn check(key: impl Into<Key>, on: bool) -> Self {
         Self::drawing(
             key,
-            crate::Part::Check(crate::Check {
+            crate::Part::Check(crate::components::Check { on, radio: false }),
+        )
+    }
+    /// A radio's mark as drawn, for a control that holds one (`radio_control`).
+    pub(crate) fn radio(key: impl Into<Key>, chosen: bool) -> Self {
+        Self::drawing(
+            key,
+            crate::Part::Check(crate::components::Check {
                 on: chosen,
                 radio: true,
             }),
@@ -797,7 +800,7 @@ impl Node {
     /// A checkbox (VIEW.md §13.5): as the switch, only the box responds, never the row it
     /// sits in; `name` is what its row says, `action` is reported on each flip. It is off
     /// glass, and the view paints its states.
-    pub fn check_control(
+    pub(crate) fn check_control(
         key: impl Into<Key>,
         name: impl Into<String>,
         action: impl Into<String>,
@@ -809,7 +812,7 @@ impl Node {
     }
     /// A radio (VIEW.md §13.5): one choice of several; put the group's radios next to each
     /// other. `action` is reported when it is chosen, by a click or by the arrows.
-    pub fn radio_control(
+    pub(crate) fn radio_control(
         key: impl Into<Key>,
         name: impl Into<String>,
         action: impl Into<String>,
@@ -840,13 +843,13 @@ impl Node {
     }
     /// Stands in for a row the surface leaves unbuilt, outside a scroll region's window:
     /// `height` is what `ViewState::rect` gave for the row when it was built.
-    pub fn placeholder(key: impl Into<Key>, height: f64) -> Self {
+    pub(crate) fn placeholder(key: impl Into<Key>, height: f64) -> Self {
         Self::new(key, Kind::Placeholder(height))
     }
-    pub fn spacer(key: impl Into<Key>) -> Self {
+    pub(crate) fn spacer(key: impl Into<Key>) -> Self {
         Self::new(key, Kind::Spacer)
     }
-    pub fn control(
+    pub(crate) fn control(
         key: impl Into<Key>,
         name: impl Into<String>,
         action: impl Into<String>,
@@ -872,7 +875,7 @@ impl Node {
         )
     }
     /// A component without its own input or semantic node.
-    pub fn drawing(key: impl Into<Key>, part: crate::Part) -> Self {
+    pub(crate) fn drawing(key: impl Into<Key>, part: crate::Part) -> Self {
         let key = key.into();
         let child = Box::new(Self::spacer(format!("{}/body", key.0)));
         Self::new(
@@ -885,7 +888,7 @@ impl Node {
     }
     /// A button in a page's content (`Part::Button`): `label` centred in `style`, in the
     /// button's padding and corner. Not glass: for one over content, put a control in a pane.
-    pub fn button(
+    pub(crate) fn button(
         key: impl Into<Key>,
         label: impl Into<String>,
         action: impl Into<String>,
@@ -915,7 +918,7 @@ impl Node {
     /// as wide as its widest option so that a choice never moves what lies beside it. Its
     /// measures, tones and fonts are `style`'s (the exported `dropdown`), the font a step of
     /// `types`. Activated, the window it is in opens its list (`AppWindow`).
-    pub fn dropdown(key: impl Into<Key>, d: Dropdown) -> Self {
+    pub(crate) fn dropdown(key: impl Into<Key>, d: Dropdown) -> Self {
         let key = key.into();
         let mut n = Self::control(
             key.clone(),
@@ -939,7 +942,7 @@ impl Node {
     /// that the arrows move the choice and Tab stops at it once. Segment `n` is keyed
     /// `"{key}/{n}"` and reports `"{action}:{n}"` when it is chosen; its measures, tones and
     /// font arrive with the layout look (the exported `choices.segmented` and type scale).
-    pub fn segmented(key: impl Into<Key>, s: Segmented) -> Self {
+    pub(crate) fn segmented(key: impl Into<Key>, s: Segmented) -> Self {
         Self::drawing(
             key,
             crate::Part::Segmented(crate::components::SegmentedRow {
@@ -953,7 +956,7 @@ impl Node {
         )
     }
     /// A row of colour samples, with the exported swatch geometry and independent radio membership.
-    pub fn swatches(key: impl Into<Key>, s: Swatches) -> Self {
+    pub(crate) fn swatches(key: impl Into<Key>, s: Swatches) -> Self {
         Self::drawing(
             key,
             crate::Part::Swatches(crate::components::SwatchRow {
@@ -972,7 +975,7 @@ impl Node {
     }
     /// A row of a dropdown's open list: `label` and room for the tick after it, in the row's
     /// padding (`style`, the exported `dropdown.menu`). `chosen` ticks it.
-    pub fn menu_row(
+    pub(crate) fn menu_row(
         key: impl Into<Key>,
         label: impl Into<String>,
         action: impl Into<String>,
@@ -998,7 +1001,7 @@ impl Node {
     /// A slider (VIEW.md §12.1): as tall as its thumb and as wide as it is given (a column
     /// stretches it; in a row, `.grow()` it). `action` is reported on every change, its value
     /// read with `ViewState::value`.
-    pub fn slider(
+    pub(crate) fn slider(
         key: impl Into<Key>,
         name: impl Into<String>,
         action: impl Into<String>,
@@ -1020,7 +1023,7 @@ impl Node {
     }
 
     /// A text field (VIEW.md §12.2), its text in `style`; `action` is its Enter.
-    pub fn field(
+    pub(crate) fn field(
         key: impl Into<Key>,
         name: impl Into<String>,
         action: impl Into<String>,
@@ -1049,20 +1052,23 @@ impl Node {
 
     /// An application payload for a plain/surface control; intrinsic component values
     /// (a range or selection) remain owned by that component.
-    pub fn value(mut self, value: crate::Value) -> Self {
+    pub(crate) fn value(mut self, value: crate::Value) -> Self {
         if let Kind::Control(c) = &mut self.kind {
             c.configure(crate::components::Configure::Value(value));
         }
         self
     }
     /// Gallery fixture: show a child of a composed choice row in a stable state.
-    pub fn button_appearance(mut self, appearance: crate::components::ButtonAppearance) -> Self {
+    pub(crate) fn button_appearance(
+        mut self,
+        appearance: crate::components::ButtonAppearance,
+    ) -> Self {
         if let Kind::Control(c) = &mut self.kind {
             c.configure(crate::components::Configure::ButtonAppearance(appearance));
         }
         self
     }
-    pub fn sample_state(mut self, index: usize, shown: Shown) -> Self {
+    pub(crate) fn sample_state(mut self, index: usize, shown: Shown) -> Self {
         if let Kind::Drawing(d) = &mut self.kind {
             *d.part = d
                 .part
@@ -1071,31 +1077,31 @@ impl Node {
         self
     }
     // Modifiers. Each applies to the kind it names and is a no-op on any other.
-    pub fn gap(mut self, s: Space) -> Self {
+    pub(crate) fn gap(mut self, s: Space) -> Self {
         if let Kind::Stack(st) = &mut self.kind {
             st.gap = Some(s);
         }
         self
     }
-    pub fn padding(mut self, p: Padding) -> Self {
+    pub(crate) fn padding(mut self, p: Padding) -> Self {
         if let Kind::Stack(st) = &mut self.kind {
             st.padding = p;
         }
         self
     }
-    pub fn justify(mut self, j: Justify) -> Self {
+    pub(crate) fn justify(mut self, j: Justify) -> Self {
         if let Kind::Stack(st) = &mut self.kind {
             st.justify = j;
         }
         self
     }
-    pub fn align(mut self, a: Align) -> Self {
+    pub(crate) fn align(mut self, a: Align) -> Self {
         if let Kind::Stack(st) = &mut self.kind {
             st.align = a;
         }
         self
     }
-    pub fn layer(mut self, across: Align, down: Align, inset: Padding, child: Node) -> Self {
+    pub(crate) fn layer(mut self, across: Align, down: Align, inset: Padding, child: Node) -> Self {
         if let Kind::Overlay(o) = &mut self.kind {
             o.layers.push(Layer {
                 across,
@@ -1108,7 +1114,7 @@ impl Node {
         self
     }
     /// A layer at its natural size, its top-left `(x, y)` from the base's (§9).
-    pub fn layer_at(mut self, x: f64, y: f64, child: Node) -> Self {
+    pub(crate) fn layer_at(mut self, x: f64, y: f64, child: Node) -> Self {
         if let Kind::Overlay(o) = &mut self.kind {
             o.layers.push(Layer {
                 across: Align::Start,
@@ -1121,7 +1127,7 @@ impl Node {
         self
     }
     /// A pane's glass and content formed at `o` (§12.7).
-    pub fn opacity(mut self, o: f64) -> Self {
+    pub(crate) fn opacity(mut self, o: f64) -> Self {
         if let Kind::Pane(p) = &mut self.kind {
             p.opacity = o.clamp(0., 1.);
         }
@@ -1147,7 +1153,7 @@ impl Node {
         self.grow = true;
         self
     }
-    pub fn lines(mut self, n: usize) -> Self {
+    pub(crate) fn lines(mut self, n: usize) -> Self {
         if let Kind::Text(t) = &mut self.kind {
             t.lines = Some(n.max(1));
         }
@@ -1156,33 +1162,33 @@ impl Node {
     /// A text at least `n` lines tall.
     /// A text as wide as the widest of `texts` (and its own), so it does not move what lies
     /// beside it as it changes.
-    pub fn room(mut self, texts: Vec<String>) -> Self {
+    pub(crate) fn room(mut self, texts: Vec<String>) -> Self {
         if let Kind::Text(t) = &mut self.kind {
             t.room = texts;
         }
         self
     }
     /// An icon's ink at `alpha` of its own opacity.
-    pub fn alpha(mut self, alpha: f64) -> Self {
+    pub(crate) fn alpha(mut self, alpha: f64) -> Self {
         if let Kind::Icon(i) = &mut self.kind {
             i.alpha = alpha.clamp(0., 1.);
         }
         self
     }
-    pub fn reserve(mut self, n: usize) -> Self {
+    pub(crate) fn reserve(mut self, n: usize) -> Self {
         if let Kind::Text(t) = &mut self.kind {
             t.reserve = n;
         }
         self
     }
     /// A text hidden while `pane` is hovered or holds the focus.
-    pub fn hidden_with(mut self, pane: impl Into<Key>) -> Self {
+    pub(crate) fn hidden_with(mut self, pane: impl Into<Key>) -> Self {
         if let Kind::Text(t) = &mut self.kind {
             t.hidden_with = Some(pane.into());
         }
         self
     }
-    pub fn ink(mut self, ink: Ink) -> Self {
+    pub(crate) fn ink(mut self, ink: Ink) -> Self {
         match &mut self.kind {
             Kind::Text(t) => t.ink = ink,
             Kind::Icon(i) => i.ink = ink,
@@ -1190,13 +1196,13 @@ impl Node {
         }
         self
     }
-    pub fn wash(mut self, w: Wash) -> Self {
+    pub(crate) fn wash(mut self, w: Wash) -> Self {
         if let Kind::Control(c) = &mut self.kind {
             c.configure(crate::components::Configure::Wash(w));
         }
         self
     }
-    pub fn corner(mut self, corner: Corner) -> Self {
+    pub(crate) fn corner(mut self, corner: Corner) -> Self {
         match &mut self.kind {
             Kind::Control(c) => c.configure(crate::components::Configure::Corner(corner)),
             Kind::Pane(p) => p.corner = corner,
@@ -1204,63 +1210,63 @@ impl Node {
         }
         self
     }
-    pub fn role(mut self, r: Role) -> Self {
+    pub(crate) fn role(mut self, r: Role) -> Self {
         if let Kind::Control(c) = &mut self.kind {
             c.role = r;
         }
         self
     }
-    pub fn enabled(mut self, on: bool) -> Self {
+    pub(crate) fn enabled(mut self, on: bool) -> Self {
         if let Kind::Control(c) = &mut self.kind {
             c.enabled = on;
         }
         self
     }
-    pub fn marked(mut self, on: bool) -> Self {
+    pub(crate) fn marked(mut self, on: bool) -> Self {
         if let Kind::Control(c) = &mut self.kind {
             c.configure(crate::components::Configure::Marked(on));
         }
         self
     }
     /// Shows a control in `state` for good: the gallery's states side by side (§13.3).
-    pub fn shown(mut self, state: Shown) -> Self {
+    pub(crate) fn shown(mut self, state: Shown) -> Self {
         if let Kind::Control(c) = &mut self.kind {
             c.shown = Some(state);
         }
         self
     }
-    pub fn on(mut self, on: bool) -> Self {
+    pub(crate) fn on(mut self, on: bool) -> Self {
         if let Kind::Control(c) = &mut self.kind {
             c.configure(crate::components::Configure::On(on));
         }
         self
     }
-    pub fn surface(mut self) -> Self {
+    pub(crate) fn surface(mut self) -> Self {
         if let Kind::Control(c) = &mut self.kind {
             c.configure(crate::components::Configure::Surface);
         }
         self
     }
     /// The pointer passes through it; keys and readers reach it.
-    pub fn keys_only(mut self) -> Self {
+    pub(crate) fn keys_only(mut self) -> Self {
         if let Kind::Control(c) = &mut self.kind {
             c.pointer = false;
         }
         self
     }
-    pub fn revealed_with(mut self, pane: impl Into<Key>) -> Self {
+    pub(crate) fn revealed_with(mut self, pane: impl Into<Key>) -> Self {
         if let Kind::Control(c) = &mut self.kind {
             c.revealed_with = Some(pane.into());
         }
         self
     }
-    pub fn description(mut self, text: impl Into<String>) -> Self {
+    pub(crate) fn description(mut self, text: impl Into<String>) -> Self {
         if let Kind::Control(c) = &mut self.kind {
             c.description = text.into();
         }
         self
     }
-    pub fn swipe(mut self, action: impl Into<String>) -> Self {
+    pub(crate) fn swipe(mut self, action: impl Into<String>) -> Self {
         if let Kind::Control(c) = &mut self.kind {
             c.swipe = Some(action.into());
         }

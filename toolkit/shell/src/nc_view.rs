@@ -11,12 +11,13 @@ use crate::{
     notifications::Banner,
     popup::Look,
 };
-use nk_render::{Canvas, ImageFit};
-use nk_text::{Rect, TextStyle};
-use nk_view::{
+use nk::prelude::*;
+use nk::{
     Activated, Align, Corner, Frame, Ink, Key, KeyInput, Node, Padding, Radius, ScrollBy, Space,
     Ticked, Tokens, ViewState, Wash,
 };
+use nk_render::{Canvas, ImageFit};
+use nk_text::{Rect, TextStyle};
 use nk_wayland::{Group, MaterialRect, Pane, Shadow, Tone};
 use std::{
     collections::{HashMap, HashSet},
@@ -77,7 +78,7 @@ pub enum Act {
 pub struct View {
     pub state: ViewState,
     tokens: Option<Tokens>,
-    types: Option<nk_view::TypeScale>,
+    types: Option<nk::TypeScale>,
     groups_open: HashSet<String>,
     items_open: HashSet<u64>,
     history: Arc<Vec<Banner>>,
@@ -263,30 +264,35 @@ fn ghosts(count: usize) -> usize {
 impl View {
     /// The centre's view: the calendar card, then the list, which scrolls.
     pub fn view(&self, m: &Model<'_>) -> Node {
-        let mut list = vec![];
+        let mut list: Vec<Node> = vec![];
         let groups = groups(m.history);
         if groups.is_empty() {
             list.push(
-                Node::row(
+                nk::Row::new(
                     "empty/row",
-                    vec![Node::pane(
-                        "empty",
-                        Corner::Pill,
-                        Node::row(
-                            "empty/pad",
-                            vec![
-                                Node::text(
-                                    "empty/text",
-                                    &m.strings.empty,
-                                    style(m.text, 13., 400.),
-                                )
-                                .ink(Ink::Secondary),
-                            ],
+                    vec![
+                        nk::Pane::new(
+                            "empty",
+                            Corner::Pill,
+                            nk::Row::new(
+                                "empty/pad",
+                                vec![
+                                    nk::Label::new(
+                                        "empty/text",
+                                        &m.strings.empty,
+                                        style(m.text, 13., 400.),
+                                    )
+                                    .ink(Ink::Secondary)
+                                    .into(),
+                                ],
+                            )
+                            .padding(Padding::symmetric(Space::S2, Space::S8)),
                         )
-                        .padding(Padding::symmetric(Space::S2, Space::S8)),
-                    )],
+                        .into(),
+                    ],
                 )
-                .justify(nk_view::Justify::Center),
+                .justify(nk::Justify::Center)
+                .into(),
             );
         }
         // Only the rows near what shows are built (B3.2, VIEW.md §8): a viewport above and
@@ -301,14 +307,14 @@ impl View {
         // A group's open rows from `y`, each built if near, else a placeholder; and where
         // they end.
         let rows = |list_of: &[&Banner], mut y: f64| -> (Vec<Node>, f64) {
-            let mut out = vec![];
+            let mut out: Vec<Node> = vec![];
             for (n, b) in list_of.iter().enumerate() {
                 let pane = format!("n{}/pane", b.instance);
                 let h = height(&pane, self.card_guess);
                 out.push(if near(y, h) {
                     self.card(b, m, None)
                 } else {
-                    Node::placeholder(pane, h)
+                    nk::Placeholder::new(pane, h).into()
                 });
                 // The last card's gap is the list's, to the next row.
                 y += h + px(if n + 1 == list_of.len() {
@@ -326,7 +332,7 @@ impl View {
                 list.push(if near(y, h) {
                     self.card(list_of[0], m, None)
                 } else {
-                    Node::placeholder(pane, h)
+                    nk::Placeholder::new(pane, h).into()
                 });
                 y += h + px(Space::S4);
                 continue;
@@ -342,7 +348,7 @@ impl View {
                 let node = if near(y, h) {
                     self.group_header(key, list_of, m)
                 } else {
-                    Node::placeholder(header, h)
+                    nk::Placeholder::new(header, h).into()
                 };
                 y += h + px(Space::S3);
                 node
@@ -351,15 +357,16 @@ impl View {
                 let pane = format!("f{}/pane", list_of[0].instance);
                 let h = height(&pane, self.card_guess) + strip;
                 let node = if near(y, h) {
-                    Node::column(
+                    nk::Column::new(
                         format!("g:{key}/stack"),
                         vec![
                             self.card(list_of[0], m, Some((key, list_of.len()))),
-                            Node::placeholder(format!("g:{key}/ghosts"), strip),
+                            nk::Placeholder::new(format!("g:{key}/ghosts"), strip).into(),
                         ],
                     )
+                    .into()
                 } else {
-                    Node::placeholder(format!("g:{key}/stack"), h)
+                    nk::Placeholder::new(format!("g:{key}/stack"), h).into()
                 };
                 y += h + px(Space::S4);
                 node
@@ -373,114 +380,134 @@ impl View {
             } else {
                 vec![]
             };
-            list.push(Node::column(
-                format!("g:{key}"),
-                vec![
-                    front,
-                    Node::reveal(
-                        format!("g:{key}/rows"),
-                        open,
-                        Node::column(format!("g:{key}/list"), built)
-                            .gap(Space::S3)
-                            .padding(Padding {
-                                top: Some(Space::S3),
-                                ..Padding::default()
-                            }),
-                    ),
-                ],
-            ));
+            list.push(
+                nk::Column::new(
+                    format!("g:{key}"),
+                    vec![
+                        front,
+                        nk::Revealer::new(
+                            format!("g:{key}/rows"),
+                            open,
+                            nk::Column::new(format!("g:{key}/list"), built)
+                                .gap(Space::S3)
+                                .padding(Padding {
+                                    top: Some(Space::S3),
+                                    ..Padding::default()
+                                }),
+                        )
+                        .into(),
+                    ],
+                )
+                .into(),
+            );
         }
         if !m.error.is_empty() {
             list.push(
-                Node::row(
+                nk::Row::new(
                     "error/row",
                     vec![
-                        Node::text("error", m.error, style(m.text, 12., 400.))
+                        nk::Label::new("error", m.error, style(m.text, 12., 400.))
                             .lines(2)
-                            .ink(Ink::Secondary),
+                            .ink(Ink::Secondary)
+                            .into(),
                     ],
                 )
-                .justify(nk_view::Justify::Center),
+                .justify(nk::Justify::Center)
+                .into(),
             );
         }
         if !groups.is_empty() {
             list.push(
-                Node::row(
+                nk::Row::new(
                     "clear/row",
-                    vec![Node::pane(
-                        "clear",
-                        Corner::Pill,
-                        Node::control(
-                            "clear-all",
-                            &m.strings.clear_all,
-                            "clear-all",
-                            Node::row(
-                                "clear/pad",
-                                vec![Node::text(
-                                    "clear/text",
-                                    &m.strings.clear_all,
-                                    style(m.text, 13., 400.),
-                                )],
-                            )
-                            .padding(Padding::symmetric(Space::S2, Space::S8)),
-                        ),
-                    )],
+                    vec![
+                        nk::Pane::new(
+                            "clear",
+                            Corner::Pill,
+                            nk::Button::with_child(
+                                "clear-all",
+                                &m.strings.clear_all,
+                                "clear-all",
+                                nk::Row::new(
+                                    "clear/pad",
+                                    vec![
+                                        nk::Label::new(
+                                            "clear/text",
+                                            &m.strings.clear_all,
+                                            style(m.text, 13., 400.),
+                                        )
+                                        .into(),
+                                    ],
+                                )
+                                .padding(Padding::symmetric(Space::S2, Space::S8)),
+                            ),
+                        )
+                        .into(),
+                    ],
                 )
-                .justify(nk_view::Justify::Center),
+                .justify(nk::Justify::Center)
+                .into(),
             );
         }
-        Node::column(
+        nk::Column::new(
             "nc",
             vec![
-                Node::row("calendar/row", vec![self.calendar(m).grow()]).padding(Padding {
-                    right: Some(LANE),
-                    ..Padding::default()
-                }),
-                Node::scroll(
+                nk::Row::new("calendar/row", vec![self.calendar(m).grow()])
+                    .padding(Padding {
+                        right: Some(LANE),
+                        ..Padding::default()
+                    })
+                    .into(),
+                nk::Scroll::new(
                     "list",
-                    Node::column("list/items", list)
+                    nk::Column::new("list/items", list)
                         .gap(Space::S4)
                         .padding(Padding {
                             right: Some(LANE),
                             bottom: Some(Space::S1),
                             ..Padding::default()
                         }),
-                ),
+                )
+                .into(),
             ],
         )
         .gap(Space::S4)
+        .into()
     }
 
     fn calendar(&self, m: &Model<'_>) -> Node {
         let body = style(m.text, 13., 400.);
         let nav = |key: &str, name: &str, icon: &str| {
-            Node::control(
+            nk::Button::with_child(
                 format!("cal/{key}"),
                 name,
                 key,
-                Node::row(
+                nk::Row::new(
                     format!("cal/{key}/pad"),
-                    vec![Node::icon(format!("cal/{key}/icon"), icon, 16.)],
+                    vec![nk::Image::new(format!("cal/{key}/icon"), icon, 16.).into()],
                 )
                 .padding(Padding::all(Space::S1)),
             )
         };
-        let header = Node::row(
+        let header = nk::Row::new(
             "cal/header",
             vec![
-                Node::text("cal/month", m.month_name, style(m.text, 15., 700.)).grow(),
-                nav("previous", "Previous month", "nd-pan-start"),
-                Node::control(
+                nk::Label::new("cal/month", m.month_name, style(m.text, 15., 700.))
+                    .grow()
+                    .into(),
+                nav("previous", "Previous month", "nd-pan-start").into(),
+                nk::Button::with_child(
                     "cal/today",
                     "Today",
                     "today",
-                    Node::row(
+                    nk::Row::new(
                         "cal/today/pad",
-                        vec![Node::text("cal/today/text", "Today", body.clone())],
+                        vec![nk::Label::new("cal/today/text", "Today", body.clone()).into()],
                     )
                     .padding(Padding::symmetric(Space::S1, Space::S2)),
-                ),
-                nav("next", "Next month", "nd-pan-end"),
+                )
+                .into(),
+                nav("next", "Next month", "nd-pan-end").into(),
             ],
         )
         .gap(Space::S1)
@@ -488,38 +515,39 @@ impl View {
         // A cell is a square the width of a day number, the number centred over it; the
         // seven share the row's room, so the columns are equal whatever the digits.
         let cell = |key: String, label: String, ink: Ink| {
-            Node::overlay(
+            nk::Overlay::new(
                 format!("{key}/cell"),
-                Node::icon(format!("{key}/square"), "", 28.),
+                nk::Image::new(format!("{key}/square"), "", 28.),
             )
             .layer(
                 Align::Center,
                 Align::Center,
                 Padding::default(),
-                Node::text(key, label, body.clone()).ink(ink),
+                nk::Label::new(key, label, body.clone()).ink(ink),
             )
             .grow()
         };
-        let mut rows = vec![
-            header,
-            Node::row(
+        let mut rows: Vec<Node> = vec![
+            header.into(),
+            nk::Row::new(
                 "cal/weekdays",
                 m.weekdays
                     .iter()
                     .enumerate()
-                    .map(|(i, d)| cell(format!("cal/wd{i}"), d.clone(), Ink::Dim))
+                    .map(|(i, d)| cell(format!("cal/wd{i}"), d.clone(), Ink::Dim).into())
                     .collect(),
-            ),
+            )
+            .into(),
         ];
         let days = nc::calendar(m.year, m.month);
         for week in 0..6 {
-            let mut cells = vec![];
+            let mut cells: Vec<Node> = vec![];
             for col in 0..7 {
                 let at = week * 7 + col;
                 let day = days.iter().find(|(_, c)| *c == at).map(|(d, _)| *d);
                 let key = format!("cal/d{at}");
                 cells.push(match day {
-                    Some(d) if m.today == Some(d) => Node::control(
+                    Some(d) if m.today == Some(d) => nk::Button::with_child(
                         format!("{key}/today"),
                         format!("Today, {d}"),
                         "",
@@ -527,61 +555,71 @@ impl View {
                     )
                     .enabled(false)
                     .marked(true)
-                    .grow(),
-                    Some(d) => cell(key, d.to_string(), Ink::Primary),
+                    .grow()
+                    .into(),
+                    Some(d) => cell(key, d.to_string(), Ink::Primary).into(),
                     // A day outside the month is room, not an empty text a reader would visit.
-                    None => Node::icon(format!("{key}/square"), "", 28.).grow(),
+                    None => nk::Image::new(format!("{key}/square"), "", 28.)
+                        .grow()
+                        .into(),
                 });
             }
-            rows.push(Node::row(format!("cal/w{week}"), cells));
+            rows.push(nk::Row::new(format!("cal/w{week}"), cells).into());
         }
-        Node::pane(
+        nk::Pane::new(
             "calendar",
             Corner::Token(Radius::Xl),
-            Node::column("cal/col", rows)
+            nk::Column::new("cal/col", rows)
                 .gap(Space::S1)
                 .padding(Padding::all(Space::S4)),
         )
+        .into()
     }
 
     fn group_header(&self, key: &str, list: &[&Banner], m: &Model<'_>) -> Node {
         let name = list[0].notice.app_name.clone();
         let pane = format!("g:{key}/header");
-        Node::pane(
+        nk::Pane::new(
             pane.clone(),
             Corner::Token(Radius::Md),
-            Node::control(
+            nk::Button::with_child(
                 format!("g:{key}/toggle"),
                 format!("{name}, {} notifications, collapse", list.len()),
                 format!("group:{key}"),
-                Node::row(
+                nk::Row::new(
                     format!("g:{key}/row"),
                     vec![
-                        Node::text(format!("g:{key}/name"), name, style(m.text, 13., 700.))
+                        nk::Label::new(format!("g:{key}/name"), name, style(m.text, 13., 700.))
                             .lines(1)
-                            .grow(),
-                        Node::text(
+                            .grow()
+                            .into(),
+                        nk::Label::new(
                             format!("g:{key}/count"),
                             list.len().to_string(),
                             style(m.text, 11., 600.),
                         )
-                        .ink(Ink::Secondary),
-                        Node::control(
+                        .ink(Ink::Secondary)
+                        .into(),
+                        nk::Button::with_child(
                             format!("g:{key}/clear"),
                             format!("Clear {}", list[0].notice.app_name),
                             format!("clear-group:{key}"),
-                            Node::row(
+                            nk::Row::new(
                                 format!("g:{key}/clear/pad"),
-                                vec![Node::icon(
-                                    format!("g:{key}/clear/icon"),
-                                    "nd-window-close",
-                                    13.,
-                                )],
+                                vec![
+                                    nk::Image::new(
+                                        format!("g:{key}/clear/icon"),
+                                        "nd-window-close",
+                                        13.,
+                                    )
+                                    .into(),
+                                ],
                             )
                             .padding(Padding::all(Space::S1)),
                         )
                         .wash(Wash::Destructive)
-                        .revealed_with(pane),
+                        .revealed_with(pane)
+                        .into(),
                     ],
                 )
                 .gap(Space::S2)
@@ -591,6 +629,7 @@ impl View {
             .corner(Corner::Token(Radius::Md))
             .swipe(format!("clear-group:{key}")),
         )
+        .into()
     }
 
     /// One card. `group`: the collapsed group it fronts and how many it holds; its close and
@@ -650,7 +689,7 @@ impl View {
             Some((key, _)) => format!("clear-group:{key}"),
             None => format!("close:{i}:{c}"),
         };
-        let age = Node::text(
+        let age = nk::Label::new(
             k("age"),
             nc::age(b.notice.time, m.now),
             style(m.text, 11., 400.),
@@ -659,74 +698,82 @@ impl View {
         // The chevron shows on hover in the age's place, as TS swapped them, so the title
         // line never moves.
         let age = if expandable {
-            Node::overlay(k("when"), age.hidden_with(pane.clone())).layer(
-                Align::Center,
-                Align::Center,
-                Padding::default(),
-                Node::control(
-                    k("more"),
-                    if expanded { "Show less" } else { "Show more" },
-                    format!("item:{i}"),
-                    Node::icon(
-                        k("more/icon"),
-                        if expanded { "nd-pan-up" } else { "nd-pan-down" },
-                        13.,
-                    ),
+            nk::Overlay::new(k("when"), age.hidden_with(pane.clone()))
+                .layer(
+                    Align::Center,
+                    Align::Center,
+                    Padding::default(),
+                    nk::Button::with_child(
+                        k("more"),
+                        if expanded { "Show less" } else { "Show more" },
+                        format!("item:{i}"),
+                        nk::Image::new(
+                            k("more/icon"),
+                            if expanded { "nd-pan-up" } else { "nd-pan-down" },
+                            13.,
+                        ),
+                    )
+                    .revealed_with(pane.clone()),
                 )
-                .revealed_with(pane.clone()),
-            )
+                .into()
         } else {
-            age
+            age.into()
         };
-        let mut head = vec![
-            Node::text(k("title"), title.clone(), style(m.text, 13., 700.))
+        let mut head: Vec<Node> = vec![
+            nk::Label::new(k("title"), title.clone(), style(m.text, 13., 700.))
                 .lines(1)
-                .grow(),
+                .grow()
+                .into(),
             age,
         ];
         if let Some((_, count)) = group {
             head.push(
-                Node::text(k("count"), count.to_string(), style(m.text, 11., 600.))
-                    .ink(Ink::Secondary),
+                nk::Label::new(k("count"), count.to_string(), style(m.text, 11., 600.))
+                    .ink(Ink::Secondary)
+                    .into(),
             );
         }
-        let mut text = vec![
-            Node::row(k("head"), head)
+        let mut text: Vec<Node> = vec![
+            nk::Row::new(k("head"), head)
                 .gap(Space::S2)
-                .align(Align::Center),
+                .align(Align::Center)
+                .into(),
         ];
         if !body.is_empty() {
             text.push(
                 // Two lines however short, so every card of its kind is one height (TS).
-                Node::text(k("body"), body, style(m.text, 12., 400.))
+                nk::Label::new(k("body"), body, style(m.text, 12., 400.))
                     .lines(if expanded { 4 } else { 2 })
                     .reserve(if expanded { 0 } else { 2 })
-                    .ink(Ink::Secondary),
+                    .ink(Ink::Secondary)
+                    .into(),
             );
         }
         let mut actions = (expanded && !actions.is_empty()).then(|| {
-            Node::row(
+            nk::Row::new(
                 k("actions"),
                 actions
                     .iter()
                     .map(|a| {
-                        Node::control(
+                        nk::Button::with_child(
                             format!("n{i}/act/{}", a.id),
                             a.label.clone(),
                             format!("act:{i}:{c}:{}", a.id),
-                            Node::row(
+                            nk::Row::new(
                                 format!("n{i}/act/{}/pad", a.id),
                                 vec![
-                                    Node::text(
+                                    nk::Label::new(
                                         format!("n{i}/act/{}/text", a.id),
                                         a.label.clone(),
                                         style(m.text, 12., 400.),
                                     )
-                                    .lines(1),
+                                    .lines(1)
+                                    .into(),
                                 ],
                             )
                             .padding(Padding::symmetric(Space::S1, Space::S3)),
                         )
+                        .into()
                     })
                     .collect(),
             )
@@ -735,35 +782,47 @@ impl View {
         if hero.is_none()
             && let Some(row) = actions.take()
         {
-            text.push(row);
+            text.push(row.into());
         }
         if !b.error.is_empty() {
-            text.push(Node::text(k("error"), b.error.clone(), style(m.text, 12., 400.)).lines(2));
+            text.push(
+                nk::Label::new(k("error"), b.error.clone(), style(m.text, 12., 400.))
+                    .lines(2)
+                    .into(),
+            );
         }
-        let mut row = vec![
-            Node::icon(k("app"), "", ART),
-            Node::column(k("text"), text).gap(Space::S1).grow(),
+        let mut row: Vec<Node> = vec![
+            nk::Image::new(k("app"), "", ART).into(),
+            nk::Column::new(k("text"), text)
+                .gap(Space::S1)
+                .grow()
+                .into(),
         ];
         if hero.is_none() && thumbnail(b).is_some() {
-            row.push(Node::icon(k("thumb"), "", ART));
+            row.push(nk::Image::new(k("thumb"), "", ART).into());
         }
-        let mut body = vec![Node::row(k("row"), row).gap(Space::S3).align(Align::Center)];
+        let mut body: Vec<Node> = vec![
+            nk::Row::new(k("row"), row)
+                .gap(Space::S3)
+                .align(Align::Center)
+                .into(),
+        ];
         if let Some(h) = hero {
-            body.push(Node::placeholder(k("hero"), h));
+            body.push(nk::Placeholder::new(k("hero"), h).into());
         }
-        body.extend(actions);
+        body.extend(actions.map(Node::from));
         let open = match group {
             Some((key, _)) => format!("group:{key}"),
             None => format!("open:{i}:{c}"),
         };
-        let content = Node::control(
+        let content = nk::Button::with_child(
             k("card"),
             match group {
                 Some((_, n)) => format!("{title}, {n} notifications, expand"),
                 None => title,
             },
             open,
-            Node::column(k("body-col"), body)
+            nk::Column::new(k("body-col"), body)
                 .gap(Space::S3)
                 .padding(Padding::all(Space::S3)),
         )
@@ -771,25 +830,25 @@ impl View {
         .wash(Wash::None)
         .corner(Corner::Token(CARD))
         .swipe(close_action.clone());
-        let close = Node::control(
+        let close = nk::Button::with_child(
             k("close"),
             match group {
                 Some(_) => format!("Clear {}", b.notice.app_name),
                 None => "Close notification".into(),
             },
             close_action,
-            Node::row(
+            nk::Row::new(
                 k("close/pad"),
-                vec![Node::icon(k("close/icon"), "nd-window-close", 13.)],
+                vec![nk::Image::new(k("close/icon"), "nd-window-close", 13.).into()],
             )
             .padding(Padding::all(Space::S1)),
         )
         .wash(Wash::Destructive)
         .revealed_with(pane.clone());
-        Node::pane(
+        nk::Pane::new(
             pane,
             Corner::Token(CARD),
-            Node::overlay(k("over"), content).layer(
+            nk::Overlay::new(k("over"), content).layer(
                 Align::Start,
                 Align::Start,
                 Padding {
@@ -800,6 +859,7 @@ impl View {
                 close,
             ),
         )
+        .into()
     }
 
     /// Rebuilds the view from the history and the month shown, and lays it out. `cards`:
@@ -817,7 +877,7 @@ impl View {
     ) {
         if self.appearance.as_ref() != Some(&look.appearance) {
             self.appearance = Some(look.appearance.clone());
-            self.types = nk_view::TypeScale::load(&look.exports, &look.appearance)
+            self.types = nk::TypeScale::load(&look.exports, &look.appearance)
                 .map_err(|e| eprintln!("nidara-shell: the view has no type scale: {e}"))
                 .ok();
             self.tokens = tokens(&look.exports, &look.appearance)
@@ -918,7 +978,7 @@ impl View {
         self.built = self.window();
         for p in self.state.placed() {
             let k = &p.key.0;
-            if matches!(p.what, nk_view::What::Pane(_))
+            if matches!(p.what, nk::What::Pane(_))
                 && (k.starts_with('n') || k.starts_with('f') || k.starts_with("g:"))
             {
                 self.heights.insert(k.clone(), p.rect[3]);
@@ -1220,7 +1280,7 @@ impl View {
     /// Each card's artwork this frame: its slot (`app`, `thumb` or `hero`), its notice and
     /// what of it shows. Everything that shows is drawn, at its card's opacity, so a card
     /// leaving or unrolling takes its pictures with it.
-    fn artwork(&self) -> Vec<(&nk_view::Placed, &str, &Banner, nk_view::Rect)> {
+    fn artwork(&self) -> Vec<(&nk::Placed, &str, &Banner, nk::Rect)> {
         self.state
             .placed()
             .iter()
@@ -1316,13 +1376,13 @@ pub(crate) fn exported_tokens() -> Option<Tokens> {
     exported_look().map(|l| l.0)
 }
 #[cfg(test)]
-pub(crate) fn exported_types() -> Option<nk_view::TypeScale> {
+pub(crate) fn exported_types() -> Option<nk::TypeScale> {
     exported_look().map(|l| l.1)
 }
 
 /// The exported tokens in the dark skin, for tests; None (skipped) without an export.
 #[cfg(test)]
-fn exported_look() -> Option<(Tokens, nk_view::TypeScale)> {
+fn exported_look() -> Option<(Tokens, nk::TypeScale)> {
     let root = std::env::var_os("NK_SETTINGS_DATA")
         .map(std::path::PathBuf::from)
         .unwrap_or_else(|| {
@@ -1346,7 +1406,7 @@ fn exported_look() -> Option<(Tokens, nk_view::TypeScale)> {
     let hex = e.colors["accents"][set["accent"].as_str().unwrap()]
         .as_str()
         .unwrap();
-    let c = nk_view::parse_color(hex).unwrap().components;
+    let c = nk::parse_color(hex).unwrap().components;
     let appearance = nk_platform::portal::Appearance {
         accent: [c[0] as f64, c[1] as f64, c[2] as f64],
         dark: true,
@@ -1358,14 +1418,14 @@ fn exported_look() -> Option<(Tokens, nk_view::TypeScale)> {
     };
     Some((
         tokens(&e, &appearance).unwrap(),
-        nk_view::TypeScale::load(&e, &appearance).unwrap(),
+        nk::TypeScale::load(&e, &appearance).unwrap(),
     ))
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use nk_view::What;
+    use nk::What;
 
     fn banner(instance: u64, app: &str, time: u64, extra: serde_json::Value) -> Banner {
         let mut notice = serde_json::json!({"id": instance, "app_name": app,
