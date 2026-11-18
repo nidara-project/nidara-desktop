@@ -439,12 +439,17 @@ struct HyaloPeer {
     requests: std::sync::mpsc::Receiver<serde_json::Value>,
     pending: std::sync::Mutex<Vec<serde_json::Value>>,
     refuse: std::sync::Arc<std::sync::atomic::AtomicBool>,
+    config: std::sync::Arc<std::sync::Mutex<serde_json::Value>>,
+    ignore_input: std::sync::Arc<std::sync::atomic::AtomicBool>,
     events: std::sync::mpsc::Receiver<std::os::unix::net::UnixStream>,
     thread: Option<std::thread::JoinHandle<()>>,
     stop: std::sync::Arc<std::sync::atomic::AtomicBool>,
 }
 impl HyaloPeer {
     fn new(path: PathBuf) -> Self {
+        Self::with_input(path, serde_json::Value::Null)
+    }
+    fn with_input(path: PathBuf, input: serde_json::Value) -> Self {
         use std::io::{BufRead, Write};
         use std::sync::{
             Arc,
@@ -456,6 +461,13 @@ impl HyaloPeer {
         let (events_tx, events) = std::sync::mpsc::channel();
         let refuse = Arc::new(AtomicBool::new(false));
         let stop = Arc::new(AtomicBool::new(false));
+        let config = Arc::new(std::sync::Mutex::new(if input.is_null() {
+            serde_json::Value::Null
+        } else {
+            serde_json::json!({"input":input})
+        }));
+        let ignore_input = Arc::new(AtomicBool::new(false));
+        let (cfg, ignore) = (config.clone(), ignore_input.clone());
         let (r, s) = (refuse.clone(), stop.clone());
         let thread = std::thread::spawn(move || {
             while !s.load(Ordering::Relaxed) {
@@ -474,11 +486,25 @@ impl HyaloPeer {
                             continue;
                         }
                         let reply = if r.load(Ordering::Relaxed) {
-                            "{\"error\":\"injected refusal\"}\n"
+                            serde_json::json!({"error":"injected refusal"})
                         } else {
-                            "{\"ok\":{\"kind\":\"handled\"}}\n"
+                            let mut config = cfg.lock().unwrap();
+                            if value["request"] == "config" && !config.is_null() {
+                                serde_json::json!({"ok":{"config":*config}})
+                            } else {
+                                if !ignore.load(Ordering::Relaxed)
+                                    && let Some(sections) = value["patch"]["input"].as_object()
+                                {
+                                    for (section, fields) in sections {
+                                        for (key, v) in fields.as_object().unwrap() {
+                                            config["input"][section][key] = v.clone();
+                                        }
+                                    }
+                                }
+                                serde_json::json!({"ok":{"kind":"handled"}})
+                            }
                         };
-                        let _ = stream.write_all(reply.as_bytes());
+                        let _ = stream.write_all(format!("{reply}\n").as_bytes());
                         let _ = tx.send(value);
                     }
                     Err(e) if e.kind() == std::io::ErrorKind::WouldBlock => {
@@ -493,6 +519,8 @@ impl HyaloPeer {
             requests,
             pending: std::sync::Mutex::new(Vec::new()),
             refuse,
+            config,
+            ignore_input,
             events,
             thread: Some(thread),
             stop,
@@ -577,6 +605,7 @@ if os.path.exists(os.path.join(os.environ['HOME'], 'awww-refuse')):
         "'TestCursor'",
     );
     env.gsettings_set("org.gnome.desktop.interface", "cursor-size", "32");
+    env.gsettings_set("org.gnome.desktop.interface", "enable-animations", "false");
     env.gsettings_set("org.nidara.night-light", "enabled", "true");
     env.gsettings_set("org.nidara.night-light", "temperature", "4300");
     let image = env.dir.join("an image;literal.png");
@@ -600,6 +629,13 @@ if os.path.exists(os.path.join(os.environ['HOME'], 'awww-refuse')):
     wait_for_config(&conn).await;
     let cursor = json!({"request":"settings","patch":{"cursor":{"theme":"TestCursor","size":32}}});
     peer.expect(cursor.clone()).await;
+    let reduce = json!({"request":"settings","patch":{"animations":{"enabled":false}}});
+    let restore = json!({"request":"settings","patch":{"animations":{"enabled":null}}});
+    peer.expect(reduce.clone()).await;
+    // Another writer changes the existing GSettings home; restoring removes the key.
+    env.gsettings_set("org.gnome.desktop.interface", "enable-animations", "true");
+    peer.expect(restore.clone()).await;
+
     peer.expect(json!({"request":"night_light","temperature":4300}))
         .await;
     eventually("initial GTK values and preserved keys", || {
@@ -765,6 +801,13 @@ if os.path.exists(os.path.join(os.environ['HOME'], 'awww-refuse')):
     peer.refuse
         .store(false, std::sync::atomic::Ordering::Relaxed);
     peer.expect(expected).await;
+    // Discard earlier motion requests so each assertion proves a fresh reload/reconnect.
+    let clear_motion = || {
+        let mut pending = peer.pending.lock().unwrap();
+        pending.extend(peer.requests.try_iter());
+        pending.retain(|v| v["patch"].get("animations").is_none());
+    };
+    clear_motion();
     // Hotplug restates output-dependent effects; reconnect also restores the cursor.
     let mut stream = peer.events.recv_timeout(Duration::from_secs(2)).unwrap();
     stream
@@ -772,11 +815,21 @@ if os.path.exists(os.path.join(os.environ['HOME'], 'awww-refuse')):
         .unwrap();
     peer.expect(json!({"request":"night_light","temperature":null}))
         .await;
+    peer.expect(restore.clone()).await;
+    env.gsettings_set("org.gnome.desktop.interface", "enable-animations", "false");
+    peer.expect(reduce.clone()).await;
+    clear_motion();
+    stream
+        .write_all(b"{\"event\":\"outputs_changed\",\"outputs\":[]}\n")
+        .unwrap();
+    peer.expect(reduce.clone()).await;
+    clear_motion();
     drop(stream);
     peer.expect(json!({"request":"settings","patch":{"cursor":{"theme":"TestCursor","size":48}}}))
         .await;
     peer.expect(json!({"request":"night_light","temperature":null}))
         .await;
+    peer.expect(reduce).await;
     // A no-op must not rewrite the INI or reapply wallpaper after it has settled.
     tokio::time::sleep(Duration::from_millis(100)).await;
     let file = env.dir.join("config/gtk-4.0/settings.ini");
@@ -1029,4 +1082,225 @@ async fn power_homes_and_effective_compositor_settings() {
     }
     assert!(heard);
     task.abort();
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn ordinary_pages_share_homes_and_hyalo_is_the_only_input_writer() {
+    use serde_json::json;
+    let mut env = setup();
+    let peer = HyaloPeer::with_input(
+        env.dir.join("hyalo.sock"),
+        json!({
+            "pointer":{"accel_speed":0.0,"accel_profile":"adaptive","natural_scroll":false},
+            "touchpad":{"accel_speed":0.0,"accel_profile":"adaptive","natural_scroll":false,"tap":false},
+            "keyboard":{"layout":"us","variant":"","numlock":false,"repeat_delay":600,"repeat_rate":25}
+        }),
+    );
+    env.start();
+    let conn = connect(&env.address).await;
+    wait_for_config(&conn).await;
+    let (_, _, raw): (u64, u64, String) = call(&conn, "Snapshot", &()).await.unwrap();
+    let schema: serde_json::Value = serde_json::from_str(&raw).unwrap();
+    let expected = [
+        "notifications.doNotDisturb",
+        "notifications.popupTimeout",
+        "accessibility.textScale",
+        "accessibility.cursorSize",
+        "accessibility.reduceMotion",
+        "input.mouse.speed",
+        "input.mouse.accel",
+        "input.mouse.natural",
+        "input.touchpad.natural",
+        "input.touchpad.tap",
+        "input.keyboard.layout",
+        "input.keyboard.numlock",
+        "input.keyboard.repeatDelay",
+        "input.keyboard.repeatRate",
+    ];
+    for key in expected {
+        assert_eq!(schema["keys"][key]["available"], true, "{key}");
+        assert!(schema["keys"][key]["ui"]["control"].is_string(), "{key}");
+    }
+    let layout = &schema["keys"]["input.keyboard.layout"];
+    assert!(
+        layout["values"]
+            .as_array()
+            .unwrap()
+            .contains(&json!("us-colemak"))
+    );
+    assert!(
+        !layout["values"]
+            .as_array()
+            .unwrap()
+            .contains(&json!("custom"))
+    );
+    assert_eq!(schema["keys"]["input.keyboard.repeatDelay"]["max"], 2000.);
+    for (key, value, canonical) in [
+        (
+            "notifications.doNotDisturb",
+            OwnedValue::from(true),
+            json!(true),
+        ),
+        (
+            "notifications.popupTimeout",
+            OwnedValue::from(5.6f64),
+            json!(6.),
+        ),
+        (
+            "accessibility.textScale",
+            OwnedValue::from(1.237f64),
+            json!(1.24),
+        ),
+        (
+            "accessibility.cursorSize",
+            OwnedValue::from(31.5f64),
+            json!(32.),
+        ),
+        (
+            "accessibility.reduceMotion",
+            OwnedValue::from(true),
+            json!(true),
+        ),
+        ("input.mouse.speed", OwnedValue::from(0.4f64), json!(0.4)),
+        (
+            "input.mouse.accel",
+            OwnedValue::try_from(Value::from("flat")).unwrap(),
+            json!("flat"),
+        ),
+        ("input.mouse.natural", OwnedValue::from(true), json!(true)),
+        (
+            "input.touchpad.natural",
+            OwnedValue::from(true),
+            json!(true),
+        ),
+        ("input.touchpad.tap", OwnedValue::from(true), json!(true)),
+        (
+            "input.keyboard.layout",
+            OwnedValue::try_from(Value::from("us-colemak")).unwrap(),
+            json!("us-colemak"),
+        ),
+        (
+            "input.keyboard.numlock",
+            OwnedValue::from(true),
+            json!(true),
+        ),
+        (
+            "input.keyboard.repeatDelay",
+            OwnedValue::from(501.6f64),
+            json!(502.),
+        ),
+        (
+            "input.keyboard.repeatRate",
+            OwnedValue::from(30.5f64),
+            json!(31.),
+        ),
+    ] {
+        let (_, result): (u64, OwnedValue) = call(&conn, "Apply", &(key, value)).await.unwrap();
+        let result = if let Ok(v) = bool::try_from(&result) {
+            json!(v)
+        } else if let Ok(v) = f64::try_from(&result) {
+            json!(v)
+        } else {
+            json!(String::try_from(result).unwrap())
+        };
+        assert_eq!(result, canonical, "{key}");
+    }
+    let input = peer.config.lock().unwrap()["input"].clone();
+    assert_eq!(input["pointer"]["accel_speed"], 0.4);
+    assert_eq!(input["touchpad"]["accel_speed"], 0.4);
+    assert_eq!(input["keyboard"]["variant"], "colemak");
+    assert_eq!(input["keyboard"]["repeat_delay"], 502);
+    assert!(
+        !env.dir.join("config/nidara/hyalo-settings.toml").exists(),
+        "sessiond must never write Hyalo's settings file"
+    );
+    for (name, key, value) in [
+        ("org.nidara.notifications", "do-not-disturb", "true"),
+        ("org.nidara.notifications", "popup-timeout", "6"),
+        ("org.gnome.desktop.interface", "text-scaling-factor", "1.24"),
+        ("org.gnome.desktop.interface", "cursor-size", "32"),
+        ("org.gnome.desktop.interface", "enable-animations", "false"),
+    ] {
+        let mut command = Command::new("gsettings");
+        command.args(["get", name, key]);
+        env.vars(&mut command);
+        let out = command.output().unwrap();
+        assert!(out.status.success());
+        assert_eq!(String::from_utf8(out.stdout).unwrap().trim(), value);
+    }
+    for (key, value) in [
+        ("input.mouse.speed", OwnedValue::from(1.1f64)),
+        ("input.keyboard.repeatDelay", OwnedValue::from(99.9f64)),
+        (
+            "input.keyboard.layout",
+            OwnedValue::try_from(Value::from("custom")).unwrap(),
+        ),
+    ] {
+        assert_eq!(
+            error_name(
+                call::<(u64, OwnedValue)>(&conn, "Apply", &(key, value))
+                    .await
+                    .unwrap_err()
+            ),
+            "org.nidara.Config1.Error.Invalid"
+        );
+    }
+    // A successful RPC is not success when the user's later layer wins.
+    peer.ignore_input
+        .store(true, std::sync::atomic::Ordering::Relaxed);
+    assert_eq!(
+        error_name(
+            call::<(u64, OwnedValue)>(
+                &conn,
+                "Apply",
+                &("input.mouse.speed", OwnedValue::from(0.8f64))
+            )
+            .await
+            .unwrap_err()
+        ),
+        "org.nidara.Config1.Error.Failed"
+    );
+    assert_eq!(
+        peer.config.lock().unwrap()["input"]["pointer"]["accel_speed"],
+        0.4
+    );
+    peer.ignore_input
+        .store(false, std::sync::atomic::Ordering::Relaxed);
+    // Another writer changes the compositor: the existing monitor refreshes Config1.
+    peer.config.lock().unwrap()["input"]["pointer"]["accel_speed"] = json!(0.6);
+    for n in 0..80 {
+        let values: HashMap<String, OwnedValue> = call(&conn, "Get", &(vec!["input.mouse.speed"],))
+            .await
+            .unwrap();
+        if f64::try_from(values.get("input.mouse.speed").unwrap()).unwrap() == 0.6 {
+            break;
+        }
+        assert!(n < 79, "external Hyalo input change was not observed");
+        tokio::time::sleep(Duration::from_millis(50)).await;
+    }
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn ordinary_keys_are_unavailable_when_their_home_is_missing() {
+    let mut env = setup_without(Some("text-scaling-factor"));
+    env.start();
+    let conn = connect(&env.address).await;
+    wait_for_config(&conn).await;
+    let (_, _, raw): (u64, u64, String) = call(&conn, "Snapshot", &()).await.unwrap();
+    let schema: serde_json::Value = serde_json::from_str(&raw).unwrap();
+    for key in [
+        "accessibility.textScale",
+        "input.mouse.speed",
+        "input.keyboard.layout",
+    ] {
+        assert_eq!(schema["keys"][key]["available"], false, "{key}");
+        assert!(
+            schema["keys"][key].get("value").is_none(),
+            "no invented effective value for {key}"
+        );
+    }
+    assert_eq!(
+        schema["keys"]["notifications.doNotDisturb"]["available"],
+        true
+    );
 }

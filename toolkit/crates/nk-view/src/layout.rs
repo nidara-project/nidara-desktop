@@ -462,8 +462,10 @@ impl Layouter<'_> {
                     }
                     None => (0., 0., None),
                 };
+                // A reserved label still keeps its stable width when it fits;
+                // line-limited text may give up that room under constraint.
                 let w = if t.lines.is_some() {
-                    w.min(width)
+                    w.max(self.room(t)).min(width)
                 } else {
                     w.max(self.room(t))
                 };

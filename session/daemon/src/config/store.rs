@@ -110,14 +110,6 @@ pub fn spawn(changes: Arc<Changes>) -> Handle {
                         }
                     }
                 }
-                // Cursor size is a GSettings home even though Config1 has no picker for it.
-                if store.has("org.gnome.desktop.interface", "cursor-size") {
-                    let updates = changes.clone();
-                    store
-                        .settings("org.gnome.desktop.interface")
-                        .unwrap()
-                        .connect_changed(Some("cursor-size"), move |_, _| updates.publish());
-                }
                 // GNOME's wallpaper keys: an app that sets the wallpaper by writing them
                 // (#1044). The file changes, and its monitor below announces it.
                 for k in ["picture-uri", "picture-uri-dark"] {
@@ -164,7 +156,7 @@ pub fn spawn(changes: Arc<Changes>) -> Handle {
                     .spawn(move || {
                         loop {
                             let serial = idle_serial.load(std::sync::atomic::Ordering::SeqCst);
-                            let idle = registry::read_idle();
+                            let compositor = registry::read_compositor();
                             let updates = updates.clone();
                             context.invoke(move || {
                                 STORE.with(|s| {
@@ -174,12 +166,20 @@ pub fn spawn(changes: Arc<Changes>) -> Handle {
                                         {
                                             return;
                                         }
-                                        let before = st.idle.replace(idle);
+                                        let before = st.idle.replace(compositor["idle"].clone());
+                                        let previous_input =
+                                            st.input.replace(compositor["input"].clone());
                                         for key in registry::keys() {
-                                            if let Some(field) = registry::idle_field(key.name)
-                                                && before[field] != st.idle.borrow()[field]
-                                                && registry::available(st, key)
-                                            {
+                                            let changed = registry::idle_field(key.name)
+                                                .is_some_and(|field| {
+                                                    before[field] != st.idle.borrow()[field]
+                                                })
+                                                || registry::input_changed(
+                                                    key.name,
+                                                    &previous_input,
+                                                    &st.input.borrow(),
+                                                );
+                                            if changed && registry::available(st, key) {
                                                 updates.push(key.name, registry::get(st, key));
                                             }
                                         }

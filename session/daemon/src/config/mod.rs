@@ -168,7 +168,7 @@ impl Config1 {
                     .filter(|k| registry::available(st, k))
                     .map(|k| registry::get(st, k));
                 let result = registry::set(st, &key, &raw);
-                if registry::idle_field(&key).is_some()
+                if registry::compositor_key(&key)
                     && let Some(k) = registry::find(&key)
                     && registry::available(st, k)
                 {

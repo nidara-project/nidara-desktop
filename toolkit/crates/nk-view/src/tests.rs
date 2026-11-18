@@ -4363,6 +4363,67 @@ fn a_dropdown_is_its_triggers_height_and_as_wide_as_its_widest_option() {
 }
 
 #[test]
+fn a_long_dropdown_fits_its_setting_row_without_losing_options_or_stable_width() {
+    let long = "English (international, with a very long keyboard variant description) ".repeat(8);
+    let options = vec!["US".to_owned(), long.clone()];
+    for scale in [1., 1.25] {
+        for width in [400., 800.] {
+            let mut previous = None;
+            for chosen in [0, 1] {
+                let view = Node::setting_row(
+                    "row",
+                    SettingRow {
+                        title: "Keyboard layout".into(),
+                        title_style: style(14.),
+                        trailing: Some(Node::dropdown(
+                            "d",
+                            Dropdown {
+                                name: "Keyboard layout".into(),
+                                options: options.clone(),
+                                chosen,
+                                action: "layout".into(),
+                                disabled: false,
+                            },
+                        )),
+                        ..Default::default()
+                    },
+                );
+                let mut s = laid(&view, (width, 100.), scale);
+                let row = rect(&s, "row");
+                let trigger = rect(&s, "d");
+                let arrow = rect(&s, "d/arrow");
+                assert!(row[2] <= width, "row overflow at {scale}: {row:?}");
+                assert!(
+                    trigger[0] + trigger[2] <= width,
+                    "trigger overflow: {trigger:?}"
+                );
+                assert!(arrow[0] + arrow[2] <= trigger[0] + trigger[2]);
+                if let Some(before) = previous {
+                    assert_eq!(trigger, before);
+                }
+                previous = Some(trigger);
+                if chosen == 1 {
+                    let text = &s.text().get(&"d/label".into()).unwrap().shown;
+                    assert!(
+                        text.ends_with('…'),
+                        "long trigger was not shortened: {text}"
+                    );
+                }
+                assert_eq!(s.choice(&"d".into()), Some((options.clone(), chosen)));
+                let tree = s.semantics(nk_a11y::Node::new(1, nk_a11y::Role::Window, "W"), 2);
+                let combo = tree
+                    .nodes
+                    .values()
+                    .find(|n| n.role == nk_a11y::Role::ComboBox)
+                    .unwrap();
+                assert_eq!(combo.name, "Keyboard layout");
+                assert_eq!(tree.nodes[&combo.children[1]].name, long);
+            }
+        }
+    }
+}
+
+#[test]
 fn a_reader_finds_a_combo_box_holding_its_options_the_chosen_one_selected() {
     let mut s = laid(&speed(&SPEEDS, 1, false), (400., 200.), 1.);
     let tree = s.semantics(nk_a11y::Node::new(1, nk_a11y::Role::Window, "W"), 2);

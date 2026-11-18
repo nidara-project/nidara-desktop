@@ -29,6 +29,7 @@ const DEADLINE: Duration = Duration::from_secs(5);
 pub(super) struct Snapshot {
     gtk: Option<Gtk>,
     night: Option<Night>,
+    animations: Option<bool>,
     wallpaper: Option<(String, String)>,
 }
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -101,6 +102,10 @@ impl Snapshot {
         Self {
             gtk,
             night,
+            animations: st
+                .settings(INTERFACE)
+                .filter(|_| st.has(INTERFACE, "enable-animations"))
+                .map(|s| s.boolean("enable-animations")),
             wallpaper,
         }
     }
@@ -407,6 +412,26 @@ pub(super) fn start(store: Handle, changes: Arc<Changes>) {
                 let p = p.clone();
                 async move {
                     request(&p, json!({"request":"settings", "patch":{"cursor":{"theme":theme,"size":size}}})).await
+                }
+            },
+        ));
+        let p = path.clone();
+        tokio::spawn(lane(
+            "reduce-motion",
+            rx.clone(),
+            reset_rx.clone(),
+            |s| s.animations,
+            move |enabled| {
+                let p = p.clone();
+                async move {
+                    // Restoring motion removes our override: lower/user layers decide,
+                    // never force true. Hyalo's no-op merge prevents reload feedback.
+                    let enabled = if enabled { Json::Null } else { json!(false) };
+                    request(
+                        &p,
+                        json!({"request":"settings", "patch":{"animations":{"enabled":enabled}}}),
+                    )
+                    .await
                 }
             },
         ));
