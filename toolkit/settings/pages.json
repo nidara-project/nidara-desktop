@@ -379,9 +379,9 @@
   "icon": "nd-battery",
   "groups": [
    {
-    "i18n": "settings.power.group.profile",
-    "note": "The profile group is an entire custom group: selection_mode = SINGLE, rows use NidaraRow directly and are NOT indexed in search, and updates follow onPageShown with a syncing flag to avoid spurious daemon writes.",
-    "custom": "performanceProfiles"
+    "items": [
+     "power.profile"
+    ]
    },
    {
     "i18n": "settings.power.group.idle",

@@ -113,6 +113,8 @@ impl Env {
         cmd.env_clear()
             .env("PATH", std::env::var("PATH").unwrap_or_default())
             .env("DBUS_SESSION_BUS_ADDRESS", &self.address)
+            // The host's system services (power-profiles-daemon) never leak into a test.
+            .env("DBUS_SYSTEM_BUS_ADDRESS", &self.address)
             .env("HYALO_SOCKET", self.dir.join("hyalo.sock"))
             .env("GSETTINGS_BACKEND", "keyfile")
             .env("GIO_USE_VFS", "local")
@@ -1393,6 +1395,95 @@ async fn workspace_modes_live_in_hyalo_and_settings_wins_over_a_runtime_toggle()
         !env.dir.join("config/nidara/hyalo-settings.toml").exists(),
         "sessiond must never write Hyalo's settings file"
     );
+}
+
+struct Ppd(String);
+#[zbus::interface(name = "org.freedesktop.UPower.PowerProfiles")]
+impl Ppd {
+    #[zbus(property)]
+    fn profiles(&self) -> Vec<HashMap<String, OwnedValue>> {
+        ["power-saver", "balanced"]
+            .into_iter()
+            .map(|s| HashMap::from([("Profile".into(), Value::from(s).try_into().unwrap())]))
+            .collect()
+    }
+    #[zbus(property)]
+    fn active_profile(&self) -> String {
+        self.0.clone()
+    }
+    #[zbus(property)]
+    fn set_active_profile(&mut self, value: String) {
+        self.0 = value;
+    }
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn the_performance_profile_is_power_profiles_daemons() {
+    const PATH: &str = "/org/freedesktop/UPower/PowerProfiles";
+    let mut env = setup();
+    let ppd = connect(&env.address).await;
+    ppd.object_server()
+        .at(PATH, Ppd("balanced".into()))
+        .await
+        .unwrap();
+    ppd.request_name("org.freedesktop.UPower.PowerProfiles")
+        .await
+        .unwrap();
+    env.start();
+    let conn = connect(&env.address).await;
+    wait_for_config(&conn).await;
+    let (_, _, raw): (u64, u64, String) = call(&conn, "Snapshot", &()).await.unwrap();
+    let schema: serde_json::Value = serde_json::from_str(&raw).unwrap();
+    let key = &schema["keys"]["power.profile"];
+    assert_eq!(key["available"], true);
+    assert_eq!(key["value"], "balanced");
+    assert_eq!(
+        key["values"],
+        serde_json::json!(["power-saver", "balanced"])
+    );
+    assert_eq!(key["ui"]["control"], "segmented");
+    let apply = |mode: &'static str| {
+        let conn = conn.clone();
+        async move {
+            call::<(u64, OwnedValue)>(
+                &conn,
+                "Apply",
+                &(
+                    "power.profile",
+                    OwnedValue::try_from(Value::from(mode)).unwrap(),
+                ),
+            )
+            .await
+        }
+    };
+    let (_, v) = apply("power-saver").await.unwrap();
+    assert_eq!(String::try_from(v).unwrap(), "power-saver");
+    let iface = ppd.object_server().interface::<_, Ppd>(PATH).await.unwrap();
+    assert_eq!(iface.get().await.0, "power-saver", "PPD is the home");
+    // Not advertised here: refused, never sent.
+    assert_eq!(
+        error_name(apply("performance").await.unwrap_err()),
+        "org.nidara.Config1.Error.Invalid"
+    );
+    // Another writer (powerprofilesctl, the CC): PPD's signal refreshes Config1.
+    iface.get_mut().await.0 = "balanced".into();
+    iface
+        .get()
+        .await
+        .active_profile_changed(iface.signal_emitter())
+        .await
+        .unwrap();
+    for n in 0..80 {
+        let values: HashMap<String, OwnedValue> =
+            call(&conn, "Get", &(vec!["power.profile"],)).await.unwrap();
+        if String::try_from(values.get("power.profile").unwrap().try_clone().unwrap()).unwrap()
+            == "balanced"
+        {
+            break;
+        }
+        assert!(n < 79, "an external profile change was not observed");
+        tokio::time::sleep(Duration::from_millis(50)).await;
+    }
 }
 
 #[tokio::test(flavor = "multi_thread")]

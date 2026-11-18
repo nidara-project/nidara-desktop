@@ -508,7 +508,8 @@ reconnect: false while reducing, null to release the override when restoring; ne
 force true over the user's lower layers. Reuse effect lanes/reset and Hyalo's
 idempotent settings merge. The existing
 compositor monitor reads idle/input together and guards stale reads with one serial.
-Step 7c adds the six Desktop workspace-mode keys in Hyalo's `[workspaces]` layer; a
+`power.profile` is PPD's ActiveProfile on the system bus, announced by PPD's own
+signals; Config1 tests set `DBUS_SYSTEM_BUS_ADDRESS` to their private bus. Step 7c adds the six Desktop workspace-mode keys in Hyalo's `[workspaces]` layer; a
 write also clears runtime modes so Settings wins, as TS did.
 Read session/daemon/src/config/README.md for homes, followers, keyboard catalogue and
 physical-session limits. A dropdown reserves its widest option only within its available

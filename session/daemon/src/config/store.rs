@@ -110,6 +110,18 @@ pub fn spawn(changes: Arc<Changes>) -> Handle {
                         }
                     }
                 }
+                // power-profiles-daemon: its own signals, never a poll.
+                {
+                    let changes = changes.clone();
+                    registry::watch_profile(move || {
+                        STORE.with(|s| {
+                            if let Some(st) = s.borrow().as_ref() {
+                                registry::refresh_profile(st);
+                            }
+                        });
+                        announce(&changes, registry::PROFILE_KEY);
+                    });
+                }
                 // GNOME's wallpaper keys: an app that sets the wallpaper by writing them
                 // (#1044). The file changes, and its monitor below announces it.
                 for k in ["picture-uri", "picture-uri-dark"] {
