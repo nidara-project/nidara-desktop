@@ -169,6 +169,8 @@ pub fn spawn(changes: Arc<Changes>) -> Handle {
                                         let before = st.idle.replace(compositor["idle"].clone());
                                         let previous_input =
                                             st.input.replace(compositor["input"].clone());
+                                        let previous_workspaces =
+                                            st.workspaces.replace(compositor["workspaces"].clone());
                                         for key in registry::keys() {
                                             let changed = registry::idle_field(key.name)
                                                 .is_some_and(|field| {
@@ -178,6 +180,11 @@ pub fn spawn(changes: Arc<Changes>) -> Handle {
                                                     key.name,
                                                     &previous_input,
                                                     &st.input.borrow(),
+                                                )
+                                                || registry::workspaces_changed(
+                                                    key.name,
+                                                    &previous_workspaces,
+                                                    &st.workspaces.borrow(),
                                                 );
                                             if changed && registry::available(st, key) {
                                                 updates.push(key.name, registry::get(st, key));
