@@ -424,8 +424,9 @@ A window's sidebar is built of `nk::SidebarEntry` (§13.8): the selected one in 
 Enter/Space choose a row and report its index, and the caller supplies the selected index.
 Settings' Power profiles use this control and the exported selected-row tint.
 `nk::FontButton` previews the current face with its explicit pt/px unit. `nk::FontDialog`
-uses the parent text backend's own catalogue, optionally filtered to monospace, and returns the
-draft only on Choose. Points become logical pixels at 96 DPI before output scaling.
+uses the parent text backend's own catalogue and loads faces only for the selected family.
+Monospace filtering checks one default face per family. Choose returns the draft; the size field
+accepts a decimal point or comma. Points become logical pixels at 96 DPI before output scaling.
 `nk::DropDown` (§13.9) is only the TRIGGER:
 `AppWindow` opens its list as a popup and reports the dropdown's action only on a choice (read
 the index with `AppWindow::value`). Outside an `AppWindow` nothing opens it — a surface hosting a

@@ -197,17 +197,16 @@ impl Default for FontFace {
     }
 }
 
-#[derive(Clone, Debug)]
-pub struct FontFamily {
-    pub name: String,
-    /// The first face is the backend's default for the family.
-    pub faces: Vec<FontFace>,
+/// Names and on-demand face metadata from the collection used for shaping.
+pub trait FontCatalogue {
+    fn family_names(&mut self, monospace_only: bool) -> Vec<String>;
+    /// The first face is the backend's default for this family.
+    fn faces(&mut self, family: &str) -> Vec<FontFace>;
 }
 
 pub trait TextBackend {
-    /// Named families from the same collection used for shaping.
-    fn font_families(&mut self, _monospace_only: bool) -> Vec<FontFamily> {
-        Vec::new()
+    fn font_catalogue(&self) -> Option<Box<dyn FontCatalogue>> {
+        None
     }
     /// An independent retained editor using the same font source and engine policy.
     fn fork(&self) -> Result<Box<dyn TextBackend>> {

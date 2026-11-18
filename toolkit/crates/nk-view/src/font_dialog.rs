@@ -5,7 +5,7 @@ use crate::{
     DropDown, Entry, FontFace, Key, Label, ListSource, ListView, Node, Page, RowInfo, SearchEntry,
     SettingRow, Space, Type, Value, Weight,
 };
-use nk_text::{FontFamily, TextStyle};
+use nk_text::{FontCatalogue, TextStyle};
 use nk_wayland::Window;
 
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -146,8 +146,7 @@ impl FontDialog {
         updates: impl FnMut() -> Result<DialogUpdate, String>,
         parent_page: impl FnMut(&AppWindow) -> Page,
     ) -> Result<Option<FontChoice>, String> {
-        let families = host.font_families(self.monospace_only);
-        let mut draft = Draft::new(self, families, updates);
+        let mut draft = Draft::new(self, host.font_catalogue(), updates);
         let spec = Dialog {
             title: draft.labels.title.clone(),
             close_label: draft.labels.close.clone(),
@@ -159,7 +158,9 @@ impl FontDialog {
 }
 
 struct Draft<U> {
-    families: Vec<FontFamily>,
+    catalogue: Option<Box<dyn FontCatalogue>>,
+    families: Vec<String>,
+    faces: Vec<FontFace>,
     filtered: Vec<usize>,
     query: String,
     filter_revision: usize,
@@ -171,34 +172,52 @@ struct Draft<U> {
     updates: U,
 }
 impl<U> Draft<U> {
-    fn new(dialog: FontDialog, families: Vec<FontFamily>, updates: U) -> Self {
+    fn new(dialog: FontDialog, mut catalogue: Option<Box<dyn FontCatalogue>>, updates: U) -> Self {
+        let families = catalogue.as_mut().map_or_else(Vec::new, |catalogue| {
+            catalogue.family_names(dialog.monospace_only)
+        });
         let family = families
             .iter()
-            .position(|f| f.name.eq_ignore_ascii_case(&dialog.initial.family))
+            .position(|name| name.eq_ignore_ascii_case(&dialog.initial.family))
             .or_else(|| (!families.is_empty()).then_some(0));
-        let face = family
-            .and_then(|index| {
-                families[index].faces.iter().position(|f| {
-                    let initial = &dialog.initial.face;
-                    f.weight == initial.weight
-                        && f.width == initial.width
-                        && f.slant == initial.slant
-                })
-            })
-            .unwrap_or_default();
         let size = dialog.initial.size;
-        Self {
+        let mut draft = Self {
             filtered: (0..families.len()).collect(),
+            catalogue,
             families,
+            faces: Vec::new(),
             query: String::new(),
             filter_revision: 0,
-            family,
-            face,
+            family: None,
+            face: 0,
             size,
             size_text: size.value().to_string(),
             labels: dialog.labels,
             updates,
+        };
+        if let Some(index) = family {
+            draft.select_family(index);
+            let initial = dialog.initial.face;
+            draft.face = draft
+                .faces
+                .iter()
+                .position(|face| {
+                    face.weight == initial.weight
+                        && face.width == initial.width
+                        && face.slant == initial.slant
+                })
+                .unwrap_or_default();
         }
+        draft
+    }
+
+    fn select_family(&mut self, index: usize) {
+        self.family = Some(index);
+        self.faces = self
+            .catalogue
+            .as_mut()
+            .map_or_else(Vec::new, |catalogue| catalogue.faces(&self.families[index]));
+        self.face = 0;
     }
     fn filter(&mut self, query: String) {
         let name = query.trim().to_lowercase();
@@ -206,19 +225,20 @@ impl<U> Draft<U> {
             .families
             .iter()
             .enumerate()
-            .filter_map(|(i, family)| family.name.to_lowercase().contains(&name).then_some(i))
+            .filter_map(|(i, family)| family.to_lowercase().contains(&name).then_some(i))
             .collect();
         self.query = query;
         self.filter_revision += 1;
     }
     fn picked_size(&self) -> Option<FontSize> {
-        let size = self.size.with_value(self.size_text.trim().parse().ok()?);
+        let value = self.size_text.trim().replace(',', ".").parse().ok()?;
+        let size = self.size.with_value(value);
         size.valid().then_some(size)
     }
     fn choice(&self) -> Option<FontChoice> {
         let family = self.families.get(self.family?)?;
-        let face = family.faces.get(self.face)?.clone();
-        Some(FontChoice::new(&family.name, self.picked_size()?).face(face))
+        let face = self.faces.get(self.face)?.clone();
+        Some(FontChoice::new(family, self.picked_size()?).face(face))
     }
     fn responses(&self) -> Vec<DialogButton> {
         vec![
@@ -249,7 +269,7 @@ impl<U> Draft<U> {
 }
 
 struct Families<'a> {
-    all: &'a [FontFamily],
+    all: &'a [String],
     filtered: &'a [usize],
     style: TextStyle,
 }
@@ -258,11 +278,11 @@ impl ListSource for Families<'_> {
         let id = self.filtered[index];
         RowInfo {
             key: id.to_string().into(),
-            name: self.all[id].name.clone(),
+            name: self.all[id].clone(),
         }
     }
     fn build(&self, index: usize, key: &Key) -> Node {
-        let font = &self.all[self.filtered[index]].name;
+        let font = &self.all[self.filtered[index]];
         Label::new(
             format!("{}/name", key.0),
             font,
@@ -320,12 +340,8 @@ impl<U: FnMut() -> Result<DialogUpdate, String>> DialogContent for Draft<U> {
                 .into(),
             );
         }
-        if let Some(family) = self.family {
-            let faces = self.families[family]
-                .faces
-                .iter()
-                .map(|f| f.name.clone())
-                .collect();
+        if !self.faces.is_empty() {
+            let faces = self.faces.iter().map(|f| f.name.clone()).collect();
             let styles = DropDown::new(
                 "font/style",
                 &self.labels.style,
@@ -362,15 +378,11 @@ impl<U: FnMut() -> Result<DialogUpdate, String>> DialogContent for Draft<U> {
                 if let Some(&family) = self.filtered.get(index)
                     && Some(family) != self.family
                 {
-                    self.family = Some(family);
-                    self.face = 0;
+                    self.select_family(family);
                 }
             }
             ("font-style", Some(Value::Index(index))) => {
-                if self
-                    .family
-                    .is_some_and(|family| index < self.families[family].faces.len())
-                {
+                if index < self.faces.len() {
                     self.face = index;
                 }
             }
@@ -391,13 +403,18 @@ impl<U: FnMut() -> Result<DialogUpdate, String>> DialogContent for Draft<U> {
 #[test]
 fn a_font_search_keeps_the_parent_choice_until_confirmation() {
     let initial = FontChoice::new("Sans", FontSize::Pixels(16.));
-    let font = |name: &str| FontFamily {
-        name: name.into(),
-        faces: vec![FontFace::default()],
-    };
+    struct Catalogue;
+    impl FontCatalogue for Catalogue {
+        fn family_names(&mut self, _: bool) -> Vec<String> {
+            vec!["Serif".into(), "Sans".into()]
+        }
+        fn faces(&mut self, _: &str) -> Vec<FontFace> {
+            vec![FontFace::default()]
+        }
+    }
     let mut draft = Draft::new(
         FontDialog::new(initial.clone()),
-        vec![font("Serif"), font("Sans")],
+        Some(Box::new(Catalogue)),
         || Ok(DialogUpdate::default()),
     );
     draft
@@ -416,10 +433,17 @@ fn a_font_search_keeps_the_parent_choice_until_confirmation() {
             value: Some(Value::Index(0)),
         })
         .unwrap();
+    draft
+        .activated(Activated {
+            key: "font/size".into(),
+            action: "font-size".into(),
+            value: Some(Value::Text("11,5".into())),
+        })
+        .unwrap();
     assert!(draft.answer(DialogAnswer::Cancel).is_none());
     assert_eq!(initial.caption(), "Sans  16px");
     let picked = draft.answer(DialogAnswer::Button("choose".into())).unwrap();
-    assert_eq!(picked.caption(), "Serif  16px");
-    assert_eq!(picked.size.logical_pixels(), 16.);
+    assert_eq!(picked.caption(), "Serif  11.5px");
+    assert_eq!(picked.size.logical_pixels(), 11.5);
     assert_eq!(FontSize::Points(12.).logical_pixels(), 16.);
 }
