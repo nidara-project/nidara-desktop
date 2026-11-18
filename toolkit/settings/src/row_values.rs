@@ -113,5 +113,12 @@ pub fn dropdown_options(
     if !out.iter().any(|(v, _)| v == current) {
         out.push((current.into(), current.into()));
     }
+    if entry["ui"]["format"] == "duration" {
+        for (value, label) in &mut out {
+            if let Some(words) = crate::session::duration_label(value) {
+                *label = words;
+            }
+        }
+    }
     Ok(out)
 }

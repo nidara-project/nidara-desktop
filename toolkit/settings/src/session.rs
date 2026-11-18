@@ -65,6 +65,29 @@ static TRANSLATE: std::sync::OnceLock<Translate> = std::sync::OnceLock::new();
 pub fn set_translator(translate: Translate) {
     let _ = TRANSLATE.set(translate);
 }
+/// A `format: duration` option's words: `0` is "Never", then minutes below an hour, hours
+/// above (the TypeScript rows' `powerLockLabel`). `None` without a translator or a number.
+pub fn duration_label(value: &str) -> Option<String> {
+    let t = TRANSLATE.get()?;
+    let secs: u64 = value.parse().ok()?;
+    if secs == 0 {
+        return t("settings.power.opt.never");
+    }
+    if secs < 3600 {
+        return Some(format!(
+            "{} {}",
+            (secs + 30) / 60,
+            t("settings.power.time.min")?
+        ));
+    }
+    let hours = (secs + 1800) / 3600;
+    let unit = if hours == 1 {
+        "settings.power.time.hour"
+    } else {
+        "settings.power.time.hours"
+    };
+    Some(format!("{hours} {}", t(unit)?))
+}
 fn localize(entry: &mut serde_json::Value) {
     let Some(t) = TRANSLATE.get() else { return };
     let ui = &mut entry["ui"];
