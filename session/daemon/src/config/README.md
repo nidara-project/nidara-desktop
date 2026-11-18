@@ -99,3 +99,15 @@ a write the service sends `set-workspace-mode N default` for each affected works
 A mode chosen in Settings therefore wins over a runtime toggle, as `pushAll` did in TS.
 The read-back and the `Failed` reply when the user's layer wins work as for Input; the
 existing monitor also refreshes `[workspaces]`.
+
+## Performance profile (#1103)
+
+`profile.rs` serves `power.profile`, a segmented choice among the profiles
+power-profiles-daemon advertises. Its home is PPD's `ActiveProfile`, the property TS set
+with `powerprofilesctl`, read and written on the system bus. Power1 sees such a write as
+a manual choice and the automatic saver stands aside (`power/README.md`).
+
+PPD's `PropertiesChanged` and its `NameOwnerChanged` re-read the profile and announce the
+key; there is no polling. Without PPD the key is unavailable, and so is the Power page.
+The tests point `DBUS_SYSTEM_BUS_ADDRESS` at their private bus, so the host's PPD never
+leaks in.

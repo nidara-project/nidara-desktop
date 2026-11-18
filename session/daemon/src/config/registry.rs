@@ -17,6 +17,8 @@
 mod desktop;
 #[path = "ordinary.rs"]
 mod ordinary;
+#[path = "profile.rs"]
+mod profile;
 
 use gio::prelude::*;
 use serde_json::{Value as Json, json};
@@ -108,6 +110,7 @@ pub struct Store {
     pub idle: std::cell::RefCell<Json>,
     pub input: std::cell::RefCell<Json>,
     pub workspaces: std::cell::RefCell<Json>,
+    pub profile: std::cell::RefCell<Json>,
     pub idle_serial: std::sync::Arc<std::sync::atomic::AtomicU64>,
 }
 impl Store {
@@ -143,6 +146,7 @@ impl Store {
             idle: std::cell::RefCell::new(compositor["idle"].clone()),
             input: std::cell::RefCell::new(compositor["input"].clone()),
             workspaces: std::cell::RefCell::new(compositor["workspaces"].clone()),
+            profile: std::cell::RefCell::new(profile::read()),
             idle_serial: Default::default(),
         }
     }
@@ -775,6 +779,7 @@ fn table() -> Vec<Key> {
     keys.extend(dock_keys());
     keys.extend(ordinary::keys());
     keys.extend(desktop::keys());
+    keys.extend(profile::keys());
     keys
 }
 
@@ -789,6 +794,9 @@ pub fn available(st: &Store, key: &Key) -> bool {
     }
     if desktop::is_key(key.name) {
         return desktop::available(st);
+    }
+    if profile::is_key(key.name) {
+        return profile::available(st);
     }
     if let Some(field) = idle_field(key.name) {
         return st.idle.borrow()[field].is_u64();
@@ -1292,6 +1300,14 @@ pub fn input_changed(name: &str, before: &Json, after: &Json) -> bool {
             .iter()
             .any(|p| ordinary::at(before, p) != ordinary::at(after, p))
     })
+}
+/// The performance profile's key, re-read from PPD whenever it announces a change.
+pub const PROFILE_KEY: &str = profile::KEY;
+pub fn watch_profile(changed: impl Fn() + Clone + 'static) {
+    profile::watch(changed)
+}
+pub fn refresh_profile(st: &Store) {
+    *st.profile.borrow_mut() = profile::read();
 }
 pub fn workspaces_changed(name: &str, before: &Json, after: &Json) -> bool {
     desktop::changed(name, before, after)
