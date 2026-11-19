@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: LGPL-3.0-or-later
 //! Uniform-height virtualization: the app's source lives only during its rebuild.
 use super::*;
-use std::ops::Range;
+use std::{collections::BTreeSet, ops::Range};
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub struct RowInfo {
@@ -27,10 +27,18 @@ pub struct LongList {
     pub selected: Option<usize>,
     pub row_height: f64,
     pub activate: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub multiple: Option<MultipleSelection>,
     first: usize,
     rows: Vec<Row>,
     selected_item: Option<RowInfo>,
 }
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+pub struct MultipleSelection {
+    pub selected: BTreeSet<usize>,
+    pub toggle: String,
+}
+
 #[derive(Default)]
 struct State {
     model: Option<(usize, Option<Key>)>,
@@ -102,6 +110,7 @@ impl LongList {
             selected: Some(selected),
             row_height,
             activate: None,
+            multiple: None,
             first: 0,
             rows: vec![],
             selected_item: None,
@@ -225,6 +234,20 @@ impl LongList {
         if before != Some(index) {
             cx.effects.redraw = true;
             cx.effects.activate = true;
+            cx.effects.value = Some(Value::Index(index));
+        }
+    }
+    fn is_selected(&self, index: usize, state: Option<&dyn Any>) -> bool {
+        self.multiple.as_ref().map_or_else(
+            || self.current(state) == Some(index),
+            |multi| multi.selected.contains(&index),
+        )
+    }
+    fn toggle(&self, cx: &mut Input<'_>, index: usize) {
+        self.choose(cx, index);
+        if let Some(multi) = &self.multiple {
+            cx.effects.activate = true;
+            cx.effects.action = Some(multi.toggle.clone());
             cx.effects.value = Some(Value::Index(index));
         }
     }
@@ -458,7 +481,11 @@ impl Component for LongList {
             .and_then(|s| s.downcast_ref::<State>())
             .is_some_and(|s| s.last_clicked.as_ref() == Some(&info.key))
             && read.clicks == 2;
-        self.choose(cx, index);
+        if double {
+            self.choose(cx, index);
+        } else {
+            self.toggle(cx, index);
+        }
         cx.effects.focus = true;
         if let Some(s) = cx
             .state
@@ -484,6 +511,12 @@ impl Component for LongList {
     fn key_event(&self, cx: &mut Input<'_>, key: &nk_wayland::Key) {
         if key.sym == 0x20 {
             cx.effects.handled = true;
+            if self.multiple.is_some()
+                && let Some(index) = self.current(cx.state.as_deref())
+            {
+                self.toggle(cx, index);
+                cx.effects.keyboard_focus = true;
+            }
         }
     }
     fn key(&self, cx: &mut Input<'_>, key: crate::KeyInput) {
@@ -528,7 +561,7 @@ impl Component for LongList {
         match request {
             Request::Set(Value::Index(index)) => {
                 if index < self.count {
-                    self.choose(cx, index);
+                    self.toggle(cx, index);
                     cx.effects.focus = true;
                     cx.effects.keyboard_focus = true;
                 } else {
@@ -543,12 +576,13 @@ impl Component for LongList {
         if !cx.interaction.enabled {
             return cx.look.tokens.look.disabled;
         }
-        if let Some(i) = self.current(cx.state)
-            && let Some(item) = self.info(i)
-            && self
-                .row_rect(cx, item)
-                .is_some_and(|r| inside(r, (at[0] + at[2] / 2., at[1] + at[3] / 2.)))
-        {
+        let point = (at[0] + at[2] / 2., at[1] + at[3] / 2.);
+        if self.rows.iter().any(|row| {
+            self.is_selected(row.index, cx.state)
+                && self
+                    .row_rect(cx, &row.item)
+                    .is_some_and(|r| inside(r, point))
+        }) {
             return cx.look.tokens.look.accent_fg;
         }
         ink
@@ -560,7 +594,6 @@ impl Component for LongList {
         let Some(viewport) = self.clip(&cx.read) else {
             return;
         };
-        let selected = self.current(cx.state);
         let hover = cx
             .state
             .and_then(|s| s.downcast_ref::<State>())
@@ -578,7 +611,7 @@ impl Component for LongList {
                 (bounds[2] - 2. * style.inset).max(0.),
                 (bounds[3] - 2. * style.inset).max(0.),
             ];
-            if selected == Some(row.index) {
+            if self.is_selected(row.index, cx.state) {
                 let color = cx.ink(cx.look.tokens.look.accent).with_alpha(
                     cx.alpha as f32
                         * if cx.interaction.enabled {
@@ -604,6 +637,10 @@ impl Component for LongList {
         children: &mut Vec<SemanticChild>,
     ) {
         node.role = nk_a11y::Role::ListBox;
+        if self.multiple.is_some() {
+            node.attributes
+                .insert("multiselectable".into(), "true".into());
+        }
         node.attributes
             .insert("setsize".into(), self.count.to_string());
         let selected = self.current(cx.state);
@@ -618,7 +655,7 @@ impl Component for LongList {
         let viewport = self.clip(cx);
         for (index, item) in items {
             let mut n = nk_a11y::Node::new(0, nk_a11y::Role::Option, item.name.clone());
-            n.states.selected = selected == Some(index);
+            n.states.selected = self.is_selected(index, cx.state);
             n.states.disabled = !cx.interaction.enabled;
             n.states.offscreen = true;
             n.actions = vec![nk_a11y::Action::Activate];

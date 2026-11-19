@@ -416,6 +416,7 @@ pub fn find_app_icon(
 pub struct Icons {
     theme: Option<Theme>,
     reference: Theme,
+    standard: Option<Theme>,
     cache: HashMap<(String, u32), Arc<Icon>>,
 }
 
@@ -437,6 +438,7 @@ impl Icons {
         Ok(Self {
             theme: Theme::find(theme, search).filter(|t| t.spec > 0),
             reference,
+            standard: None,
             cache: HashMap::new(),
         })
     }
@@ -446,8 +448,11 @@ impl Icons {
         self.theme.is_some()
     }
 
-    /// `name` (an `nd-` name, without `-symbolic`) for a `size` px icon.
+    /// A symbolic Nidara or standard desktop icon by base name and logical size.
     pub fn get(&mut self, name: &str, size: u32) -> Result<Arc<Icon>, String> {
+        if name.contains('/') {
+            return Err("icon names cannot contain a path separator".into());
+        }
         let key = (name.to_owned(), size);
         if let Some(icon) = self.cache.get(&key) {
             return Ok(icon.clone());
@@ -464,6 +469,20 @@ impl Icons {
             .and_then(|t| t.lookup(&file, size))
             .and_then(load)
             .or_else(|| self.reference.lookup(&file, size).and_then(load))
+            .or_else(|| {
+                if name.starts_with("nd-") {
+                    return None;
+                }
+                if self.standard.is_none() {
+                    self.standard = Theme::find("Adwaita", &search_path());
+                }
+                let standard = self.standard.as_ref()?;
+                standard.lookup(&file, size).and_then(load).or_else(|| {
+                    standard
+                        .lookup("text-x-generic-symbolic.svg", size)
+                        .and_then(load)
+                })
+            })
             .ok_or_else(|| format!("no drawing for icon {name}"))?;
         let icon = Arc::new(icon);
         self.cache.insert(key, icon.clone());

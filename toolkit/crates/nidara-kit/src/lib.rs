@@ -15,5 +15,6 @@
 //! ```
 //!
 //! The pieces live in `nk-view`, the kit's base; this crate is its public name.
+pub use nk_files as files;
 pub use nk_text::TextStyle;
 pub use nk_view::*;

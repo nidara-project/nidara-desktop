@@ -12,5 +12,6 @@ publish.workspace = true
 name = "nk"
 
 [dependencies]
+nk-files = { path = "../nk-files" }
 nk-view = { path = "../nk-view" }
 nk-text = { path = "../nk-text" }

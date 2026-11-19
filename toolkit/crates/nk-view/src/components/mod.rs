@@ -8,7 +8,7 @@ use std::{
     collections::{HashMap, HashSet},
 };
 mod long_list;
-pub use long_list::{ListSource, LongList, RowInfo};
+pub use long_list::{ListSource, LongList, MultipleSelection, RowInfo};
 mod editable;
 pub use editable::EditableField;
 mod search;
