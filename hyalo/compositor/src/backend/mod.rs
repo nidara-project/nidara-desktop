@@ -360,7 +360,17 @@ pub fn capture_window(state: &mut Hyalo, window: &smithay::desktop::Window, scal
 /// A picture of `window` as it is now, at `scale`, to draw after it is gone (render/snapshot.rs).
 pub fn snapshot_window(state: &mut Hyalo, window: &smithay::desktop::Window, scale: f64, glass: bool) -> Result<crate::render::snapshot::Snapshot, String> {
     let Hyalo { backend, space, seat, cursor_status, dnd_icon, wm, lock, config, .. } = state;
-    let scene = crate::render::Scene::new(space, wm, seat, cursor_status, dnd_icon.as_ref(), lock, &config.windows, config.animations.enabled, std::time::Instant::now(), false);
+    // A capture (`glass`) leaves the screen behind the window out, so a tinted or translucent
+    // background would come out half transparent, over whatever the receiver puts behind it:
+    // it is drawn as with reduce transparency, opaque (#1148).
+    let windows = if glass {
+        let mut w = config.windows.clone();
+        w.background.reduce_transparency = true;
+        std::borrow::Cow::Owned(w)
+    } else {
+        std::borrow::Cow::Borrowed(&config.windows)
+    };
+    let scene = crate::render::Scene::new(space, wm, seat, cursor_status, dnd_icon.as_ref(), lock, &windows, config.animations.enabled, std::time::Instant::now(), false);
     match backend {
         Backend::Winit(w) => crate::render::snapshot::take(w.renderer(), &scene, window, scale, glass),
         Backend::Tty(t) => {
