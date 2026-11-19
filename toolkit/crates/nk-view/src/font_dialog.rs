@@ -2,8 +2,8 @@
 //! A font selection draft hosted by the standard modal dialog.
 use crate::{
     Activated, AppWindow, Column, Dialog, DialogAnswer, DialogButton, DialogContent, DialogUpdate,
-    DropDown, Entry, FontFace, Key, Label, ListSource, ListView, Node, Page, RowInfo, SearchEntry,
-    ListRow, Space, Type, Value, Weight,
+    DropDown, Entry, FontFace, Key, Label, ListRow, ListSource, ListView, Node, Page, RowInfo,
+    SearchEntry, Space, Type, Value, Weight,
 };
 use nk_text::{FontCatalogue, TextStyle};
 use nk_wayland::Window;

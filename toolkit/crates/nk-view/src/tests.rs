@@ -1,9 +1,7 @@
 // SPDX-License-Identifier: LGPL-3.0-or-later
 use super::*;
 use crate::components::Switch;
-use crate::view::{
-    Dropdown, Field, Segmented, ListRow, SidebarEntry, Slider, SliderEnd, Swatches,
-};
+use crate::view::{Dropdown, Field, ListRow, Segmented, SidebarEntry, Slider, SliderEnd, Swatches};
 use nk_text::{FontSet, ParleyBackend, TextStyle};
 use serde_json::json;
 use std::sync::Arc;
