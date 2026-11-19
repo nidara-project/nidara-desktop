@@ -418,8 +418,15 @@ state; the radios next to each other are one group, one Tab stop, the arrows mov
 whole row is the control and what it ends with must be drawn only (a chevron, `nk::Switch::drawn`).
 A slider row is a setting row ending in `nk::SliderEnd`
 (§13.7): measures from `range.slider`, its value in room for its widest text (`nk::Label::room`).
-A window's sidebar is built of `nk::SidebarEntry` (§13.8): the selected one in the ACCENT
-(D1, a control's `accent` flag), never the neutral grey wash.
+A window's sidebar is ONE kit component, `nk::SidebarList` (§13.8), holding `nk::SidebarEntry`
+rows: the selected one in the ACCENT (D1, a control's `accent` flag), never the neutral grey
+wash. The list owns the scrolling, padding, spacing and section headings. Never wrap the entries
+in your own `Column`/`Scroll`: before #1148 the gallery, Settings and the chooser each did, and
+showed three different sidebars, one unscrollable. `nk::PlacesSidebar` is built on it.
+**Kit criticals** (`nk_view::diagnostics`): a setting a part does not take (`Node::value` on a
+control whose part drops it) prints `nk-CRITICAL: …` once. It panics under the kit's own
+`cargo test` and with `NK_DEBUG=fatal-criticals`, like GTK's `G_DEBUG=fatal-criticals`. When a
+control "does nothing when clicked", run the app with that variable before writing a test.
 `nk::ListBox` is the short single-selection list inside a `Group`: Up/Down move focus,
 Enter/Space choose a row and report its index, and the caller supplies the selected index.
 Settings' Power profiles use this control and the exported selected-row tint.

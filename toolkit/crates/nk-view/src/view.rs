@@ -385,8 +385,11 @@ impl Control {
         self.part.as_ref().is_some_and(|p| p.component().selected())
     }
     fn configure(&mut self, property: crate::components::Configure) {
-        if let Some(part) = &self.part {
-            self.part = Some(Box::new(part.configured(property)));
+        match &self.part {
+            Some(part) => self.part = Some(Box::new(part.configured(property))),
+            None => crate::diagnostics::critical(format!(
+                "a control with no part does not take {property:?}: the setting is lost"
+            )),
         }
     }
 }
@@ -688,6 +691,8 @@ impl Node {
             .corner(Corner::Pill)
             .role(Role::Toggle)
             .marked(on)
+            // A flip reports the state it switches TO, as a disclosure does (#1148).
+            .value(crate::Value::Bool(!on))
     }
     /// A setting row (VIEW.md §13.6): its title and second line, what it ends with, at least
     /// the kit's row height, its padding the kit's. Not activatable, it is no control: the
@@ -931,6 +936,7 @@ impl Node {
                 style,
                 selected: false,
                 corner: Corner::Token(Radius::Sm),
+                value: None,
             })));
         }
         n
