@@ -15,6 +15,9 @@ pub struct Button {
     pub style: nk_text::TextStyle,
     pub selected: bool,
     pub corner: Corner,
+    /// What activating it reports with its action (`Button::value`): which crumb, which row.
+    #[serde(default)]
+    pub value: Option<Value>,
 }
 impl Component for Button {
     fn ink(&self, look: ComponentLook<'_>, _: Interaction, _: bool) -> Option<Color> {
@@ -27,6 +30,9 @@ impl Component for Button {
     fn selected(&self) -> bool {
         self.selected
     }
+    fn value(&self, _state: Option<&dyn Any>) -> Option<Value> {
+        self.value.clone()
+    }
     fn corner(&self) -> Corner {
         self.corner
     }
@@ -36,6 +42,7 @@ impl Component for Button {
             Configure::Marked(v) => next.selected = v,
             Configure::ButtonAppearance(v) => next.appearance = v,
             Configure::Corner(v) => next.corner = v,
+            Configure::Value(v) => next.value = Some(v),
             _ => return None,
         };
         Some(Part::Button(next))

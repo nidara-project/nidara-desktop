@@ -311,9 +311,15 @@ pub enum Part {
 }
 impl Part {
     pub fn configured(&self, property: Configure) -> Self {
-        self.component()
-            .configure(property)
-            .unwrap_or_else(|| self.clone())
+        let said = format!("{property:?}");
+        self.component().configure(property).unwrap_or_else(|| {
+            let name = format!("{self:?}");
+            let name = name.split(['(', ' ']).next().unwrap_or_default();
+            crate::diagnostics::critical(format!(
+                "a {name} does not take {said}: the setting is lost"
+            ));
+            self.clone()
+        })
     }
     /// The only dispatch that names concrete components.
     pub fn component(&self) -> &dyn Component {
