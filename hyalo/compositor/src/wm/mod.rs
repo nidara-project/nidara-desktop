@@ -1178,6 +1178,35 @@ impl Hyalo {
             }
             self.wm.dirty_windows = true;
         }
+        // A dialog comes up WITH the window it belongs to, just above it: picked from the dock's
+        // previews, Firefox's file chooser rose alone over another app, which then looked like
+        // its owner (#1148). Its parents go to the top first, the farthest first, unfocused.
+        let mut parents = Vec::new();
+        let mut child = id;
+        // Bounded: a client could make a cycle of parents.
+        for _ in 0..8 {
+            let Some(parent) = self
+                .wm
+                .get(child)
+                .and_then(|m| self.wm.parent_of(&m.window))
+                .and_then(|s| self.wm.by_surface(&s))
+                .filter(|p| p.workspace == ws && p.mapped && !self.wm.is_hidden(p))
+                .map(|p| p.id)
+            else {
+                break;
+            };
+            parents.push(parent);
+            child = parent;
+        }
+        for parent in parents.into_iter().rev() {
+            if let Some(at) = self.wm.windows.iter().position(|m| m.id == parent) {
+                let m = self.wm.windows.remove(at);
+                if let (Some(x), Some(xwm)) = (m.window.x11_surface(), self.x11.wm.as_mut()) {
+                    let _ = xwm.raise_window(x);
+                }
+                self.wm.windows.push(m);
+            }
+        }
         self.wm.focus_counter += 1;
         let counter = self.wm.focus_counter;
         let pos = self.wm.windows.iter().position(|m| m.id == id).unwrap();
@@ -1206,7 +1235,7 @@ impl Hyalo {
 
     /// The window that takes the focus meant for `id`: its open modal dialog, or that
     /// dialog's own, all the way down; `id` itself when it has none.
-    fn modal_target(&self, id: WindowId) -> WindowId {
+    pub(crate) fn modal_target(&self, id: WindowId) -> WindowId {
         let mut target = id;
         // Bounded: a client could make a cycle of parents.
         for _ in 0..8 {
@@ -1620,7 +1649,7 @@ impl Hyalo {
         if let Some((id, _)) = self.chrome_under(pos) {
             return Some(id);
         }
-        let (surface, _) = self.surface_under(pos)?;
+        let (surface, _) = self.anything_under(pos)?;
         let root = crate::shell::root_surface(self, &surface);
         self.wm.by_surface(&root).map(|m| m.id)
     }

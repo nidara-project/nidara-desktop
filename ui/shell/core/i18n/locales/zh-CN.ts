@@ -20,6 +20,9 @@ export default {
     "fileChooser.drives": "驱动器",
     "fileChooser.showPlaces": "显示位置",
     "fileChooser.hidePlaces": "隐藏位置",
+    "fileChooser.name": "名称",
+    "fileChooser.size": "大小",
+    "fileChooser.modified": "修改日期",
 
     // Native session energy notifications.
     "power1.alert.low": "电池电量低",

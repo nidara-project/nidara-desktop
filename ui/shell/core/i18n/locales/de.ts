@@ -20,6 +20,9 @@ export default {
     "fileChooser.drives": "Laufwerke",
     "fileChooser.showPlaces": "Orte anzeigen",
     "fileChooser.hidePlaces": "Orte ausblenden",
+    "fileChooser.name": "Name",
+    "fileChooser.size": "Größe",
+    "fileChooser.modified": "Geändert",
 
     // Native session energy notifications.
     "power1.alert.low": "Akku fast leer",

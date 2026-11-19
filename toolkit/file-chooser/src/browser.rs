@@ -440,7 +440,13 @@ impl Browser {
             look.tokens.row_height
         })
         .window(viewport)
-        .cursor(position(self.cursor.as_ref()));
+        .cursor(position(self.cursor.as_ref()))
+        .headers(
+            &self.strings.name,
+            &self.strings.size,
+            &self.strings.modified,
+            look.types.style(Type::Caption, Weight::Medium),
+        );
         if self.grid {
             list = list.grid(self.columns(), TILE_HEIGHT, &thumbnails);
         }

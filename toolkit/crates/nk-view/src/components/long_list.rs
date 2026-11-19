@@ -28,6 +28,14 @@ pub struct LongList {
     pub row_height: f64,
     #[serde(default = "one")]
     pub columns: usize,
+    /// A grid's tile width (`ListView::tile_width`): each tile keeps it, centred in its
+    /// column, and the width left over goes between tiles. None: a tile fills its column.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub tile_width: Option<f64>,
+    /// What each column is (`ListView::header`): a row above the rows, with their padding so
+    /// its titles stand over their columns, and not scrolled.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub header: Option<Box<Node>>,
     pub activate: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub multiple: Option<MultipleSelection>,
@@ -125,6 +133,8 @@ impl LongList {
             selected: Some(selected),
             row_height,
             columns: 1,
+            tile_width: None,
+            header: None,
             activate: None,
             multiple: None,
             first: 0,
@@ -436,19 +446,25 @@ impl Component for LongList {
             let mut cells = Vec::with_capacity(self.columns);
             for row in band {
                 let key = item_key(cx.key, &row.item.key);
-                cells.push(
-                    Node::row(
-                        key.clone(),
-                        vec![
-                            Node::row(format!("{}/leading", key.0), vec![]).width(inset),
-                            row.content.clone().grow(),
-                            Node::row(format!("{}/trailing", key.0), vec![]).width(inset),
-                        ],
-                    )
-                    .align(crate::Align::Center)
-                    .height(self.row_height)
-                    .grow(),
-                );
+                let cell = Node::row(
+                    key.clone(),
+                    vec![
+                        Node::row(format!("{}/leading", key.0), vec![]).width(inset),
+                        row.content.clone().grow(),
+                        Node::row(format!("{}/trailing", key.0), vec![]).width(inset),
+                    ],
+                )
+                .align(crate::Align::Center)
+                .height(self.row_height);
+                cells.push(match self.tile_width.filter(|_| self.columns > 1) {
+                    // A tile of its own size, whatever the window's: its wash and its hit are
+                    // the tile's, never the column's (#1148: a selected tile stretched with
+                    // the window).
+                    Some(width) => Node::row(format!("{}/slot", key.0), vec![cell.width(width)])
+                        .justify(crate::Justify::Center)
+                        .grow(),
+                    None => cell.grow(),
+                });
             }
             let band_key = cx.key(&format!("band/{}", band[0].index));
             if self.columns == 1 {
@@ -467,8 +483,25 @@ impl Component for LongList {
             (self.count.div_ceil(self.columns) - self.built().end.div_ceil(self.columns)) as f64
                 * self.row_height,
         ));
-        Node::scroll(cx.key("scroll"), Node::column(cx.key("rows"), nodes))
+        let rows = Node::scroll(cx.key("scroll"), Node::column(cx.key("rows"), nodes))
             .presentational()
+            .grow();
+        let Some(header) = &self.header else {
+            return rows;
+        };
+        let key = cx.key("header");
+        let header = Node::row(
+            key.clone(),
+            vec![
+                Node::row(format!("{}/leading", key.0), vec![]).width(inset),
+                (**header).clone().grow(),
+                Node::row(format!("{}/trailing", key.0), vec![]).width(inset),
+            ],
+        )
+        .align(crate::Align::Center)
+        .presentational();
+        Node::column(cx.key("with-header"), vec![header, rows])
+            .gap(crate::Space::S1)
             .grow()
     }
     fn frame(&self, _look: ComponentLook<'_>) -> FrameSpec {

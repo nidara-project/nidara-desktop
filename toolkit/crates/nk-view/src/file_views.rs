@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: LGPL-3.0-or-later
 //! Compositions shared by file choosers and browsers.
 use crate::{
-    Align, Button, Column, Image, Key, Label, ListSource, ListView, Node, Row, RowInfo,
+    Align, Button, Column, Image, Ink, Key, Label, ListSource, ListView, Node, Row, RowInfo,
     SidebarEntry, Space, Value, prelude::*,
 };
 use nk_files::{Entry, Place, PlaceKind};
@@ -208,31 +208,50 @@ impl ListSource for FileRows<'_> {
         } else {
             file_size(entry.size)
         };
-        let em = f64::from(self.style.size);
-        Row::new(
-            format!("{}/row", key.0),
-            vec![
-                Image::new(format!("{}/icon", key.0), &entry.icon, 20.)
-                    .app_theme(if entry.is_dir { "nd-folder" } else { "nd-file" })
-                    .into(),
-                Label::new(format!("{}/name", key.0), &entry.name, self.style.clone())
-                    .lines(1)
-                    .grow()
-                    .into(),
-                Label::new(format!("{}/size", key.0), size, self.style.clone())
-                    .lines(1)
-                    .width(6. * em)
-                    .into(),
-                Label::new(format!("{}/date", key.0), date, self.style.clone())
-                    .lines(1)
-                    .width(7. * em)
-                    .into(),
-            ],
+        let icon = Image::new(format!("{}/icon", key.0), &entry.icon, 20.)
+            .app_theme(if entry.is_dir { "nd-folder" } else { "nd-file" })
+            .into();
+        columns(
+            key.clone(),
+            Some(icon),
+            [entry.name.clone(), size, date],
+            &self.style,
+            f64::from(self.style.size),
+            Ink::Primary,
         )
-        .gap(Space::S2)
-        .align(Align::Center)
-        .into()
     }
+}
+
+/// A list row's columns, the header's too, so that each title stands over its column: the
+/// icon's room, the name, the size, the date modified. `em` is the rows' type size, which
+/// sizes the fixed columns in both.
+fn columns(
+    key: Key,
+    icon: Option<Node>,
+    [name, size, date]: [String; 3],
+    style: &TextStyle,
+    em: f64,
+    ink: Ink,
+) -> Node {
+    let k = &key.0;
+    let icon = icon.unwrap_or_else(|| Row::new(format!("{k}/icon"), vec![]).width(20.).into());
+    let label = |part: &str, text: String| {
+        Label::new(format!("{k}/{part}"), text, style.clone())
+            .lines(1)
+            .ink(ink)
+    };
+    Row::new(
+        format!("{k}/row"),
+        vec![
+            icon,
+            label("name", name).grow().into(),
+            label("size", size).width(6. * em).into(),
+            label("date", date).width(7. * em).into(),
+        ],
+    )
+    .gap(Space::S2)
+    .align(Align::Center)
+    .into()
 }
 
 fn file_size(bytes: u64) -> String {
@@ -266,6 +285,7 @@ pub struct FileList<'a> {
     height: f64,
     fill_height: bool,
     viewport: Option<(f64, f64)>,
+    headers: Option<([String; 3], TextStyle)>,
 }
 
 impl<'a> FileList<'a> {
@@ -296,10 +316,18 @@ impl<'a> FileList<'a> {
             height: 8. * row_height,
             fill_height: false,
             viewport: None,
+            headers: None,
         }
     }
-    /// Use the same retained selection and scroll model in a grid. Images are
-    /// identifiers from `AppWindow::set_pictures`, indexed by the original path.
+    /// In the list, a row naming the columns: the name, the size and the date modified, in
+    /// `style` (a caption type). Without it nothing says what the numbers are (#1148).
+    pub fn headers(mut self, name: &str, size: &str, modified: &str, style: TextStyle) -> Self {
+        self.headers = Some(([name.into(), size.into(), modified.into()], style));
+        self
+    }
+    /// Use the same retained selection and scroll model in a grid of square tiles,
+    /// `tile_height` on each side whatever the window's width. Images are identifiers from
+    /// `AppWindow::set_pictures`, indexed by the original path.
     pub fn grid(
         mut self,
         columns: usize,
@@ -358,11 +386,22 @@ impl From<FileList<'_>> for Node {
         )
         .selected(list.cursor)
         .columns(list.columns)
+        .tile_width(list.row_height)
         .height(list.height)
         .window(list.viewport.or(Some((0., list.height))))
         .activate(list.open);
         if let Some(multi) = list.multiple {
             view = view.multiple(multi.selected, multi.anchor, multi.changed);
+        }
+        if let (Some(([name, size, date], style)), 1) = (list.headers, list.columns) {
+            view = view.header(columns(
+                "file-list-header".into(),
+                None,
+                [name, size, date],
+                &style,
+                f64::from(list.rows.style.size),
+                Ink::Secondary,
+            ));
         }
         let node: Node = view.into();
         if list.fill_height { node.grow() } else { node }

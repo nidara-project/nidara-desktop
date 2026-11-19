@@ -302,11 +302,13 @@ pub fn draw_upright_into(state: &mut Hyalo, output: &Output, dmabuf: &mut Dmabuf
 
 /// One window alone, drawn straight into a client's dmabuf (capture.rs).
 pub fn draw_window_into(state: &mut Hyalo, window: &smithay::desktop::Window, scale: f64, dmabuf: &mut Dmabuf) -> Result<(), String> {
+    let bar = state.wm.by_window(window).map_or(0, |m| m.bar());
+    let picture = snapshot_window(state, window, scale)?;
     match &mut state.backend {
-        Backend::Winit(w) => crate::capture::draw_window_into(w.renderer(), window, scale, dmabuf),
+        Backend::Winit(w) => crate::capture::draw_window_into(w.renderer(), window, &picture, bar, scale, dmabuf),
         Backend::Tty(t) => {
             let mut renderer = t.primary_renderer()?;
-            crate::capture::draw_window_into(renderer.as_mut(), window, scale, dmabuf)
+            crate::capture::draw_window_into(renderer.as_mut(), window, &picture, bar, scale, dmabuf)
         }
     }
 }
@@ -344,11 +346,13 @@ pub fn capture_dmabuf(state: &mut Hyalo) -> Option<smithay::wayland::image_copy_
 
 /// One window alone, as RGBA rows (capture.rs).
 pub fn capture_window(state: &mut Hyalo, window: &smithay::desktop::Window, scale: f64) -> Result<(u32, u32, Vec<u8>), String> {
+    let bar = state.wm.by_window(window).map_or(0, |m| m.bar());
+    let picture = snapshot_window(state, window, scale)?;
     match &mut state.backend {
-        Backend::Winit(w) => crate::capture::draw_window(w.renderer(), window, scale),
+        Backend::Winit(w) => crate::capture::draw_window(w.renderer(), window, &picture, bar, scale),
         Backend::Tty(t) => {
             let mut renderer = t.primary_renderer()?;
-            crate::capture::draw_window(renderer.as_mut(), window, scale)
+            crate::capture::draw_window(renderer.as_mut(), window, &picture, bar, scale)
         }
     }
 }

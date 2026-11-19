@@ -20,6 +20,9 @@
     "fileChooser.drives": "13219b91",
     "fileChooser.showPlaces": "9daa6407",
     "fileChooser.hidePlaces": "09b05b78",
+    "fileChooser.name": "709a2322",
+    "fileChooser.size": "b7152342",
+    "fileChooser.modified": "19a532c8",
     "power1.alert.low": "0abb8d54",
     "power1.alert.critical": "df98178b",
     "power1.alert.remaining": "c8a8bba5",
@@ -950,8 +953,8 @@
   },
   "locales": {
     "de": {
-      "translated": 822,
-      "of": 946,
+      "translated": 825,
+      "of": 949,
       "untranslated": [
         "bar.edit.done",
         "bar.edit.hint",
@@ -1081,14 +1084,14 @@
       "stale": []
     },
     "es": {
-      "translated": 946,
-      "of": 946,
+      "translated": 949,
+      "of": 949,
       "untranslated": [],
       "stale": []
     },
     "fr": {
-      "translated": 822,
-      "of": 946,
+      "translated": 825,
+      "of": 949,
       "untranslated": [
         "bar.edit.done",
         "bar.edit.hint",
@@ -1218,8 +1221,8 @@
       "stale": []
     },
     "it": {
-      "translated": 822,
-      "of": 946,
+      "translated": 825,
+      "of": 949,
       "untranslated": [
         "bar.edit.done",
         "bar.edit.hint",
@@ -1349,8 +1352,8 @@
       "stale": []
     },
     "ja": {
-      "translated": 822,
-      "of": 946,
+      "translated": 825,
+      "of": 949,
       "untranslated": [
         "bar.edit.done",
         "bar.edit.hint",
@@ -1480,8 +1483,8 @@
       "stale": []
     },
     "nl": {
-      "translated": 822,
-      "of": 946,
+      "translated": 825,
+      "of": 949,
       "untranslated": [
         "bar.edit.done",
         "bar.edit.hint",
@@ -1611,8 +1614,8 @@
       "stale": []
     },
     "pl": {
-      "translated": 822,
-      "of": 946,
+      "translated": 825,
+      "of": 949,
       "untranslated": [
         "bar.edit.done",
         "bar.edit.hint",
@@ -1742,8 +1745,8 @@
       "stale": []
     },
     "pt-BR": {
-      "translated": 822,
-      "of": 946,
+      "translated": 825,
+      "of": 949,
       "untranslated": [
         "bar.edit.done",
         "bar.edit.hint",
@@ -1873,8 +1876,8 @@
       "stale": []
     },
     "pt-PT": {
-      "translated": 822,
-      "of": 946,
+      "translated": 825,
+      "of": 949,
       "untranslated": [
         "bar.edit.done",
         "bar.edit.hint",
@@ -2004,8 +2007,8 @@
       "stale": []
     },
     "ru": {
-      "translated": 822,
-      "of": 946,
+      "translated": 825,
+      "of": 949,
       "untranslated": [
         "bar.edit.done",
         "bar.edit.hint",
@@ -2135,8 +2138,8 @@
       "stale": []
     },
     "zh-CN": {
-      "translated": 822,
-      "of": 946,
+      "translated": 825,
+      "of": 949,
       "untranslated": [
         "bar.edit.done",
         "bar.edit.hint",

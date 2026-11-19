@@ -20,6 +20,9 @@ export default {
     "fileChooser.drives": "Unidades",
     "fileChooser.showPlaces": "Mostrar lugares",
     "fileChooser.hidePlaces": "Ocultar lugares",
+    "fileChooser.name": "Nombre",
+    "fileChooser.size": "Tamaño",
+    "fileChooser.modified": "Modificado",
 
     // Native session energy notifications.
     "power1.alert.low": "Batería baja",

@@ -401,7 +401,22 @@ impl Hyalo {
     /// What the pointer is over, in the order things are drawn: overlay layers, a fullscreen
     /// window (and whatever is shown above it), top layers, the other windows, then bottom
     /// and background layers.
+    ///
+    /// A window waiting on its modal dialog gets nothing: no button, no wheel, no hover (GNOME's
+    /// attached dialogs, macOS's sheets). Without this, Firefox's tabs stayed clickable under
+    /// its file chooser and the file opened in another tab (#1148). A press there still finds
+    /// the window (`window_under`), and focusing it focuses the dialog (wm::modal_target).
     pub fn surface_under(&self, pos: Point<f64, Logical>) -> Option<(WlSurface, Point<f64, Logical>)> {
+        let (surface, at) = self.anything_under(pos)?;
+        let root = crate::shell::root_surface(self, &surface);
+        if self.wm.by_surface(&root).is_some_and(|m| self.modal_target(m.id) != m.id) {
+            return None;
+        }
+        Some((surface, at))
+    }
+
+    /// What the pointer is over, a window waiting on a dialog included (`surface_under`).
+    pub(crate) fn anything_under(&self, pos: Point<f64, Logical>) -> Option<(WlSurface, Point<f64, Logical>)> {
         use smithay::wayland::shell::wlr_layer::Layer;
         // Locked: the lock screen is all the pointer can reach (lock.rs).
         if self.lock.is_locked() {
