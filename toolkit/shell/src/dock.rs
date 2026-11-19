@@ -2473,18 +2473,14 @@ impl Application for Dock {
                 .as_millis()
                 .clamp(1, 1000) as u32;
         }
-        // Everything arrives by Wake; an open chooser refreshes its pictures, and a bounce
-        // wants its frames.
+        // Everything arrives by Wake; a bounce wants its frames.
         if self
             .attention
             .wants_frames(Instant::now(), self.frame.prefs.reduce_motion)
         {
             return crate::attention::FRAME.as_millis() as u32;
         }
-        let base = match self.popup {
-            Some(Overlay::Chooser(_)) => crate::chooser::REFRESH.as_millis() as u32,
-            _ => 60_000,
-        };
+        let base = 60_000;
         if self.presence.value != self.presence_target
             || self.settling
             || !self.slides.is_empty()
@@ -2536,9 +2532,6 @@ impl Application for Dock {
             if self.dropping.is_some() {
                 self.drop_over(w, self.pointer, false)?;
             }
-        }
-        if let Some(Overlay::Chooser(c)) = self.popup.as_mut() {
-            c.refresh(w);
         }
         if self.thumbs.waiting() {
             self.capture(w);
