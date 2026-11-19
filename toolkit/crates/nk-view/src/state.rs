@@ -2233,9 +2233,8 @@ impl ViewState {
             // row's text starts to its padding on the other side, and not next to a row that is
             // lit — its highlight is the boundary there (VIEW.md §13.6).
             if let Some(&prev) = above.get(&i) {
-                let lit = |r: usize| {
-                    interactions[r].is_some_and(|x| x.hover || x.pressed || x.marked)
-                };
+                let lit =
+                    |r: usize| interactions[r].is_some_and(|x| x.hover || x.pressed || x.marked);
                 if !lit(prev) && !lit(i) && self.shown(prev) {
                     let start = self
                         .index(&Key(format!("{}/text", p.key.0)))
@@ -2246,7 +2245,9 @@ impl ViewState {
                     let y = (bottom + p.rect[1]) / 2. - width / 2.;
                     // The gap lies outside both rows: what clips it is the stack's own.
                     let clip = p.parent.and_then(|s| self.placed[s].visible());
-                    if end > start && let Some(clip) = clip {
+                    if end > start
+                        && let Some(clip) = clip
+                    {
                         canvas.clip(rect(&clip));
                         canvas.rect(
                             rect(&[start, y, end - start, width]),

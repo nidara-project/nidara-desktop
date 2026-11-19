@@ -907,6 +907,17 @@ a piece is, not who used it first.
   `nk::Switch::drawn`, a mark): a control inside a control would be two things to press, and the
   builder refuses it in debug builds. A row that flips a setting it shows takes
   `Role::Toggle` and `marked(on)`, so a reader hears a toggle.
+- **The kit draws the line between rows** (#1156), as the old layer did: between two
+  `nk::ListRow`s next to each other in one stack (a group's rows, an `nk::ListBox`), a hairline
+  of `list.separator` (its physical pixels, its `--nidara-border`) midway between them, from where
+  the row's text starts to its padding on the other side. None before or after something that is
+  not a row, none after the last one, and none next to a row that is hovered, pressed or selected:
+  its highlight is the boundary there. An app never draws its own.
+- **The same row in every list.** `nk::Group` and `nk::ListBox` hold it as it is; an
+  `nk::ListView`'s source may build it too, and the list then adds only the highlight's inset
+  round it, so its text lines up with the same row in a group. A long list draws no separators
+  (`Gtk.ListView`'s default, and every file list): its rows are many and its selection is the
+  boundary.
 
 ### 13.7 Slider row
 

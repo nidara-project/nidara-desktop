@@ -6068,9 +6068,18 @@ fn the_kit_draws_a_separator_between_list_rows_and_nowhere_else() {
     let bottom = |k: &str| rect(&s, k)[1] + rect(&s, k)[3];
     assert!(separator_at(&px, 300, bottom("a")), "between a and b");
     assert!(separator_at(&px, 300, bottom("b")), "between b and c");
-    assert!(!separator_at(&px, 300, bottom("c")), "none before what is not a row");
-    assert!(!separator_at(&px, 300, bottom("after")), "none after it either");
-    assert!(!separator_at(&px, 300, bottom("d")), "none after the last row");
+    assert!(
+        !separator_at(&px, 300, bottom("c")),
+        "none before what is not a row"
+    );
+    assert!(
+        !separator_at(&px, 300, bottom("after")),
+        "none after it either"
+    );
+    assert!(
+        !separator_at(&px, 300, bottom("d")),
+        "none after the last row"
+    );
     // It starts where the row's text does, not at the row's edge.
     let y = bottom("a").round() as usize;
     let first = (0..300)
@@ -6097,7 +6106,16 @@ fn the_kit_draws_a_separator_between_list_rows_and_nowhere_else() {
         .unwrap();
     let px = c.finish();
     let bottom = |k: &str| rect(&s, k)[1] + rect(&s, k)[3];
-    assert!(!separator_at(&px, 300, bottom("lb/0")), "above the selected row");
-    assert!(!separator_at(&px, 300, bottom("lb/1")), "below the selected row");
-    assert!(separator_at(&px, 300, bottom("lb/2")), "between two plain rows");
+    assert!(
+        !separator_at(&px, 300, bottom("lb/0")),
+        "above the selected row"
+    );
+    assert!(
+        !separator_at(&px, 300, bottom("lb/1")),
+        "below the selected row"
+    );
+    assert!(
+        separator_at(&px, 300, bottom("lb/2")),
+        "between two plain rows"
+    );
 }
