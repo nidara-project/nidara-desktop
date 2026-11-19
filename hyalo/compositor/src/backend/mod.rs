@@ -362,10 +362,12 @@ pub fn snapshot_window(state: &mut Hyalo, window: &smithay::desktop::Window, sca
     let Hyalo { backend, space, seat, cursor_status, dnd_icon, wm, lock, config, .. } = state;
     // A capture (`glass`) leaves the screen behind the window out, so a tinted or translucent
     // background would come out half transparent, over whatever the receiver puts behind it:
-    // it is drawn as with reduce transparency, opaque (#1148).
+    // its background alone is drawn opaque (#1148). Nothing else changes — not reduce
+    // transparency, whose own glass (the controls') a capture must not take.
     let windows = if glass {
         let mut w = config.windows.clone();
-        w.background.reduce_transparency = true;
+        w.background.tinted.opacity = 1.0;
+        w.background.translucent.opacity = 1.0;
         std::borrow::Cow::Owned(w)
     } else {
         std::borrow::Cow::Borrowed(&config.windows)
