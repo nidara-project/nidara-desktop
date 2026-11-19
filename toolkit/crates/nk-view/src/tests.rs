@@ -6004,3 +6004,30 @@ fn list_box_moves_focus_before_activating_and_publishes_one_selected_row() {
     let mut rebuilt = laid(&list(index), (400., 200.), 1.);
     assert_eq!(selected_names(&mut rebuilt), ["Power Saver"]);
 }
+
+/// #1148: a crumb said which folder and a switch which state only in the app's head; the
+/// click reached the app with no value, and the app ignored it.
+#[test]
+fn a_path_crumb_and_a_switch_report_their_value_when_clicked() {
+    let path = std::path::PathBuf::from("/home/u/Docs");
+    let view: Node = crate::Column::new(
+        "root",
+        vec![
+            crate::PathBar::new("bar", &path, "crumb", style(14.)).into(),
+            crate::SettingRow::new("row", "Hidden", style(14.))
+                .trailing(crate::Switch::new("sw", "Hidden", "hidden", false))
+                .into(),
+        ],
+    )
+    .into();
+    let mut s = laid(&view, (600., 200.), 1.);
+    let mut click = |k: &str| {
+        let r = rect(&s, k);
+        s.pointer_motion(r[0] + r[2] / 2., r[1] + r[3] / 2.);
+        assert!(s.button(true, Instant::now()).is_none());
+        s.button(false, Instant::now()).expect("activates").value
+    };
+    assert_eq!(click("bar/part/0"), Some(Value::Index(0)));
+    assert_eq!(click("bar/part/2"), Some(Value::Index(2)));
+    assert_eq!(click("sw"), Some(Value::Bool(true)));
+}

@@ -925,6 +925,11 @@ A setting row (§13.6) that ends in `nk::SliderEnd::new(key, name, action, range
 
 ### 13.8 Sidebar entry
 
+A window's sidebar is `nk::SidebarList::new(key)`, with `.entries(..)` for a section without a
+heading and `.section(heading, caption_style, ..)` for a titled one. The list scrolls on its
+own, so the wheel over it never scrolls the page. Its padding, the space between entries and
+between sections, and the headings' ink are the kit's. Each app passes only the entries.
+
 `nk::SidebarEntry::new(key, title, glyph, action, style, glyph_size).selected(..)`:
 a page a window's sidebar offers (`Gtk.StackSidebar`'s row), its glyph at the frame's glyph size
 (`FrameStyle::icon`) and its title, in the kit's padding at the `sm` corner.

@@ -1136,6 +1136,81 @@ impl From<SidebarEntry> for Node {
         n
     }
 }
+/// A window's sidebar (`Gtk.StackSidebar`, Finder's and Settings' source list): its entries,
+/// in sections under an optional heading, scrolled on their own. The ONE sidebar of the kit
+/// (#1148): its padding, the space between entries and between sections, the headings' type
+/// and the scrolling are the kit's, never an app's, so the gallery, Settings, the file chooser
+/// and every later app show the same sidebar. The wheel over it scrolls it, not the page.
+#[must_use]
+pub struct SidebarList {
+    key: Key,
+    sections: Vec<SidebarSection>,
+}
+/// A section of a sidebar: its heading and that heading's type, if any, and its entries.
+type SidebarSection = (Option<(String, TextStyle)>, Vec<Node>);
+impl SidebarList {
+    pub fn new(key: impl Into<Key>) -> Self {
+        Self {
+            key: key.into(),
+            sections: Vec::new(),
+        }
+    }
+    /// A section without a heading: an app's pages.
+    pub fn entries(mut self, entries: impl IntoIterator<Item = SidebarEntry>) -> Self {
+        self.sections
+            .push((None, entries.into_iter().map(Node::from).collect()));
+        self
+    }
+    /// A section under `heading` (Places, Bookmarks), in `style`, the app's caption type. An
+    /// empty section is left out, its heading too.
+    pub fn section(
+        mut self,
+        heading: impl Into<String>,
+        style: TextStyle,
+        entries: impl IntoIterator<Item = SidebarEntry>,
+    ) -> Self {
+        self.sections.push((
+            Some((heading.into(), style)),
+            entries.into_iter().map(Node::from).collect(),
+        ));
+        self
+    }
+}
+impl From<SidebarList> for Node {
+    fn from(list: SidebarList) -> Node {
+        let key = list.key.0;
+        let sections = list
+            .sections
+            .into_iter()
+            .enumerate()
+            .filter(|(_, (_, entries))| !entries.is_empty())
+            .map(|(i, (heading, mut entries))| {
+                let section = format!("{key}/section/{i}");
+                if let Some((text, style)) = heading {
+                    // In line with the entries' glyphs (their padding), dimmer than they are.
+                    let label =
+                        Node::text(format!("{section}/heading"), text, style).ink(Ink::Secondary);
+                    entries.insert(
+                        0,
+                        Node::row(format!("{section}/heading-row"), vec![label]).padding(Padding {
+                            top: None,
+                            right: Some(Space::S3),
+                            bottom: None,
+                            left: Some(Space::S3),
+                        }),
+                    );
+                }
+                Node::column(section, entries).gap(Space::S1)
+            })
+            .collect();
+        Node::scroll(
+            format!("{key}/scroll"),
+            Node::column(key, sections)
+                .gap(Space::S4)
+                .padding(Padding::all(Space::S2)),
+        )
+    }
+}
 widget!(
     /// A row of a dropdown's open list or a menu: its label and room for the tick
     /// (`Gtk.PopoverMenu`'s item).

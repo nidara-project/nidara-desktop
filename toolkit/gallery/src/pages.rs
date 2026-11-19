@@ -162,29 +162,19 @@ pub struct Measures<'a> {
 }
 
 pub fn view(m: &Model, cat: &Catalogue, t: &TypeScale, k: &Measures) -> View {
-    let nav = PAGES
-        .iter()
-        .enumerate()
-        .map(|(i, (id, title, glyph))| {
-            nk::SidebarEntry::new(
-                format!("nav/{id}"),
-                *title,
-                *glyph,
-                format!("page:{id}"),
-                t.style(Type::Body, Weight::Regular),
-                k.glyph,
-            )
-            .selected(m.page == i)
-            .into()
-        })
-        .collect();
-    // The sidebar's list; the window's frame (nk-view FrameStyle) puts it in its glass.
-    let sidebar = nk::Scroll::new(
-        "side/scroll",
-        nk::Column::new("side/pages", nav)
-            .gap(Space::S1)
-            .padding(Padding::all(Space::S2)),
-    );
+    let nav = PAGES.iter().enumerate().map(|(i, (id, title, glyph))| {
+        nk::SidebarEntry::new(
+            format!("nav/{id}"),
+            *title,
+            *glyph,
+            format!("page:{id}"),
+            t.style(Type::Body, Weight::Regular),
+            k.glyph,
+        )
+        .selected(m.page == i)
+    });
+    // The kit's sidebar; the window's frame (nk-view FrameStyle) puts it in its glass.
+    let sidebar = nk::SidebarList::new("side/pages").entries(nav);
     let (id, title, _) = PAGES[m.page.min(PAGES.len() - 1)];
     let mut body = vec![header(id, cat, t)];
     body.extend(page(id, m, cat, t, k));
@@ -355,7 +345,7 @@ fn page(id: &str, m: &Model, cat: &Catalogue, t: &TypeScale, k: &Measures) -> Ve
         "list" => long_list(m, t, k),
         "focus" => focus_page(t, k),
         "dialog" => dialogs(m, t),
-        "files" => m.files.view(t, k.row_height, k.files_window),
+        "files" => m.files.view(t, k.row_height, k.files_window, k.glyph),
         _ => vec![],
     }
 }

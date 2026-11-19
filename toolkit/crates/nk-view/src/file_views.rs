@@ -2,7 +2,7 @@
 //! Compositions shared by file choosers and browsers.
 use crate::{
     Align, Button, Column, Image, Ink, Key, Label, ListSource, ListView, Node, Row, RowInfo,
-    SidebarEntry, Space, Value, prelude::*,
+    SidebarEntry, SidebarList, Space, Value, prelude::*,
 };
 use nk_files::{Entry, Place, PlaceKind};
 use nk_text::TextStyle;
@@ -11,29 +11,38 @@ use std::{
     path::{Path, PathBuf},
 };
 
-/// Places in sidebar sections, with the current location highlighted.
+/// The places as a window's sidebar (the kit's one sidebar, `SidebarList`): home and the
+/// user's folders, bookmarks, drives, each under its heading, the current folder selected.
 #[must_use]
 pub struct PlacesSidebar<'a> {
     key: Key,
     places: &'a [Place],
     action: String,
     style: TextStyle,
+    heading: TextStyle,
+    glyph: f64,
     current: Option<&'a Path>,
     headings: [&'a str; 3],
 }
 
 impl<'a> PlacesSidebar<'a> {
+    /// Entries in `style` with glyphs at `glyph` (the frame's, as any sidebar's), headings in
+    /// `heading` (the caption type).
     pub fn new(
         key: impl Into<Key>,
         places: &'a [Place],
         action: impl Into<String>,
         style: TextStyle,
+        heading: TextStyle,
+        glyph: f64,
     ) -> Self {
         Self {
             key: key.into(),
             places,
             action: action.into(),
             style,
+            heading,
+            glyph,
             current: None,
             headings: ["Places", "Bookmarks", "Drives"],
         }
@@ -50,25 +59,27 @@ impl<'a> PlacesSidebar<'a> {
 
 impl From<PlacesSidebar<'_>> for Node {
     fn from(sidebar: PlacesSidebar<'_>) -> Self {
-        let mut sections = Vec::new();
+        let mut list = SidebarList::new(sidebar.key.clone());
         for (section, heading) in sidebar.headings.into_iter().enumerate() {
-            let mut rows = Vec::new();
-            for (index, place) in sidebar.places.iter().enumerate() {
-                let (group, icon) = match place.kind {
-                    PlaceKind::Home => (0, "nd-home"),
-                    PlaceKind::UserDir => (0, "nd-folder"),
-                    PlaceKind::Bookmark => (1, "nd-bookmarks"),
-                    PlaceKind::Drive => (2, "nd-drive-harddisk"),
-                };
-                if group == section {
-                    rows.push(
+            let entries = sidebar
+                .places
+                .iter()
+                .enumerate()
+                .filter_map(|(index, place)| {
+                    let (group, icon) = match place.kind {
+                        PlaceKind::Home => (0, "nd-home"),
+                        PlaceKind::UserDir => (0, "nd-folder"),
+                        PlaceKind::Bookmark => (1, "nd-bookmarks"),
+                        PlaceKind::Drive => (2, "nd-drive-harddisk"),
+                    };
+                    (group == section).then(|| {
                         SidebarEntry::new(
                             format!("{}/place/{index}", sidebar.key.0),
                             &place.name,
                             icon,
                             &sidebar.action,
                             sidebar.style.clone(),
-                            20.,
+                            sidebar.glyph,
                         )
                         .selected(
                             place
@@ -77,20 +88,12 @@ impl From<PlacesSidebar<'_>> for Node {
                         )
                         .enabled(place.path().is_some())
                         .value(Value::Index(index))
-                        .into(),
-                    );
-                }
-            }
-            if !rows.is_empty() {
-                let key = format!("{}/section/{section}", sidebar.key.0);
-                rows.insert(
-                    0,
-                    Label::new(format!("{key}/heading"), heading, sidebar.style.clone()).into(),
-                );
-                sections.push(Column::new(key, rows).gap(Space::S1).into());
-            }
+                    })
+                })
+                .collect::<Vec<_>>();
+            list = list.section(heading, sidebar.heading.clone(), entries);
         }
-        Column::new(sidebar.key, sections).gap(Space::S3).into()
+        list.into()
     }
 }
 
