@@ -22,6 +22,9 @@ pub struct Strings {
     pub drives: String,
     pub show_places: String,
     pub hide_places: String,
+    pub name: String,
+    pub size: String,
+    pub modified: String,
 }
 
 impl Strings {
@@ -52,6 +55,9 @@ impl Strings {
             drives: text("drives")?,
             show_places: text("showPlaces")?,
             hide_places: text("hidePlaces")?,
+            name: text("name")?,
+            size: text("size")?,
+            modified: text("modified")?,
         })
     }
 }

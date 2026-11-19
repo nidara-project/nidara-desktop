@@ -20,6 +20,9 @@ export default {
     "fileChooser.drives": "ドライブ",
     "fileChooser.showPlaces": "場所を表示",
     "fileChooser.hidePlaces": "場所を隠す",
+    "fileChooser.name": "名前",
+    "fileChooser.size": "サイズ",
+    "fileChooser.modified": "変更日",
 
     // Native session energy notifications.
     "power1.alert.low": "バッテリー残量が少なくなっています",

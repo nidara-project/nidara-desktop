@@ -3,9 +3,10 @@
 //! as ONE picture (wm/motion.rs): a window opening, drawn again every frame of it, and one
 //! closing, drawn once as it was when its app destroyed it (its surfaces go right after).
 //!
-//! What a picture leaves out: the blur behind a translucent window and the glass a client
-//! declares (`nidara-material-v1`), which sample what is behind them on the screen, and here
-//! there is nothing behind them. An opening window's are drawn live under its picture, formed
+//! What a picture leaves out: the blur behind a translucent window, which samples the screen
+//! behind it, and here there is nothing behind it. The glass a client declares
+//! (`nidara-material-v1`) lies over the window itself and is kept for a capture (`take`'s
+//! `glass`); an opening or closing window's picture leaves it out too. An opening window's are drawn live under its picture, formed
 //! as it fades in (render/mod.rs); a closing one's go with it.
 //!
 //! Drawn with the GL renderer underneath (`HyaloRenderer::gles`, the GPU that renders), like a
@@ -54,7 +55,11 @@ fn margin(cfg: &crate::config::WindowsConfig) -> f64 {
 }
 
 /// `window` alone at `scale`, as it is now.
-pub fn take(gles: &mut GlesRenderer, scene: &Scene<'_>, window: &Window, scale: f64) -> Result<Snapshot, String> {
+/// `glass`: a capture (capture.rs) — the glass the window lays over itself kept (its sidebar,
+/// its header's buttons, its controls), and the wallpaper drawn behind it, so its background
+/// at any level and its blur come out as on the screen. An opening or closing window's picture leaves it out: there its glass is
+/// drawn live, over the screen (render/mod.rs).
+pub fn take(gles: &mut GlesRenderer, scene: &Scene<'_>, window: &Window, scale: f64, glass: bool) -> Result<Snapshot, String> {
     let m = scene.wm.by_window(window).ok_or("not a window of ours")?;
     let surface = crate::wm::surface_of(window).ok_or("no surface yet")?;
     import_surface_tree(gles, &surface).map_err(|e| format!("{e:?}"))?;
@@ -72,8 +77,28 @@ pub fn take(gles: &mut GlesRenderer, scene: &Scene<'_>, window: &Window, scale: 
     let mut elements: Vec<OutputElement<GlesRenderer>> = Vec::new();
     let place = crate::wm::minimize::Placement { origin: (pad, pad).into(), scale: 1.0 };
     super::push_window(&mut elements, gles, scene, window, Some(place), Point::from((0, 0)), Scale::from(scale), size);
-    // What samples the screen behind it: nothing is behind it here.
-    elements.retain(|e| !matches!(e, OutputElement::Glass(_) | OutputElement::Scrim(_)));
+    // What samples the screen behind the window goes: the screen is not in this picture. Its
+    // own glass lies over the window, whose background and content are drawn first here.
+    elements.retain(|e| match e {
+        OutputElement::Glass(_) => glass,
+        OutputElement::Scrim(_) => false,
+        _ => true,
+    });
+    // A capture: behind the window, the wallpaper of its output where the window lies on it,
+    // so a tinted or translucent background is mixed and blurred with it as on the screen —
+    // and nothing of the other windows behind it (owner, 2026-11-19).
+    if glass
+        && let Some(output) = scene.wm.workspaces.get(&m.workspace).and_then(|w| scene.space.outputs().find(|o| o.name() == w.output))
+        && let Some(geo) = scene.space.output_geometry(output)
+    {
+        let at = Point::<f64, Logical>::from((pad - (frame.loc.x - f64::from(geo.loc.x)), pad - (frame.loc.y - f64::from(geo.loc.y))));
+        let pixels = geo.size.to_f64().to_physical_precise_round(scale);
+        elements.extend(
+            super::wallpaper::elements(gles, output, geo.size, pixels, at.to_physical(scale), scene.when, scene.reduce_motion)
+                .into_iter()
+                .map(OutputElement::Cursor),
+        );
+    }
     let mut tracker = OutputDamageTracker::new(size, scale, Transform::Normal);
     {
         let mut fb = gles.bind(&mut texture).map_err(|e| e.to_string())?;

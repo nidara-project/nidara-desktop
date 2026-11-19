@@ -505,11 +505,15 @@ pub struct LayeredTree<R: Renderer> {
     pub glass: Vec<(usize, LayerPaint)>,
 }
 
-/// What Hyalo paints under a layer: its glass, and below that its panes' shadow (`set_shadow`).
+/// What Hyalo paints under a layer: the window's background faded over it, its glass, and below
+/// that its panes' shadow (`set_shadow`).
 #[derive(Debug)]
 pub enum LayerPaint {
     Glass(Box<GlassElement>),
     Shadow(crate::render::ScrimElement),
+    /// The window's background faded over the layer (`set_background_fade`), in front of its
+    /// glass.
+    Fade(crate::render::fade::FadeElement),
 }
 
 impl<R: Renderer> LayeredTree<R> {
@@ -537,10 +541,16 @@ struct Glassy {
     scale: Scale<f64>,
     alpha: f64,
     clip: Option<Rectangle<i32, Physical>>,
+    /// Its box, output px: where the window's background is faded (`set_background_fade`).
+    rect: Rectangle<f64, Physical>,
+    fade: Option<[f64; 2]>,
 }
 
 /// `surface`'s tree as render elements, front to back, each layer at its presented transform
-/// `when`. None when the tree holds no layer: the caller uses Smithay's own walk.
+/// `when`. None when the tree holds no layer: the caller uses Smithay's own walk. `fill` is the
+/// window's background as Hyalo paints it (premultiplied, at its level), which a layer that asks
+/// for it gets faded over it.
+#[allow(clippy::too_many_arguments)]
 pub fn render_tree<R>(
     renderer: &mut R,
     surface: &WlSurface,
@@ -549,6 +559,7 @@ pub fn render_tree<R>(
     output_size: Size<i32, Physical>,
     kind: Kind,
     when: Instant,
+    fill: Option<[f32; 4]>,
 ) -> Option<LayeredTree<R>>
 where
     R: Renderer + ImportAll,
@@ -585,8 +596,10 @@ where
                 Ok(Some(inner)) => {
                     let s = Scale::from((scale.x * here.scale, scale.y * here.scale));
                     out.push(AtScale { inner, scale: s, clip: here.clip.map(|r| r.to_physical(scale).to_i32_round()) });
-                    if is_layer(states) && crate::protocols::material::glass_shapes(states) > 0 {
-                        glassy.push(Glassy { index: out.len() - 1, layer: surface.clone(), at: at.to_i32_round(), scale: s, alpha: here.alpha, clip: here.clip.map(|r| r.to_physical(scale).to_i32_round()) });
+                    let fade = fill.and_then(|_| crate::protocols::material::background_fade(states));
+                    if is_layer(states) && (crate::protocols::material::glass_shapes(states) > 0 || fade.is_some()) {
+                        let rect = Rectangle::new(at, v.dst.to_f64().to_physical(s));
+                        glassy.push(Glassy { index: out.len() - 1, layer: surface.clone(), at: at.to_i32_round(), scale: s, alpha: here.alpha, clip: here.clip.map(|r| r.to_physical(scale).to_i32_round()), rect, fade });
                     }
                 }
                 Ok(None) => {}
@@ -602,7 +615,7 @@ where
     });
     let glass = glassy
         .into_iter()
-        .flat_map(|Glassy { index, layer, at, scale, alpha, clip }| {
+        .flat_map(|Glassy { index, layer, at, scale, alpha, clip, rect, fade }| {
             let bounds = match (bounds, clip) {
                 (Some(a), Some(b)) => Some(a.intersection(b).unwrap_or_default()),
                 (a,b) => a.or(b),
@@ -629,7 +642,13 @@ where
                     })
                     .map(|e| if alpha < 1.0 { e.forming(alpha, &states.data_map) } else { e })
             });
-            elements.into_iter().map(|g| LayerPaint::Glass(Box::new(g))).chain(shadow.map(LayerPaint::Shadow)).map(move |g| (index, g)).collect::<Vec<_>>()
+            let fade = fill.zip(fade).and_then(|(fill, fade)| crate::render::fade::FadeElement::new(&layer, rect, fill, fade)).map(|f| f.with_alpha(alpha));
+            fade.map(LayerPaint::Fade)
+                .into_iter()
+                .chain(elements.into_iter().map(|g| LayerPaint::Glass(Box::new(g))))
+                .chain(shadow.map(LayerPaint::Shadow))
+                .map(move |g| (index, g))
+                .collect::<Vec<_>>()
         })
         .collect();
     Some(LayeredTree { surfaces: out, glass })

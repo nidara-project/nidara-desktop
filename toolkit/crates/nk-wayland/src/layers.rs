@@ -306,6 +306,19 @@ impl Window {
         layer.pending = true;
         Ok(())
     }
+    /// The window's background faded over the layer, `top` to `bottom` strength (0..1): Hyalo
+    /// paints it with the background it paints for the window, at the same level
+    /// (`nidara-material-v1` `set_background_fade`). 0 and 0: none.
+    pub fn set_layer_fade(&mut self, id: LayerId, top: f64, bottom: f64) -> Result<()> {
+        fixed(&[top, bottom])?;
+        if !(0. ..=1.).contains(&top) || !(0. ..=1.).contains(&bottom) {
+            return Err("invalid fade".into());
+        }
+        let layer = self.layer(id)?;
+        layer.material.set_background_fade(top, bottom);
+        layer.pending = true;
+        Ok(())
+    }
     pub fn set_position(&mut self, id: LayerId, x: f64, y: f64) -> Result<()> {
         fixed(&[x, y])?;
         let l = self.layer(id)?;

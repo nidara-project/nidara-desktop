@@ -8,7 +8,8 @@
 //!   Hyalo does not carry a Hyprland protocol for it (lib/nidara-wl falls back to the
 //!   identifier when the mapping manager is absent).
 //! - `ext-image-capture-source-v1` (toplevel sources) + `ext-image-copy-capture-v1`: the
-//!   window is drawn on its own — its surface and subsurfaces, no other window, no glass.
+//!   window is drawn on its own — its surfaces and what Hyalo paints of it (its background,
+//!   its controls), no other window, no glass (`window_elements`).
 //!
 //! A window on a hidden workspace is captured too, with its last committed content, as on
 //! Hyprland: drawing it from its surface tree does not need it on screen.
@@ -32,14 +33,12 @@ use smithay::{
         renderer::{
             Bind, ExportMem, Offscreen, Texture as _, TextureMapping as _,
             damage::OutputDamageTracker,
-            element::{Kind, surface::{WaylandSurfaceRenderElement, render_elements_from_surface_tree}},
             gles::{GlesRenderer, GlesTexture},
-            utils::import_surface_tree,
         },
     },
     desktop::Window,
     reexports::wayland_server::protocol::{wl_shm, wl_surface::WlSurface},
-    utils::{Buffer as BufferCoords, Physical, Rectangle, Scale, Size, Transform},
+    utils::{Buffer as BufferCoords, Physical, Rectangle, Size, Transform},
     wayland::{
         foreign_toplevel_list::{ForeignToplevelHandle, ForeignToplevelListHandler, ForeignToplevelListState},
         image_capture_source::{
@@ -55,6 +54,7 @@ use smithay::{
     },
 };
 
+use crate::render::snapshot::{Snapshot, SnapshotElement};
 use crate::{state::Hyalo, wm::WindowId};
 
 /// The identifier a window is listed under: its id in hex, the shell's address for it.
@@ -371,27 +371,29 @@ impl Hyalo {
     }
 }
 
-/// A window's elements, and the size they are drawn at.
-type WindowDraw = (Size<i32, Physical>, Vec<WaylandSurfaceRenderElement<GlesRenderer>>);
+/// What a window capture draws: the window's picture (render/snapshot.rs: its surfaces, its
+/// declared background over the wallpaper where the window lies — mixed and blurred with it
+/// as on the screen, the other windows left out —, its controls, and its own glass formed
+/// over what it drew under it),
+/// cropped to its client box at 0,0, and the size of that.
+///
+/// Until #1148 a capture was the client's buffers alone: a window of ours, whose background,
+/// glass and controls Hyalo paints (D6), showed in the dock's previews as a transparent box
+/// with only its header.
+type WindowDraw = (Size<i32, Physical>, Vec<SnapshotElement>);
 
-/// What `window` alone is drawn from — its surface and subsurfaces, at `scale`, the geometry's
-/// origin at 0,0 — and the size it is drawn at.
-fn window_elements(renderer: &mut GlesRenderer, window: &Window, scale: f64) -> Result<WindowDraw, String> {
-    let geo = window.geometry();
-    let size = geo.size.to_f64().to_physical_precise_round(scale);
-    let surface = crate::wm::surface_of(window).ok_or("no surface yet")?;
-    // A window on a hidden workspace has not been drawn since its last commits: its buffers
-    // become textures here, as they would when shown.
-    import_surface_tree(renderer, &surface).map_err(|e| format!("{e:?}"))?;
-    // The geometry's origin at 0,0: the client's own decoration margin falls outside.
-    let origin = (geo.loc.to_f64().upscale(-1.0)).to_physical_precise_round(scale);
-    let elements = render_elements_from_surface_tree(renderer, &surface, origin, Scale::from(scale), 1.0, Kind::Unspecified);
-    Ok((size, elements))
+fn window_elements(window: &Window, picture: &Snapshot, bar: i32, scale: f64) -> WindowDraw {
+    let size = window.geometry().size.to_f64().to_physical_precise_round(scale);
+    // The picture's window box lands with its client box at 0,0: Hyalo's title bar, when it
+    // draws one, is above it, outside the capture.
+    let top = -(f64::from(bar) * scale);
+    let frame = Rectangle::new((0.0, top).into(), picture.frame.size);
+    (size, vec![SnapshotElement::new(picture, frame, 1.0, 1.0)])
 }
 
-/// `window` alone straight into a client's dmabuf — a window being shared: never read back.
-pub fn draw_window_into(renderer: &mut GlesRenderer, window: &Window, scale: f64, dmabuf: &mut Dmabuf) -> Result<(), String> {
-    let (size, elements) = window_elements(renderer, window, scale)?;
+/// `window` straight into a client's dmabuf — a window being shared: never read back.
+pub fn draw_window_into(renderer: &mut GlesRenderer, window: &Window, picture: &Snapshot, bar: i32, scale: f64, dmabuf: &mut Dmabuf) -> Result<(), String> {
+    let (size, elements) = window_elements(window, picture, bar, scale);
     let mut tracker = OutputDamageTracker::new(size, scale, Transform::Normal);
     let mut fb = renderer.bind(dmabuf).map_err(|e| e.to_string())?;
     let result = tracker
@@ -400,9 +402,9 @@ pub fn draw_window_into(renderer: &mut GlesRenderer, window: &Window, scale: f64
     result.sync.wait().map_err(|e| format!("{e:?}"))
 }
 
-/// `window` alone — its surface and subsurfaces, at `scale` — as RGBA rows, top first.
-pub fn draw_window(renderer: &mut GlesRenderer, window: &Window, scale: f64) -> Result<(u32, u32, Vec<u8>), String> {
-    let (size, elements) = window_elements(renderer, window, scale)?;
+/// `window` as `window_elements` draws it, as RGBA rows, top first.
+pub fn draw_window(renderer: &mut GlesRenderer, window: &Window, picture: &Snapshot, bar: i32, scale: f64) -> Result<(u32, u32, Vec<u8>), String> {
+    let (size, elements) = window_elements(window, picture, bar, scale);
     let mut texture: GlesTexture = renderer
         .create_buffer(Fourcc::Abgr8888, (size.w, size.h).into())
         .map_err(|e| e.to_string())?;

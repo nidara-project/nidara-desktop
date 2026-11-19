@@ -24,7 +24,7 @@ match the file you are in by hand.
 | `hyalo/compositor/src/wm/` | the window manager: workspaces, focus, floating/tiling, fullscreen (`mod.rs`), the commands (`actions.rs`), pointer move/resize (`grabs.rs`), tiling layouts (`layout/`), window rules (`rules.rs`), which windows are games (`games.rs`), minimizing (`minimize.rs`), opening and closing (`motion.rs`) |
 | `hyalo/compositor/src/binds.rs` | key and pointer bindings from the config's `[binds]` |
 | `hyalo/compositor/src/ipc/` | the JSON socket and `nidara-hyalo msg`; `observe.rs`: epoch/serial/time, snapshot, launches, attention (#959 H1) |
-| `hyalo/compositor/src/capture.rs` | capture of a window or an output (ext-foreign-toplevel-list + ext-image-copy-capture): the shell's thumbnails, grim, and a screen or window shared in a call |
+| `hyalo/compositor/src/capture.rs` | capture of a window or an output (ext-foreign-toplevel-list + ext-image-copy-capture): the shell's thumbnails, grim, and a screen or window shared in a call. A window is drawn from its snapshot (render/snapshot.rs), so it includes everything Hyalo paints of it (D6 background, controls, and its own glass, formed over the window's own pixels: a sidebar floats over the window, not the desktop), cropped to its client box. Behind it goes the wallpaper of its output where the window lies (never the other windows), so a tinted or translucent background mixes and blurs with it as on screen. Before #1148 it held only the client's buffers, and our windows showed transparent in the dock's previews |
 | `hyalo/compositor/src/sandbox.rs` | what a sandboxed (Flatpak) client is not offered |
 | `hyalo/compositor/src/shell/` | windows and popups (xdg-shell, `mod.rs`), layer surfaces (`layer.rs`), who draws a title bar (`decoration.rs`) |
 | `hyalo/compositor/src/protocols/window_controls.rs`, `render/controls.rs` | a window's controls, Hyalo's: the protocol, and the capsule drawn over the app's header |
@@ -2947,3 +2947,19 @@ maps is drawn over it.
   dialog, so after the toolkit).
 - Not done yet: the portal with that consent (W3), game mode's temporary wallpaper (W4),
   fit and centre.
+
+## A title bar's veil (`set_background_fade`)
+
+The band over a native window's content fades the window's background from the top down, over
+a graded blur, so the title stays legible over content scrolled under it (D7). **Hyalo paints
+it, never the kit**: the kit's layer sends `set_background_fade(top, bottom)` (nk-wayland
+`set_layer_fade`) and leaves its own buffer clear; `protocols/layers.rs` `render_tree` puts a
+`render/fade.rs` `FadeElement` in front of the layer's glass, coloured with the background
+`render/window.rs` `background` gives (its level's opacity, cut to the window's corners).
+Before #1148 point 11 the kit painted that colour itself, which could not follow a tinted or
+translucent level: the band came out more opaque than the rest of the window.
+
+## Modal dialogs and their parents (#1148)
+
+- A window with a mapped modal child (`wm::modal_target`) receives no pointer input: `surface_under` returns nothing over it. `anything_under` still finds it, so a press focuses it, and focus is redirected to the dialog. Without this, Firefox's tabs stayed clickable under its file chooser.
+- Focusing a window raises its parents first, below it (`focus_window`). A dialog picked from the dock's previews therefore never comes up alone over another app.

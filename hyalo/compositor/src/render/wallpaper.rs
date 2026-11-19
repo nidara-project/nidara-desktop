@@ -197,12 +197,16 @@ fn layer(bgra: &[u8], serial: u64, size: (i32, i32)) -> Layer {
 
 /// The wallpaper on `output`, front to back: the picture, and under it the one it is
 /// replacing while it fades in. `logical` is the output's size in the layout, `physical` the
-/// same in its own pixels; `when` is the moment the frame shows.
+/// same in its own pixels; `at` is where the output's top left corner lands in the target,
+/// its pixels (0,0 on the output itself; a window capture moves it, capture.rs); `when` is
+/// the moment the frame shows.
+#[allow(clippy::too_many_arguments)]
 pub fn elements<R: HyaloRenderer>(
     renderer: &mut R,
     output: &Output,
     logical: Size<i32, Logical>,
     physical: Size<i32, Physical>,
+    at: smithay::utils::Point<f64, Physical>,
     when: Instant,
     reduce_motion: bool,
 ) -> Vec<MemoryRenderBufferRenderElement<R>> {
@@ -288,7 +292,7 @@ pub fn elements<R: HyaloRenderer>(
     let mut out = Vec::new();
     // Drawn at the output's size whatever the buffer's: a picture of the size before a mode
     // change is stretched for the frames its replacement takes to decode.
-    let mut push = |l: &Layer, alpha: Option<f32>| match MemoryRenderBufferRenderElement::from_buffer(renderer, (0.0, 0.0), &l.buffer, alpha, None, Some(logical), Kind::Unspecified) {
+    let mut push = |l: &Layer, alpha: Option<f32>| match MemoryRenderBufferRenderElement::from_buffer(renderer, at, &l.buffer, alpha, None, Some(logical), Kind::Unspecified) {
         Ok(e) => out.push(e),
         Err(err) => tracing::warn!(?err, "wallpaper not drawn"),
     };

@@ -94,15 +94,6 @@ impl Tree {
         surface: Surface,
         palette: Palette,
     ) -> Result<Vec<u8>> {
-        self.paint_with_titlebar(frame, surface, palette, None)
-    }
-    pub(crate) fn paint_with_titlebar(
-        &self,
-        frame: nk_wayland::Frame,
-        surface: Surface,
-        palette: Palette,
-        title_style: Option<&crate::window::TitlebarStyle>,
-    ) -> Result<Vec<u8>> {
         if surface == Surface::Content && self.menu_style.is_some() {
             return self.paint_menu(frame, palette);
         }
@@ -125,30 +116,6 @@ impl Tree {
                 }
             }
             canvas.pop_clip();
-        }
-        if surface == Surface::TitleBar
-            && self.layered
-            && let Some(style) = title_style
-        {
-            // Fade only the window background. The compositor supplies the graded blur.
-            for row in 0..frame.pixel_height {
-                let y = row as f32 / frame.scale as f32;
-                let mut color = opaque(palette.background);
-                color.components[3] = if style.opaque {
-                    1.
-                } else {
-                    style.background_opacity * (1. - y / frame.height as f32)
-                };
-                canvas.rect(
-                    Rect {
-                        x: 0.,
-                        y,
-                        width: frame.width as f32,
-                        height: 1. / frame.scale as f32,
-                    },
-                    color,
-                );
-            }
         }
         if surface != Surface::Content || !self.layered {
             let panes = match surface {

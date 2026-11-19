@@ -386,8 +386,18 @@ impl FrameStyle {
             .collect()
     }
 
-    /// The window's background faded over the band, top to bottom: what keeps the title
-    /// legible over the content scrolled under it. The blur is Hyalo's; this is content.
+    /// How strongly the window's background covers the band at its top and its bottom: what
+    /// keeps the title legible over the content scrolled under it. Hyalo paints it.
+    pub fn fade(&self) -> (f64, f64) {
+        if self.opaque {
+            (1., 1.)
+        } else {
+            (self.background_opacity, 0.)
+        }
+    }
+
+    /// The window's background faded over the band, top to bottom, painted by the kit: only
+    /// a window without layers (D5), where there is no Hyalo to paint it.
     pub fn paint_fade(&self, canvas: &mut nk_render::Canvas, r: [f64; 4], background: [f64; 3]) {
         let scale = canvas.scale();
         let rows = (r[3] * scale).ceil() as u32;

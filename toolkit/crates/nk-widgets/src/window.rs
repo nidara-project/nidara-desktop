@@ -476,19 +476,20 @@ impl Composition {
                             window.scale(),
                         ),
                     )?;
+                    // The window's background faded over it is Hyalo's (#1148 point 11).
+                    let (top, bottom) = if style.opaque {
+                        (1., 1.)
+                    } else {
+                        (f64::from(style.background_opacity), 0.)
+                    };
+                    window.set_layer_fade(titlebar, top, bottom)?;
                 } else {
                     window.set_layer_material(titlebar, None)?;
                 }
                 let a =
                     window.paint_layer(sidebar, |f| tree.paint(f, Surface::Sidebar, palette))?;
-                let b = window.paint_layer(titlebar, |f| {
-                    tree.paint_with_titlebar(
-                        f,
-                        Surface::TitleBar,
-                        palette,
-                        self.title_style.as_ref(),
-                    )
-                })?;
+                let b =
+                    window.paint_layer(titlebar, |f| tree.paint(f, Surface::TitleBar, palette))?;
                 if a && b {
                     self.painted = Some(signature);
                 }
@@ -1332,7 +1333,7 @@ mod tests {
         }
     }
     #[test]
-    fn titlebar_recipe_has_contiguous_graded_bands_and_only_a_background_fade() {
+    fn titlebar_recipe_has_contiguous_graded_bands_and_leaves_the_fade_to_hyalo() {
         let (mut tree, mut backend, _, _, _) = fixture();
         tree.layout(tree.size, true, &mut backend).unwrap();
         let mut style = TitlebarStyle {
@@ -1365,26 +1366,21 @@ mod tests {
                 scale,
                 material: true,
             };
+            // The window's background faded over the band is Hyalo's (#1148 point 11): the
+            // layer's own buffer leaves it clear, opaque or not.
             let pixels = tree
-                .paint_with_titlebar(frame, Surface::TitleBar, test_palette(), Some(&style))
+                .paint(frame, Surface::TitleBar, test_palette())
                 .unwrap();
             let alpha = |data: &[u8], y: usize| {
                 data[(y * frame.pixel_width as usize + frame.pixel_width as usize - 1) * 4 + 3]
             };
-            assert!((alpha(&pixels, 0) as i32 - 217).abs() <= 2);
-            assert!(alpha(&pixels, frame.pixel_height as usize - 1) < 5);
-            for row in 1..frame.pixel_height as usize {
-                assert!(
-                    alpha(&pixels, row) <= alpha(&pixels, row - 1),
-                    "fade has a divider/band"
+            for row in 0..frame.pixel_height as usize {
+                assert_eq!(
+                    alpha(&pixels, row),
+                    0,
+                    "the kit painted a fade at row {row}"
                 );
             }
-            style.opaque = true;
-            let opaque = tree
-                .paint_with_titlebar(frame, Surface::TitleBar, test_palette(), Some(&style))
-                .unwrap();
-            assert_eq!(alpha(&opaque, frame.pixel_height as usize - 1), 255);
-            style.opaque = false;
         }
         style.curve[1] = f64::NAN;
         assert!(style.validate().is_err());

@@ -682,7 +682,8 @@ reference. What it does:
   every app has the same window: the glass sidebar floating at the header's inset, the content
   in the scroll region `frame/content`, reaching the window's edges and starting below the
   header band, the band over it in a layer of its own with Hyalo's graded blur and the
-  window's background faded on it, the page's title in the band, and Hyalo's window controls
+  window's background faded on it — also Hyalo's, asked with `set_layer_fade`, so it is the
+  background Hyalo paints at the same level (#1148 point 11), the page's title in the band, and Hyalo's window controls
   placed by `controls_at` on the side the user chose. Its measures are the exported `header`
   component's (`toolkit/tokens/header.json`); an app passes its sidebar, its content and its
   title. A press on the band where nothing else is moves the window; two toggle maximised.

@@ -608,8 +608,10 @@ Phase 0 remains an independent client of those four crates.
   The application supplies exported colours/measurements and the menus' panel Material.
   `Tree::set_sidebar_frame` supplies the floating margin/radius. The title uses
   `TitlebarStyle` and `nk-wayland::set_layer_blur` with explicit `Blur`/`GradedPane`
-  bands, no glass tone/rim. The app supplies its background fade; reduced transparency
-  makes it opaque and unblurred. The provisional recipe remains the owner's D7 choice.
+  bands, no glass tone/rim. The background fade is Hyalo's: the kit asks for it with
+  `set_layer_fade` (`nidara-material-v1` `set_background_fade`) and Hyalo paints the
+  window's own background at its level (#1148 point 11); reduced transparency makes it
+  opaque and unblurred. The provisional recipe remains the owner's D7 choice.
   `Tree::window_controls` supplies retained client buttons; a server layout replaces
   them and reserves its actual side/size. The app opts in before configure with
   `Application::window_controls`, places the root-local box, and sends fallback
@@ -1617,7 +1619,8 @@ Settings' D7 header geometry is exported from tokens/header.json, sourced from
 Main.dc.html in the owner's 23-10 artifact. Header controls are 32 high at y=8;
 the title band is 48 and the separate window-control capsule remains 72x24 at
 12. Do not change Hyalo SSD geometry to match a header button. The title layer
-uses TitlebarStyle's blur-only grade and background fade, with no panel tone/rim.
+uses TitlebarStyle's blur-only grade and Hyalo's background fade (`set_layer_fade`), with
+no panel tone/rim.
 A configured title text box reserves the actual floating controls; its caption
 uses retained text geometry. Floating capsules support named vector-icon buttons
 and one retained SearchInput using the same editor and IME host. Selection pixels

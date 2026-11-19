@@ -20,6 +20,9 @@ export default {
     "fileChooser.drives": "Диски",
     "fileChooser.showPlaces": "Показать места",
     "fileChooser.hidePlaces": "Скрыть места",
+    "fileChooser.name": "Имя",
+    "fileChooser.size": "Размер",
+    "fileChooser.modified": "Изменён",
 
     // Native session energy notifications.
     "power1.alert.low": "Низкий заряд батареи",

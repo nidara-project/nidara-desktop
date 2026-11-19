@@ -830,6 +830,17 @@ impl<'a, S: ListSource + ?Sized> ListView<'a, S> {
         self.list.columns = count.max(1);
         self
     }
+    /// A row above the rows naming their columns, laid out as a row is (its titles over
+    /// their columns); it does not scroll.
+    pub fn header(mut self, header: impl Into<Node>) -> Self {
+        self.list.header = Some(Box::new(header.into()));
+        self
+    }
+    /// In a grid (`columns` > 1), every tile this wide, centred in its column.
+    pub fn tile_width(mut self, width: f64) -> Self {
+        self.list.tile_width = Some(width);
+        self
+    }
     /// The currently selected row, or none when a filter hides it.
     pub fn selected(mut self, index: Option<usize>) -> Self {
         self.list.selected = index;

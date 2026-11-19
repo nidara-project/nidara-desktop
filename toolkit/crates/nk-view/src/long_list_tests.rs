@@ -591,3 +591,48 @@ fn reveal_offset_is_minimal_for_visible_taller_and_outside_rows() {
         );
     }
 }
+
+/// #1148: a grid's tile is its own size at any window width (its wash was the column's,
+/// stretching with the window), and a header row stands over the rows without scrolling.
+#[test]
+fn grid_tiles_keep_their_width_and_a_header_stays_over_the_rows() {
+    let source = Source::default();
+    let mut widths = Vec::new();
+    for width in [400., 640.] {
+        let mut s = ViewState::new(0);
+        let mut list = LongList::new(6, 0, 100.);
+        list.columns = 3;
+        list.tile_width = Some(100.);
+        let n = list.node("grid", "Files", "select", None, &source);
+        s.layout(
+            &n,
+            (width, 400.),
+            1.,
+            crate::tests::tokens().with_types(&crate::tests::types()),
+            &mut crate::tests::backend(),
+            Instant::now(),
+        );
+        let tile = s.rect(&"grid/item/record-0".into()).unwrap();
+        widths.push(tile[2]);
+    }
+    assert_eq!(widths, [100., 100.]);
+
+    let mut s = ViewState::new(0);
+    let mut list = LongList::new(40, 0, 32.);
+    list.header = Some(Box::new(Node::text("title", "Name", Default::default())));
+    let n = list.node("list", "Files", "select", None, &source);
+    s.layout(
+        &n,
+        (320., 256.),
+        1.,
+        crate::tests::tokens().with_types(&crate::tests::types()),
+        &mut crate::tests::backend(),
+        Instant::now(),
+    );
+    let header = s.rect(&"title".into()).unwrap();
+    let first = s.rect(&"list/item/record-0".into()).unwrap();
+    assert!(
+        header[1] + header[3] <= first[1],
+        "{header:?} over {first:?}"
+    );
+}

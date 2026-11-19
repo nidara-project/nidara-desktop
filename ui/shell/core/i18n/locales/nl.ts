@@ -20,6 +20,9 @@ export default {
     "fileChooser.drives": "Stations",
     "fileChooser.showPlaces": "Locaties tonen",
     "fileChooser.hidePlaces": "Locaties verbergen",
+    "fileChooser.name": "Naam",
+    "fileChooser.size": "Grootte",
+    "fileChooser.modified": "Gewijzigd",
 
     // Native session energy notifications.
     "power1.alert.low": "Batterij bijna leeg",
