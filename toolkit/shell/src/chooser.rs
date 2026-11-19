@@ -7,8 +7,10 @@
 //!
 //! It is bounded: at most `COLUMNS` across, and when Hyalo gives it less height than its
 //! rows need it scrolls with the wheel, never growing past the output. Pictures are taken
-//! when it opens and refreshed at `REFRESH` while it stays open; a window with no picture
-//! shows its app's icon, never an older frame.
+//! once, when it opens, and stay still (owner, 2026-11-19): refreshed every 500 ms, a video
+//! played in jerks, and a preview that jumps looks broken. Live pictures belong to Hyalo
+//! drawing the real windows, not to captures. A window with no picture shows its app's
+//! icon, never an older frame.
 use crate::popup::{Look, Outcome};
 use nk_a11y::{Action, Bounds, Node, NodeId, Role, Tree};
 use nk_render::{Canvas, ImageFit, Raster};
@@ -20,7 +22,6 @@ use nk_wayland::{
 use std::collections::BTreeMap;
 use std::collections::HashMap;
 use std::sync::Arc;
-use std::time::{Duration, Instant};
 
 pub const COLUMNS: usize = 4;
 /// A picture's box, logical pixels (16:10).
@@ -28,7 +29,6 @@ pub const PICTURE: (f64, f64) = (192., 120.);
 pub const PAD: f64 = 8.;
 pub const TITLE: f64 = 20.;
 pub const GAP: f64 = 4.;
-pub const REFRESH: Duration = Duration::from_millis(500);
 const LEFT_BUTTON: u32 = 0x110;
 
 #[derive(Clone, Debug, PartialEq)]
@@ -117,7 +117,6 @@ pub struct Chooser {
     /// Pictures by window, and the capture each one is waiting for.
     pictures: HashMap<u64, Arc<Raster>>,
     pub captures: HashMap<nk_wayland::CaptureId, u64>,
-    asked: Instant,
     icon: Option<Arc<Raster>>,
     hover: Option<usize>,
     focus: Option<usize>,
@@ -170,7 +169,6 @@ impl Chooser {
             size,
             pictures: HashMap::new(),
             captures: HashMap::new(),
-            asked: Instant::now(),
             icon: r.icon,
             hover: None,
             focus: r.keyboard.then_some(0),
@@ -186,16 +184,8 @@ impl Chooser {
         Ok(c)
     }
 
-    /// While it stays open, fresh pictures at most every `REFRESH`, one round at a time.
-    pub fn refresh(&mut self, w: &mut Window) {
-        if self.captures.is_empty() && self.asked.elapsed() >= REFRESH {
-            self.capture(w);
-        }
-    }
-
     /// Ask for every candidate's picture that is not already on its way.
     pub fn capture(&mut self, w: &mut Window) {
-        self.asked = Instant::now();
         for c in &self.candidates {
             if self.captures.values().any(|w| *w == c.window) {
                 continue;
