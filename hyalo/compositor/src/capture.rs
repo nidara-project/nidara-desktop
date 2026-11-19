@@ -372,8 +372,9 @@ impl Hyalo {
 }
 
 /// What a window capture draws: the window's picture (render/snapshot.rs: its surfaces, its
-/// declared background — opaque at any level, since the screen behind it is not in the
-/// picture; nothing else changes —, its controls, and its own glass formed over what it drew under it),
+/// declared background over the wallpaper where the window lies — mixed and blurred with it
+/// as on the screen, the other windows left out —, its controls, and its own glass formed
+/// over what it drew under it),
 /// cropped to its client box at 0,0, and the size of that.
 ///
 /// Until #1148 a capture was the client's buffers alone: a window of ours, whose background,

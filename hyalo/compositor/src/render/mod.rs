@@ -421,7 +421,7 @@ fn scene_elements<R: HyaloRenderer>(
     // locked one, under the `Background` layers a client may still put there.
     let push_wallpaper = |out: &mut Vec<OutputElement<R>>, renderer: &mut R| {
         let pixels = output_geo.size.to_f64().to_physical_precise_round(scale);
-        out.extend(wallpaper::elements(renderer, output, output_geo.size, pixels, state.when, state.reduce_motion).into_iter().map(OutputElement::Cursor));
+        out.extend(wallpaper::elements(renderer, output, output_geo.size, pixels, (0.0, 0.0).into(), state.when, state.reduce_motion).into_iter().map(OutputElement::Cursor));
     };
     if state.dimmed {
         use smithay::backend::renderer::element::{Kind, solid::{SolidColorBuffer, SolidColorRenderElement}};
