@@ -239,6 +239,13 @@ impl Image {
     pub fn new(key: impl Into<Key>, name: impl Into<String>, size: f64) -> Self {
         Self(Node::icon(key, name, size))
     }
+    /// Use the application icon theme, with a Nidara interface glyph as the fallback.
+    pub fn app_theme(mut self, fallback: impl Into<String>) -> Self {
+        if let Kind::Icon(icon) = &mut self.0.kind {
+            icon.app_fallback = Some(fallback.into());
+        }
+        self
+    }
     setters! {
         ink(ink: Ink);
         /// Its ink at `alpha` of its own opacity.
@@ -797,16 +804,18 @@ impl<'a, S: ListSource + ?Sized> ListView<'a, S> {
         self.enabled = on;
         self
     }
-    /// Multiple selection. Clicking or pressing Space toggles a row and reports
-    /// its index through `toggle`. Arrows only move the cursor.
+    /// Multiple selection. The selection action reports indices and a range anchor
+    /// through `Value::Selection`. Arrows only move the cursor.
     pub fn multiple(
         mut self,
         selected: std::collections::BTreeSet<usize>,
-        toggle: impl Into<String>,
+        anchor: Option<usize>,
+        changed: impl Into<String>,
     ) -> Self {
         self.list.multiple = Some(crate::components::MultipleSelection {
             selected,
-            toggle: toggle.into(),
+            anchor,
+            changed: changed.into(),
         });
         self
     }

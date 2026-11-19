@@ -344,6 +344,10 @@ impl AppWindow {
         &self.look
     }
     /// A new appearance from the portal.
+    pub fn set_app_icon_theme(&mut self, theme: &str) {
+        self.glyphs.set_app_icon_theme(theme);
+        self.paint_dirty = true;
+    }
     pub fn set_look(&mut self, look: WindowLook, reduced: bool) {
         self.look = look;
         self.reduced = reduced;
@@ -761,13 +765,15 @@ impl AppWindow {
                 self.paint_dirty |= self.state.pointer_leave();
                 true
             }
-            Event::Button { pressed, .. } => {
+            Event::Button {
+                pressed, modifiers, ..
+            } => {
                 if pressed {
                     self.band.blur();
                     self.band_dirty = true;
                 }
                 self.changed = true;
-                if let Some(a) = self.state.button(pressed, now) {
+                if let Some(a) = self.state.button_with_modifiers(pressed, now, modifiers) {
                     self.route(a, &mut out);
                 }
                 self.paint_dirty = true;
@@ -1022,9 +1028,13 @@ impl AppWindow {
                 frame.scale,
                 (r[0], r[1]),
             );
-            state.paint_lifted(&mut c, tokens.with_types(&self.look.types), &mut |n, s| {
-                glyphs.get(n, s)
-            })?;
+            state.paint_with_glyphs(
+                &mut c,
+                tokens.with_types(&self.look.types),
+                glyphs,
+                None,
+                true,
+            )?;
             Ok(c.finish())
         })?;
         // A layer with both buffers busy: tried again on the next turn.
@@ -1513,11 +1523,12 @@ impl AppWindow {
             self.last = self.state.frame(&self.look.tokens, now);
         }
         let glyphs = &mut self.glyphs;
-        self.state.paint(
+        self.state.paint_with_glyphs(
             &mut c,
             self.look.tokens.with_types(&self.look.types),
-            &mut |name, size| glyphs.get(name, size),
+            glyphs,
             (!frame.material).then_some(&self.last),
+            false,
         )?;
         if self.modal_frame.is_none() && self.band_layer.is_none() {
             // No layers (D5): the band in the window itself, opaque, over the content.

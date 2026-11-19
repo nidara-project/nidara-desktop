@@ -36,7 +36,16 @@ pub struct LongList {
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub struct MultipleSelection {
     pub selected: BTreeSet<usize>,
-    pub toggle: String,
+    pub anchor: Option<usize>,
+    pub changed: String,
+}
+
+enum Select {
+    Replace,
+    Toggle,
+    Extend { keep: bool },
+    Add,
+    All,
 }
 
 #[derive(Default)]
@@ -243,13 +252,55 @@ impl LongList {
             |multi| multi.selected.contains(&index),
         )
     }
-    fn toggle(&self, cx: &mut Input<'_>, index: usize) {
+    fn select(&self, cx: &mut Input<'_>, index: usize, change: Select) {
+        let Some(multi) = &self.multiple else {
+            self.choose(cx, index);
+            return;
+        };
+        let current = self.current(cx.state.as_deref());
+        let anchor = multi
+            .anchor
+            .filter(|&i| i < self.count)
+            .or(current)
+            .unwrap_or(index);
+        let mut indices = match change {
+            Select::Replace | Select::Extend { keep: false } | Select::All => BTreeSet::new(),
+            _ => multi.selected.clone(),
+        };
+        let anchor = match change {
+            Select::Replace => {
+                indices.insert(index);
+                index
+            }
+            Select::Toggle => {
+                if !indices.remove(&index) {
+                    indices.insert(index);
+                }
+                index
+            }
+            Select::Extend { .. } => {
+                indices.extend(anchor.min(index)..=anchor.max(index));
+                anchor
+            }
+            Select::Add => {
+                indices.insert(index);
+                index
+            }
+            Select::All => {
+                indices = (0..self.count).collect();
+                anchor
+            }
+        };
+        indices.retain(|&i| i < self.count);
         self.choose(cx, index);
-        if let Some(multi) = &self.multiple {
-            cx.effects.activate = true;
-            cx.effects.action = Some(multi.toggle.clone());
-            cx.effects.value = Some(Value::Index(index));
-        }
+        cx.effects.activate = true;
+        cx.effects.redraw = true;
+        cx.effects.action = Some(multi.changed.clone());
+        cx.effects.value = Some(Value::Selection {
+            cursor: index,
+            anchor,
+            indices,
+        });
     }
     fn info(&self, index: usize) -> Option<&RowInfo> {
         self.rows
@@ -465,7 +516,12 @@ impl Component for LongList {
             cx.effects.redraw = true;
         }
     }
-    fn press(&self, cx: &mut Input<'_>, at: (f64, f64)) {
+    fn press_with_modifiers(
+        &self,
+        cx: &mut Input<'_>,
+        at: (f64, f64),
+        modifiers: nk_wayland::PointerModifiers,
+    ) {
         let Some(read) = cx.context else {
             return;
         };
@@ -475,16 +531,27 @@ impl Component for LongList {
         let Some(info) = self.info(index) else {
             return;
         };
-        let double = cx
-            .state
-            .as_deref()
-            .and_then(|s| s.downcast_ref::<State>())
-            .is_some_and(|s| s.last_clicked.as_ref() == Some(&info.key))
+        let plain = self.multiple.is_none() || (!modifiers.ctrl && !modifiers.shift);
+        let double = plain
+            && cx
+                .state
+                .as_deref()
+                .and_then(|s| s.downcast_ref::<State>())
+                .is_some_and(|s| s.last_clicked.as_ref() == Some(&info.key))
             && read.clicks == 2;
         if double {
             self.choose(cx, index);
         } else {
-            self.toggle(cx, index);
+            let change = if modifiers.shift {
+                Select::Extend {
+                    keep: modifiers.ctrl,
+                }
+            } else if modifiers.ctrl {
+                Select::Toggle
+            } else {
+                Select::Replace
+            };
+            self.select(cx, index, change);
         }
         cx.effects.focus = true;
         if let Some(s) = cx
@@ -492,7 +559,7 @@ impl Component for LongList {
             .as_deref_mut()
             .and_then(|s| s.downcast_mut::<State>())
         {
-            s.last_clicked = Some(info.key.clone());
+            s.last_clicked = plain.then(|| info.key.clone());
         }
         if double && let Some(action) = &self.activate {
             cx.effects.activate = true;
@@ -509,15 +576,18 @@ impl Component for LongList {
         }
     }
     fn key_event(&self, cx: &mut Input<'_>, key: &nk_wayland::Key) {
-        if key.sym == 0x20 {
-            cx.effects.handled = true;
-            if self.multiple.is_some()
-                && let Some(index) = self.current(cx.state.as_deref())
-            {
-                self.toggle(cx, index);
-                cx.effects.keyboard_focus = true;
-            }
+        let space = key.sym == 0x20;
+        let all = self.multiple.is_some() && key.ctrl && !key.alt && matches!(key.sym, 0x61 | 0x41);
+        if !space && !all {
+            return;
         }
+        cx.effects.handled = true;
+        if self.multiple.is_none() || self.count == 0 {
+            return;
+        }
+        let index = self.current(cx.state.as_deref()).unwrap_or_default();
+        self.select(cx, index, if all { Select::All } else { Select::Toggle });
+        cx.effects.keyboard_focus = true;
     }
     fn key(&self, cx: &mut Input<'_>, key: crate::KeyInput) {
         use crate::KeyInput::*;
@@ -561,7 +631,7 @@ impl Component for LongList {
         match request {
             Request::Set(Value::Index(index)) => {
                 if index < self.count {
-                    self.toggle(cx, index);
+                    self.select(cx, index, Select::Add);
                     cx.effects.focus = true;
                     cx.effects.keyboard_focus = true;
                 } else {

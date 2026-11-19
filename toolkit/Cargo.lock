@@ -1303,6 +1303,7 @@ dependencies = [
 name = "nk-gallery"
 version = "0.1.0"
 dependencies = [
+ "gio",
  "nidara-kit",
  "nk-a11y",
  "nk-icons",
@@ -1319,6 +1320,8 @@ dependencies = [
 name = "nk-icons"
 version = "0.1.0"
 dependencies = [
+ "image",
+ "resvg",
  "usvg",
 ]
 

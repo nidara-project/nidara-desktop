@@ -21,6 +21,7 @@ pub(super) struct Browser {
     error: Option<String>,
     opened: Option<String>,
     cursor: Option<PathBuf>,
+    anchor: Option<PathBuf>,
     selected: BTreeSet<PathBuf>,
     multiple: bool,
     revision: u64,
@@ -46,6 +47,7 @@ impl Browser {
         self.path = Some(path.clone());
         self.revision += 1;
         self.cursor = None;
+        self.anchor = None;
         self.selected.clear();
         self.opened = None;
         self.error = None;
@@ -78,10 +80,35 @@ impl Browser {
         if let ("files-mode", Some(Value::Bool(multiple))) = (action.action.as_str(), &action.value)
         {
             self.multiple = *multiple;
+            self.anchor = self.cursor.clone();
             self.selected.clear();
             if let Some(path) = &self.cursor {
                 self.selected.insert(path.clone());
             }
+            return;
+        }
+        if let (
+            "files-selection",
+            Some(Value::Selection {
+                cursor,
+                anchor,
+                indices,
+            }),
+        ) = (action.action.as_str(), &action.value)
+        {
+            let path_for = |index| {
+                self.entries()
+                    .get(index)
+                    .map(|entry: &Entry| entry.path.clone())
+            };
+            let selected = indices
+                .iter()
+                .filter_map(|&index| path_for(index))
+                .collect();
+            let cursor = path_for(*cursor);
+            self.anchor = path_for(*anchor);
+            self.cursor = cursor;
+            self.selected = selected;
             return;
         }
         let Some(Value::Index(index)) = action.value else {
@@ -105,7 +132,7 @@ impl Browser {
                     self.navigate(path);
                 }
             }
-            "files-cursor" | "files-toggle" | "files-open" => {
+            "files-cursor" | "files-open" => {
                 let Some(entry) = self.entries().get(index) else {
                     return;
                 };
@@ -117,10 +144,7 @@ impl Browser {
                         self.opened = Some(entry.name.clone());
                     }
                 } else {
-                    self.cursor = Some(path.clone());
-                    if action.action == "files-toggle" && !self.selected.remove(&path) {
-                        self.selected.insert(path);
-                    }
+                    self.cursor = Some(path);
                 }
             }
             _ => {}
@@ -162,7 +186,10 @@ impl Browser {
                 .enumerate()
                 .filter_map(|(i, entry)| self.selected.contains(&entry.path).then_some(i))
                 .collect();
-            list = list.multiple(selected, "files-toggle");
+            let anchor = entries
+                .iter()
+                .position(|entry| Some(&entry.path) == self.anchor.as_ref());
+            list = list.multiple(selected, anchor, "files-selection");
         }
         let mut content = vec![
             PathBar::new("files/path", path, "files-path", body()).into(),

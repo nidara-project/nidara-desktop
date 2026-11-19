@@ -426,7 +426,10 @@ Settings' Power profiles use this control and the exported selected-row tint.
 `nk::files` (#1148) is the read-only file model shared by the chooser and file manager.
 Poll `Listing` for sorted batches and keep selection by path when the snapshot changes.
 `nk::PlacesSidebar`, `nk::PathBar`, and virtualized `nk::FileList` report snapshot indices;
-in multiple mode, click/Space toggle selection and arrows move only the cursor.
+in multiple mode click replaces the selection, Ctrl+click and Space toggle, Shift+click
+extends from the anchor, and Ctrl+A selects all. Keep the cursor and anchor by path.
+File type icons use the application theme; places use the `nd-` interface spec.
+The date column currently uses a local calendar date in ISO order.
 `nk::FontButton` previews the current face with its explicit pt/px unit. `nk::FontDialog`
 uses the parent text backend's own catalogue and loads faces only for the selected family.
 Monospace filtering checks one default face per family. Choose returns the draft; the size field

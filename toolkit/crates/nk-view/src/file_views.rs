@@ -55,10 +55,10 @@ impl From<PlacesSidebar<'_>> for Node {
             let mut rows = Vec::new();
             for (index, place) in sidebar.places.iter().enumerate() {
                 let (group, icon) = match place.kind {
-                    PlaceKind::Home => (0, "user-home"),
-                    PlaceKind::UserDir => (0, "folder"),
-                    PlaceKind::Bookmark => (1, "user-bookmarks"),
-                    PlaceKind::Drive => (2, "drive-removable-media"),
+                    PlaceKind::Home => (0, "nd-home"),
+                    PlaceKind::UserDir => (0, "nd-folder"),
+                    PlaceKind::Bookmark => (1, "nd-bookmarks"),
+                    PlaceKind::Drive => (2, "nd-drive-harddisk"),
                 };
                 if group == section {
                     rows.push(
@@ -192,7 +192,9 @@ impl ListSource for FileRows<'_> {
         Row::new(
             format!("{}/row", key.0),
             vec![
-                Image::new(format!("{}/icon", key.0), &entry.icon, 20.).into(),
+                Image::new(format!("{}/icon", key.0), &entry.icon, 20.)
+                    .app_theme(if entry.is_dir { "nd-folder" } else { "nd-file" })
+                    .into(),
                 Label::new(format!("{}/name", key.0), &entry.name, self.style.clone())
                     .lines(1)
                     .grow()
@@ -238,7 +240,7 @@ pub struct FileList<'a> {
     open: String,
     rows: FileRows<'a>,
     cursor: Option<usize>,
-    multiple: Option<(BTreeSet<usize>, String)>,
+    multiple: Option<crate::components::MultipleSelection>,
     row_height: f64,
     height: f64,
     viewport: Option<(f64, f64)>,
@@ -275,8 +277,17 @@ impl<'a> FileList<'a> {
         self.cursor = index;
         self
     }
-    pub fn multiple(mut self, indices: BTreeSet<usize>, toggle: impl Into<String>) -> Self {
-        self.multiple = Some((indices, toggle.into()));
+    pub fn multiple(
+        mut self,
+        indices: BTreeSet<usize>,
+        anchor: Option<usize>,
+        changed: impl Into<String>,
+    ) -> Self {
+        self.multiple = Some(crate::components::MultipleSelection {
+            selected: indices,
+            anchor,
+            changed: changed.into(),
+        });
         self
     }
     pub fn height(mut self, height: f64) -> Self {
@@ -306,8 +317,8 @@ impl From<FileList<'_>> for Node {
         .height(list.height)
         .window(list.viewport.or(Some((0., list.height))))
         .activate(list.open);
-        if let Some((selected, toggle)) = list.multiple {
-            view = view.multiple(selected, toggle);
+        if let Some(multi) = list.multiple {
+            view = view.multiple(multi.selected, multi.anchor, multi.changed);
         }
         view.into()
     }

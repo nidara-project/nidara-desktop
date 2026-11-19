@@ -1,6 +1,6 @@
 # Nidara icon spec
 
-**Version 4.** How to make an icon theme that changes Nidara's interface icons — the bar,
+**Version 5.** How to make an icon theme that changes Nidara's interface icons — the bar,
 the menus, the Control Centre, Settings, the login and lock screens.
 
 Nidara's interface asks for its own icon names, all starting with `nd-`. Only a theme that
@@ -108,6 +108,7 @@ check your drawing in place; it is not part of the contract and may grow.
 | `nd-bluetooth-active` | Bluetooth on | Bluetooth widget, Settings → Bluetooth |
 | `nd-bluetooth-disabled` | Bluetooth off | Bluetooth widget |
 | `nd-clipboard` | The clipboard history | Clipboard widget |
+| `nd-bookmarks` | Saved locations | Files |
 | `nd-clipboard-list` | Summary of settings (checklist on a clipboard) | Installer |
 | `nd-contact-new` | Add a user | Settings → Users |
 | `nd-control-center` | The Control Centre. *States:* `closed` (initial), `open` — Nidara's own drawing is two switches that flip | Bar button |
@@ -121,9 +122,12 @@ check your drawing in place; it is not part of the contract and may grow.
 | `nd-display-brightness-low` | Screen brightness, low | Brightness slider |
 | `nd-dock` | The dock | Settings → Dock |
 | `nd-drive-harddisk` | A disk | Installer |
+| `nd-file` | A generic file | Files |
+| `nd-folder` | A folder | Files |
 | `nd-emblem-default` | Selected (a check mark) | Menus |
 | `nd-globe` | Where in the world you are (a globe) | Installer → Region |
 | `nd-hand` | Welcome (a waving hand) | Installer |
+| `nd-home` | The user’s home folder | Files |
 | `nd-input-gaming` | Games | Settings → Gaming |
 | `nd-input-keyboard` | A keyboard / keyboard layout | Settings → Input, login screen |
 | `nd-light-mode` | Light appearance | Dark-mode widget |

@@ -1296,6 +1296,14 @@ impl ViewState {
     /// off past the dismiss distance or settles it back, and activates nothing then (`tick`
     /// reports the fling), except with reduced motion, where the fling lands at once.
     pub fn button(&mut self, pressed: bool, now: Instant) -> Option<Activated> {
+        self.button_with_modifiers(pressed, now, nk_wayland::PointerModifiers::default())
+    }
+    pub fn button_with_modifiers(
+        &mut self,
+        pressed: bool,
+        now: Instant,
+        modifiers: nk_wayland::PointerModifiers,
+    ) -> Option<Activated> {
         if pressed && let Some((s, g)) = self.pointer.and_then(|pt| self.on_bar(pt)) {
             // The bar's: a press on the empty track jumps there, then drags.
             let key = self.placed[s].key.clone();
@@ -1340,7 +1348,8 @@ impl ViewState {
                 1
             };
             self.last_click = Some((key.clone(), now, at));
-            let effects = self.component_input(i, |c, cx| c.press(cx, at))?;
+            let effects =
+                self.component_input(i, |c, cx| c.press_with_modifiers(cx, at, modifiers))?;
             self.press = effects.arm.then_some(key.clone());
             self.focus_visible = false;
             if self.editing().is_some() || self.text_input().focused {
@@ -2068,7 +2077,7 @@ impl ViewState {
         icons: &mut dyn FnMut(&str, f64) -> Option<std::sync::Arc<nk_icons::Icon>>,
         fallback: Option<&Frame>,
     ) -> Result<(), String> {
-        self.paint_part(canvas, look, icons, fallback, false)
+        self.paint_part(canvas, look, icons, fallback, false, None)
     }
     /// What `paint` leaves out: the lifted pane and what it holds, in window coordinates, for
     /// a canvas whose origin is the layer's (`Canvas::at` with `lifted_rect`).
@@ -2078,7 +2087,25 @@ impl ViewState {
         look: ComponentLook<'_>,
         icons: &mut dyn FnMut(&str, f64) -> Option<std::sync::Arc<nk_icons::Icon>>,
     ) -> Result<(), String> {
-        self.paint_part(canvas, look, icons, None, true)
+        self.paint_part(canvas, look, icons, None, true, None)
+    }
+    pub(crate) fn paint_with_glyphs(
+        &self,
+        canvas: &mut Canvas,
+        look: ComponentLook<'_>,
+        glyphs: &mut crate::Glyphs,
+        fallback: Option<&Frame>,
+        lifted: bool,
+    ) -> Result<(), String> {
+        let mut app_icons = glyphs.clone();
+        self.paint_part(
+            canvas,
+            look,
+            &mut |n, s| glyphs.get(n, s),
+            fallback,
+            lifted,
+            Some(&mut app_icons),
+        )
     }
     fn paint_focus(
         &self,
@@ -2141,6 +2168,7 @@ impl ViewState {
         icons: &mut dyn FnMut(&str, f64) -> Option<std::sync::Arc<nk_icons::Icon>>,
         fallback: Option<&Frame>,
         lifted: bool,
+        mut app_icons: Option<&mut crate::Glyphs>,
     ) -> Result<(), String> {
         let tokens = look.tokens;
         let root = self.lifted_root();
@@ -2268,7 +2296,28 @@ impl ViewState {
                     }
                 }
                 What::Icon(icon) => {
-                    if let Some(glyph) = icons(&icon.name, icon.size) {
+                    let name = if let Some(fallback) = &icon.app_fallback {
+                        if let Some(art) = app_icons
+                            .as_deref_mut()
+                            .and_then(|glyphs| glyphs.app_icon(&icon.name, icon.size))
+                        {
+                            canvas.clip(rect(&visible));
+                            let alpha = p.alpha * icon.alpha;
+                            if alpha < 1. {
+                                canvas.push_opacity(alpha);
+                            }
+                            canvas.image(&art, rect(&p.rect), nk_render::ImageFit::Contain);
+                            if alpha < 1. {
+                                canvas.pop_opacity();
+                            }
+                            canvas.pop_clip();
+                            continue;
+                        }
+                        fallback
+                    } else {
+                        &icon.name
+                    };
+                    if let Some(glyph) = icons(name, icon.size) {
                         canvas.clip(rect(&visible));
                         let c = self
                             .component_ink(i, look, interaction(p), true)

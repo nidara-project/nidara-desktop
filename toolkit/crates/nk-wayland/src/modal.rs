@@ -67,6 +67,7 @@ mod tests {
                 pressed: true,
                 serial: 3,
                 time: 4,
+                modifiers: Default::default(),
             },
             Event::Paste("text".into()),
         ] {

@@ -221,6 +221,7 @@ impl Gallery {
     fn show(&mut self, page: usize) {
         self.model.page = page;
         if PAGES[page].0 == "files" {
+            self.window.set_app_icon_theme(&app_icon_theme());
             self.model.files.start();
         }
         self.rebuild();
@@ -341,6 +342,21 @@ fn icons() -> std::result::Result<nk_icons::Icons, String> {
     nk_icons::Icons::new("", &[], &reference)
 }
 
+fn app_icon_theme() -> String {
+    use gio::prelude::*;
+    gio::SettingsSchemaSource::default()
+        .and_then(|src| src.lookup("org.gnome.desktop.interface", true))
+        .filter(|schema| schema.has_key("icon-theme"))
+        .map_or_else(
+            || "hicolor".into(),
+            |_| {
+                gio::Settings::new("org.gnome.desktop.interface")
+                    .string("icon-theme")
+                    .to_string()
+            },
+        )
+}
+
 fn run() -> Result<()> {
     let start = Instant::now();
     let page = std::env::args()
@@ -393,6 +409,7 @@ fn run() -> Result<()> {
         dialog_request: None,
     };
     if PAGES[page].0 == "files" {
+        gallery.window.set_app_icon_theme(&app_icon_theme());
         gallery.model.files.start();
     }
     gallery.rebuild();

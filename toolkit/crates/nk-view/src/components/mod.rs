@@ -203,6 +203,14 @@ pub trait Component: Any {
     fn target(&self) -> Option<f64> {
         None
     }
+    fn press_with_modifiers(
+        &self,
+        cx: &mut Input<'_>,
+        at: (f64, f64),
+        _modifiers: nk_wayland::PointerModifiers,
+    ) {
+        self.press(cx, at);
+    }
     fn press(&self, cx: &mut Input<'_>, _at: (f64, f64)) {
         cx.effects.arm = true;
     }

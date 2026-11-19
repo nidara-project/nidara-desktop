@@ -368,6 +368,7 @@ impl Popup {
                                 pressed,
                                 serial,
                                 time,
+                                modifiers: Default::default(),
                             },
                             Some(serial),
                         )

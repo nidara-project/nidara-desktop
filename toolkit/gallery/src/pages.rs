@@ -80,7 +80,7 @@ pub const PAGES: [(&str, &str, &str); 25] = [
     ("list", "Long list", "nd-clipboard-list"),
     ("focus", "Focus", "nd-input-keyboard"),
     ("dialog", "Dialog and alert", "nd-dialog-information"),
-    ("files", "Files", "folder"),
+    ("files", "Files", "nd-folder"),
 ];
 
 /// What the view is built from: the page, and what the live samples hold.
