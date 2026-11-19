@@ -759,8 +759,9 @@ Minimized entries use Hyalo's existing ext-foreign-toplevel-list identifiers
 (hex window ID) + ext-image-capture-source/ext-image-copy-capture. Add the native
 client to nk-wayland; never instantiate libnidara-wl/GJS or another Wayland host.
 Capture only currently displayed minimized slots or open chooser candidates,
-with a small bounded cache (proposed32 MiB, max8 concurrent, refresh≤5 Hz for
-visible chooser; minimized static thumbnail refreshed on content invalidation).
+with a small bounded cache (proposed32 MiB, max8 concurrent; the chooser's pictures
+taken once when it opens and never refreshed: owner, 2026-11-19, a 2 Hz refresh made a
+video jump; minimized static thumbnail refreshed on content invalidation).
 Frame/capture failure shows icon+title, never old content as a live frame.
 Generation/source destruction/output removal/lock invalidate captures; stop and
 zero sensitive cached images on lock and discard closed-window pixels.
