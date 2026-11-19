@@ -13,6 +13,7 @@ use nk::{
 };
 use std::{
     collections::BTreeSet,
+    ffi::OsString,
     path::{Path, PathBuf},
     sync::{
         Arc,
@@ -21,6 +22,27 @@ use std::{
 };
 
 const TILE_HEIGHT: f64 = 116.;
+
+/// What the dialog chooses: files to open, or where to save.
+pub enum Saving {
+    /// OpenFile: files or folders that exist.
+    No,
+    /// SaveFile: a name in a folder; the name is the user's to edit.
+    One { name: String },
+    /// SaveFiles: a folder, into which the app's files go under their own names.
+    Many { names: Vec<OsString> },
+}
+
+/// What accepting led to.
+pub enum Outcome {
+    Done(Response),
+    /// The file is there already: the user is asked first (`main.rs`).
+    Replace {
+        name: String,
+        folder: String,
+        response: Response,
+    },
+}
 
 pub struct Browser {
     pub strings: Strings,
@@ -50,10 +72,53 @@ pub struct Browser {
     /// Alt+Left and Right). Going somewhere new forgets what was ahead, as in a browser.
     back: Vec<PathBuf>,
     forward: Vec<PathBuf>,
+    saving: Saving,
+    /// The name being typed for a new folder; None: not making one.
+    new_folder: Option<String>,
+    /// A control to give the keyboard to on the next commit (`main.rs`).
+    pub focus: Option<&'static str>,
 }
 
 impl Browser {
     pub fn new(spec: Request, sources: Sources, strings: Strings) -> Result<Self, String> {
+        let mut spec = spec;
+        let saving = match spec.method.as_str() {
+            "OpenFile" => Saving::No,
+            "SaveFile" => {
+                let mut name = spec.current_name.clone();
+                // The file it saves over: its folder and its name.
+                if let Some(file) = request::folder(std::mem::take(&mut spec.current_file)) {
+                    if let Some(parent) = file.parent() {
+                        let mut bytes =
+                            std::os::unix::ffi::OsStrExt::as_bytes(parent.as_os_str()).to_vec();
+                        bytes.push(0);
+                        spec.current_folder = bytes;
+                    }
+                    if let Some(file_name) = file.file_name() {
+                        name = file_name.to_string_lossy().into_owned();
+                    }
+                }
+                spec.directory = false;
+                spec.multiple = false;
+                Saving::One { name }
+            }
+            "SaveFiles" => {
+                let names = std::mem::take(&mut spec.files)
+                    .into_iter()
+                    .map(|bytes| {
+                        request::file_name(bytes).ok_or("SaveFiles: a file name is not one name")
+                    })
+                    .collect::<Result<Vec<_>, _>>()?;
+                if names.is_empty() {
+                    return Err("SaveFiles: no files".into());
+                }
+                spec.directory = true;
+                spec.multiple = false;
+                Saving::Many { names }
+            }
+            other => return Err(format!("unknown file chooser method {other}")),
+        };
+        let saves = !matches!(saving, Saving::No);
         let requested = request::folder(spec.current_folder);
         let path = requested.clone().unwrap_or_else(|| sources.home.clone());
         let mime = Arc::new(sources.mime_db());
@@ -89,16 +154,23 @@ impl Browser {
             directories: spec.directory,
             multiple: spec.multiple,
             filters,
-            title: if spec.title.is_empty() {
-                strings.open.clone()
-            } else {
+            title: if !spec.title.is_empty() {
                 spec.title
-            },
-            accept: if accept.is_empty() {
-                strings.open.clone()
+            } else if saves {
+                strings.save.clone()
             } else {
-                accept
+                strings.open.clone()
             },
+            accept: if !accept.is_empty() {
+                accept
+            } else if saves {
+                strings.save.clone()
+            } else {
+                strings.open.clone()
+            },
+            focus: matches!(saving, Saving::One { .. }).then_some("chooser/name"),
+            saving,
+            new_folder: None,
             strings,
             generation: 0,
             grid: false,
@@ -175,6 +247,7 @@ impl Browser {
         self.location = None;
         self.pending_path = None;
         self.message = None;
+        self.new_folder = None;
         Ok(())
     }
 
@@ -329,7 +402,80 @@ impl Browser {
             .then(|| vec![self.path.as_path()])
     }
     fn response(&self) -> Option<Response> {
-        self.finish(self.accepted_paths()?)
+        match &self.saving {
+            Saving::Many { names } => {
+                let [folder] = self.accepted_paths()?[..] else {
+                    return None;
+                };
+                // Each file under its own name, or a numbered one where that is taken —
+                // by a file already there or by one of the others.
+                let mut chosen: Vec<PathBuf> = Vec::new();
+                for name in names {
+                    let path = request::free_name(folder, name, |p| {
+                        chosen.iter().any(|c| c == p) || p.symlink_metadata().is_ok()
+                    });
+                    chosen.push(path);
+                }
+                self.finish(chosen.iter().map(PathBuf::as_path))
+            }
+            _ => self.finish(self.accepted_paths()?),
+        }
+    }
+    /// SaveFile: where the typed name would go, when it can be a file's name.
+    fn save_target(&self) -> Option<PathBuf> {
+        let Saving::One { name } = &self.saving else {
+            return None;
+        };
+        let name = std::ffi::OsStr::new(name.as_str());
+        (request::valid_name(name) && self.listing.error().is_none()).then(|| self.path.join(name))
+    }
+    fn save(&mut self) -> Result<Option<Outcome>, String> {
+        let Saving::One { name } = &self.saving else {
+            return Ok(None);
+        };
+        // Nothing typed and a folder picked in the list: into it, as Enter on it does.
+        if name.is_empty()
+            && let Some(folder) = self.cursor_folder()
+        {
+            self.go(folder)?;
+            return Ok(None);
+        }
+        let Some(target) = self.save_target() else {
+            self.message = Some(self.strings.invalid_name.clone());
+            return Ok(None);
+        };
+        let name = name.clone();
+        match target.metadata() {
+            // A folder's name typed: into it (GTK and Finder alike).
+            Ok(metadata) if metadata.is_dir() => {
+                self.go(target)?;
+                Ok(None)
+            }
+            Ok(_) => {
+                let Some(response) = self.finish([target.as_path()]) else {
+                    return Ok(None);
+                };
+                let folder = self
+                    .path
+                    .file_name()
+                    .map_or_else(|| self.path.to_string_lossy(), |f| f.to_string_lossy())
+                    .into_owned();
+                Ok(Some(Outcome::Replace {
+                    name,
+                    folder,
+                    response,
+                }))
+            }
+            Err(_) => Ok(self.finish([target.as_path()]).map(Outcome::Done)),
+        }
+    }
+    fn cursor_folder(&self) -> Option<PathBuf> {
+        let path = self.cursor.as_ref()?;
+        self.listing
+            .entries()
+            .iter()
+            .find(|e| e.path == *path && e.is_dir)
+            .map(|e| e.path.clone())
     }
     fn finish<'a>(&self, paths: impl IntoIterator<Item = &'a Path>) -> Option<Response> {
         let uris: Vec<_> = paths
@@ -341,7 +487,14 @@ impl Browser {
             current_filter: self.filters.wire(),
         })
     }
-    pub fn accept(&mut self) -> Result<Option<Response>, String> {
+    pub fn accept(&mut self) -> Result<Option<Outcome>, String> {
+        if self.new_folder.is_some() {
+            self.create_folder()?;
+            return Ok(None);
+        }
+        if matches!(self.saving, Saving::One { .. }) {
+            return self.save();
+        }
         if !self.directories {
             let folder = self
                 .cursor
@@ -360,9 +513,13 @@ impl Browser {
                 return Ok(None);
             }
         }
-        Ok(self.response())
+        Ok(self.response().map(Outcome::Done))
     }
     fn can_accept(&self) -> bool {
+        if let Saving::One { name } = &self.saving {
+            return self.save_target().is_some()
+                || name.is_empty() && self.cursor_folder().is_some();
+        }
         self.accepted_paths().is_some()
             || !self.directories
                 && self.listing.entries().iter().any(|entry| {
@@ -381,9 +538,63 @@ impl Browser {
         self.set_hidden(!self.show_hidden)
     }
 
-    pub fn activate(&mut self, action: Activated) -> Result<Option<Response>, String> {
+    /// Where a new folder can be made: saving, or choosing a folder.
+    fn can_make_folders(&self) -> bool {
+        !matches!(self.saving, Saving::No) || self.directories
+    }
+    fn create_folder(&mut self) -> Result<(), String> {
+        let Some(name) = self.new_folder.clone() else {
+            return Ok(());
+        };
+        if !request::valid_name(std::ffi::OsStr::new(&name)) {
+            self.message = Some(self.strings.invalid_name.clone());
+            return Ok(());
+        }
+        let path = self.path.join(&name);
+        match std::fs::create_dir(&path) {
+            // Made: into it, as Finder does; GTK's selects it, which saving then needs a
+            // second step for.
+            Ok(()) => self.go(path),
+            Err(error) if error.kind() == std::io::ErrorKind::AlreadyExists => {
+                self.message = Some(self.strings.folder_exists.clone());
+                Ok(())
+            }
+            Err(error) => {
+                eprintln!(
+                    "nidara-file-chooser: cannot create {}: {error}",
+                    path.display()
+                );
+                self.message = Some(self.strings.cannot_create.clone());
+                Ok(())
+            }
+        }
+    }
+
+    pub fn activate(&mut self, action: Activated) -> Result<Option<Outcome>, String> {
         match (action.action.as_str(), action.value) {
             ("accept", _) => return self.accept(),
+            ("name-change", Some(Value::Text(value))) => {
+                if let Saving::One { name } = &mut self.saving {
+                    *name = value;
+                    self.message = None;
+                }
+            }
+            ("new-folder", _) if self.can_make_folders() => {
+                self.new_folder = Some(String::new());
+                self.message = None;
+                self.focus = Some("chooser/new-folder-name");
+            }
+            ("new-folder-change", Some(Value::Text(value))) => {
+                if self.new_folder.is_some() {
+                    self.new_folder = Some(value);
+                    self.message = None;
+                }
+            }
+            ("new-folder-go", _) => self.create_folder()?,
+            ("new-folder-cancel", _) => {
+                self.new_folder = None;
+                self.message = None;
+            }
             (nk::BACK, _) => self.step(true)?,
             (nk::FORWARD, _) => self.step(false)?,
             ("location-change", Some(Value::Text(value))) => {
@@ -410,11 +621,16 @@ impl Browser {
                 }
             }
             ("cursor", Some(Value::Index(i))) => {
-                self.cursor = self
-                    .listing
-                    .entries()
-                    .get(i)
-                    .map(|entry| entry.path.clone());
+                let entry = self.listing.entries().get(i);
+                self.cursor = entry.map(|entry| entry.path.clone());
+                // Saving: a file picked in the list lends its name, to save over it.
+                if let (Saving::One { name }, Some(entry)) = (&mut self.saving, entry)
+                    && !entry.is_dir
+                    && let Some(file) = entry.path.file_name()
+                {
+                    *name = file.to_string_lossy().into_owned();
+                    self.message = None;
+                }
             }
             (
                 "selection",
@@ -436,10 +652,16 @@ impl Browser {
                 if let Some(entry) = self.listing.entries().get(i) {
                     if entry.is_dir {
                         self.go(entry.path.clone())?;
+                    } else if let Saving::One { name } = &mut self.saving {
+                        // Saving over this file: its name, then asked as Save asks.
+                        if let Some(file) = entry.path.file_name() {
+                            *name = file.to_string_lossy().into_owned();
+                        }
+                        return self.save();
                     } else if self.multiple && self.selection.contains(&entry.path) {
-                        return Ok(self.response());
+                        return Ok(self.response().map(Outcome::Done));
                     } else {
-                        return Ok(self.finish([entry.path.as_path()]));
+                        return Ok(self.finish([entry.path.as_path()]).map(Outcome::Done));
                     }
                 }
             }
@@ -502,7 +724,20 @@ impl Browser {
         } else {
             PathBar::new("chooser/path", &self.path, "breadcrumb", body()).into()
         };
-        let mut controls = vec![
+        let mut controls = vec![];
+        if self.can_make_folders() {
+            controls.push(
+                Button::new(
+                    "chooser/new-folder",
+                    &self.strings.new_folder,
+                    "new-folder",
+                    body(),
+                )
+                .enabled(self.new_folder.is_none())
+                .into(),
+            );
+        }
+        controls.extend([
             Segmented::new(
                 "chooser/layout",
                 &self.strings.view,
@@ -519,7 +754,7 @@ impl Browser {
                     self.show_hidden,
                 ))
                 .into(),
-        ];
+        ]);
         let choices = self.filters.labels();
         if !choices.is_empty() {
             controls.push(
@@ -547,17 +782,84 @@ impl Browser {
                     .into(),
             );
         }
-        let mut content = vec![
+        let mut content = Vec::new();
+        if let Saving::One { name } = &self.saving {
+            content.push(
+                Row::new(
+                    "chooser/name-row",
+                    vec![
+                        Label::new("chooser/name-label", &self.strings.name, body()).into(),
+                        Column::new(
+                            "chooser/name-field",
+                            vec![
+                                Entry::new("chooser/name", &self.strings.name, "name-change", name)
+                                    .submit("accept")
+                                    .into(),
+                            ],
+                        )
+                        .grow()
+                        .into(),
+                    ],
+                )
+                .align(Align::Center)
+                .gap(Space::S3)
+                .into(),
+            );
+        }
+        content.extend([
             nav,
             Row::new("chooser/tools", controls)
                 .align(Align::Center)
                 .gap(Space::S3)
                 .into(),
-            Row::new("chooser/list-and-preview", listing)
-                .gap(Space::S3)
-                .grow()
+        ]);
+        if let Some(folder) = &self.new_folder {
+            content.push(
+                Row::new(
+                    "chooser/new-folder-row",
+                    vec![
+                        Column::new(
+                            "chooser/new-folder-field",
+                            vec![
+                                Entry::new(
+                                    "chooser/new-folder-name",
+                                    &self.strings.folder_name,
+                                    "new-folder-change",
+                                    folder,
+                                )
+                                .placeholder(&self.strings.folder_name)
+                                .submit("new-folder-go")
+                                .into(),
+                            ],
+                        )
+                        .grow()
+                        .into(),
+                        Button::new(
+                            "chooser/new-folder-cancel",
+                            &self.strings.cancel,
+                            "new-folder-cancel",
+                            body(),
+                        )
+                        .into(),
+                        Button::new(
+                            "chooser/new-folder-go",
+                            &self.strings.create,
+                            "new-folder-go",
+                            body(),
+                        )
+                        .enabled(request::valid_name(std::ffi::OsStr::new(folder)))
+                        .into(),
+                    ],
+                )
+                .align(Align::Center)
+                .gap(Space::S2)
                 .into(),
-        ];
+            );
+        }
+        content.extend([Row::new("chooser/list-and-preview", listing)
+            .gap(Space::S3)
+            .grow()
+            .into()]);
         let message = self
             .message
             .clone()
@@ -615,5 +917,153 @@ impl Browser {
             can_back: !self.back.is_empty(),
             can_forward: !self.forward.is_empty(),
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn folder(name: &str) -> PathBuf {
+        let dir = std::env::temp_dir().join(format!("nk-chooser-{name}-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(dir.join("home")).unwrap();
+        dir
+    }
+    fn browser(dir: &Path, method: &str, name: &str, files: &[&str]) -> Browser {
+        let mut bytes = dir.as_os_str().as_encoded_bytes().to_vec();
+        bytes.push(0);
+        let spec = Request {
+            method: method.into(),
+            current_folder: bytes,
+            current_name: name.into(),
+            files: files
+                .iter()
+                .map(|f| [f.as_bytes(), b"\0"].concat())
+                .collect(),
+            ..Default::default()
+        };
+        let sources = Sources {
+            home: dir.join("home"),
+            config: dir.join("config"),
+            data: dir.join("data"),
+            cache: dir.join("cache"),
+            mountinfo: dir.join("mountinfo"),
+            media: None,
+        };
+        let mut b = Browser::new(spec, sources, Strings::default()).unwrap();
+        settle(&mut b);
+        b
+    }
+    fn settle(b: &mut Browser) {
+        for _ in 0..500 {
+            b.poll().unwrap();
+            if !b.listing.loading() {
+                return;
+            }
+            std::thread::sleep(std::time::Duration::from_millis(2));
+        }
+        panic!("the listing never finished");
+    }
+    fn act(b: &mut Browser, action: &str, value: Option<Value>) -> Option<Outcome> {
+        let outcome = b
+            .activate(Activated {
+                key: "test".into(),
+                action: action.into(),
+                value,
+            })
+            .unwrap();
+        settle(b);
+        outcome
+    }
+    fn uris(outcome: Option<Outcome>) -> Vec<String> {
+        match outcome {
+            Some(Outcome::Done(r)) => r.uris,
+            Some(Outcome::Replace { .. }) => panic!("asked to replace"),
+            None => panic!("nothing accepted"),
+        }
+    }
+
+    #[test]
+    fn save_asks_before_replacing_and_enters_a_folder_typed_or_made() {
+        let dir = folder("save");
+        std::fs::write(dir.join("taken.txt"), "x").unwrap();
+        std::fs::create_dir(dir.join("Docs")).unwrap();
+        let mut b = browser(&dir, "SaveFile", "new.txt", &[]);
+        assert_eq!(b.focus, Some("chooser/name"));
+        assert!(b.can_accept());
+        let base = files::file_uri(&dir).unwrap();
+        assert_eq!(
+            uris(act(&mut b, "accept", None)),
+            [format!("{base}/new.txt")]
+        );
+
+        // A file that is there: the question first, with its name and folder.
+        act(&mut b, "name-change", Some(Value::Text("taken.txt".into())));
+        match act(&mut b, "accept", None) {
+            Some(Outcome::Replace { name, response, .. }) => {
+                assert_eq!(name, "taken.txt");
+                assert_eq!(response.uris, [format!("{base}/taken.txt")]);
+            }
+            _ => panic!("saved over a file without asking"),
+        }
+
+        // No name, or one that is not one name: nothing is accepted.
+        for bad in ["", "a/b", ".."] {
+            act(&mut b, "name-change", Some(Value::Text(bad.into())));
+            assert!(!b.can_accept(), "{bad:?} could be saved");
+            assert!(act(&mut b, "accept", None).is_none());
+        }
+
+        // A folder's name typed: into it, the name kept for the next try.
+        act(&mut b, "name-change", Some(Value::Text("Docs".into())));
+        assert!(act(&mut b, "accept", None).is_none());
+        assert_eq!(b.path, dir.join("Docs"));
+        assert!(matches!(&b.saving, Saving::One { name } if name == "Docs"));
+
+        // A new folder: made and entered.
+        act(&mut b, "new-folder", None);
+        assert_eq!(b.focus, Some("chooser/new-folder-name"));
+        act(
+            &mut b,
+            "new-folder-change",
+            Some(Value::Text("Inside".into())),
+        );
+        act(&mut b, "new-folder-go", None);
+        assert!(dir.join("Docs/Inside").is_dir());
+        assert_eq!(b.path, dir.join("Docs/Inside"));
+        assert!(b.new_folder.is_none());
+
+        // Picking a file in the list lends its name.
+        std::fs::write(dir.join("Docs/Inside/picked.odt"), "x").unwrap();
+        act(&mut b, "new-folder-cancel", None);
+        b.navigate(dir.join("Docs/Inside")).unwrap();
+        settle(&mut b);
+        let i = b
+            .listing
+            .entries()
+            .iter()
+            .position(|e| e.path.ends_with("picked.odt"))
+            .unwrap();
+        act(&mut b, "cursor", Some(Value::Index(i)));
+        assert!(matches!(&b.saving, Saving::One { name } if name == "picked.odt"));
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn save_files_keeps_every_name_without_writing_over_one() {
+        let dir = folder("save-files");
+        std::fs::write(dir.join("a.txt"), "x").unwrap();
+        let mut b = browser(&dir, "SaveFiles", "", &["a.txt", "b.txt", "a.txt"]);
+        let base = files::file_uri(&dir).unwrap();
+        assert_eq!(
+            uris(act(&mut b, "accept", None)),
+            [
+                format!("{base}/a%20(2).txt"),
+                format!("{base}/b.txt"),
+                format!("{base}/a%20(3).txt"),
+            ]
+        );
+        let _ = std::fs::remove_dir_all(&dir);
     }
 }

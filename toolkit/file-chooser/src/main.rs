@@ -4,8 +4,11 @@ mod pictures;
 mod request;
 mod strings;
 
-use browser::Browser;
-use nk::{Activated, AppWindow, Glyphs, Host, HostRequest, Labels, WindowLook};
+use browser::{Browser, Outcome};
+use nk::{
+    Activated, Alert, AppWindow, DialogAnswer, DialogButton, DialogUpdate, Glyphs, Host,
+    HostRequest, Labels, WindowLook,
+};
 use nk_platform::{exports::Exports, portal::Portal};
 use nk_text::{FontSet, ParleyBackend};
 use nk_wayland::{Application, Event, Frame, Material, Options, Result, Window, WindowBackground};
@@ -38,17 +41,78 @@ impl Dialog {
         if std::mem::take(&mut self.dirty) {
             self.host.show(self.browser.page(&self.host));
         }
-        self.host.commit(window, |host| self.browser.page(host))
+        self.host.commit(window, |host| self.browser.page(host))?;
+        if let Some(owner) = self.browser.focus.take() {
+            self.host.request(HostRequest::Focus {
+                owner: owner.into(),
+            });
+            self.host.commit(window, |host| self.browser.page(host))?;
+        }
+        Ok(())
     }
     fn activate(&mut self, action: Activated, window: &mut Window) -> Result<()> {
         if action.action == "cancel" {
             window.close();
-        } else if let Some(result) = self.browser.activate(action)? {
-            *self.answer.borrow_mut() = Some(result);
-            window.close();
-        } else {
-            self.dirty = true;
+            return Ok(());
         }
+        let outcome = self.browser.activate(action)?;
+        self.finish(outcome, window)
+    }
+    /// What accepting led to: the answer, or first the question whether to replace the
+    /// file that is there.
+    fn finish(&mut self, outcome: Option<Outcome>, window: &mut Window) -> Result<()> {
+        let response = match outcome {
+            None => {
+                self.dirty = true;
+                return Ok(());
+            }
+            Some(Outcome::Done(response)) => response,
+            Some(Outcome::Replace {
+                name,
+                folder,
+                response,
+            }) => {
+                let s = &self.browser.strings;
+                let alert = Alert {
+                    title: s.replace_title.replace("{name}", &name),
+                    message: s.replace_title.replace("{name}", &name),
+                    detail: Some(s.replace_message.replace("{folder}", &folder)),
+                    buttons: vec![
+                        DialogButton {
+                            id: "cancel".into(),
+                            label: s.cancel.clone(),
+                            default: false,
+                            cancel: true,
+                            destructive: false,
+                            enabled: true,
+                        },
+                        DialogButton {
+                            id: "replace".into(),
+                            label: s.replace.clone(),
+                            default: false,
+                            cancel: false,
+                            destructive: true,
+                            enabled: true,
+                        },
+                    ],
+                };
+                let browser = &self.browser;
+                let answer = self.host.run_alert(
+                    window,
+                    &"chooser/accept".into(),
+                    alert,
+                    || Ok(DialogUpdate::default()),
+                    |host| browser.page(host),
+                )?;
+                if answer != DialogAnswer::Button("replace".into()) {
+                    self.dirty = true;
+                    return Ok(());
+                }
+                response
+            }
+        };
+        *self.answer.borrow_mut() = Some(response);
+        window.close();
         Ok(())
     }
 }
@@ -132,9 +196,14 @@ impl Application for Dialog {
                 return Ok(());
             }
         }
-        if default_response && let Some(result) = self.browser.accept()? {
-            *self.answer.borrow_mut() = Some(result);
-            window.close();
+        if default_response {
+            let outcome = self.browser.accept()?;
+            if outcome.is_some() {
+                self.finish(outcome, window)?;
+                if window.is_closed() {
+                    return Ok(());
+                }
+            }
         }
         self.commit(window)
     }

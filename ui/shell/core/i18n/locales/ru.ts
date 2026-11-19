@@ -23,6 +23,16 @@ export default {
     "fileChooser.name": "Имя",
     "fileChooser.size": "Размер",
     "fileChooser.modified": "Изменён",
+    "fileChooser.save": "Сохранить",
+    "fileChooser.newFolder": "Новая папка",
+    "fileChooser.folderName": "Имя папки",
+    "fileChooser.create": "Создать",
+    "fileChooser.invalidName": "Такое имя не подходит для файла: оно не может быть пустым или содержать «/».",
+    "fileChooser.folderExists": "В этой папке уже есть объект с таким именем.",
+    "fileChooser.cannotCreate": "Не удалось создать здесь папку.",
+    "fileChooser.replaceTitle": "Заменить «{name}»?",
+    "fileChooser.replaceMessage": "В «{folder}» уже есть файл с таким именем. При замене его содержимое будет перезаписано.",
+    "fileChooser.replace": "Заменить",
 
     // Native session energy notifications.
     "power1.alert.low": "Низкий заряд батареи",
