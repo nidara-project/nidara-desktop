@@ -1081,8 +1081,9 @@ impl AppWindow {
         Ok(())
     }
 
-    /// The two layers over the content: the blur with the window's background faded on it,
-    /// and the band's buttons on their glass with the title. Painted again after a layout
+    /// The two layers over the content: the blur with the window's background faded on it
+    /// (both Hyalo's: the kit only says how, #1148 point 11), and the band's buttons on their
+    /// glass with the title. Painted again after a layout
     /// or a change of the band's hover and press.
     fn sync_band(&mut self, window: &mut Window) -> Result<()> {
         let (Some(blur), Some(band)) = (self.blur_layer, self.band_layer) else {
@@ -1103,15 +1104,11 @@ impl AppWindow {
             f.blur,
             &f.graded(size.0 as f64, size.1 as f64, window.scale()),
         )?;
-        let background = self.look.background;
+        let (top, bottom) = f.fade();
+        window.set_layer_fade(blur, top, bottom)?;
+        // Nothing of its own: the layer's buffer stays clear over Hyalo's fade.
         let a = window.paint_layer(blur, |frame| {
-            let mut c = nk_render::Canvas::new(frame.pixel_width, frame.pixel_height, frame.scale);
-            f.paint_fade(
-                &mut c,
-                [0., 0., frame.width as f64, frame.height as f64],
-                background,
-            );
-            Ok(c.finish())
+            Ok(nk_render::Canvas::new(frame.pixel_width, frame.pixel_height, frame.scale).finish())
         })?;
         self.band_last = self.band.frame(&self.look.tokens, now);
         let band_size = (self.size.0.ceil().max(1.) as u32, f.band.ceil() as u32);

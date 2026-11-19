@@ -10,6 +10,7 @@
 pub mod controls;
 pub mod decor;
 pub mod drawn;
+pub mod fade;
 pub mod glass;
 pub mod glass_gl;
 pub mod glass_tokens;
@@ -147,6 +148,7 @@ smithay::backend::renderer::element::render_elements! {
     Controls=controls::ControlsElement,
     TitleBar=title_bar::TitleBarElement,
     Decor=decor::DecorElement,
+    Fade=fade::FadeElement,
     Snapshot=snapshot::SnapshotElement,
     Cursor=MemoryRenderBufferRenderElement<R>,
     Debug=smithay::backend::renderer::element::solid::SolidColorRenderElement,
@@ -165,6 +167,7 @@ impl<R: HyaloRenderer> std::fmt::Debug for OutputElement<R> {
             Self::Controls(e) => f.debug_tuple("Controls").field(e).finish(),
             Self::TitleBar(e) => f.debug_tuple("TitleBar").field(e).finish(),
             Self::Decor(e) => f.debug_tuple("Decor").field(e).finish(),
+            Self::Fade(e) => f.debug_tuple("Fade").field(e).finish(),
             Self::Snapshot(e) => f.debug_tuple("Snapshot").field(e).finish(),
             Self::Cursor(e) => f.debug_tuple("Cursor").field(e).finish(),
             Self::Debug(e) => f.debug_tuple("Debug").field(e).finish(),
@@ -217,7 +220,7 @@ fn push_surface_over_glass<R: HyaloRenderer>(
         let inked = window::inked_surfaces(s);
         // A tree with layers a client handed Hyalo to animate (protocols/layers.rs) is drawn
         // where they are shown, whole: its drawn region (#761) describes the buffer at rest.
-        if let Some(layered) = crate::protocols::layers::render_tree(renderer, s, loc, scale, output_size, kind, when) {
+        if let Some(layered) = crate::protocols::layers::render_tree(renderer, s, loc, scale, output_size, kind, when, None) {
             out.extend(layered.interleave(|e| window::inked_element(renderer, &inked, e, when), layer_paint));
         } else {
             let elements: Vec<WaylandSurfaceRenderElement<R>> = render_elements_from_surface_tree(renderer, s, loc, scale, 1.0, kind);
@@ -281,7 +284,7 @@ pub(super) fn push_tree<R: HyaloRenderer>(
     when: std::time::Instant,
 ) {
     let inked = window::inked_surfaces(surface);
-    match crate::protocols::layers::render_tree(renderer, surface, location, scale, output_size, kind, when) {
+    match crate::protocols::layers::render_tree(renderer, surface, location, scale, output_size, kind, when, None) {
         Some(layered) => out.extend(layered.interleave(|e| window::inked_element(renderer, &inked, e, when), layer_paint)),
         None => {
             let elements: Vec<WaylandSurfaceRenderElement<R>> = render_elements_from_surface_tree(renderer, surface, location, scale, 1.0, kind);
@@ -296,6 +299,7 @@ pub(super) fn layer_paint<R: HyaloRenderer>(p: crate::protocols::layers::LayerPa
     match p {
         crate::protocols::layers::LayerPaint::Glass(g) => OutputElement::Glass(*g),
         crate::protocols::layers::LayerPaint::Shadow(s) => OutputElement::Scrim(s),
+        crate::protocols::layers::LayerPaint::Fade(f) => OutputElement::Fade(f),
     }
 }
 

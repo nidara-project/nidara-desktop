@@ -694,6 +694,8 @@ pub(super) struct Programs {
     pub(super) controls: Program,
     /// A window's line and shadow (render/decor.rs).
     pub(super) decor: Program,
+    /// A window's background faded over a layer (render/fade.rs).
+    pub(super) fade: Program,
     /// The measurement's target: MEASURE_WIDTH × 1, one texel per box. Made on first use.
     ink_target: std::cell::Cell<(u32, u32)>,
     pub(super) vbo: u32,
@@ -836,6 +838,7 @@ impl Programs {
                 scrim: compile(gl, VS_FINAL, super::scrim::FS_SCRIM),
                 controls: compile(gl, VS_FINAL, super::controls::FS_CONTROLS),
                 decor: compile(gl, VS_FINAL, super::decor::FS_DECOR),
+                fade: compile(gl, VS_FINAL, super::fade::FS_FADE),
                 ink_target: Default::default(),
                 vbo,
                 trash: Default::default(),

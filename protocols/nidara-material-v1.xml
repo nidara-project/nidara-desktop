@@ -530,5 +530,22 @@
       <arg name="override_b" type="fixed"/>
       <arg name="override_a" type="fixed"/>
     </request>
+    <request name="set_background_fade">
+      <description summary="pending: the window's background faded over this surface">
+        On a surface of a window that declared a background
+        (set_window_background on its toplevel): the compositor paints that
+        background over the surface's whole box, in front of the glass this
+        object casts and behind the surface's own buffer, at the window's
+        level (its opacity, as the background itself) times a strength that
+        goes linearly from top at the box's top edge to bottom at its
+        bottom edge. A title bar's veil over content that scrolls under it:
+        the client paints none of it, so it always matches the background
+        the compositor paints. Cut to the window's corners like the
+        surface. top 0 and bottom 0 = none, the default. Values are clamped
+        to 0..1. Persists until set again; clear_shapes leaves it.
+      </description>
+      <arg name="top" type="fixed" summary="the strength at the top edge, 0..1"/>
+      <arg name="bottom" type="fixed" summary="the strength at the bottom edge, 0..1"/>
+    </request>
   </interface>
 </protocol>

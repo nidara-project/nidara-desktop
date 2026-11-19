@@ -2948,6 +2948,17 @@ maps is drawn over it.
 - Not done yet: the portal with that consent (W3), game mode's temporary wallpaper (W4),
   fit and centre.
 
+## A title bar's veil (`set_background_fade`)
+
+The band over a native window's content fades the window's background from the top down, over
+a graded blur, so the title stays legible over content scrolled under it (D7). **Hyalo paints
+it, never the kit**: the kit's layer sends `set_background_fade(top, bottom)` (nk-wayland
+`set_layer_fade`) and leaves its own buffer clear; `protocols/layers.rs` `render_tree` puts a
+`render/fade.rs` `FadeElement` in front of the layer's glass, coloured with the background
+`render/window.rs` `background` gives (its level's opacity, cut to the window's corners).
+Before #1148 point 11 the kit painted that colour itself, which could not follow a tinted or
+translucent level: the band came out more opaque than the rest of the window.
+
 ## Modal dialogs and their parents (#1148)
 
 - A window with a mapped modal child (`wm::modal_target`) receives no pointer input: `surface_under` returns nothing over it. `anything_under` still finds it, so a press focuses it, and focus is redirected to the dialog. Without this, Firefox's tabs stayed clickable under its file chooser.

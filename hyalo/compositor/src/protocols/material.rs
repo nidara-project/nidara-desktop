@@ -300,6 +300,9 @@ pub struct MaterialState {
     pub window_background: Option<[f64; 3]>,
     /// `set_window_background_level`: the level the app asked for; None: the user's.
     pub window_background_level: Option<crate::config::BackgroundLevel>,
+    /// `set_background_fade`: the window's background over this surface, strength at its
+    /// top and bottom edges, 0..1 (render/fade.rs). None: no fade.
+    pub background_fade: Option<[f64; 2]>,
     /// What `set_response` last said: how the next shapes answer their backdrop.
     pub responding: Option<Response>,
     /// The washes over the glass (`add_state_region`).
@@ -866,6 +869,11 @@ pub fn window_background(surface: &WlSurface) -> Option<([f64; 3], Option<crate:
     })
 }
 
+/// The fade of the window's background `states`' surface asked for (`set_background_fade`).
+pub fn background_fade(states: &smithay::wayland::compositor::SurfaceData) -> Option<[f64; 2]> {
+    states.data_map.get::<std::sync::Mutex<Current>>()?.lock().unwrap().state.background_fade
+}
+
 pub struct MaterialGlobal;
 pub struct MaterialData(Weak<WlSurface>);
 
@@ -1060,6 +1068,10 @@ impl Dispatch2<NidaraMaterialV1, Hyalo> for MaterialData {
             }
             Request::SetWindowBackground { r, g, b } => {
                 self.pending(|m| m.window_background = Some([r.clamp(0.0, 1.0), g.clamp(0.0, 1.0), b.clamp(0.0, 1.0)]));
+            }
+            Request::SetBackgroundFade { top, bottom } => {
+                let (top, bottom) = (top.clamp(0.0, 1.0), bottom.clamp(0.0, 1.0));
+                self.pending(|m| m.background_fade = (top > 0.0 || bottom > 0.0).then_some([top, bottom]));
             }
             Request::UnsetWindowBackground => {
                 self.pending(|m| m.window_background = None);
