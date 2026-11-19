@@ -23,6 +23,16 @@ export default {
     "fileChooser.name": "名前",
     "fileChooser.size": "サイズ",
     "fileChooser.modified": "変更日",
+    "fileChooser.save": "保存",
+    "fileChooser.newFolder": "新規フォルダ",
+    "fileChooser.folderName": "フォルダ名",
+    "fileChooser.create": "作成",
+    "fileChooser.invalidName": "この名前はファイル名に使えません。空にしたり「/」を含めたりはできません。",
+    "fileChooser.folderExists": "このフォルダには同じ名前の項目がすでにあります。",
+    "fileChooser.cannotCreate": "ここにフォルダを作成できませんでした。",
+    "fileChooser.replaceTitle": "「{name}」を置き換えますか？",
+    "fileChooser.replaceMessage": "「{folder}」に同じ名前のファイルがすでにあります。置き換えると内容が上書きされます。",
+    "fileChooser.replace": "置き換える",
 
     // Native session energy notifications.
     "power1.alert.low": "バッテリー残量が少なくなっています",

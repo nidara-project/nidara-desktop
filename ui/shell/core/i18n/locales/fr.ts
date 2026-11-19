@@ -23,6 +23,16 @@ export default {
     "fileChooser.name": "Nom",
     "fileChooser.size": "Taille",
     "fileChooser.modified": "Modifié",
+    "fileChooser.save": "Enregistrer",
+    "fileChooser.newFolder": "Nouveau dossier",
+    "fileChooser.folderName": "Nom du dossier",
+    "fileChooser.create": "Créer",
+    "fileChooser.invalidName": "Ce nom ne convient pas à un fichier : il ne peut être vide ni contenir « / ».",
+    "fileChooser.folderExists": "Un élément portant ce nom existe déjà dans ce dossier.",
+    "fileChooser.cannotCreate": "Impossible de créer le dossier ici.",
+    "fileChooser.replaceTitle": "Remplacer « {name} » ?",
+    "fileChooser.replaceMessage": "Un fichier portant ce nom existe déjà dans « {folder} ». Le remplacer écrasera son contenu.",
+    "fileChooser.replace": "Remplacer",
 
     // Native session energy notifications.
     "power1.alert.low": "Batterie faible",

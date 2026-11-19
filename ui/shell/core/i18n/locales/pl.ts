@@ -23,6 +23,16 @@ export default {
     "fileChooser.name": "Nazwa",
     "fileChooser.size": "Rozmiar",
     "fileChooser.modified": "Zmodyfikowano",
+    "fileChooser.save": "Zapisz",
+    "fileChooser.newFolder": "Nowy folder",
+    "fileChooser.folderName": "Nazwa folderu",
+    "fileChooser.create": "Utwórz",
+    "fileChooser.invalidName": "Ta nazwa nie nadaje się dla pliku: nie może być pusta ani zawierać „/”.",
+    "fileChooser.folderExists": "W tym folderze jest już element o tej nazwie.",
+    "fileChooser.cannotCreate": "Nie udało się utworzyć tutaj folderu.",
+    "fileChooser.replaceTitle": "Zastąpić „{name}”?",
+    "fileChooser.replaceMessage": "W „{folder}” istnieje już plik o tej nazwie. Zastąpienie go nadpisze jego zawartość.",
+    "fileChooser.replace": "Zastąp",
 
     // Native session energy notifications.
     "power1.alert.low": "Niski poziom baterii",

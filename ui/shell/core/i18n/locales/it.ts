@@ -23,6 +23,16 @@ export default {
     "fileChooser.name": "Nome",
     "fileChooser.size": "Dimensione",
     "fileChooser.modified": "Modificato",
+    "fileChooser.save": "Salva",
+    "fileChooser.newFolder": "Nuova cartella",
+    "fileChooser.folderName": "Nome della cartella",
+    "fileChooser.create": "Crea",
+    "fileChooser.invalidName": "Questo nome non va bene per un file: non può essere vuoto né contenere «/».",
+    "fileChooser.folderExists": "In questa cartella c’è già un elemento con questo nome.",
+    "fileChooser.cannotCreate": "Impossibile creare la cartella qui.",
+    "fileChooser.replaceTitle": "Sostituire «{name}»?",
+    "fileChooser.replaceMessage": "In «{folder}» esiste già un file con questo nome. Sostituendolo, il suo contenuto verrà sovrascritto.",
+    "fileChooser.replace": "Sostituisci",
 
     // Native session energy notifications.
     "power1.alert.low": "Batteria scarica",

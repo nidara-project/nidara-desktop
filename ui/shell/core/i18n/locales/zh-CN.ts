@@ -23,6 +23,16 @@ export default {
     "fileChooser.name": "名称",
     "fileChooser.size": "大小",
     "fileChooser.modified": "修改日期",
+    "fileChooser.save": "保存",
+    "fileChooser.newFolder": "新建文件夹",
+    "fileChooser.folderName": "文件夹名称",
+    "fileChooser.create": "创建",
+    "fileChooser.invalidName": "这个名称不能用作文件名：不能为空，也不能包含“/”。",
+    "fileChooser.folderExists": "此文件夹中已有同名项目。",
+    "fileChooser.cannotCreate": "无法在此处创建文件夹。",
+    "fileChooser.replaceTitle": "替换“{name}”？",
+    "fileChooser.replaceMessage": "“{folder}”中已存在同名文件。替换将覆盖其内容。",
+    "fileChooser.replace": "替换",
 
     // Native session energy notifications.
     "power1.alert.low": "电池电量低",

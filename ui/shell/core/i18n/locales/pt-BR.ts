@@ -23,6 +23,16 @@ export default {
     "fileChooser.name": "Nome",
     "fileChooser.size": "Tamanho",
     "fileChooser.modified": "Modificado",
+    "fileChooser.save": "Salvar",
+    "fileChooser.newFolder": "Nova pasta",
+    "fileChooser.folderName": "Nome da pasta",
+    "fileChooser.create": "Criar",
+    "fileChooser.invalidName": "Esse nome não serve para um arquivo: não pode estar vazio nem conter “/”.",
+    "fileChooser.folderExists": "Já existe algo com esse nome nesta pasta.",
+    "fileChooser.cannotCreate": "Não foi possível criar a pasta aqui.",
+    "fileChooser.replaceTitle": "Substituir “{name}”?",
+    "fileChooser.replaceMessage": "Já existe um arquivo com esse nome em “{folder}”. Substituí-lo sobrescreverá o conteúdo.",
+    "fileChooser.replace": "Substituir",
 
     // Native session energy notifications.
     "power1.alert.low": "Bateria fraca",

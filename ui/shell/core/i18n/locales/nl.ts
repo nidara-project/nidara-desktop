@@ -23,6 +23,16 @@ export default {
     "fileChooser.name": "Naam",
     "fileChooser.size": "Grootte",
     "fileChooser.modified": "Gewijzigd",
+    "fileChooser.save": "Opslaan",
+    "fileChooser.newFolder": "Nieuwe map",
+    "fileChooser.folderName": "Mapnaam",
+    "fileChooser.create": "Aanmaken",
+    "fileChooser.invalidName": "Die naam kan niet voor een bestand: hij mag niet leeg zijn en geen ‘/’ bevatten.",
+    "fileChooser.folderExists": "Er staat al iets met die naam in deze map.",
+    "fileChooser.cannotCreate": "De map kon hier niet worden aangemaakt.",
+    "fileChooser.replaceTitle": "‘{name}’ vervangen?",
+    "fileChooser.replaceMessage": "Er bestaat al een bestand met die naam in ‘{folder}’. Vervangen overschrijft de inhoud.",
+    "fileChooser.replace": "Vervangen",
 
     // Native session energy notifications.
     "power1.alert.low": "Batterij bijna leeg",

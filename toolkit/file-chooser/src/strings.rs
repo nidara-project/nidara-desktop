@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: LGPL-3.0-or-later
 use nk_platform::exports::Exports;
 
+#[derive(Default)]
 pub struct Strings {
     pub open: String,
     pub cancel: String,
@@ -25,6 +26,16 @@ pub struct Strings {
     pub name: String,
     pub size: String,
     pub modified: String,
+    pub save: String,
+    pub new_folder: String,
+    pub folder_name: String,
+    pub create: String,
+    pub invalid_name: String,
+    pub folder_exists: String,
+    pub cannot_create: String,
+    pub replace_title: String,
+    pub replace_message: String,
+    pub replace: String,
 }
 
 impl Strings {
@@ -58,6 +69,16 @@ impl Strings {
             name: text("name")?,
             size: text("size")?,
             modified: text("modified")?,
+            save: text("save")?,
+            new_folder: text("newFolder")?,
+            folder_name: text("folderName")?,
+            create: text("create")?,
+            invalid_name: text("invalidName")?,
+            folder_exists: text("folderExists")?,
+            cannot_create: text("cannotCreate")?,
+            replace_title: text("replaceTitle")?,
+            replace_message: text("replaceMessage")?,
+            replace: text("replace")?,
         })
     }
 }

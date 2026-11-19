@@ -23,6 +23,16 @@
     "fileChooser.name": "709a2322",
     "fileChooser.size": "b7152342",
     "fileChooser.modified": "19a532c8",
+    "fileChooser.save": "efc007a3",
+    "fileChooser.newFolder": "d8eddd70",
+    "fileChooser.folderName": "b2ce023b",
+    "fileChooser.create": "6e157c5d",
+    "fileChooser.invalidName": "bf77d84b",
+    "fileChooser.folderExists": "1fe5f043",
+    "fileChooser.cannotCreate": "ab7444a7",
+    "fileChooser.replaceTitle": "aebf7dee",
+    "fileChooser.replaceMessage": "47c091b7",
+    "fileChooser.replace": "a7cf7b25",
     "power1.alert.low": "0abb8d54",
     "power1.alert.critical": "df98178b",
     "power1.alert.remaining": "c8a8bba5",
@@ -953,8 +963,8 @@
   },
   "locales": {
     "de": {
-      "translated": 825,
-      "of": 949,
+      "translated": 835,
+      "of": 959,
       "untranslated": [
         "bar.edit.done",
         "bar.edit.hint",
@@ -1084,14 +1094,14 @@
       "stale": []
     },
     "es": {
-      "translated": 949,
-      "of": 949,
+      "translated": 959,
+      "of": 959,
       "untranslated": [],
       "stale": []
     },
     "fr": {
-      "translated": 825,
-      "of": 949,
+      "translated": 835,
+      "of": 959,
       "untranslated": [
         "bar.edit.done",
         "bar.edit.hint",
@@ -1221,8 +1231,8 @@
       "stale": []
     },
     "it": {
-      "translated": 825,
-      "of": 949,
+      "translated": 835,
+      "of": 959,
       "untranslated": [
         "bar.edit.done",
         "bar.edit.hint",
@@ -1352,8 +1362,8 @@
       "stale": []
     },
     "ja": {
-      "translated": 825,
-      "of": 949,
+      "translated": 835,
+      "of": 959,
       "untranslated": [
         "bar.edit.done",
         "bar.edit.hint",
@@ -1483,8 +1493,8 @@
       "stale": []
     },
     "nl": {
-      "translated": 825,
-      "of": 949,
+      "translated": 835,
+      "of": 959,
       "untranslated": [
         "bar.edit.done",
         "bar.edit.hint",
@@ -1614,8 +1624,8 @@
       "stale": []
     },
     "pl": {
-      "translated": 825,
-      "of": 949,
+      "translated": 835,
+      "of": 959,
       "untranslated": [
         "bar.edit.done",
         "bar.edit.hint",
@@ -1745,8 +1755,8 @@
       "stale": []
     },
     "pt-BR": {
-      "translated": 825,
-      "of": 949,
+      "translated": 835,
+      "of": 959,
       "untranslated": [
         "bar.edit.done",
         "bar.edit.hint",
@@ -1876,8 +1886,8 @@
       "stale": []
     },
     "pt-PT": {
-      "translated": 825,
-      "of": 949,
+      "translated": 835,
+      "of": 959,
       "untranslated": [
         "bar.edit.done",
         "bar.edit.hint",
@@ -2007,8 +2017,8 @@
       "stale": []
     },
     "ru": {
-      "translated": 825,
-      "of": 949,
+      "translated": 835,
+      "of": 959,
       "untranslated": [
         "bar.edit.done",
         "bar.edit.hint",
@@ -2138,8 +2148,8 @@
       "stale": []
     },
     "zh-CN": {
-      "translated": 825,
-      "of": 949,
+      "translated": 835,
+      "of": 959,
       "untranslated": [
         "bar.edit.done",
         "bar.edit.hint",

@@ -528,8 +528,8 @@ class SettingsBackend {
     }
 }
 
-// FileChooser is routed as a whole. Keep GTK for saves until Nidara's Save
-// implementation lands, and for parents from XWayland.
+// FileChooser is routed as a whole: Open and Save are ours (#1148). GTK's stays
+// only for parents from XWayland, whose windows ours cannot be parented to.
 class FileChooserBackend {
     OpenFileAsync(_params, invocation) { this.run("OpenFile", invocation) }
     SaveFileAsync(_params, invocation) { this.run("SaveFile", invocation) }
@@ -541,7 +541,7 @@ class FileChooserBackend {
         const params = invocation.get_parameters()
         const handle = params.get_child_value(0).deep_unpack()
         const parent = params.get_child_value(2).deep_unpack()
-        const delegate = method !== "OpenFile" || parent.startsWith("x11:")
+        const delegate = parent.startsWith("x11:")
         let request = null
         let watch = 0
         let child = null
@@ -612,6 +612,7 @@ class FileChooserBackend {
             const get = (key, sig, fallback) =>
                 options.lookup_value(key, new GLib.VariantType(sig))?.deep_unpack() ?? fallback
             const input = JSON.stringify({
+                method,
                 parent_window: parent,
                 title: params.get_child_value(3).deep_unpack(),
                 accept_label: get("accept_label", "s", ""),
@@ -621,6 +622,9 @@ class FileChooserBackend {
                 filters: get("filters", "a(sa(us))", []),
                 current_filter: get("current_filter", "(sa(us))", null),
                 current_folder: Array.from(get("current_folder", "ay", [])),
+                current_name: get("current_name", "s", ""),
+                current_file: Array.from(get("current_file", "ay", [])),
+                files: get("files", "aay", []).map(name => Array.from(name)),
             })
             child = Gio.Subprocess.new(["/usr/lib/nidara/nidara-file-chooser"],
                 Gio.SubprocessFlags.STDIN_PIPE | Gio.SubprocessFlags.STDOUT_PIPE)
@@ -642,7 +646,7 @@ class FileChooserBackend {
                         results.current_filter = new GLib.Variant("(sa(us))", selection.current_filter)
                     finish(0, results)
                 } catch (e) {
-                    printerr(`[nidara-portal] OpenFile failed: ${e}`)
+                    printerr(`[nidara-portal] ${method} failed: ${e}`)
                     finish(2)
                 }
             })

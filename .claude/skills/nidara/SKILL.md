@@ -438,14 +438,18 @@ in multiple mode click replaces the selection, Ctrl+click and Space toggle, Shif
 extends from the anchor, and Ctrl+A selects all. Keep the cursor and anchor by path.
 File type icons use the application theme; places use the `nd-` interface spec.
 The date column currently uses a local calendar date in ISO order.
-`nidara-file-chooser` hosts the OpenFile portal in a separate process. Hyalo exports and
+`nidara-file-chooser` hosts the FileChooser portal (OpenFile, SaveFile, SaveFiles) in a separate process. Hyalo exports and
 imports xdg-foreign-v2 windows. `run_foreign_dialog` logs and opens independently when a parent
 cannot be imported. A successfully linked window closes when the export is revoked. The pinned Smithay revision clears
 parentage without sending the revocation event, so Hyalo closes its chooser on parent loss.
 FileList's icon grid shares list selection. The chooser uses a height-filling AppWindow page
 and reads its labels from the exported locale. Ctrl+H uses the same action as the hidden-files switch.
 The worker reads fresh thumbnails or writes ordinary freedesktop PNGs atomically with the
-canonical URI and mtime. GTK handles saves and X11 parents until there is a native path for them.
+canonical URI and mtime. GTK's chooser handles only X11 parents (ours cannot be parented to them).
+SaveFile shows a Name field (focused; a file picked in the list lends its name; a folder's name
+typed enters it) and asks with an `Alert` whose Replace is destructive before writing over a file;
+SaveFiles chooses a folder and numbers a name that is taken (`a (2).txt`), never asking. New
+Folder (saving or choosing folders) makes the folder and enters it.
 `nk::FontButton` previews the current face with its explicit pt/px unit. `nk::FontDialog`
 uses the parent text backend's own catalogue and loads faces only for the selected family.
 Monospace filtering checks one default face per family. Choose returns the draft; the size field

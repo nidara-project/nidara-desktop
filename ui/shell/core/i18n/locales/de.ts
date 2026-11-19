@@ -23,6 +23,16 @@ export default {
     "fileChooser.name": "Name",
     "fileChooser.size": "Größe",
     "fileChooser.modified": "Geändert",
+    "fileChooser.save": "Speichern",
+    "fileChooser.newFolder": "Neuer Ordner",
+    "fileChooser.folderName": "Ordnername",
+    "fileChooser.create": "Erstellen",
+    "fileChooser.invalidName": "Dieser Name geht für eine Datei nicht: Er darf nicht leer sein und kein „/“ enthalten.",
+    "fileChooser.folderExists": "In diesem Ordner gibt es bereits etwas mit diesem Namen.",
+    "fileChooser.cannotCreate": "Der Ordner konnte hier nicht erstellt werden.",
+    "fileChooser.replaceTitle": "„{name}“ ersetzen?",
+    "fileChooser.replaceMessage": "In „{folder}“ gibt es bereits eine Datei mit diesem Namen. Beim Ersetzen wird ihr Inhalt überschrieben.",
+    "fileChooser.replace": "Ersetzen",
 
     // Native session energy notifications.
     "power1.alert.low": "Akku fast leer",
