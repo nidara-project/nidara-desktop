@@ -1133,8 +1133,10 @@ impl From<SidebarEntry> for Node {
 #[must_use]
 pub struct SidebarList {
     key: Key,
-    sections: Vec<(Option<(String, TextStyle)>, Vec<Node>)>,
+    sections: Vec<SidebarSection>,
 }
+/// A section of a sidebar: its heading and that heading's type, if any, and its entries.
+type SidebarSection = (Option<(String, TextStyle)>, Vec<Node>);
 impl SidebarList {
     pub fn new(key: impl Into<Key>) -> Self {
         Self {
