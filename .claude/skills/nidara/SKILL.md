@@ -432,10 +432,11 @@ extends from the anchor, and Ctrl+A selects all. Keep the cursor and anchor by p
 File type icons use the application theme; places use the `nd-` interface spec.
 The date column currently uses a local calendar date in ISO order.
 `nidara-file-chooser` hosts the OpenFile portal in a separate process. Hyalo exports and
-imports xdg-foreign-v2 windows. `run_foreign_dialog` rejects a supplied parent that cannot
-be imported and closes when the export is revoked. The pinned Smithay revision clears
+imports xdg-foreign-v2 windows. `run_foreign_dialog` logs and opens independently when a parent
+cannot be imported. A successfully linked window closes when the export is revoked. The pinned Smithay revision clears
 parentage without sending the revocation event, so Hyalo closes its chooser on parent loss.
-FileList's icon grid shares list selection.
+FileList's icon grid shares list selection. The chooser uses a height-filling AppWindow page
+and reads its labels from the exported locale. Ctrl+H uses the same action as the hidden-files switch.
 The worker reads fresh thumbnails or writes ordinary freedesktop PNGs atomically with the
 canonical URI and mtime. GTK handles saves and X11 parents until there is a native path for them.
 `nk::FontButton` previews the current face with its explicit pt/px unit. `nk::FontDialog`

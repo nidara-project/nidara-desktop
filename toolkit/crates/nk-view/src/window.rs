@@ -183,6 +183,7 @@ pub(crate) fn retain_rebuilds(state: &ViewState, requests: &mut Vec<ReplyTarget>
 
 pub struct AppWindow {
     modal_frame: Option<dialog::ModalFrame>,
+    page_fills_window: bool,
     suspended: bool,
     active: bool,
     focus_restore: Option<crate::state::FocusLease>,
@@ -295,6 +296,7 @@ impl AppWindow {
         band.set_slides(false);
         Self {
             modal_frame: None,
+            page_fills_window: false,
             suspended: false,
             active: false,
             focus_restore: None,
@@ -368,6 +370,12 @@ impl AppWindow {
             m.dirty = true;
         }
     }
+    /// Give the page the window's available height. Its grow children can
+    /// fill it, with any scrolling regions nested inside the page.
+    pub fn set_page_fills_window(&mut self, fill: bool) {
+        self.page_fills_window = fill;
+        self.lay(Instant::now());
+    }
     /// The app's model changed: the page it shows now.
     pub fn show(&mut self, page: Page) {
         self.page = Some(page);
@@ -432,7 +440,13 @@ impl AppWindow {
         let f = &self.look.frame;
         let shown = self.sidebar.shown(now, &self.look.tokens.motion);
         let narrow = self.sidebar.narrow();
-        let main = f.view(self.size, shown, narrow, page.sidebar, page.content);
+        let content = if self.page_fills_window {
+            page.content
+                .height((self.size.1 - f.band - f.content_gap).max(0.))
+        } else {
+            page.content
+        };
+        let main = f.view(self.size, shown, narrow, page.sidebar, content);
         // The frame moves the sidebar's glass and the content's panes itself as the sidebar
         // slides or the window resizes. An ease of nk-view's own over each step would trail
         // behind the content's edge and start again every frame (VIEW.md §13.2). A change of

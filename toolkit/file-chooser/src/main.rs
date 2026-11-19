@@ -2,6 +2,7 @@
 mod browser;
 mod pictures;
 mod request;
+mod strings;
 
 use browser::Browser;
 use nk::{Activated, AppWindow, Glyphs, Host, HostRequest, Labels, WindowLook};
@@ -90,6 +91,11 @@ impl Application for Dialog {
             window.set_size_limits((580, 410), (0, 0))?;
         }
         if let Event::Key(key) = &event {
+            if key.ctrl && !key.alt && matches!(key.sym, 0x68 | 0x48) {
+                self.browser.toggle_hidden()?;
+                self.dirty = true;
+                return self.commit(window);
+            }
             if key.sym == 0xff1b {
                 window.close();
                 return Ok(());
@@ -173,11 +179,11 @@ fn run() -> Result<()> {
     let parent = std::mem::take(&mut spec.parent_window);
     let modal = spec.modal;
     let sources = nk::files::Sources::user().map_err(|error| error.to_string())?;
-    let browser = Browser::new(spec, sources)?;
+    let exports = Exports::load(&Exports::root())?;
+    let browser = Browser::new(spec, sources, strings::Strings::load(&exports)?)?;
     let bus = zbus::blocking::Connection::session().map_err(|error| error.to_string())?;
     let portal = Portal::watch(&bus)?;
     let appearance = portal.read()?;
-    let exports = Exports::load(&Exports::root())?;
     let look = WindowLook::load(&exports, &appearance)?;
     let (interface, apps) = themes();
     let reference = std::env::var_os("NK_ICON_REFERENCE")
@@ -192,10 +198,10 @@ fn run() -> Result<()> {
     let mut host = AppWindow::new(
         look,
         Labels {
-            show_sidebar: "Show places".into(),
-            hide_sidebar: "Hide places".into(),
-            back: "Back".into(),
-            forward: "Forward".into(),
+            show_sidebar: browser.strings.show_places.clone(),
+            hide_sidebar: browser.strings.hide_places.clone(),
+            back: exports.text("settings.nav.back")?.into(),
+            forward: exports.text("settings.nav.forward")?.into(),
         },
         &browser.title,
         Box::new(ParleyBackend::with_system_fonts(Arc::new(
@@ -204,6 +210,7 @@ fn run() -> Result<()> {
         glyphs,
         appearance.reduced_motion,
     );
+    host.set_page_fills_window(true);
     host.show(browser.page(&host));
     let answer = Rc::new(RefCell::new(None));
     let dialog = Dialog {
@@ -220,7 +227,7 @@ fn run() -> Result<()> {
             material: true,
             map: true,
             app_id: "nidara-file-chooser",
-            title: "Open",
+            title: "",
             size: (940, 580),
             require_material: None,
         },

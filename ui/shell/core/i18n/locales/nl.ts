@@ -1,4 +1,26 @@
 export default {
+
+    // Native file chooser.
+    "fileChooser.open": "Openen",
+    "fileChooser.files": "Bestanden",
+    "fileChooser.location": "Locatie",
+    "fileChooser.view": "Weergave",
+    "fileChooser.list": "Lijst",
+    "fileChooser.icons": "Pictogrammen",
+    "fileChooser.hidden": "Verborgen bestanden tonen",
+    "fileChooser.fileType": "Bestandstype",
+    "fileChooser.loading": "Laden…",
+    "fileChooser.empty": "De map is leeg",
+    "fileChooser.folderOnly": "Selecteer een map.",
+    "fileChooser.invalidLocation": "Voer een absoluut pad in of een pad dat begint met ~/.",
+    "fileChooser.unreadableLocation": "Deze locatie kon niet worden gelezen.",
+    "fileChooser.home": "Persoonlijke map",
+    "fileChooser.places": "Locaties",
+    "fileChooser.bookmarks": "Bladwijzers",
+    "fileChooser.drives": "Stations",
+    "fileChooser.showPlaces": "Locaties tonen",
+    "fileChooser.hidePlaces": "Locaties verbergen",
+
     // Native session energy notifications.
     "power1.alert.low": "Batterij bijna leeg",
     "power1.alert.critical": "Batterij vrijwel leeg",

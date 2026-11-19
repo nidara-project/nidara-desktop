@@ -1,4 +1,26 @@
 export default {
+
+    // Native file chooser.
+    "fileChooser.open": "開く",
+    "fileChooser.files": "ファイル",
+    "fileChooser.location": "場所",
+    "fileChooser.view": "表示",
+    "fileChooser.list": "一覧",
+    "fileChooser.icons": "アイコン",
+    "fileChooser.hidden": "隠しファイルを表示",
+    "fileChooser.fileType": "ファイルの種類",
+    "fileChooser.loading": "読み込み中…",
+    "fileChooser.empty": "フォルダーは空です",
+    "fileChooser.folderOnly": "フォルダーを選択してください。",
+    "fileChooser.invalidLocation": "絶対パス、または ~/ で始まるパスを入力してください。",
+    "fileChooser.unreadableLocation": "この場所を読み込めませんでした。",
+    "fileChooser.home": "ホーム",
+    "fileChooser.places": "場所",
+    "fileChooser.bookmarks": "ブックマーク",
+    "fileChooser.drives": "ドライブ",
+    "fileChooser.showPlaces": "場所を表示",
+    "fileChooser.hidePlaces": "場所を隠す",
+
     // Native session energy notifications.
     "power1.alert.low": "バッテリー残量が少なくなっています",
     "power1.alert.critical": "バッテリー残量がわずかです",

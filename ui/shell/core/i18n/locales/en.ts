@@ -1,4 +1,26 @@
 export default {
+
+    // Native file chooser.
+    "fileChooser.open": "Open",
+    "fileChooser.files": "Files",
+    "fileChooser.location": "Location",
+    "fileChooser.view": "View",
+    "fileChooser.list": "List",
+    "fileChooser.icons": "Icons",
+    "fileChooser.hidden": "Show hidden files",
+    "fileChooser.fileType": "File type",
+    "fileChooser.loading": "Loading…",
+    "fileChooser.empty": "Folder is empty",
+    "fileChooser.folderOnly": "Select a folder.",
+    "fileChooser.invalidLocation": "Enter an absolute path or a path starting with ~/.",
+    "fileChooser.unreadableLocation": "Could not read this location.",
+    "fileChooser.home": "Home",
+    "fileChooser.places": "Places",
+    "fileChooser.bookmarks": "Bookmarks",
+    "fileChooser.drives": "Drives",
+    "fileChooser.showPlaces": "Show places",
+    "fileChooser.hidePlaces": "Hide places",
+
     // Native session energy notifications.
     "power1.alert.low": "Battery low",
     "power1.alert.critical": "Battery critically low",

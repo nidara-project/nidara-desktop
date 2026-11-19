@@ -41,6 +41,7 @@ impl Handle {
 pub(crate) struct Foreign {
     pub(crate) exporter: Option<zxdg_exporter_v2::ZxdgExporterV2>,
     pub(crate) imported: Option<zxdg_imported_v2::ZxdgImportedV2>,
+    pub(crate) import_revoked: bool,
     exported: Option<zxdg_exported_v2::ZxdgExportedV2>,
     handle: Handle,
 }
@@ -56,6 +57,7 @@ impl Foreign {
             exporter.destroy();
         }
         self.handle = Handle::Pending;
+        self.import_revoked = false;
     }
 }
 impl Window {
@@ -116,7 +118,10 @@ impl Dispatch<zxdg_imported_v2::ZxdgImportedV2, ()> for Window {
         if matches!(event, zxdg_imported_v2::Event::Destroyed)
             && state.foreign.imported.as_ref() == Some(proxy)
         {
-            state.close();
+            state.foreign.import_revoked = true;
+            if state.commits > 0 {
+                state.close();
+            }
         }
     }
 }

@@ -1,4 +1,26 @@
 export default {
+
+    // Native file chooser.
+    "fileChooser.open": "打开",
+    "fileChooser.files": "文件",
+    "fileChooser.location": "位置",
+    "fileChooser.view": "视图",
+    "fileChooser.list": "列表",
+    "fileChooser.icons": "图标",
+    "fileChooser.hidden": "显示隐藏文件",
+    "fileChooser.fileType": "文件类型",
+    "fileChooser.loading": "正在加载…",
+    "fileChooser.empty": "文件夹为空",
+    "fileChooser.folderOnly": "请选择一个文件夹。",
+    "fileChooser.invalidLocation": "请输入绝对路径或以 ~/ 开头的路径。",
+    "fileChooser.unreadableLocation": "无法读取此位置。",
+    "fileChooser.home": "主文件夹",
+    "fileChooser.places": "位置",
+    "fileChooser.bookmarks": "书签",
+    "fileChooser.drives": "驱动器",
+    "fileChooser.showPlaces": "显示位置",
+    "fileChooser.hidePlaces": "隐藏位置",
+
     // Native session energy notifications.
     "power1.alert.low": "电池电量低",
     "power1.alert.critical": "电池电量严重不足",

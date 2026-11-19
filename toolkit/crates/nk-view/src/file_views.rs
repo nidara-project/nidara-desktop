@@ -264,6 +264,7 @@ pub struct FileList<'a> {
     row_height: f64,
     columns: usize,
     height: f64,
+    fill_height: bool,
     viewport: Option<(f64, f64)>,
 }
 
@@ -293,6 +294,7 @@ impl<'a> FileList<'a> {
             row_height,
             columns: 1,
             height: 8. * row_height,
+            fill_height: false,
             viewport: None,
         }
     }
@@ -330,6 +332,11 @@ impl<'a> FileList<'a> {
         self.height = height;
         self
     }
+    /// Use the surrounding column's remaining vertical space beyond `height`.
+    pub fn fill_height(mut self) -> Self {
+        self.fill_height = true;
+        self
+    }
     pub fn window(mut self, viewport: Option<(f64, f64)>) -> Self {
         self.viewport = viewport;
         self
@@ -357,6 +364,7 @@ impl From<FileList<'_>> for Node {
         if let Some(multi) = list.multiple {
             view = view.multiple(multi.selected, multi.anchor, multi.changed);
         }
-        view.into()
+        let node: Node = view.into();
+        if list.fill_height { node.grow() } else { node }
     }
 }

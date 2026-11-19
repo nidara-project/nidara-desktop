@@ -2,6 +2,7 @@
 use crate::{
     pictures::{Job, Pictures},
     request::{self, Filters, Request, Response},
+    strings::Strings,
 };
 use nk::{
     Activated, Align, AppWindow, Button, ButtonAppearance, Column, DropDown, Entry, FileList,
@@ -20,9 +21,9 @@ use std::{
 };
 
 const TILE_HEIGHT: f64 = 116.;
-const VIEWPORT: f64 = 350.;
 
 pub struct Browser {
+    pub strings: Strings,
     sources: Sources,
     mime: Arc<MimeDb>,
     places: Vec<Place>,
@@ -48,7 +49,7 @@ pub struct Browser {
 }
 
 impl Browser {
-    pub fn new(spec: Request, sources: Sources) -> Result<Self, String> {
+    pub fn new(spec: Request, sources: Sources, strings: Strings) -> Result<Self, String> {
         let requested = request::folder(spec.current_folder);
         let path = requested.clone().unwrap_or_else(|| sources.home.clone());
         let mime = Arc::new(sources.mime_db());
@@ -64,8 +65,15 @@ impl Browser {
         )
         .map_err(|error| error.to_string())?;
         let accept = request::label(&spec.accept_label);
+        let mut places = sources.places();
+        if let Some(home) = places
+            .iter_mut()
+            .find(|place| place.kind == files::PlaceKind::Home)
+        {
+            home.name.clone_from(&strings.home);
+        }
         Ok(Self {
-            places: sources.places(),
+            places,
             pictures: Pictures::new(sources.clone())?,
             sources,
             mime,
@@ -76,15 +84,16 @@ impl Browser {
             multiple: spec.multiple,
             filters,
             title: if spec.title.is_empty() {
-                "Open".into()
+                strings.open.clone()
             } else {
                 spec.title
             },
             accept: if accept.is_empty() {
-                "Open".into()
+                strings.open.clone()
             } else {
                 accept
             },
+            strings,
             generation: 0,
             grid: false,
             width: 940,
@@ -153,7 +162,7 @@ impl Browser {
             .as_ref()
             .and_then(|text| request::location(text, &self.sources.home))
         else {
-            self.message = Some("Enter an absolute path or a path starting with ~/.".into());
+            self.message = Some(self.strings.invalid_location.clone());
             return Ok(());
         };
         let (send, receive) = mpsc::sync_channel(1);
@@ -165,9 +174,7 @@ impl Browser {
                     if metadata.is_dir() || metadata.is_file() {
                         Ok((path, metadata.is_dir()))
                     } else {
-                        Err(std::io::Error::other(
-                            "The path is not a regular file or folder",
-                        ))
+                        Err(std::io::ErrorKind::InvalidInput.into())
                     }
                 });
                 let _ = send.send(result);
@@ -184,14 +191,14 @@ impl Browser {
         let outcome = match receive.try_recv() {
             Ok(outcome) => outcome,
             Err(TryRecvError::Empty) => return Ok(false),
-            Err(TryRecvError::Disconnected) => {
-                Err(std::io::Error::other("The location could not be read"))
-            }
+            Err(TryRecvError::Disconnected) => Err(std::io::ErrorKind::Other.into()),
         };
         self.pending_path = None;
         match outcome {
             Ok((path, true)) => self.navigate(path)?,
-            Ok((_, false)) if self.directories => self.message = Some("Select a folder.".into()),
+            Ok((_, false)) if self.directories => {
+                self.message = Some(self.strings.folder_only.clone())
+            }
             Ok((path, false)) => {
                 let parent = path.parent().ok_or("file has no parent")?.to_owned();
                 self.navigate(parent)?;
@@ -199,7 +206,10 @@ impl Browser {
                 self.anchor = Some(path.clone());
                 self.selection.insert(path);
             }
-            Err(error) => self.message = Some(error.to_string()),
+            Err(error) => {
+                eprintln!("nidara-file-chooser: cannot read location: {error}");
+                self.message = Some(self.strings.unreadable_location.clone());
+            }
         }
         Ok(true)
     }
@@ -242,7 +252,7 @@ impl Browser {
         if self.grid {
             let (offset, height) = host
                 .scroll_window(&FileList::scroll_key(&self.file_list_key()))
-                .unwrap_or((0., VIEWPORT));
+                .unwrap_or((0., TILE_HEIGHT));
             let first =
                 ((offset / TILE_HEIGHT).floor() as usize).saturating_sub(1) * self.columns();
             let count = ((height / TILE_HEIGHT).ceil() as usize + 3) * self.columns();
@@ -333,6 +343,14 @@ impl Browser {
                 })
     }
 
+    fn set_hidden(&mut self, hidden: bool) -> Result<(), String> {
+        self.show_hidden = hidden;
+        self.navigate(self.path.clone())
+    }
+    pub fn toggle_hidden(&mut self) -> Result<(), String> {
+        self.set_hidden(!self.show_hidden)
+    }
+
     pub fn activate(&mut self, action: Activated) -> Result<Option<Response>, String> {
         match (action.action.as_str(), action.value) {
             ("accept", _) => return self.accept(),
@@ -342,8 +360,7 @@ impl Browser {
             }
             ("location-go", _) => self.submit_location()?,
             ("hidden", Some(Value::Bool(hidden))) => {
-                self.show_hidden = hidden;
-                self.navigate(self.path.clone())?;
+                self.set_hidden(hidden)?;
             }
             ("layout:0", _) => self.grid = false,
             ("layout:1", _) => self.grid = true,
@@ -410,14 +427,18 @@ impl Browser {
         let thumbnails = self.pictures.thumbnails();
         let mut list = FileList::new(
             key,
-            "Files",
+            &self.strings.files,
             entries,
             "cursor",
             "open-row",
             body(),
             look.tokens.row_height,
         )
-        .height(VIEWPORT)
+        .height(if self.grid {
+            TILE_HEIGHT
+        } else {
+            look.tokens.row_height
+        })
         .window(viewport)
         .cursor(position(self.cursor.as_ref()));
         if self.grid {
@@ -432,25 +453,30 @@ impl Browser {
             list = list.multiple(indices, position(self.anchor.as_ref()), "selection");
         }
         let nav: Node = if let Some(text) = &self.location {
-            Entry::new("chooser/location", "Location", "location-change", text)
-                .submit("location-go")
-                .into()
+            Entry::new(
+                "chooser/location",
+                &self.strings.location,
+                "location-change",
+                text,
+            )
+            .submit("location-go")
+            .into()
         } else {
             PathBar::new("chooser/path", &self.path, "breadcrumb", body()).into()
         };
         let mut controls = vec![
             Segmented::new(
                 "chooser/layout",
-                "View",
+                &self.strings.view,
                 "layout",
-                vec!["List".into(), "Icons".into()],
+                vec![self.strings.list.clone(), self.strings.icons.clone()],
                 usize::from(self.grid),
             )
             .into(),
-            nk::SettingRow::new("chooser/hidden-row", "Show hidden files", body())
+            nk::SettingRow::new("chooser/hidden-row", &self.strings.hidden, body())
                 .trailing(nk::Switch::new(
                     "chooser/hidden",
-                    "Show hidden files",
+                    &self.strings.hidden,
                     "hidden",
                     self.show_hidden,
                 ))
@@ -461,7 +487,7 @@ impl Browser {
             controls.push(
                 DropDown::new(
                     "chooser/filter",
-                    "File type",
+                    &self.strings.file_type,
                     "filter",
                     choices,
                     self.filters.chosen,
@@ -469,14 +495,19 @@ impl Browser {
                 .into(),
             );
         }
-        let list: Node = list.into();
+        let list: Node = list.fill_height().into();
         let mut listing = vec![Column::new("chooser/list-column", vec![list]).grow().into()];
         if let Some(id) = self
             .preview_entry()
             .and_then(|entry| self.pictures.preview(&entry.path))
         {
             let size = if self.width >= 900 { 214. } else { 128. };
-            listing.push(Image::new("chooser/preview", id, size).picture().into());
+            listing.push(
+                Image::new("chooser/preview", id, size)
+                    .picture()
+                    .height(look.tokens.row_height)
+                    .into(),
+            );
         }
         let mut content = vec![
             nav,
@@ -485,16 +516,20 @@ impl Browser {
                 .gap(Space::S3)
                 .into(),
             Row::new("chooser/list-and-preview", listing)
-                .align(Align::Center)
                 .gap(Space::S3)
+                .grow()
                 .into(),
         ];
         let message = self
             .message
             .clone()
-            .or_else(|| self.listing.error().map(ToString::to_string))
-            .or_else(|| self.listing.loading().then(|| "Loading…".into()))
-            .or_else(|| entries.is_empty().then(|| "Folder is empty".into()));
+            .or_else(|| {
+                self.listing
+                    .error()
+                    .map(|_| self.strings.unreadable_location.clone())
+            })
+            .or_else(|| self.listing.loading().then(|| self.strings.loading.clone()))
+            .or_else(|| entries.is_empty().then(|| self.strings.empty.clone()));
         if let Some(message) = message {
             content.push(
                 Label::new("chooser/status", message, body())
@@ -507,7 +542,7 @@ impl Browser {
             Row::new(
                 "chooser/responses",
                 vec![
-                    Button::new("chooser/cancel", "Cancel", "cancel", body()).into(),
+                    Button::new("chooser/cancel", &self.strings.cancel, "cancel", body()).into(),
                     Button::new("chooser/accept", &self.accept, "accept", body())
                         .enabled(self.can_accept())
                         .button_appearance(ButtonAppearance::Default)
@@ -520,6 +555,11 @@ impl Browser {
         );
         Page {
             sidebar: PlacesSidebar::new("chooser/places", &self.places, "place", body())
+                .headings([
+                    &self.strings.places,
+                    &self.strings.bookmarks,
+                    &self.strings.drives,
+                ])
                 .current(&self.path)
                 .into(),
             content: Column::new("chooser/content", content)

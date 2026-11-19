@@ -1269,24 +1269,20 @@ pub fn run_dialog_with_options(
     Ok(())
 }
 
-/// Open a portal dialog on its own connection. A supplied parent must be a valid
-/// Wayland export; the dialog is closed if that export is revoked.
+/// Open a portal dialog on its own connection. An unavailable parent falls back
+/// to an independent window. Revocation after mapping closes the dialog.
 pub fn run_foreign_dialog(
     app: impl Application,
     options: Options,
     parent_window: &str,
     modal: bool,
 ) -> Result<()> {
-    let handle = if parent_window.is_empty() {
-        None
-    } else {
-        Some(
-            parent_window
-                .strip_prefix("wayland:")
-                .filter(|handle| !handle.is_empty() && !handle.contains('\0'))
-                .ok_or("invalid Wayland portal parent")?,
-        )
-    };
+    let handle = parent_window
+        .strip_prefix("wayland:")
+        .filter(|handle| !handle.is_empty() && !handle.contains('\0'));
+    if !parent_window.is_empty() && handle.is_none() {
+        eprintln!("nk-wayland: invalid portal parent identifier; opening without a parent");
+    }
     run_inner(
         app,
         options,
@@ -1537,15 +1533,30 @@ fn run_inner(
             top.set_parent(parent.toplevel.as_ref());
         }
         if let Some((Some(handle), _)) = foreign_dialog {
-            let importer = bind!(
+            if let Some(importer) = bind!(
                 wayland_protocols::xdg::foreign::zv2::client::zxdg_importer_v2::ZxdgImporterV2,
                 1
-            )
-            .ok_or("portal parent requires xdg-foreign-v2 import support")?;
-            let imported = importer.import_toplevel(handle.to_owned(), &qh, ());
-            imported.set_parent_of(&surface);
-            w.foreign.imported = Some(imported);
-            importer.destroy();
+            ) {
+                // Wait for a possible invalid-handle event before trying to set parentage.
+                let imported = importer.import_toplevel(handle.to_owned(), &qh, ());
+                w.foreign.imported = Some(imported);
+                importer.destroy();
+                queue.borrow_mut().roundtrip(&mut w).map_err(err)?;
+                if w.foreign.import_revoked {
+                    if let Some(imported) = w.foreign.imported.take() {
+                        imported.destroy();
+                    }
+                    eprintln!(
+                        "nk-wayland: portal parent could not be imported; opening without a parent"
+                    );
+                } else if let Some(imported) = &w.foreign.imported {
+                    imported.set_parent_of(&surface);
+                }
+            } else {
+                eprintln!(
+                    "nk-wayland: compositor cannot import portal parents; opening without a parent"
+                );
+            }
         }
         if parent.is_some() || foreign_dialog.is_some_and(|(_, modal)| modal) {
             let manager =
@@ -1580,13 +1591,6 @@ fn run_inner(
     }
     if let (Some(m), Some(s)) = (&w.data_manager, &w.seat) {
         w.data = Some(m.get_data_device(s, &qh, ()));
-    }
-    if w.foreign.imported.is_some() {
-        // Resolve invalid handles before mapping. Normal dialogue updates never roundtrip.
-        queue.borrow_mut().roundtrip(&mut w).map_err(err)?;
-        if w.closed {
-            return Err("the requesting window could not be imported".into());
-        }
     }
     if options.map {
         w.surface.as_ref().unwrap().commit();

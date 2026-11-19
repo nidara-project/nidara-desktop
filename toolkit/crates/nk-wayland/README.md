@@ -194,7 +194,8 @@ Format reference: https://flatpak.github.io/xdg-desktop-portal/docs/window-ident
 `run_foreign_dialog` imports a supplied `wayland:` parent before mapping, adds the
 xdg-dialog modal hint when requested and closes on export revocation. Hyalo enables the
 Smithay xdg-foreign-v2 globals and closes its chooser when the pinned Smithay revision
-clears parentage without a revocation event. Passing an empty parent opens an independent window.
+clears parentage without a revocation event. An unavailable or invalid parent is logged
+and opens an independent window. An empty parent requests that behavior directly.
 
 ## Activation tokens
 
