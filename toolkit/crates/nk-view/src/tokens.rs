@@ -1178,8 +1178,11 @@ pub struct Tokens {
 pub struct ListStyle {
     pub inset: f64,
     pub hover_opacity: f32,
+    /// The line between two rows: its width in physical pixels and its colour.
+    pub separator_px: f64,
+    pub separator: Color,
 }
-pub fn list_from(value: &Value) -> Result<ListStyle, String> {
+pub fn list_from(value: &Value, set: &Value) -> Result<ListStyle, String> {
     let inset = value["highlight"]["inset"]
         .as_f64()
         .filter(|v| v.is_finite() && *v >= 0.)
@@ -1188,9 +1191,22 @@ pub fn list_from(value: &Value) -> Result<ListStyle, String> {
         .as_f64()
         .filter(|v| v.is_finite() && (0.0..=1.0).contains(v))
         .ok_or("list.highlight.hoverOpacity")?;
+    let separator_px = value["separator"]["physicalPixels"]
+        .as_f64()
+        .filter(|v| v.is_finite() && *v > 0.)
+        .ok_or("list.separator.physicalPixels")?;
+    let name = value["separator"]["color"]
+        .as_str()
+        .ok_or("list.separator.color")?;
+    let separator = set["tokens"][name]
+        .as_str()
+        .ok_or_else(|| "list.separator.color token".to_owned())
+        .and_then(parse_color)?;
     Ok(ListStyle {
         inset,
         hover_opacity: hover as f32,
+        separator_px,
+        separator,
     })
 }
 
