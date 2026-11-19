@@ -746,7 +746,7 @@ impl Browser {
                 usize::from(self.grid),
             )
             .into(),
-            nk::SettingRow::new("chooser/hidden-row", &self.strings.hidden, body())
+            nk::ListRow::new("chooser/hidden-row", &self.strings.hidden, body())
                 .trailing(nk::Switch::new(
                     "chooser/hidden",
                     &self.strings.hidden,

@@ -3,7 +3,7 @@
 use crate::{
     Activated, AppWindow, Column, Dialog, DialogAnswer, DialogButton, DialogContent, DialogUpdate,
     DropDown, Entry, FontFace, Key, Label, ListSource, ListView, Node, Page, RowInfo, SearchEntry,
-    SettingRow, Space, Type, Value, Weight,
+    ListRow, Space, Type, Value, Weight,
 };
 use nk_text::{FontCatalogue, TextStyle};
 use nk_wayland::Window;
@@ -350,7 +350,7 @@ impl<U: FnMut() -> Result<DialogUpdate, String>> DialogContent for Draft<U> {
                 self.face,
             );
             content.push(
-                SettingRow::new("font/style-row", &self.labels.style, body.clone())
+                ListRow::new("font/style-row", &self.labels.style, body.clone())
                     .trailing(styles)
                     .into(),
             );
@@ -358,7 +358,7 @@ impl<U: FnMut() -> Result<DialogUpdate, String>> DialogContent for Draft<U> {
         let size_label = format!("{} ({})", self.labels.size, self.size.suffix());
         let size = Entry::new("font/size", &size_label, "font-size", &self.size_text);
         content.push(
-            SettingRow::new("font/size-row", size_label, body.clone())
+            ListRow::new("font/size-row", size_label, body.clone())
                 .trailing(size)
                 .into(),
         );

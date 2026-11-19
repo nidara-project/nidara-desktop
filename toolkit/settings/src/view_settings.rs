@@ -566,7 +566,7 @@ impl Model {
                         _ => return Err(format!("{key}: unsupported ordinary row")),
                     };
                     let mut row =
-                        nk::SettingRow::new(id, title, types.style(Type::Body, Weight::Regular))
+                        nk::ListRow::new(id, title, types.style(Type::Body, Weight::Regular))
                             .trailing(control)
                             .enabled(!disabled);
                     if let Some(subtitle) = subtitle {

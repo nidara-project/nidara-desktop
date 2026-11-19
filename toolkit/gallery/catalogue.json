@@ -1,116 +1,117 @@
 {
-  "_": "The kit's catalogue (toolkit/CATALOG.md, #1079) and where each component stands. status: view = in nk-view, the kit's one way to build (VIEW.md §13); both = in nk-view and in nk-widgets, two copies to make one; widgets = only in nk-widgets, still to move; hand = drawn by hand in a surface, debt; missing = nowhere yet. page = the gallery page that shows it. A component counts as done only when its status is view and it has a page.",
+  "_": "The kit's catalogue (toolkit/CATALOG.md, #1079) and where each component stands. status: view = in nk-view, the kit's one way to build (VIEW.md §13); both = in nk-view and in nk-widgets, two copies to make one; widgets = only in nk-widgets, still to move; hand = drawn by hand in a surface, debt; missing = nowhere yet. page = the gallery page that shows it. A component counts as done only when its status is view and it has a page. nk = the kit's types that build it (`nk::`), shown on its page; a gallery test fails when a public component of the kit is on no page.",
   "focusPage": {"page": "focus", "covers": "All nk-view focus outlines on and off glass; portal light/dark appearances; shared components.focus tokens"},
   "groups": [
     {
       "name": "Windows and structure",
       "items": [
-        {"name": "App window", "gtk": "Gtk.Window", "appkit": "NSWindow", "status": "both", "users": "Settings (nk-widgets), this gallery (nk-view FrameStyle)"},
-        {"name": "Dialog window", "gtk": "Gtk.Window (modal)", "appkit": "NSPanel (sheet)", "status": "both", "users": "Settings (DialogTree), this gallery (AppWindow)", "page": "dialog"},
-        {"name": "Auxiliary window", "gtk": "Gtk.Window", "appkit": "NSPanel", "status": "missing", "users": ""},
-        {"name": "Title bar", "gtk": "Gtk.HeaderBar", "appkit": "NSTitlebarAccessoryViewController", "status": "both", "users": "Settings (with search), this gallery (sidebar toggle, back and forward, title; no search yet)"},
-        {"name": "Command strip", "gtk": "Gtk.ActionBar", "appkit": "NSToolbar", "status": "missing", "users": ""},
-        {"name": "Split view", "gtk": "Gtk.Paned", "appkit": "NSSplitView", "status": "widgets", "users": "Settings"},
-        {"name": "Scroll region", "gtk": "Gtk.ScrolledWindow", "appkit": "NSScrollView", "status": "both", "users": "NC, CC edit mode, Settings", "page": "scroll"},
-        {"name": "Scroll bar", "gtk": "Gtk.Scrollbar", "appkit": "NSScroller", "status": "both", "users": "NC, Settings", "page": "scroll"},
-        {"name": "Glass region", "gtk": "no equivalent", "appkit": "NSVisualEffectView", "status": "view", "users": "NC, CC", "page": "glass"},
-        {"name": "Desktop layer", "gtk": "gtk4-layer-shell", "appkit": "NSWindow level", "status": "hand", "users": "every shell surface"}
+        {"name": "App window", "nk": ["nk::AppWindow"], "gtk": "Gtk.Window", "appkit": "NSWindow", "status": "both", "users": "Settings (nk-widgets), this gallery (nk-view FrameStyle)", "page": "window"},
+        {"name": "Dialog window", "nk": ["nk::Dialog"], "gtk": "Gtk.Window (modal)", "appkit": "NSPanel (sheet)", "status": "both", "users": "Settings (DialogTree), this gallery (AppWindow)", "page": "dialog"},
+        {"name": "Auxiliary window", "nk": [], "gtk": "Gtk.Window", "appkit": "NSPanel", "status": "missing", "users": ""},
+        {"name": "Title bar", "nk": [], "gtk": "Gtk.HeaderBar", "appkit": "NSTitlebarAccessoryViewController", "status": "both", "users": "Settings (with search), this gallery (sidebar toggle, back and forward, title; no search yet)", "page": "window"},
+        {"name": "Command strip", "nk": [], "gtk": "Gtk.ActionBar", "appkit": "NSToolbar", "status": "missing", "users": ""},
+        {"name": "Split view", "nk": [], "gtk": "Gtk.Paned", "appkit": "NSSplitView", "status": "widgets", "users": "Settings"},
+        {"name": "Scroll region", "nk": ["nk::Scroll"], "gtk": "Gtk.ScrolledWindow", "appkit": "NSScrollView", "status": "both", "users": "NC, CC edit mode, Settings", "page": "scroll"},
+        {"name": "Scroll bar", "nk": [], "gtk": "Gtk.Scrollbar", "appkit": "NSScroller", "status": "both", "users": "NC, Settings", "page": "scroll"},
+        {"name": "Glass region", "nk": ["nk::Pane"], "gtk": "no equivalent", "appkit": "NSVisualEffectView", "status": "view", "users": "NC, CC", "page": "glass"},
+        {"name": "Desktop layer", "nk": [], "gtk": "gtk4-layer-shell", "appkit": "NSWindow level", "status": "hand", "users": "every shell surface"}
       ]
     },
     {
       "name": "Navigation",
       "items": [
-        {"name": "Page deck", "gtk": "Gtk.Stack", "appkit": "NSTabView (tabless)", "status": "widgets", "users": "Settings"},
-        {"name": "Sidebar navigator", "gtk": "Gtk.StackSidebar", "appkit": "NSOutlineView (source list)", "status": "both", "users": "Settings, this gallery"},
-        {"name": "Tabs", "gtk": "Gtk.Notebook / Gtk.StackSwitcher", "appkit": "NSTabView", "status": "missing", "users": ""},
-        {"name": "Segmented choice", "gtk": "Gtk.ToggleButton (grouped)", "appkit": "NSSegmentedControl", "status": "both", "users": "Settings", "page": "segmented"},
-        {"name": "Disclosure", "gtk": "Gtk.Expander", "appkit": "NSDisclosureButton", "status": "both", "users": "Settings (nk-widgets), this gallery (nk-view)", "page": "disclosure"},
-        {"name": "Back and forward", "gtk": "no equivalent", "appkit": "NSPageController", "status": "both", "users": "Settings (nk-widgets), this gallery (the frame's band)"}
+        {"name": "Page deck", "nk": [], "gtk": "Gtk.Stack", "appkit": "NSTabView (tabless)", "status": "widgets", "users": "Settings"},
+        {"name": "Sidebar navigator", "nk": ["nk::SidebarList", "nk::SidebarEntry"], "gtk": "Gtk.StackSidebar", "appkit": "NSOutlineView (source list)", "status": "both", "users": "Settings, the file chooser, this gallery", "page": "window"},
+        {"name": "Tabs", "nk": [], "gtk": "Gtk.Notebook / Gtk.StackSwitcher", "appkit": "NSTabView", "status": "missing", "users": ""},
+        {"name": "Segmented choice", "nk": ["nk::Segmented"], "gtk": "Gtk.ToggleButton (grouped)", "appkit": "NSSegmentedControl", "status": "both", "users": "Settings", "page": "segmented"},
+        {"name": "Disclosure", "nk": ["nk::Expander"], "gtk": "Gtk.Expander", "appkit": "NSDisclosureButton", "status": "both", "users": "Settings (nk-widgets), this gallery (nk-view)", "page": "disclosure"},
+        {"name": "Back and forward", "nk": [], "gtk": "no equivalent", "appkit": "NSPageController", "status": "both", "users": "Settings (nk-widgets), this gallery (the frame's band)", "page": "window"}
       ]
     },
     {
       "name": "Controls",
       "items": [
-        {"name": "Button", "gtk": "Gtk.Button", "appkit": "NSButton", "status": "both", "users": "Settings, NC, CC", "page": "button"},
-        {"name": "Toggle button", "gtk": "Gtk.ToggleButton", "appkit": "NSButton (toggle)", "status": "view", "users": "CC", "page": "button"},
-        {"name": "Checkbox", "gtk": "Gtk.CheckButton", "appkit": "NSButton (checkbox)", "status": "view", "users": "CC details draw a mark by hand", "page": "check"},
-        {"name": "Radio", "gtk": "Gtk.CheckButton (grouped)", "appkit": "NSButton (radio)", "status": "both", "users": "Settings", "page": "check"},
-        {"name": "Switch", "gtk": "Gtk.Switch", "appkit": "NSSwitch", "status": "both", "users": "Settings, CC details", "page": "switch"},
-        {"name": "Slider", "gtk": "Gtk.Scale", "appkit": "NSSlider", "status": "both", "users": "Settings, CC", "page": "slider"},
-        {"name": "Number field", "gtk": "Gtk.SpinButton", "appkit": "NSStepper + NSTextField", "status": "widgets", "users": "Settings"},
-        {"name": "Dropdown", "gtk": "Gtk.DropDown", "appkit": "NSPopUpButton", "status": "both", "users": "Settings", "page": "dropdown"},
-        {"name": "Editable combo", "gtk": "Gtk.ComboBox (entry)", "appkit": "NSComboBox", "status": "missing", "users": ""},
-        {"name": "Date", "gtk": "Gtk.Calendar", "appkit": "NSDatePicker", "status": "hand", "users": "NC calendar"},
-        {"name": "Colour swatch", "gtk": "composite button", "appkit": "NSColorWell", "status": "both", "users": "Settings, Appearance", "page": "swatches"}
+        {"name": "Button", "nk": ["nk::Button"], "gtk": "Gtk.Button", "appkit": "NSButton", "status": "both", "users": "Settings, NC, CC", "page": "button"},
+        {"name": "Toggle button", "nk": ["nk::Button"], "gtk": "Gtk.ToggleButton", "appkit": "NSButton (toggle)", "status": "view", "users": "CC", "page": "button"},
+        {"name": "Checkbox", "nk": ["nk::CheckButton"], "gtk": "Gtk.CheckButton", "appkit": "NSButton (checkbox)", "status": "view", "users": "CC details draw a mark by hand", "page": "check"},
+        {"name": "Radio", "nk": ["nk::CheckButton"], "gtk": "Gtk.CheckButton (grouped)", "appkit": "NSButton (radio)", "status": "both", "users": "Settings", "page": "check"},
+        {"name": "Switch", "nk": ["nk::Switch"], "gtk": "Gtk.Switch", "appkit": "NSSwitch", "status": "both", "users": "Settings, CC details", "page": "switch"},
+        {"name": "Slider", "nk": ["nk::Slider", "nk::SliderEnd", "nk::SliderRange"], "gtk": "Gtk.Scale", "appkit": "NSSlider", "status": "both", "users": "Settings, CC", "page": "slider"},
+        {"name": "Number field", "nk": [], "gtk": "Gtk.SpinButton", "appkit": "NSStepper + NSTextField", "status": "widgets", "users": "Settings"},
+        {"name": "Dropdown", "nk": ["nk::DropDown"], "gtk": "Gtk.DropDown", "appkit": "NSPopUpButton", "status": "both", "users": "Settings", "page": "dropdown"},
+        {"name": "Editable combo", "nk": [], "gtk": "Gtk.ComboBox (entry)", "appkit": "NSComboBox", "status": "missing", "users": ""},
+        {"name": "Date", "nk": [], "gtk": "Gtk.Calendar", "appkit": "NSDatePicker", "status": "hand", "users": "NC calendar"},
+        {"name": "Colour swatch", "nk": ["nk::Swatches"], "gtk": "composite button", "appkit": "NSColorWell", "status": "both", "users": "Settings, Appearance", "page": "swatches"}
       ]
     },
     {
       "name": "Text",
       "items": [
-        {"name": "Label", "gtk": "Gtk.Label", "appkit": "NSTextField (label)", "status": "both", "users": "everything", "page": "text"},
-        {"name": "Heading", "gtk": "Gtk.Label (title class)", "appkit": "NSTextField (title font)", "status": "view", "users": "NC, CC", "page": "text"},
-        {"name": "Text field", "gtk": "Gtk.Entry", "appkit": "NSTextField", "status": "both", "users": "Settings (nk-widgets), gallery editor (nk-view); CC uses owner-edited display field", "page": "entry"},
-        {"name": "Password field", "gtk": "Gtk.PasswordEntry", "appkit": "NSSecureTextField", "status": "view", "users": "CC passwords", "page": "field"},
-        {"name": "Search field", "gtk": "Gtk.SearchEntry", "appkit": "NSSearchField", "status": "both", "users": "Settings (nk-widgets), gallery (nk-view); Apps remains by hand", "page": "search"},
-        {"name": "Text editor", "gtk": "Gtk.TextView", "appkit": "NSTextView", "status": "missing", "users": ""},
-        {"name": "Link", "gtk": "Gtk.LinkButton", "appkit": "NSTextField (link)", "status": "missing", "users": ""},
-        {"name": "Icon", "gtk": "Gtk.Image", "appkit": "NSImageView (symbol)", "status": "both", "users": "everything", "page": "icons"},
-        {"name": "Picture", "gtk": "Gtk.Picture", "appkit": "NSImageView", "status": "hand", "users": "NC artwork, dock"},
-        {"name": "Shortcut hint", "gtk": "Gtk.ShortcutLabel", "appkit": "menu key equivalent", "status": "missing", "users": ""}
+        {"name": "Label", "nk": ["nk::Label"], "gtk": "Gtk.Label", "appkit": "NSTextField (label)", "status": "both", "users": "everything", "page": "text"},
+        {"name": "Heading", "nk": ["nk::Label"], "gtk": "Gtk.Label (title class)", "appkit": "NSTextField (title font)", "status": "view", "users": "NC, CC", "page": "text"},
+        {"name": "Text field", "nk": ["nk::Entry"], "gtk": "Gtk.Entry", "appkit": "NSTextField", "status": "both", "users": "Settings (nk-widgets), gallery editor (nk-view); CC uses owner-edited display field", "page": "entry"},
+        {"name": "Password field", "nk": ["nk::Field", "nk::FieldState"], "gtk": "Gtk.PasswordEntry", "appkit": "NSSecureTextField", "status": "view", "users": "CC passwords", "page": "field"},
+        {"name": "Search field", "nk": ["nk::SearchEntry"], "gtk": "Gtk.SearchEntry", "appkit": "NSSearchField", "status": "both", "users": "Settings (nk-widgets), gallery (nk-view); Apps remains by hand", "page": "search"},
+        {"name": "Text editor", "nk": [], "gtk": "Gtk.TextView", "appkit": "NSTextView", "status": "missing", "users": ""},
+        {"name": "Link", "nk": [], "gtk": "Gtk.LinkButton", "appkit": "NSTextField (link)", "status": "missing", "users": ""},
+        {"name": "Icon", "nk": ["nk::Image"], "gtk": "Gtk.Image", "appkit": "NSImageView (symbol)", "status": "both", "users": "everything", "page": "icons"},
+        {"name": "Picture", "nk": ["nk::Image"], "gtk": "Gtk.Picture", "appkit": "NSImageView", "status": "view", "users": "File chooser preview and icon grid; NC artwork and dock by hand"},
+        {"name": "Shortcut hint", "nk": [], "gtk": "Gtk.ShortcutLabel", "appkit": "menu key equivalent", "status": "missing", "users": ""}
       ]
     },
     {
       "name": "Lists and collections",
       "items": [
-        {"name": "Settings group", "gtk": "Gtk.ListBox", "appkit": "NSStackView (grouped)", "status": "both", "users": "Settings (nk-widgets), this gallery's sections (Node::group)"},
-        {"name": "Setting row", "gtk": "Gtk.ListBoxRow", "appkit": "NSTableCellView", "status": "both", "users": "Settings, CC details by hand", "page": "row"},
-        {"name": "Large list", "gtk": "Gtk.ListView", "appkit": "NSTableView", "status": "view", "users": "Gallery; uniform-height single or multiple selection", "page": "list"},
-        {"name": "File browser views", "gtk": "Gtk.ListView and navigation widgets", "appkit": "NSTableView and NSPathControl", "status": "view", "users": "Gallery; shared file model", "page": "files"},
-        {"name": "Tile grid", "gtk": "Gtk.GridView", "appkit": "NSCollectionView", "status": "view", "users": "CC; Apps by hand", "page": "grid"},
-        {"name": "Tree", "gtk": "Gtk.TreeListModel + Gtk.ListView", "appkit": "NSOutlineView", "status": "missing", "users": ""},
-        {"name": "Table", "gtk": "Gtk.ColumnView", "appkit": "NSTableView (columns)", "status": "missing", "users": ""},
-        {"name": "Wrapping group", "gtk": "Gtk.FlowBox", "appkit": "NSCollectionView (flow)", "status": "missing", "users": ""}
+        {"name": "Group of rows", "nk": ["nk::Group"], "gtk": "Gtk.ListBox", "appkit": "NSStackView (grouped)", "status": "both", "users": "Settings, the file chooser, this gallery", "page": "row"},
+        {"name": "List row", "nk": ["nk::ListRow"], "gtk": "Gtk.ListBoxRow", "appkit": "NSTableCellView", "status": "both", "users": "Settings, the file chooser, this gallery; CC details by hand", "page": "row"},
+        {"name": "Choice list", "nk": ["nk::ListBox", "nk::ListBoxOption"], "gtk": "Gtk.ListBox (single selection)", "appkit": "NSTableView (single selection)", "status": "view", "users": "Settings' power profiles", "page": "row"},
+        {"name": "Large list", "nk": ["nk::ListView", "nk::Placeholder"], "gtk": "Gtk.ListView", "appkit": "NSTableView", "status": "view", "users": "Gallery; uniform-height single or multiple selection", "page": "list"},
+        {"name": "File browser views", "nk": ["nk::FileList", "nk::PathBar", "nk::PlacesSidebar"], "gtk": "Gtk.ListView and navigation widgets", "appkit": "NSTableView and NSPathControl", "status": "view", "users": "Gallery; shared file model", "page": "files"},
+        {"name": "Tile grid", "nk": ["nk::Grid"], "gtk": "Gtk.GridView", "appkit": "NSCollectionView", "status": "view", "users": "CC; Apps by hand", "page": "grid"},
+        {"name": "Tree", "nk": [], "gtk": "Gtk.TreeListModel + Gtk.ListView", "appkit": "NSOutlineView", "status": "missing", "users": ""},
+        {"name": "Table", "nk": [], "gtk": "Gtk.ColumnView", "appkit": "NSTableView (columns)", "status": "missing", "users": ""},
+        {"name": "Wrapping group", "nk": [], "gtk": "Gtk.FlowBox", "appkit": "NSCollectionView (flow)", "status": "missing", "users": ""}
       ]
     },
     {
       "name": "Menus and popovers",
       "items": [
-        {"name": "Popover", "gtk": "Gtk.Popover", "appkit": "NSPopover", "status": "widgets", "users": "shell menus"},
-        {"name": "Menu button", "gtk": "Gtk.MenuButton", "appkit": "NSPopUpButton (pull-down)", "status": "missing", "users": ""},
-        {"name": "Menu and item", "gtk": "Gtk.PopoverMenu", "appkit": "NSMenu", "status": "widgets", "users": "dock, bar, tray, Apps, dropdowns"},
-        {"name": "App menu bar", "gtk": "Gtk.PopoverMenuBar", "appkit": "NSMenu (main)", "status": "missing", "users": ""},
-        {"name": "Tooltip", "gtk": "Gtk.Tooltip", "appkit": "toolTip", "status": "hand", "users": "dock"}
+        {"name": "Popover", "nk": [], "gtk": "Gtk.Popover", "appkit": "NSPopover", "status": "widgets", "users": "shell menus"},
+        {"name": "Menu button", "nk": [], "gtk": "Gtk.MenuButton", "appkit": "NSPopUpButton (pull-down)", "status": "missing", "users": ""},
+        {"name": "Menu and item", "nk": ["nk::MenuItem"], "gtk": "Gtk.PopoverMenu", "appkit": "NSMenu", "status": "both", "users": "dropdown lists (nk-view); dock, bar, tray and Apps menus (old layer)", "page": "dropdown"},
+        {"name": "App menu bar", "nk": [], "gtk": "Gtk.PopoverMenuBar", "appkit": "NSMenu (main)", "status": "missing", "users": ""},
+        {"name": "Tooltip", "nk": [], "gtk": "Gtk.Tooltip", "appkit": "toolTip", "status": "hand", "users": "dock"}
       ]
     },
     {
       "name": "Feedback and dialogs",
       "items": [
-        {"name": "Progress bar", "gtk": "Gtk.ProgressBar", "appkit": "NSProgressIndicator (bar)", "status": "missing", "users": ""},
-        {"name": "Spinner", "gtk": "Gtk.Spinner", "appkit": "NSProgressIndicator (spinning)", "status": "missing", "users": ""},
-        {"name": "Level bar", "gtk": "Gtk.LevelBar", "appkit": "NSLevelIndicator", "status": "missing", "users": ""},
-        {"name": "Badge", "gtk": "no equivalent", "appkit": "badge", "status": "hand", "users": "dock, CC"},
-        {"name": "Inline feedback", "gtk": "Adw.Banner (not used)", "appkit": "inline alert", "status": "missing", "users": ""},
-        {"name": "Alert", "gtk": "Gtk.AlertDialog", "appkit": "NSAlert", "status": "both", "users": "Settings (old layer), this gallery (AppWindow)", "page": "dialog"},
-        {"name": "File open and save", "gtk": "Gtk.FileDialog", "appkit": "NSOpenPanel / NSSavePanel", "status": "missing", "users": ""},
-        {"name": "Colour", "gtk": "Gtk.ColorDialog", "appkit": "NSColorPanel", "status": "missing", "users": ""},
-        {"name": "Font", "gtk": "Gtk.FontDialog", "appkit": "NSFontPanel", "status": "widgets", "users": "Settings"},
-        {"name": "About", "gtk": "Gtk.AboutDialog", "appkit": "orderFrontStandardAboutPanel", "status": "missing", "users": ""}
+        {"name": "Progress bar", "nk": [], "gtk": "Gtk.ProgressBar", "appkit": "NSProgressIndicator (bar)", "status": "missing", "users": ""},
+        {"name": "Spinner", "nk": [], "gtk": "Gtk.Spinner", "appkit": "NSProgressIndicator (spinning)", "status": "missing", "users": ""},
+        {"name": "Level bar", "nk": [], "gtk": "Gtk.LevelBar", "appkit": "NSLevelIndicator", "status": "missing", "users": ""},
+        {"name": "Badge", "nk": [], "gtk": "no equivalent", "appkit": "badge", "status": "hand", "users": "dock, CC"},
+        {"name": "Inline feedback", "nk": [], "gtk": "Adw.Banner (not used)", "appkit": "inline alert", "status": "missing", "users": ""},
+        {"name": "Alert", "nk": ["nk::Alert"], "gtk": "Gtk.AlertDialog", "appkit": "NSAlert", "status": "both", "users": "Settings (old layer), this gallery (AppWindow)", "page": "dialog"},
+        {"name": "File open and save", "nk": [], "gtk": "Gtk.FileDialog", "appkit": "NSOpenPanel / NSSavePanel", "status": "view", "users": "The portal chooser (nidara-file-chooser), built from nk::FileList, nk::PathBar and nk::PlacesSidebar", "page": "files"},
+        {"name": "Colour", "nk": [], "gtk": "Gtk.ColorDialog", "appkit": "NSColorPanel", "status": "missing", "users": ""},
+        {"name": "Font", "nk": ["nk::FontButton", "nk::FontDialog"], "gtk": "Gtk.FontDialog", "appkit": "NSFontPanel", "status": "view", "users": "Settings (old layer), this gallery", "page": "dialog"},
+        {"name": "About", "nk": [], "gtk": "Gtk.AboutDialog", "appkit": "orderFrontStandardAboutPanel", "status": "missing", "users": ""}
       ]
     },
     {
       "name": "Layout",
       "items": [
-        {"name": "Box", "gtk": "Gtk.Box", "appkit": "NSStackView", "status": "view", "users": "NC, CC", "page": "layout"},
-        {"name": "Centre box", "gtk": "Gtk.CenterBox", "appkit": "NSStackView (centre)", "status": "view", "users": "CC", "page": "layout"},
-        {"name": "Grid", "gtk": "Gtk.Grid", "appkit": "NSGridView", "status": "view", "users": "CC", "page": "grid"},
-        {"name": "Overlay", "gtk": "Gtk.Overlay", "appkit": "subviews", "status": "view", "users": "CC", "page": "overlay"},
-        {"name": "Frame", "gtk": "Gtk.Frame", "appkit": "NSBox", "status": "missing", "users": ""},
-        {"name": "Separator", "gtk": "Gtk.Separator", "appkit": "NSBox (separator)", "status": "widgets", "users": "Settings"},
-        {"name": "Spacer", "gtk": "hexpand", "appkit": "flexible space", "status": "view", "users": "NC, CC", "page": "layout"},
-        {"name": "Constraint layout", "gtk": "Gtk.ConstraintLayout", "appkit": "Auto Layout", "status": "missing", "users": ""},
-        {"name": "Fixed placement", "gtk": "Gtk.Fixed", "appkit": "frame", "status": "view", "users": "CC edit mode", "page": "overlay"},
-        {"name": "Revealer", "gtk": "Gtk.Revealer", "appkit": "view animation", "status": "view", "users": "NC", "page": "reveal"},
-        {"name": "Drawing area", "gtk": "Gtk.DrawingArea", "appkit": "NSView draw(_:)", "status": "view", "users": "NC artwork, CC gauges"}
+        {"name": "Box", "nk": ["nk::Row", "nk::Column"], "gtk": "Gtk.Box", "appkit": "NSStackView", "status": "view", "users": "NC, CC", "page": "layout"},
+        {"name": "Centre box", "nk": ["nk::Row"], "gtk": "Gtk.CenterBox", "appkit": "NSStackView (centre)", "status": "view", "users": "CC", "page": "layout"},
+        {"name": "Grid", "nk": ["nk::Grid"], "gtk": "Gtk.Grid", "appkit": "NSGridView", "status": "view", "users": "CC", "page": "grid"},
+        {"name": "Overlay", "nk": ["nk::Overlay"], "gtk": "Gtk.Overlay", "appkit": "subviews", "status": "view", "users": "CC", "page": "overlay"},
+        {"name": "Frame", "nk": [], "gtk": "Gtk.Frame", "appkit": "NSBox", "status": "missing", "users": ""},
+        {"name": "Separator", "nk": [], "gtk": "Gtk.Separator", "appkit": "NSBox (separator)", "status": "widgets", "users": "Settings"},
+        {"name": "Spacer", "nk": ["nk::Spacer"], "gtk": "hexpand", "appkit": "flexible space", "status": "view", "users": "NC, CC", "page": "layout"},
+        {"name": "Constraint layout", "nk": [], "gtk": "Gtk.ConstraintLayout", "appkit": "Auto Layout", "status": "missing", "users": ""},
+        {"name": "Fixed placement", "nk": ["nk::Overlay"], "gtk": "Gtk.Fixed", "appkit": "frame", "status": "view", "users": "CC edit mode", "page": "overlay"},
+        {"name": "Revealer", "nk": ["nk::Revealer"], "gtk": "Gtk.Revealer", "appkit": "view animation", "status": "view", "users": "NC", "page": "reveal"},
+        {"name": "Drawing area", "nk": ["nk::Slot"], "gtk": "Gtk.DrawingArea", "appkit": "NSView draw(_:)", "status": "hand", "users": "NC artwork, CC gauges: a surface paints the slot itself; an app window cannot yet (#1103)"}
       ]
     }
   ]

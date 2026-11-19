@@ -2,7 +2,7 @@
 use super::*;
 use crate::components::Switch;
 use crate::view::{
-    Dropdown, Field, Segmented, SettingRow, SidebarEntry, Slider, SliderEnd, Swatches,
+    Dropdown, Field, Segmented, ListRow, SidebarEntry, Slider, SliderEnd, Swatches,
 };
 use nk_text::{FontSet, ParleyBackend, TextStyle};
 use serde_json::json;
@@ -3334,7 +3334,7 @@ fn a_content_button_is_padded_to_its_height_and_painted_by_the_view_in_the_surfa
 }
 
 #[test]
-fn in_a_setting_row_only_the_switch_responds_and_it_bears_the_rows_name() {
+fn in_a_list_row_only_the_switch_responds_and_it_bears_the_rows_name() {
     let t = tokens();
     let view = Node::row(
         "row",
@@ -3629,8 +3629,8 @@ fn setting(
     subtitle: Option<&str>,
     trailing: Option<Node>,
     action: Option<&str>,
-) -> SettingRow {
-    SettingRow {
+) -> ListRow {
+    ListRow {
         title: title.into(),
         title_style: style(14.),
         subtitle: subtitle.map(Into::into),
@@ -3643,10 +3643,10 @@ fn setting(
 }
 
 #[test]
-fn a_setting_row_is_the_kits_row_height_and_grows_with_a_second_line() {
+fn a_list_row_is_the_kits_row_height_and_grows_with_a_second_line() {
     let one = Node::column(
         "c",
-        vec![Node::setting_row("r", setting("Wi-Fi", None, None, None))],
+        vec![Node::list_row("r", setting("Wi-Fi", None, None, None))],
     );
     let s = laid(&one, (400., 200.), 1.);
     assert_eq!(rect(&s, "r")[3], 48., "the kit's row height");
@@ -3658,7 +3658,7 @@ fn a_setting_row_is_the_kits_row_height_and_grows_with_a_second_line() {
     );
     let two = Node::column(
         "c",
-        vec![Node::setting_row(
+        vec![Node::list_row(
             "r",
             setting(
                 "Wi-Fi",
@@ -3680,8 +3680,8 @@ fn a_setting_row_is_the_kits_row_height_and_grows_with_a_second_line() {
 }
 
 #[test]
-fn a_setting_row_is_not_activatable_by_default_only_its_control_responds() {
-    let view = Node::setting_row(
+fn a_list_row_is_not_activatable_by_default_only_its_control_responds() {
+    let view = Node::list_row(
         "r",
         setting(
             "Wi-Fi",
@@ -3707,7 +3707,7 @@ fn a_setting_row_is_not_activatable_by_default_only_its_control_responds() {
 }
 
 #[test]
-fn an_activatable_setting_row_responds_as_a_whole_and_is_painted_off_glass() {
+fn an_activatable_list_row_responds_as_a_whole_and_is_painted_off_glass() {
     let row = |disabled: bool| {
         let mut r = setting(
             "Wi-Fi",
@@ -3720,7 +3720,7 @@ fn an_activatable_setting_row_responds_as_a_whole_and_is_painted_off_glass() {
             "g",
             Node::column(
                 "c",
-                vec![Node::setting_row("r", r).role(Role::Toggle).marked(true)],
+                vec![Node::list_row("r", r).role(Role::Toggle).marked(true)],
             ),
         )
     };
@@ -3784,7 +3784,7 @@ fn an_activatable_setting_row_responds_as_a_whole_and_is_painted_off_glass() {
 #[test]
 #[should_panic(expected = "an activatable row is the control")]
 fn an_activatable_row_never_holds_a_control_of_its_own() {
-    let _ = Node::setting_row(
+    let _ = Node::list_row(
         "r",
         setting(
             "Wi-Fi",
@@ -3811,9 +3811,9 @@ fn slider_row(value: f64, icons: bool, disabled: bool) -> Node {
     };
     Node::column(
         "c",
-        vec![Node::setting_row(
+        vec![Node::list_row(
             "r",
-            SettingRow {
+            ListRow {
                 trailing: Some(Node::slider_end("r/slider", end)),
                 disabled,
                 ..setting("Brightness", None, None, None)
@@ -4369,16 +4369,16 @@ fn a_dropdown_is_its_triggers_height_and_as_wide_as_its_widest_option() {
 }
 
 #[test]
-fn a_long_dropdown_fits_its_setting_row_without_losing_options_or_stable_width() {
+fn a_long_dropdown_fits_its_list_row_without_losing_options_or_stable_width() {
     let long = "English (international, with a very long keyboard variant description) ".repeat(8);
     let options = vec!["US".to_owned(), long.clone()];
     for scale in [1., 1.25] {
         for width in [400., 800.] {
             let mut previous = None;
             for chosen in [0, 1] {
-                let view = Node::setting_row(
+                let view = Node::list_row(
                     "row",
-                    SettingRow {
+                    ListRow {
                         title: "Keyboard layout".into(),
                         title_style: style(14.),
                         trailing: Some(Node::dropdown(
@@ -5468,10 +5468,10 @@ fn an_application_payload_and_pending_reader_values_are_reported_without_action_
 
 #[test]
 #[should_panic(expected = "an activatable row is the control")]
-fn an_activatable_setting_row_still_refuses_a_composed_child_with_controls() {
-    Node::setting_row(
+fn an_activatable_list_row_still_refuses_a_composed_child_with_controls() {
+    Node::list_row(
         "row",
-        SettingRow {
+        ListRow {
             title: "Size".into(),
             action: Some("open".into()),
             trailing: Some(Node::segmented(
@@ -5484,7 +5484,7 @@ fn an_activatable_setting_row_still_refuses_a_composed_child_with_controls() {
                     disabled: false,
                 },
             )),
-            ..SettingRow::default()
+            ..ListRow::default()
         },
     );
 }
@@ -6014,7 +6014,7 @@ fn a_path_crumb_and_a_switch_report_their_value_when_clicked() {
         "root",
         vec![
             crate::PathBar::new("bar", &path, "crumb", style(14.)).into(),
-            crate::SettingRow::new("row", "Hidden", style(14.))
+            crate::ListRow::new("row", "Hidden", style(14.))
                 .trailing(crate::Switch::new("sw", "Hidden", "hidden", false))
                 .into(),
         ],

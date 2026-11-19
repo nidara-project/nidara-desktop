@@ -45,7 +45,7 @@ mod widgets;
 pub use widgets::{
     Button, CheckButton, Column, DropDown, Entry, Expander, Field, FieldState, FontButton, Grid,
     Group, Image, Label, ListBox, ListBoxOption, ListView, MenuItem, Overlay, Pane, Placeholder,
-    Revealer, Row, Scroll, SearchEntry, Segmented, SettingRow, SidebarEntry, SidebarList, Slider,
+    Revealer, Row, Scroll, SearchEntry, Segmented, ListRow, SidebarEntry, SidebarList, Slider,
     SliderEnd, SliderRange, Slot, Spacer, Swatches, Switch, Widget, prelude,
 };
 pub use window::{

@@ -28,6 +28,9 @@ pub struct Item {
     pub users: String,
     #[serde(default)]
     pub page: Option<String>,
+    /// The kit's types that build it (`nk::Button`…), shown on its page.
+    #[serde(default)]
+    pub nk: Vec<String>,
 }
 
 impl Catalogue {
@@ -55,15 +58,16 @@ fn status_text(s: &str) -> &'static str {
 }
 
 /// Each page: its id (what the check and `--page` name), its title and its glyph.
-pub const PAGES: [(&str, &str, &str); 25] = [
+pub const PAGES: [(&str, &str, &str); 26] = [
     ("status", "Status", "nd-emblem-default"),
+    ("window", "Window", "nd-sidebar-show"),
     ("button", "Button", "nd-hand"),
     ("switch", "Switch", "nd-light-mode"),
     ("check", "Checkbox and radio", "nd-preferences-desktop"),
     ("dropdown", "Dropdown", "nd-pan-down"),
     ("segmented", "Segmented choice", "nd-view-grid"),
     ("swatches", "Swatches", "nd-view-grid"),
-    ("row", "Setting row", "nd-preferences-system"),
+    ("row", "List row", "nd-preferences-system"),
     ("slider", "Slider", "nd-display-brightness"),
     ("field", "Text field", "nd-input-keyboard"),
     ("glass", "Glass card", "nd-preferences-desktop-theme"),
@@ -114,6 +118,8 @@ pub struct Model {
     pub list_opened: u32,
     pub files: crate::files::Browser,
     pub font: nk::FontChoice,
+    /// The entry chosen in the Window page's sample sidebar.
+    pub window_side: String,
     pub modal_answers: u32,
     pub modal_result: String,
 }
@@ -144,6 +150,7 @@ impl Default for Model {
             list_opened: 0,
             files: crate::files::Browser::default(),
             font: nk::FontChoice::new("Inter Variable", nk::FontSize::Points(11.)),
+            window_side: "home".into(),
             modal_answers: 0,
             modal_result: "Nothing answered".into(),
         }
@@ -206,12 +213,29 @@ fn header(id: &str, cat: &Catalogue, t: &TypeScale) -> Node {
     let mut lines: Vec<Node> = vec![];
     if !items.is_empty() {
         let names = items.iter().map(|i| i.name.as_str()).collect::<Vec<_>>();
+        let mut types: Vec<&str> = items
+            .iter()
+            .flat_map(|i| &i.nk)
+            .map(String::as_str)
+            .collect();
+        types.dedup();
         let gtk = items.iter().map(|i| i.gtk.as_str()).collect::<Vec<_>>();
         let appkit = items.iter().map(|i| i.appkit.as_str()).collect::<Vec<_>>();
         let statuses = items
             .iter()
             .map(|i| format!("{}: {}", i.name, status_text(&i.status)))
             .collect::<Vec<_>>();
+        if !types.is_empty() {
+            lines.push(
+                nk::Label::new(
+                    "head/nk",
+                    types.join(", "),
+                    t.style(Type::Body, Weight::Semibold),
+                )
+                .lines(2)
+                .into(),
+            );
+        }
         for (k, text) in [
             ("names", format!("Catalogue: {}", names.join(", "))),
             ("gtk", format!("GTK: {}", gtk.join(", "))),
@@ -322,6 +346,7 @@ fn button(key: &str, text: &str, action: &str, t: &TypeScale) -> nk::Button {
 fn page(id: &str, m: &Model, cat: &Catalogue, t: &TypeScale, k: &Measures) -> Vec<Node> {
     match id {
         "status" => status(cat, t),
+        "window" => window(m, t, k),
         "button" => buttons(m, t),
         "switch" => switches(m, t),
         "check" => checks(m, t),
@@ -348,6 +373,77 @@ fn page(id: &str, m: &Model, cat: &Catalogue, t: &TypeScale, k: &Measures) -> Ve
         "files" => m.files.view(t, k.row_height, k.files_window, k.glyph),
         _ => vec![],
     }
+}
+
+/// The window itself: this gallery is an `nk::AppWindow`, and its sidebar an `nk::SidebarList`,
+/// shown here on its own as any app would place one.
+fn window(m: &Model, t: &TypeScale, k: &Measures) -> Vec<Node> {
+    let body = || t.style(Type::Body, Weight::Regular);
+    let entry = |id: &str, title: &str, glyph: &str, on: bool| {
+        nk::SidebarEntry::new(
+            format!("win/side/{id}"),
+            title,
+            glyph,
+            format!("win-side:{id}"),
+            body(),
+            k.glyph,
+        )
+        .selected(on)
+    };
+    let chosen = m.window_side.as_str();
+    let list = nk::SidebarList::new("win/side")
+        .entries([
+            entry("home", "Home", "nd-user-home", chosen == "home"),
+            entry(
+                "recent",
+                "Recent",
+                "nd-document-open-recent",
+                chosen == "recent",
+            ),
+        ])
+        .section(
+            "Folders",
+            t.style(Type::Caption, Weight::Medium),
+            [
+                entry(
+                    "documents",
+                    "Documents",
+                    "nd-folder-documents",
+                    chosen == "documents",
+                ),
+                entry(
+                    "pictures",
+                    "Pictures",
+                    "nd-folder-pictures",
+                    chosen == "pictures",
+                ),
+                entry("music", "Music", "nd-folder-music", chosen == "music"),
+            ],
+        );
+    vec![
+        section(
+            "win-this",
+            "This window",
+            t,
+            nk::Label::new(
+                "win/this",
+                "This gallery is an nk::AppWindow: the title band (the sidebar button, back and \
+                 forward, the page's title), the content scrolling under it, the floating glass \
+                 sidebar on the left (an nk::SidebarList), and Hyalo's window controls.",
+                body(),
+            )
+            .lines(4)
+            .into(),
+        ),
+        section(
+            "win-side",
+            "A sidebar list, with sections",
+            t,
+            nk::Column::new("win/side-box", vec![list.into()])
+                .height(260.)
+                .into(),
+        ),
+    ]
 }
 
 fn status(cat: &Catalogue, t: &TypeScale) -> Vec<Node> {
@@ -549,7 +645,7 @@ fn buttons(m: &Model, t: &TypeScale) -> Vec<Node> {
     ]
 }
 
-/// A setting row with a switch (VIEW.md §12.6, §13.6): the row does not respond, only the
+/// A list row with a switch (VIEW.md §12.6, §13.6): the row does not respond, only the
 /// switch does; the row's text names it. `f` sets the switch's state for the samples.
 fn switch_row(
     key: &str,
@@ -567,14 +663,14 @@ fn switch_row(
         .into()
 }
 
-/// A setting row's text in the kit's styles: the title in the body, the second line small.
+/// A list row's text in the kit's styles: the title in the body, the second line small.
 fn setting(
     key: impl Into<nk::Key>,
     title: &str,
     subtitle: Option<&str>,
     t: &TypeScale,
-) -> nk::SettingRow {
-    let row = nk::SettingRow::new(key, title, t.style(Type::Body, Weight::Regular));
+) -> nk::ListRow {
+    let row = nk::ListRow::new(key, title, t.style(Type::Body, Weight::Regular));
     match subtitle {
         Some(sub) => row.subtitle(sub, t.style(Type::Small, Weight::Regular)),
         None => row,
@@ -616,13 +712,12 @@ fn rows(m: &Model, t: &TypeScale) -> Vec<Node> {
                 .into(),
         ],
     );
-    let activatable =
-        |k: &str, label: &str, f: &dyn Fn(nk::SettingRow) -> nk::SettingRow| -> Node {
-            f(setting(format!("rw/a/{k}"), label, None, t)
-                .trailing(chevron(&format!("rw/a/{k}")))
-                .action("noop"))
-            .into()
-        };
+    let activatable = |k: &str, label: &str, f: &dyn Fn(nk::ListRow) -> nk::ListRow| -> Node {
+        f(setting(format!("rw/a/{k}"), label, None, t)
+            .trailing(chevron(&format!("rw/a/{k}")))
+            .action("noop"))
+        .into()
+    };
     let states = nk::Column::new(
         "rw/act",
         vec![
@@ -1215,12 +1310,7 @@ fn sliders(m: &Model, t: &TypeScale) -> Vec<Node> {
             )
             .into(),
         ),
-        section(
-            "sl-rows",
-            "In a setting row (Settings')",
-            t,
-            slider_rows(m, t),
-        ),
+        section("sl-rows", "In a list row", t, slider_rows(m, t)),
         section("sl-tile", "Tile slider (the CC's)", t, tile.into()),
     ]
 }
@@ -2393,5 +2483,85 @@ mod tests {
                 );
             }
         }
+    }
+}
+
+#[cfg(test)]
+mod catalogue_tests {
+    use super::*;
+    use std::collections::BTreeSet;
+
+    /// Public names of the kit that are not components a page can show, and why.
+    const NOT_SHOWN: &[(&str, &str)] = &[
+        ("Widget", "the trait every component implements"),
+        ("prelude", "the import that brings Widget in"),
+        (
+            "Slot",
+            "room a surface paints itself: an app window cannot paint into it yet (#1103)",
+        ),
+    ];
+
+    /// The names in `pub use <module>::{…};` of nk-view's lib.rs.
+    fn exported(lib: &str, module: &str) -> Vec<String> {
+        let start = format!("pub use {module}::{{");
+        let at = lib
+            .find(&start)
+            .unwrap_or_else(|| panic!("no `{start}` in lib.rs"))
+            + start.len();
+        let end = at + lib[at..].find('}').expect("an unclosed export");
+        lib[at..end]
+            .split(',')
+            .map(str::trim)
+            .filter(|n| !n.is_empty())
+            .map(str::to_owned)
+            .collect()
+    }
+
+    /// The gallery is the kit's proof (#1156): every public component of the kit is shown on
+    /// a page, under its `nk::` name, and the catalogue names no type the kit does not have.
+    /// The chooser built its own sidebar because the kit's was on no page; this fails first.
+    #[test]
+    fn every_public_component_of_the_kit_is_on_a_page() {
+        let lib = include_str!("../../crates/nk-view/src/lib.rs");
+        let mut public: BTreeSet<String> = exported(lib, "widgets").into_iter().collect();
+        public.extend(exported(lib, "file_views"));
+        public.extend(["AppWindow", "Alert", "Dialog", "FontDialog"].map(String::from));
+        let cat = Catalogue::load().unwrap();
+        let pages: BTreeSet<&str> = PAGES.iter().map(|(id, _, _)| *id).collect();
+        let items: Vec<&Item> = cat.groups.iter().flat_map(|g| &g.items).collect();
+        for item in &items {
+            if let Some(page) = &item.page {
+                assert!(
+                    pages.contains(page.as_str()),
+                    "{}: no page {page:?}",
+                    item.name
+                );
+            }
+            for name in &item.nk {
+                let bare = name
+                    .strip_prefix("nk::")
+                    .unwrap_or_else(|| panic!("{}: {name:?} is not written nk::Name", item.name));
+                assert!(
+                    public.contains(bare),
+                    "{}: the kit has no {name}",
+                    item.name
+                );
+            }
+        }
+        let shown: BTreeSet<&str> = items
+            .iter()
+            .filter(|i| i.page.is_some())
+            .flat_map(|i| &i.nk)
+            .map(|n| n.trim_start_matches("nk::"))
+            .collect();
+        let missing: Vec<&String> = public
+            .iter()
+            .filter(|n| !shown.contains(n.as_str()))
+            .filter(|n| !NOT_SHOWN.iter().any(|(x, _)| x == n))
+            .collect();
+        assert!(
+            missing.is_empty(),
+            "public components on no gallery page (add them to catalogue.json with a page): {missing:?}"
+        );
     }
 }

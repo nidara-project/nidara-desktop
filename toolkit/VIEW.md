@@ -34,13 +34,13 @@ the tree with `.into()`. The setters every piece has (`grow`, `width`, `height`,
 | A button (labelled, or `with_child` anything) | `nk::Button` |
 | On/off; checkbox or radio | `nk::Switch`, `nk::CheckButton` |
 | One of several; one of a few; colour samples | `nk::DropDown`, `nk::Segmented`, `nk::Swatches` |
-| A value in a range; one at a setting row's end | `nk::Slider` (`nk::SliderRange`), `nk::SliderEnd` |
+| A value in a range; one at a list row's end | `nk::Slider` (`nk::SliderRange`), `nk::SliderEnd` |
 | Text the kit edits; text the app edits; search | `nk::Entry`, `nk::Field`, `nk::SearchEntry` |
 | A header that shows what follows; a long list | `nk::Expander`, `nk::ListView` |
 | File browser views | `nk::PlacesSidebar`, `nk::FileList`, `nk::PathBar` over `nk::files` |
 | Font preview and modal chooser | `nk::FontButton`, `nk::FontDialog` with `nk::FontChoice` |
 | Single-selection list inside a group | `nk::ListBox`, `nk::ListBoxOption` |
-| Settings' row; a sidebar's page; a menu's row | `nk::SettingRow`, `nk::SidebarEntry`, `nk::MenuItem` |
+| A row of a list or a group of rows; a sidebar's page; a menu's row | `nk::ListRow`, `nk::SidebarEntry`, `nk::MenuItem` |
 
 `Node` stays the tree's one value (what `AppWindow` and `ViewState` take), but its constructors
 are the kit's own: the rest of this file names the public types.
@@ -577,7 +577,7 @@ in the owner's session with their OK.
 picks one of several things keeps its check mark (§12.3); a switch is for a setting that is
 on or off.
 
-- **The switch is the control, not its row** (owner, 2026-11-12, #1079). A setting row is
+- **The switch is the control, not its row** (owner, 2026-11-12, #1079). A list row is
   `nk::Row` holding its text and `nk::Switch::new(key, name, action, on)`: a control
   (`Role::Toggle`, `marked(on)`, pill corner) that holds the drawn track
   (`nk::Switch::drawn(key/track, on)`). Only the switch takes hover, press and the click; the
@@ -835,7 +835,7 @@ decides the rest. Each component has three layers, kept apart:
 | Editable combo | the field, and the arrow that opens the list | — | `dropdown` |
 | Date | each day is a button; arrows move the day, PgUp/PgDn the month | today marked | — |
 | Colour swatch | the swatch; opens the colour popover; chosen = 2 px ring | — | — |
-| Setting row | does not respond; its controls do | activatable: no (default) / navigates (`›`) / a choice (✓) / activates its control (as GNOME's switch row) | `rows` |
+| List row | does not respond; its controls do | activatable: no (default) / navigates (`›`) / a choice (✓) / activates its control (as GNOME's switch row) | `rows` |
 | Settings group | does not respond; an opaque card with a footer | — | `common.groupRadius` |
 | Sidebar navigator | each entry, whole row, on press; ↑↓ Home End | selected: accent (default) | `list` |
 | Tabs, segmented choice | each segment, on press; ←→ | — | `choices` |
@@ -886,12 +886,14 @@ label after it, as a settings page does.
 
 Not carried yet: the mixed (indeterminate) checkbox; no surface asks for it.
 
-### 13.6 Setting row
+### 13.6 List row
 
-`nk::SettingRow::new(key, title, style)`, with `.subtitle(..)`, `.trailing(..)`, `.action(..)`
+`nk::ListRow::new(key, title, style)`, with `.subtitle(..)`, `.trailing(..)`, `.action(..)`
 and `.enabled(..)`:
-Settings' row (`Gtk.ListBoxRow` in a boxed list), its title, an optional second line under it
-in `Ink::Dim`, and what it ends with.
+The kit's general row in a list or a group of rows, in any app and for anything
+(`Adw.ActionRow`, a row of a SwiftUI `List`): its title, an optional second line under it in
+`Ink::Dim`, and what it starts and ends with. It was `SettingRow` until #1156: a name says what
+a piece is, not who used it first.
 
 - **Its size is the kit's.** At least `ROW_HEIGHT.single` tall (`row_floor()`, from
   `static.json`), taller when its text is, with `space-3` round its content and its text
@@ -908,7 +910,7 @@ in `Ink::Dim`, and what it ends with.
 
 ### 13.7 Slider row
 
-A setting row (§13.6) that ends in `nk::SliderEnd::new(key, name, action, range, value_style)`
+A list row (§13.6) that ends in `nk::SliderEnd::new(key, name, action, range, value_style)`
 (with `.icons(..)` and `.enabled(..)`): Settings' slider row (`NidaraSliderRow`).
 
 - **The slider at the kit's width** (`range.slider.width`), its value after it at `valueGap`,
@@ -945,7 +947,7 @@ a page a window's sidebar offers (`Gtk.StackSidebar`'s row), its glyph at the fr
 ### 13.9 Dropdown
 
 `nk::DropDown::new(key, name, action, options, chosen)`: one choice of several (`Gtk.DropDown`, `NSPopUpButton`), shown closed as the chosen
-option with an arrow; a setting row ends with it (§13.6).
+option with an arrow; a list row ends with it (§13.6).
 
 - **The trigger is off glass** (§13.2, `Part::Dropdown`): the view fills it with
   `dropdown.trigger`'s tone inside its border, lighter under the pointer and darker while
@@ -992,7 +994,7 @@ for neither.
 ### 13.10 Segmented choice
 
 `nk::Segmented::new(key, name, action, options, chosen)`: one choice of a few, all shown side by side, the chosen one in the
-accent (GTK's linked toggle buttons, `NSSegmentedControl`); a setting row ends with it (§13.6).
+accent (GTK's linked toggle buttons, `NSSegmentedControl`); a list row ends with it (§13.6).
 Settings' dock size and gaming mode presets are this.
 
 - **Its segments are radios of one group** (§13.5): segment `n` is keyed `"{key}/{n}"`, a
@@ -1069,7 +1071,7 @@ configuring component data (`Configure`), rather than fields in the view.
 - **Interaction:** controls own input and semantics; `Drawing` has neither of its own and
   inherits its enclosing control's resolved `Interaction`. Components never compare hover,
   press or focus keys. A composition can declare that its body contains controls, so a
-  setting row still refuses to wrap those controls in another activatable row. The marks
+  list row still refuses to wrap those controls in another activatable row. The marks
   declare `owns_mark`; the enclosing surface omits a duplicate selection wash and places
   focus outside the mark. Check/radio controls request no surface wash under their own paint.
 - **Read and input:** `Read` lends geometry, look, interaction, focus, immutable text layouts

@@ -136,6 +136,10 @@ impl Gallery {
                 return self.rebuild();
             }
         }
+        if let Some(id) = action.strip_prefix("win-side:") {
+            self.model.window_side = id.into();
+            return self.rebuild();
+        }
         if action.starts_with("files-") {
             self.model.files.activate(a);
             self.rebuild();

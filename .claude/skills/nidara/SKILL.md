@@ -376,7 +376,7 @@ dereference to the platform's `Exports` and `Styles`. `toolkit/CONTRACT.md` → 
 `nidara-kit` package (`toolkit/crates/nidara-kit`, lib name `nk`) and build with its types:
 `nk::Row`/`nk::Column` (not `Box`), `nk::Label`, `nk::Image`, `nk::Button` (`with_child` for any
 content), `nk::Switch`, `nk::CheckButton`, `nk::DropDown`, `nk::Segmented`, `nk::Slider`,
-`nk::Scroll`, `nk::Expander`, `nk::ListView`, `nk::SettingRow`… (table in `VIEW.md`, "How an app
+`nk::Scroll`, `nk::Expander`, `nk::ListView`, `nk::ListRow`… (table in `VIEW.md`, "How an app
 writes it"). One form: `new` + setters + `.into()` into a `Vec<Node>`; `use nk::prelude::*` for
 `grow`/`width`/`height`. `Node`'s constructors are crate-private. A new component is born as an
 `nk::` type in `crates/nk-view/src/widgets.rs`, never as a `Node::` function.
@@ -413,10 +413,11 @@ that is on or off ends its row with one; a choice among several keeps its mark s
 `nk::CheckButton::new` / `nk::CheckButton::radio` are the CheckButton (`components.json` `check`,
 `VIEW.md` §13.5): the mark is the control, its label is not; off glass, so nk-view paints every
 state; the radios next to each other are one group, one Tab stop, the arrows moving the choice.
-`nk::SettingRow` is Settings' row (`VIEW.md` §13.6): at least
+`nk::ListRow` is the kit's general row in a list or a group of rows, for any app (`VIEW.md`
+§13.6; it was `SettingRow` until #1156, named after its first user): at least
 `ROW_HEIGHT.single` (`row_floor`), NOT activatable unless the app gives it an `action` — then the
 whole row is the control and what it ends with must be drawn only (a chevron, `nk::Switch::drawn`).
-A slider row is a setting row ending in `nk::SliderEnd`
+A slider row is a list row ending in `nk::SliderEnd`
 (§13.7): measures from `range.slider`, its value in room for its widest text (`nk::Label::room`).
 A window's sidebar is ONE kit component, `nk::SidebarList` (§13.8), holding `nk::SidebarEntry`
 rows: the selected one in the ACCENT (D1, a control's `accent` flag), never the neutral grey
@@ -600,7 +601,13 @@ or changing a component. Glyph names in a view are
 drawing for icon"). **The gallery (`nk-gallery`, installed as `nidara-kit-gallery` with its own
 entry in Apps) is where a component is proven**: a page per component with its states side by side
 (`Control::shown`, gallery only), and `toolkit/gallery/catalogue.json` says where each catalogue
-entry stands. A component is done when it is in nk-view with a page there. Check it with
+entry stands, naming its `nk::` types (`"nk": [...]`), which the page shows under its title. A
+component is done when it is in nk-view with a page there. **Enforced** (#1156): the gallery's
+`every_public_component_of_the_kit_is_on_a_page` test fails when a public component of nk-view
+(`pub use widgets::{…}`, `file_views::{…}`, the window and font types) is on no page, or when the
+catalogue names a type the kit lacks. A new component and its page land in the same PR.
+**A kit name says what the piece is, never who used it first**: `nk::ListRow` was
+`nk::SettingRow` until #1156, though any app uses it for any list. Check it with
 `toolkit/gallery/check-headless.sh` (the widgets demo's private harness: pages opened by a reader,
 screenshots at 1 and 1.25, the live samples driven, an inert control that must be caught); look at
 the screenshots, not only the PASS lines.
