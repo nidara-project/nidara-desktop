@@ -309,19 +309,20 @@ impl Model {
             .iter()
             .filter(|p| ordinary(p, session))
             .map(|p| {
-                Ok(nk::SidebarEntry::new(
-                    format!("page/{}", p.id),
-                    e.text(&p.label)?.to_owned(),
-                    p.icon
-                        .as_deref()
-                        .unwrap_or("nd-settings")
-                        .trim_end_matches("-symbolic"),
-                    format!("page:{}", p.id),
-                    body(),
-                    host.look().frame.icon,
+                Ok::<_, String>(
+                    nk::SidebarEntry::new(
+                        format!("page/{}", p.id),
+                        e.text(&p.label)?.to_owned(),
+                        p.icon
+                            .as_deref()
+                            .unwrap_or("nd-settings")
+                            .trim_end_matches("-symbolic"),
+                        format!("page:{}", p.id),
+                        body(),
+                        host.look().frame.icon,
+                    )
+                    .selected(self.selected() == Some(p.id.as_str())),
                 )
-                .selected(self.selected() == Some(p.id.as_str()))
-                .into())
             })
             .collect::<Result<Vec<_>, String>>()?;
         let page = self.selected().and_then(|id| e.page(id));
@@ -379,7 +380,9 @@ impl Model {
             );
         }
         Ok(nk::Page {
-            sidebar: nk::Column::new("settings-sidebar", sidebar).into(),
+            sidebar: nk::SidebarList::new("settings-sidebar")
+                .entries(sidebar)
+                .into(),
             content: nk::Column::new("settings-content", content)
                 .gap(Space::S3)
                 .padding(Padding::all(Space::S3))

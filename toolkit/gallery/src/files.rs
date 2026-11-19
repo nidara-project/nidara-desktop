@@ -156,6 +156,7 @@ impl Browser {
         types: &TypeScale,
         row_height: f64,
         window: Option<(f64, f64)>,
+        glyph: f64,
     ) -> Vec<Node> {
         let body = || types.style(Type::Body, Weight::Regular);
         let Some(path) = &self.path else {
@@ -217,9 +218,16 @@ impl Browser {
             Row::new(
                 "files/browser",
                 vec![
-                    PlacesSidebar::new("files/places", &self.places, "files-place", body())
-                        .current(path)
-                        .into(),
+                    PlacesSidebar::new(
+                        "files/places",
+                        &self.places,
+                        "files-place",
+                        body(),
+                        types.style(Type::Caption, Weight::Medium),
+                        glyph,
+                    )
+                    .current(path)
+                    .into(),
                     Column::new("files/content", content)
                         .gap(Space::S2)
                         .grow()

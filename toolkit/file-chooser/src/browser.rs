@@ -46,6 +46,10 @@ pub struct Browser {
     pending_path: Option<Receiver<std::io::Result<(PathBuf, bool)>>>,
     message: Option<String>,
     pictures: Pictures,
+    /// The folders before this one and after it, for back and forward (the band's arrows,
+    /// Alt+Left and Right). Going somewhere new forgets what was ahead, as in a browser.
+    back: Vec<PathBuf>,
+    forward: Vec<PathBuf>,
 }
 
 impl Browser {
@@ -75,6 +79,8 @@ impl Browser {
         Ok(Self {
             places,
             pictures: Pictures::new(sources.clone())?,
+            back: Vec::new(),
+            forward: Vec::new(),
             sources,
             mime,
             path,
@@ -124,6 +130,30 @@ impl Browser {
     fn file_list_key(&self) -> Key {
         format!("chooser/files/{}/{}", self.generation, self.columns()).into()
     }
+    /// To another folder, by the user's hand: remembered for back.
+    fn go(&mut self, path: PathBuf) -> Result<(), String> {
+        if path == self.path {
+            return Ok(());
+        }
+        let from = self.path.clone();
+        self.navigate(path)?;
+        self.back.push(from);
+        self.forward.clear();
+        Ok(())
+    }
+    fn step(&mut self, back: bool) -> Result<(), String> {
+        let (from, to) = if back {
+            (&mut self.back, &mut self.forward)
+        } else {
+            (&mut self.forward, &mut self.back)
+        };
+        let Some(path) = from.pop() else {
+            return Ok(());
+        };
+        to.push(self.path.clone());
+        self.navigate(path)
+    }
+    /// Lists `path`: a move the history does not see (a refresh, the first folder's fallback).
     fn navigate(&mut self, path: PathBuf) -> Result<(), String> {
         self.listing = Listing::start(
             path.clone(),
@@ -195,13 +225,13 @@ impl Browser {
         };
         self.pending_path = None;
         match outcome {
-            Ok((path, true)) => self.navigate(path)?,
+            Ok((path, true)) => self.go(path)?,
             Ok((_, false)) if self.directories => {
                 self.message = Some(self.strings.folder_only.clone())
             }
             Ok((path, false)) => {
                 let parent = path.parent().ok_or("file has no parent")?.to_owned();
-                self.navigate(parent)?;
+                self.go(parent)?;
                 self.cursor = Some(path.clone());
                 self.anchor = Some(path.clone());
                 self.selection.insert(path);
@@ -326,7 +356,7 @@ impl Browser {
             if let Some(path) = folder
                 && (!self.multiple || self.selection.len() == 1 && self.selection.contains(&path))
             {
-                self.navigate(path)?;
+                self.go(path)?;
                 return Ok(None);
             }
         }
@@ -354,6 +384,8 @@ impl Browser {
     pub fn activate(&mut self, action: Activated) -> Result<Option<Response>, String> {
         match (action.action.as_str(), action.value) {
             ("accept", _) => return self.accept(),
+            (nk::BACK, _) => self.step(true)?,
+            (nk::FORWARD, _) => self.step(false)?,
             ("location-change", Some(Value::Text(value))) => {
                 self.pending_path = None;
                 self.location = Some(value);
@@ -369,12 +401,12 @@ impl Browser {
             }
             ("place", Some(Value::Index(i))) => {
                 if let Some(path) = self.places.get(i).and_then(Place::path) {
-                    self.navigate(path.to_owned())?;
+                    self.go(path.to_owned())?;
                 }
             }
             ("breadcrumb", Some(Value::Index(i))) => {
                 if let Some(path) = PathBar::locations(&self.path).into_iter().nth(i) {
-                    self.navigate(path)?;
+                    self.go(path)?;
                 }
             }
             ("cursor", Some(Value::Index(i))) => {
@@ -403,7 +435,7 @@ impl Browser {
             ("open-row", Some(Value::Index(i))) => {
                 if let Some(entry) = self.listing.entries().get(i) {
                     if entry.is_dir {
-                        self.navigate(entry.path.clone())?;
+                        self.go(entry.path.clone())?;
                     } else if self.multiple && self.selection.contains(&entry.path) {
                         return Ok(self.response());
                     } else {
@@ -560,21 +592,28 @@ impl Browser {
             .into(),
         );
         Page {
-            sidebar: PlacesSidebar::new("chooser/places", &self.places, "place", body())
-                .headings([
-                    &self.strings.places,
-                    &self.strings.bookmarks,
-                    &self.strings.drives,
-                ])
-                .current(&self.path)
-                .into(),
+            sidebar: PlacesSidebar::new(
+                "chooser/places",
+                &self.places,
+                "place",
+                body(),
+                look.types.style(Type::Caption, Weight::Medium),
+                look.frame.icon,
+            )
+            .headings([
+                &self.strings.places,
+                &self.strings.bookmarks,
+                &self.strings.drives,
+            ])
+            .current(&self.path)
+            .into(),
             content: Column::new("chooser/content", content)
                 .gap(Space::S3)
                 .padding(nk::Padding::all(Space::S3))
                 .into(),
             title: self.title.clone(),
-            can_back: false,
-            can_forward: false,
+            can_back: !self.back.is_empty(),
+            can_forward: !self.forward.is_empty(),
         }
     }
 }
