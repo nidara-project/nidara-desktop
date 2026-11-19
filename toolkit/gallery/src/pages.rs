@@ -55,7 +55,7 @@ fn status_text(s: &str) -> &'static str {
 }
 
 /// Each page: its id (what the check and `--page` name), its title and its glyph.
-pub const PAGES: [(&str, &str, &str); 24] = [
+pub const PAGES: [(&str, &str, &str); 25] = [
     ("status", "Status", "nd-emblem-default"),
     ("button", "Button", "nd-hand"),
     ("switch", "Switch", "nd-light-mode"),
@@ -80,6 +80,7 @@ pub const PAGES: [(&str, &str, &str); 24] = [
     ("list", "Long list", "nd-clipboard-list"),
     ("focus", "Focus", "nd-input-keyboard"),
     ("dialog", "Dialog and alert", "nd-dialog-information"),
+    ("files", "Files", "nd-folder"),
 ];
 
 /// What the view is built from: the page, and what the live samples hold.
@@ -111,6 +112,7 @@ pub struct Model {
     pub submitted: u32,
     pub selected_row: usize,
     pub list_opened: u32,
+    pub files: crate::files::Browser,
     pub font: nk::FontChoice,
     pub modal_answers: u32,
     pub modal_result: String,
@@ -140,6 +142,7 @@ impl Default for Model {
             submitted: 0,
             selected_row: 0,
             list_opened: 0,
+            files: crate::files::Browser::default(),
             font: nk::FontChoice::new("Inter Variable", nk::FontSize::Points(11.)),
             modal_answers: 0,
             modal_result: "Nothing answered".into(),
@@ -155,6 +158,7 @@ pub struct Measures<'a> {
     pub row_height: f64,
     pub list_window: Option<(f64, f64)>,
     pub disabled_list_window: Option<(f64, f64)>,
+    pub files_window: Option<(f64, f64)>,
 }
 
 pub fn view(m: &Model, cat: &Catalogue, t: &TypeScale, k: &Measures) -> View {
@@ -351,6 +355,7 @@ fn page(id: &str, m: &Model, cat: &Catalogue, t: &TypeScale, k: &Measures) -> Ve
         "list" => long_list(m, t, k),
         "focus" => focus_page(t, k),
         "dialog" => dialogs(m, t),
+        "files" => m.files.view(t, k.row_height, k.files_window),
         _ => vec![],
     }
 }
@@ -2365,6 +2370,7 @@ mod tests {
                     row_height: 40.,
                     list_window: None,
                     disabled_list_window: None,
+                    files_window: None,
                 },
             );
             let mut all = vec![];

@@ -64,7 +64,8 @@
       "items": [
         {"name": "Settings group", "gtk": "Gtk.ListBox", "appkit": "NSStackView (grouped)", "status": "both", "users": "Settings (nk-widgets), this gallery's sections (Node::group)"},
         {"name": "Setting row", "gtk": "Gtk.ListBoxRow", "appkit": "NSTableCellView", "status": "both", "users": "Settings, CC details by hand", "page": "row"},
-        {"name": "Large list", "gtk": "Gtk.ListView", "appkit": "NSTableView", "status": "view", "users": "Gallery; uniform-height single selection", "page": "list"},
+        {"name": "Large list", "gtk": "Gtk.ListView", "appkit": "NSTableView", "status": "view", "users": "Gallery; uniform-height single or multiple selection", "page": "list"},
+        {"name": "File browser views", "gtk": "Gtk.ListView and navigation widgets", "appkit": "NSTableView and NSPathControl", "status": "view", "users": "Gallery; shared file model", "page": "files"},
         {"name": "Tile grid", "gtk": "Gtk.GridView", "appkit": "NSCollectionView", "status": "view", "users": "CC; Apps by hand", "page": "grid"},
         {"name": "Tree", "gtk": "Gtk.TreeListModel + Gtk.ListView", "appkit": "NSOutlineView", "status": "missing", "users": ""},
         {"name": "Table", "gtk": "Gtk.ColumnView", "appkit": "NSTableView (columns)", "status": "missing", "users": ""},

@@ -198,6 +198,7 @@ impl Composition {
                 pressed: true,
                 serial,
                 time,
+                ..
             } => Some((self.pointer, *serial, *time)),
             Event::Layer {
                 id,
@@ -1241,6 +1242,7 @@ mod tests {
                 pressed: true,
                 serial: 7,
                 time: 10,
+                modifiers: Default::default(),
             },
         )
         .unwrap();

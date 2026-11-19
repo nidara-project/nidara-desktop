@@ -8,7 +8,7 @@ use std::{
     collections::{HashMap, HashSet},
 };
 mod long_list;
-pub use long_list::{ListSource, LongList, RowInfo};
+pub use long_list::{ListSource, LongList, MultipleSelection, RowInfo};
 mod editable;
 pub use editable::EditableField;
 mod search;
@@ -202,6 +202,14 @@ pub trait Component: Any {
     }
     fn target(&self) -> Option<f64> {
         None
+    }
+    fn press_with_modifiers(
+        &self,
+        cx: &mut Input<'_>,
+        at: (f64, f64),
+        _modifiers: nk_wayland::PointerModifiers,
+    ) {
+        self.press(cx, at);
     }
     fn press(&self, cx: &mut Input<'_>, _at: (f64, f64)) {
         cx.effects.arm = true;

@@ -7,6 +7,11 @@ pub enum Value {
     Bool(bool),
     Number(f64),
     Index(usize),
+    Selection {
+        cursor: usize,
+        anchor: usize,
+        indices: std::collections::BTreeSet<usize>,
+    },
     Text(String),
 }
 impl Value {

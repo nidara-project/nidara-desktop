@@ -317,8 +317,10 @@ pub struct Text {
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub struct Icon {
-    /// An interface glyph's `nd-` name.
+    /// A name in the interface or application icon theme.
     pub name: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub app_fallback: Option<String>,
     pub size: f64,
     pub ink: Ink,
     /// Its ink's opacity on top of the ink's own (a slider's flanking glyphs).
@@ -594,6 +596,7 @@ impl Node {
             key,
             Kind::Icon(Icon {
                 name: name.into(),
+                app_fallback: None,
                 size,
                 ink: Ink::Primary,
                 alpha: 1.,

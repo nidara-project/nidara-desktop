@@ -37,8 +37,8 @@ pub use layers::{Curve, LayerEvent, LayerId, Property};
 mod material;
 mod protocol;
 pub use ime::{ImeBatch, TextInput};
-pub use keyboard::Key;
 use keyboard::Keyboard;
+pub use keyboard::{Key, PointerModifiers};
 pub use material::{
     Blur, Glass, GradedPane, Group, Material, Pane, Pointer, Shadow, Tone, Veil, WindowBackground,
     WindowLevel,
@@ -150,6 +150,7 @@ pub enum Event {
         /// wl_pointer serial and millisecond timestamp of this exact event.
         serial: u32,
         time: u32,
+        modifiers: PointerModifiers,
     },
     Scroll(ScrollAmount),
     HorizontalScroll(ScrollAmount),
@@ -2255,6 +2256,7 @@ impl Dispatch<wl_pointer::WlPointer, ()> for Window {
                         pressed,
                         serial,
                         time,
+                        modifiers: w.keyboard.pointer_modifiers(),
                     });
                 }
             }

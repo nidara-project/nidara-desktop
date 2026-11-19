@@ -286,6 +286,7 @@ impl Suggestions {
                             pressed: *pressed,
                             serial: *serial,
                             time: *time,
+                            modifiers: Default::default(),
                         }),
                         LayerEvent::Scroll(y) => Some(Event::Scroll(*y)),
                         _ => None,

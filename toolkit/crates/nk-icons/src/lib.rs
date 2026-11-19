@@ -24,7 +24,10 @@ use std::sync::Arc;
 
 /// The spec version this toolkit implements (`Icons.ts` `ICON_SPEC_VERSION`). A theme for an
 /// older version is still used: the names added since fall back to the reference.
-pub const ICON_SPEC_VERSION: u32 = 4;
+pub const ICON_SPEC_VERSION: u32 = 5;
+
+mod app_art;
+pub use app_art::read_app_icon;
 const SPEC_KEY: &str = "X-Nidara-Icon-Spec";
 
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -446,8 +449,11 @@ impl Icons {
         self.theme.is_some()
     }
 
-    /// `name` (an `nd-` name, without `-symbolic`) for a `size` px icon.
+    /// An interface icon by its `nd-` base name and logical size.
     pub fn get(&mut self, name: &str, size: u32) -> Result<Arc<Icon>, String> {
+        if name.contains('/') {
+            return Err("icon names cannot contain a path separator".into());
+        }
         let key = (name.to_owned(), size);
         if let Some(icon) = self.cache.get(&key) {
             return Ok(icon.clone());

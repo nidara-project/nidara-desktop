@@ -15,6 +15,12 @@ pub struct Key {
     pub ctrl: bool,
     pub alt: bool,
 }
+#[derive(Clone, Copy, Debug, Default)]
+pub struct PointerModifiers {
+    pub ctrl: bool,
+    pub shift: bool,
+}
+
 pub struct Keyboard {
     pub root_enter: Option<u32>,
     pub context: xkb::Context,
@@ -25,6 +31,14 @@ pub struct Keyboard {
     pub repeat: Option<(u32, Key, Instant)>,
 }
 impl Keyboard {
+    pub fn pointer_modifiers(&self) -> PointerModifiers {
+        self.state
+            .as_ref()
+            .map_or_else(PointerModifiers::default, |state| PointerModifiers {
+                ctrl: state.mod_name_is_active(xkb::MOD_NAME_CTRL, xkb::STATE_MODS_EFFECTIVE),
+                shift: state.mod_name_is_active(xkb::MOD_NAME_SHIFT, xkb::STATE_MODS_EFFECTIVE),
+            })
+    }
     pub fn new() -> Self {
         let context = xkb::Context::new(xkb::CONTEXT_NO_FLAGS);
         let locale = env::var("LC_ALL")

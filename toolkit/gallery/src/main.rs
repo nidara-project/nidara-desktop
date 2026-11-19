@@ -5,6 +5,7 @@
 //! the kit's (`AppWindow`); the app keeps its model, builds its page from it, and acts on what
 //! the window gives back.
 mod dialogs;
+mod files;
 mod pages;
 
 use nk::{Activated, AppWindow, BACK, FORWARD, Glyphs, Labels, Page, WindowLook};
@@ -52,6 +53,7 @@ impl Gallery {
                 dropdown: &look.tokens.dropdown,
                 colors,
                 glyph: look.frame.icon,
+                files_window: host.scroll_window(&nk::FileList::scroll_key(&model.files.key())),
                 row_height: look.tokens.row_height,
                 list_window: host.scroll_window(&nk::ListView::scroll_key(&"ll/live".into())),
                 disabled_list_window: host
@@ -134,6 +136,11 @@ impl Gallery {
                 return self.rebuild();
             }
         }
+        if action.starts_with("files-") {
+            self.model.files.activate(a);
+            self.rebuild();
+            return;
+        }
         match action {
             "dialog-open" | "alert-open" | "alert-delete" | "dialog-invalid" | "font-open" => {
                 self.dialog_request = Some((a.key, action.to_owned()));
@@ -213,6 +220,10 @@ impl Gallery {
 
     fn show(&mut self, page: usize) {
         self.model.page = page;
+        if PAGES[page].0 == "files" {
+            self.window.set_app_icon_theme(&app_icon_theme());
+            self.model.files.start();
+        }
         self.rebuild();
         // A new page opens at its top.
         self.window.to_top();
@@ -225,7 +236,12 @@ impl Application for Gallery {
         true
     }
     fn poll_interval_ms(&self) -> u32 {
-        self.window.poll_interval_ms()
+        let interval = self.window.poll_interval_ms();
+        if PAGES[self.model.page].0 == "files" && self.model.files.loading() {
+            interval.min(16)
+        } else {
+            interval
+        }
     }
     fn idle(&mut self, window: &mut Window) -> Result<()> {
         if self.portal.changed() {
@@ -236,6 +252,9 @@ impl Application for Gallery {
         }
         for a in self.window.idle()? {
             self.activated(a);
+        }
+        if PAGES[self.model.page].0 == "files" && self.model.files.poll() {
+            self.rebuild();
         }
         self.commit(window)
     }
@@ -323,6 +342,21 @@ fn icons() -> std::result::Result<nk_icons::Icons, String> {
     nk_icons::Icons::new("", &[], &reference)
 }
 
+fn app_icon_theme() -> String {
+    use gio::prelude::*;
+    gio::SettingsSchemaSource::default()
+        .and_then(|src| src.lookup("org.gnome.desktop.interface", true))
+        .filter(|schema| schema.has_key("icon-theme"))
+        .map_or_else(
+            || "hicolor".into(),
+            |_| {
+                gio::Settings::new("org.gnome.desktop.interface")
+                    .string("icon-theme")
+                    .to_string()
+            },
+        )
+}
+
 fn run() -> Result<()> {
     let start = Instant::now();
     let page = std::env::args()
@@ -374,6 +408,10 @@ fn run() -> Result<()> {
         paste_replies: 0,
         dialog_request: None,
     };
+    if PAGES[page].0 == "files" {
+        gallery.window.set_app_icon_theme(&app_icon_theme());
+        gallery.model.files.start();
+    }
     gallery.rebuild();
     nk_wayland::run(
         gallery,

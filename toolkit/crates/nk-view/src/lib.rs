@@ -14,6 +14,8 @@ mod state;
 mod tokens;
 mod view;
 
+mod file_views;
+pub use file_views::{FileList, PathBar, PlacesSidebar};
 mod font_dialog;
 pub use font_dialog::{FontChoice, FontDialog, FontDialogLabels, FontSize};
 pub use nk_text::FontFace;

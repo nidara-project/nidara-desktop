@@ -239,6 +239,13 @@ impl Image {
     pub fn new(key: impl Into<Key>, name: impl Into<String>, size: f64) -> Self {
         Self(Node::icon(key, name, size))
     }
+    /// Use the application icon theme, with a Nidara interface glyph as the fallback.
+    pub fn app_theme(mut self, fallback: impl Into<String>) -> Self {
+        if let Kind::Icon(icon) = &mut self.0.kind {
+            icon.app_fallback = Some(fallback.into());
+        }
+        self
+    }
     setters! {
         ink(ink: Ink);
         /// Its ink at `alpha` of its own opacity.
@@ -797,6 +804,21 @@ impl<'a, S: ListSource + ?Sized> ListView<'a, S> {
         self.enabled = on;
         self
     }
+    /// Multiple selection. The selection action reports indices and a range anchor
+    /// through `Value::Selection`. Arrows only move the cursor.
+    pub fn multiple(
+        mut self,
+        selected: std::collections::BTreeSet<usize>,
+        anchor: Option<usize>,
+        changed: impl Into<String>,
+    ) -> Self {
+        self.list.multiple = Some(crate::components::MultipleSelection {
+            selected,
+            anchor,
+            changed: changed.into(),
+        });
+        self
+    }
     /// The currently selected row, or none when a filter hides it.
     pub fn selected(mut self, index: Option<usize>) -> Self {
         self.list.selected = index;
@@ -1024,6 +1046,8 @@ pub struct SidebarEntry {
     glyph_size: f64,
     width: Option<f64>,
     shown: Option<Shown>,
+    enabled: bool,
+    value: Option<Value>,
 }
 impl SidebarEntry {
     /// Its glyph by `nd-` name at `glyph_size` (the frame's), its title in `style`; `action` is
@@ -1048,6 +1072,8 @@ impl SidebarEntry {
             glyph_size,
             width: None,
             shown: None,
+            enabled: true,
+            value: None,
         }
     }
     /// It is the page shown.
@@ -1059,6 +1085,14 @@ impl SidebarEntry {
         self.width = Some(px);
         self
     }
+    pub fn enabled(mut self, on: bool) -> Self {
+        self.enabled = on;
+        self
+    }
+    pub fn value(mut self, value: Value) -> Self {
+        self.value = Some(value);
+        self
+    }
     /// Gallery fixture: shown in `state` for good.
     pub fn shown(mut self, state: Shown) -> Self {
         self.shown = Some(state);
@@ -1067,7 +1101,10 @@ impl SidebarEntry {
 }
 impl From<SidebarEntry> for Node {
     fn from(s: SidebarEntry) -> Node {
-        let mut n = Node::sidebar_entry(s.key, s.entry, s.glyph_size);
+        let mut n = Node::sidebar_entry(s.key, s.entry, s.glyph_size).enabled(s.enabled);
+        if let Some(value) = s.value {
+            n = n.value(value);
+        }
         if let Some(w) = s.width {
             n = n.width(w);
         }

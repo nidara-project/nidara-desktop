@@ -219,6 +219,10 @@ fn states(n: &Node) -> StateSet {
             State::Expandable,
         ),
         (n.states.selected, State::Selected),
+        (
+            n.attributes.contains_key("multiselectable"),
+            State::Multiselectable,
+        ),
         (n.role == Role::Option, State::Selectable),
         (n.states.invalid, State::InvalidEntry),
         (n.actions.contains(&Action::SetText), State::Editable),
@@ -542,6 +546,9 @@ impl Selection {
                 || option.states.hidden
             {
                 return false;
+            }
+            if combo.attributes.contains_key("multiselectable") && option.states.selected {
+                return true;
             }
             (self.0.revision.load(Ordering::Relaxed), id)
         };

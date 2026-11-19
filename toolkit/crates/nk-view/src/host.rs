@@ -92,6 +92,8 @@ pub struct Glyphs {
 struct GlyphCache {
     icons: nk_icons::Icons,
     cache: HashMap<(String, u32), Option<Arc<nk_icons::Icon>>>,
+    app_theme: String,
+    app_cache: HashMap<(String, u32), Option<Arc<nk_render::Raster>>>,
 }
 impl Glyphs {
     pub fn new(icons: nk_icons::Icons) -> Self {
@@ -99,16 +101,51 @@ impl Glyphs {
             inner: std::rc::Rc::new(std::cell::RefCell::new(GlyphCache {
                 icons,
                 cache: HashMap::new(),
+                app_theme: "hicolor".into(),
+                app_cache: HashMap::new(),
             })),
         }
     }
+    pub fn set_app_icon_theme(&mut self, theme: &str) {
+        let mut cache = self.inner.borrow_mut();
+        if cache.app_theme != theme {
+            cache.app_theme = theme.to_owned();
+            cache.app_cache.clear();
+        }
+    }
+
+    pub(crate) fn app_icon(&mut self, name: &str, size: f64) -> Option<Arc<nk_render::Raster>> {
+        if name.is_empty() || name.contains('/') {
+            return None;
+        }
+        let px = size.round() as u32;
+        let mut inner = self.inner.borrow_mut();
+        let GlyphCache {
+            app_theme,
+            app_cache,
+            ..
+        } = &mut *inner;
+        let key = (name.to_owned(), px);
+        if let Some(cached) = app_cache.get(&key) {
+            return cached.clone();
+        }
+        let art = nk_icons::find_app_icon(app_theme, name, px, &nk_icons::search_path(), &[])
+            .and_then(|path| nk_icons::read_app_icon(&path, px))
+            .and_then(|(w, h, pixels)| {
+                nk_render::Raster::from_rgba(w as u16, h as u16, pixels).ok()
+            })
+            .map(Arc::new);
+        app_cache.insert(key, art.clone());
+        art
+    }
+
     pub fn get(&mut self, name: &str, size: f64) -> Option<Arc<nk_icons::Icon>> {
         if name.is_empty() {
             return None;
         }
         let px = size.round() as u32;
         let mut inner = self.inner.borrow_mut();
-        let GlyphCache { icons, cache } = &mut *inner;
+        let GlyphCache { icons, cache, .. } = &mut *inner;
         cache
             .entry((name.to_string(), px))
             .or_insert_with(|| {

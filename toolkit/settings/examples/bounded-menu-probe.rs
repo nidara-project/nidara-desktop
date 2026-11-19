@@ -248,6 +248,7 @@ impl Probe {
                             pressed,
                             serial,
                             time,
+                            modifiers: Default::default(),
                         })
                     }
                     LayerEvent::Scroll(delta) => Some(Event::Scroll(delta)),
