@@ -482,7 +482,7 @@ fn scene_elements<R: HyaloRenderer>(
             if let Some(m) = managed.filter(|m| placement(m).is_none())
                 && let Some(look) = state.wm.opening(m.id, now)
             {
-                match snapshot::take(renderer.gles(), state, w, scale.x) {
+                match snapshot::take(renderer.gles(), state, w, scale.x, false) {
                     Ok(picture) => {
                         let at = place.map_or(m.frame().loc.to_f64(), |p| p.origin);
                         let frame = Rectangle::new(at - output_geo.loc.to_f64(), m.frame().size.to_f64()).to_physical(scale);

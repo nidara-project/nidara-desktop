@@ -211,7 +211,7 @@ impl Hyalo {
             .get(&m.workspace)
             .and_then(|w| self.output_named(&w.output))
             .map_or(1.0, |o| o.current_scale().fractional_scale());
-        let picture = match crate::backend::snapshot_window(self, &window, scale) {
+        let picture = match crate::backend::snapshot_window(self, &window, scale, false) {
             Ok(p) => p,
             Err(err) => {
                 tracing::debug!(%err, id, "no picture of a closing window");

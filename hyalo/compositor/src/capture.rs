@@ -372,13 +372,13 @@ impl Hyalo {
 }
 
 /// What a window capture draws: the window's picture (render/snapshot.rs: its surfaces, its
-/// declared background, its controls — what the screen shows of it but the glass and blur,
-/// which need the screen behind them), cropped to its client box at 0,0, and the size of that.
+/// declared background, its controls, and its own glass formed over what it drew under it —
+/// all but a translucent background's blur of the screen), cropped to its client box at 0,0,
+/// and the size of that.
 ///
 /// Until #1148 a capture was the client's buffers alone: a window of ours, whose background,
 /// glass and controls Hyalo paints (D6), showed in the dock's previews as a transparent box
-/// with only its header. Where its glass lay (a sidebar) the window's own background shows,
-/// as with reduce transparency.
+/// with only its header.
 type WindowDraw = (Size<i32, Physical>, Vec<SnapshotElement>);
 
 fn window_elements(window: &Window, picture: &Snapshot, bar: i32, scale: f64) -> WindowDraw {
