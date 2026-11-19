@@ -12,5 +12,7 @@ md5 = "0.8"
 roxmltree = "0.21"
 url = "2"
 
-[dev-dependencies]
+image = { version = "0.25.10", default-features = false, features = ["png", "jpeg", "gif", "webp", "bmp"] }
+png = "0.18"
+libc = "0.2"
 tempfile = "3"

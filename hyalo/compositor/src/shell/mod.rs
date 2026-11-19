@@ -54,6 +54,19 @@ impl XdgShellHandler for Hyalo {
         }
     }
 
+    fn parent_changed(&mut self, surface: ToplevelSurface) {
+        if surface.parent().is_none()
+            && self.window_for_surface(surface.wl_surface()).is_some_and(|window| {
+                crate::wm::app_id(&window) == "nidara-file-chooser"
+            })
+        {
+            // The pinned Smithay rev clears the relation without emitting
+            // zxdg_imported_v2.destroyed on revocation. Close our chooser rather
+            // than leave a file-selection prompt from a vanished requester.
+            surface.send_close();
+        }
+    }
+
     fn new_popup(&mut self, surface: PopupSurface, _positioner: PositionerState) {
         self.unconstrain_popup(&surface);
         let _ = self.popups.track_popup(PopupKind::Xdg(surface));

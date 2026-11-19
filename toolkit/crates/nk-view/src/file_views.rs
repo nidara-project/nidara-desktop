@@ -7,7 +7,7 @@ use crate::{
 use nk_files::{Entry, Place, PlaceKind};
 use nk_text::TextStyle;
 use std::{
-    collections::BTreeSet,
+    collections::{BTreeSet, HashMap},
     path::{Path, PathBuf},
 };
 
@@ -155,6 +155,7 @@ struct FileRows<'a> {
     entries: &'a [Entry],
     style: TextStyle,
     zone: jiff::tz::TimeZone,
+    thumbnails: Option<&'a HashMap<PathBuf, String>>,
 }
 
 impl ListSource for FileRows<'_> {
@@ -176,6 +177,25 @@ impl ListSource for FileRows<'_> {
     }
     fn build(&self, index: usize, key: &Key) -> Node {
         let entry = &self.entries[index];
+        if let Some(thumbnails) = self.thumbnails {
+            let icon = match thumbnails.get(&entry.path) {
+                Some(id) => Image::new(format!("{}/image", key.0), id, 80.).picture(),
+                None => Image::new(format!("{}/image", key.0), &entry.icon, 64.)
+                    .app_theme(if entry.is_dir { "nd-folder" } else { "nd-file" }),
+            };
+            return Column::new(
+                format!("{}/tile", key.0),
+                vec![
+                    icon.into(),
+                    Label::new(format!("{}/name", key.0), &entry.name, self.style.clone())
+                        .lines(1)
+                        .into(),
+                ],
+            )
+            .align(Align::Center)
+            .gap(Space::S1)
+            .into();
+        }
         let date = entry
             .modified
             .and_then(|time| jiff::Timestamp::try_from(time).ok())
@@ -242,6 +262,7 @@ pub struct FileList<'a> {
     cursor: Option<usize>,
     multiple: Option<crate::components::MultipleSelection>,
     row_height: f64,
+    columns: usize,
     height: f64,
     viewport: Option<(f64, f64)>,
 }
@@ -265,13 +286,28 @@ impl<'a> FileList<'a> {
                 entries,
                 style,
                 zone: jiff::tz::TimeZone::system(),
+                thumbnails: None,
             },
             cursor: None,
             multiple: None,
             row_height,
+            columns: 1,
             height: 8. * row_height,
             viewport: None,
         }
+    }
+    /// Use the same retained selection and scroll model in a grid. Images are
+    /// identifiers from `AppWindow::set_pictures`, indexed by the original path.
+    pub fn grid(
+        mut self,
+        columns: usize,
+        tile_height: f64,
+        thumbnails: &'a HashMap<PathBuf, String>,
+    ) -> Self {
+        self.columns = columns.max(1);
+        self.row_height = tile_height;
+        self.rows.thumbnails = Some(thumbnails);
+        self
     }
     pub fn cursor(mut self, index: Option<usize>) -> Self {
         self.cursor = index;
@@ -314,6 +350,7 @@ impl From<FileList<'_>> for Node {
             list.row_height,
         )
         .selected(list.cursor)
+        .columns(list.columns)
         .height(list.height)
         .window(list.viewport.or(Some((0., list.height))))
         .activate(list.open);

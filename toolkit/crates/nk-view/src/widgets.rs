@@ -239,6 +239,13 @@ impl Image {
     pub fn new(key: impl Into<Key>, name: impl Into<String>, size: f64) -> Self {
         Self(Node::icon(key, name, size))
     }
+    /// A raster previously supplied to the window under this identifier.
+    pub fn picture(mut self) -> Self {
+        if let Kind::Icon(icon) = &mut self.0.kind {
+            icon.picture = true;
+        }
+        self
+    }
     /// Use the application icon theme, with a Nidara interface glyph as the fallback.
     pub fn app_theme(mut self, fallback: impl Into<String>) -> Self {
         if let Kind::Icon(icon) = &mut self.0.kind {
@@ -817,6 +824,10 @@ impl<'a, S: ListSource + ?Sized> ListView<'a, S> {
             anchor,
             changed: changed.into(),
         });
+        self
+    }
+    pub fn columns(mut self, count: usize) -> Self {
+        self.list.columns = count.max(1);
         self
     }
     /// The currently selected row, or none when a filter hides it.

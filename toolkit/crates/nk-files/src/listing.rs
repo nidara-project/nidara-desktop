@@ -38,6 +38,7 @@ pub struct Options {
     pub sort: Sort,
     pub descending: bool,
     pub show_hidden: bool,
+    pub directories_only: bool,
     pub filter: Option<Filter>,
 }
 impl Options {
@@ -196,6 +197,9 @@ fn read_entry(item: fs::DirEntry, options: &Options, mime: &MimeDb) -> Option<En
         metadata
     };
     let is_dir = metadata.is_dir();
+    if options.directories_only && !is_dir {
+        return None;
+    }
     let kind = if is_dir {
         "inode/directory"
     } else {

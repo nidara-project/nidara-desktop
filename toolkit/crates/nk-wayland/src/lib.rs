@@ -1217,7 +1217,7 @@ pub fn capabilities<'a>(globals: impl IntoIterator<Item = &'a str>) -> Result<Ca
     })
 }
 pub fn run(app: impl Application, options: Options, start: Instant) -> Result<()> {
-    run_inner(app, options, start, None, None, None).map(|_| ())
+    run_inner(app, options, start, None, None, None, None).map(|_| ())
 }
 /// A layer-shell root (SHELL-SURFACES.md §1) on its own connection: the one
 /// `OutputWatch::bind_output` made when `layer.output` is set, else a new one. `options.size`
@@ -1235,7 +1235,7 @@ pub fn run_layer(
     if layer.namespace.is_empty() || layer.namespace.contains('\0') {
         return Err("layer namespace must be nonempty text".into());
     }
-    run_inner(app, options, start, None, None, Some((layer, wake))).map(|_| ())
+    run_inner(app, options, start, None, None, Some((layer, wake)), None).map(|_| ())
 }
 /// A modal xdg toplevel on the SAME connection; set_parent cannot name a
 /// surface from another connection. The parent event queue resumes on close.
@@ -1263,10 +1263,40 @@ pub fn run_dialog_with_options(
         return Err("dialog needs a nonempty size".into());
     }
     options.app_id = parent.app_id;
-    let last_serial = run_inner(app, options, Instant::now(), Some(parent), None, None)?;
+    let last_serial = run_inner(app, options, Instant::now(), Some(parent), None, None, None)?;
     parent.ignore_input_before = Some(last_serial);
     parent.keyboard.reset();
     Ok(())
+}
+
+/// Open a portal dialog on its own connection. A supplied parent must be a valid
+/// Wayland export; the dialog is closed if that export is revoked.
+pub fn run_foreign_dialog(
+    app: impl Application,
+    options: Options,
+    parent_window: &str,
+    modal: bool,
+) -> Result<()> {
+    let handle = if parent_window.is_empty() {
+        None
+    } else {
+        Some(
+            parent_window
+                .strip_prefix("wayland:")
+                .filter(|handle| !handle.is_empty() && !handle.contains('\0'))
+                .ok_or("invalid Wayland portal parent")?,
+        )
+    };
+    run_inner(
+        app,
+        options,
+        Instant::now(),
+        None,
+        None,
+        None,
+        Some((handle, modal)),
+    )
+    .map(|_| ())
 }
 
 fn run_inner(
@@ -1276,6 +1306,7 @@ fn run_inner(
     mut parent: Option<&mut Window>,
     popup_options: Option<(PopupPlacement, Option<u32>)>,
     layer: Option<(LayerSpec, Option<WakeSource>)>,
+    foreign_dialog: Option<(Option<&str>, bool)>,
 ) -> Result<u32> {
     let own = layer
         .as_ref()
@@ -1504,6 +1535,19 @@ fn run_inner(
             // A dialog derives its minimum from its content, not the ordinary
             // application window's historical 400x300 floor.
             top.set_parent(parent.toplevel.as_ref());
+        }
+        if let Some((Some(handle), _)) = foreign_dialog {
+            let importer = bind!(
+                wayland_protocols::xdg::foreign::zv2::client::zxdg_importer_v2::ZxdgImporterV2,
+                1
+            )
+            .ok_or("portal parent requires xdg-foreign-v2 import support")?;
+            let imported = importer.import_toplevel(handle.to_owned(), &qh, ());
+            imported.set_parent_of(&surface);
+            w.foreign.imported = Some(imported);
+            importer.destroy();
+        }
+        if parent.is_some() || foreign_dialog.is_some_and(|(_, modal)| modal) {
             let manager =
                 bind!(modal::XdgWmDialogV1, 1).ok_or("modal dialog requires xdg_wm_dialog_v1")?;
             let hint = manager.get_xdg_dialog(&top, &qh, ());
@@ -1536,6 +1580,13 @@ fn run_inner(
     }
     if let (Some(m), Some(s)) = (&w.data_manager, &w.seat) {
         w.data = Some(m.get_data_device(s, &qh, ()));
+    }
+    if w.foreign.imported.is_some() {
+        // Resolve invalid handles before mapping. Normal dialogue updates never roundtrip.
+        queue.borrow_mut().roundtrip(&mut w).map_err(err)?;
+        if w.closed {
+            return Err("the requesting window could not be imported".into());
+        }
     }
     if options.map {
         w.surface.as_ref().unwrap().commit();

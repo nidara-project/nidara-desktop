@@ -2296,27 +2296,32 @@ impl ViewState {
                     }
                 }
                 What::Icon(icon) => {
-                    let name = if let Some(fallback) = &icon.app_fallback {
-                        if let Some(art) = app_icons
-                            .as_deref_mut()
-                            .and_then(|glyphs| glyphs.app_icon(&icon.name, icon.size))
-                        {
-                            canvas.clip(rect(&visible));
-                            let alpha = p.alpha * icon.alpha;
-                            if alpha < 1. {
-                                canvas.push_opacity(alpha);
-                            }
-                            canvas.image(&art, rect(&p.rect), nk_render::ImageFit::Contain);
-                            if alpha < 1. {
-                                canvas.pop_opacity();
-                            }
-                            canvas.pop_clip();
-                            continue;
+                    let art = app_icons.as_deref_mut().and_then(|glyphs| {
+                        if icon.picture {
+                            glyphs.picture(&icon.name)
+                        } else if icon.app_fallback.is_some() {
+                            glyphs.app_icon(&icon.name, icon.size)
+                        } else {
+                            None
                         }
-                        fallback
-                    } else {
-                        &icon.name
-                    };
+                    });
+                    if let Some(art) = art {
+                        canvas.clip(rect(&visible));
+                        let alpha = p.alpha * icon.alpha;
+                        if alpha < 1. {
+                            canvas.push_opacity(alpha);
+                        }
+                        canvas.image(&art, rect(&p.rect), nk_render::ImageFit::Contain);
+                        if alpha < 1. {
+                            canvas.pop_opacity();
+                        }
+                        canvas.pop_clip();
+                        continue;
+                    }
+                    if icon.picture {
+                        continue;
+                    }
+                    let name = icon.app_fallback.as_deref().unwrap_or(&icon.name);
                     if let Some(glyph) = icons(name, icon.size) {
                         canvas.clip(rect(&visible));
                         let c = self

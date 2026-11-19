@@ -2,7 +2,9 @@
 //! Standard xdg-foreign-v2 identifier for an out-of-process portal dialog.
 use crate::{Result, Window};
 use wayland_client::{Dispatch, Proxy, delegate_noop};
-use wayland_protocols::xdg::foreign::zv2::client::{zxdg_exported_v2, zxdg_exporter_v2};
+use wayland_protocols::xdg::foreign::zv2::client::{
+    zxdg_exported_v2, zxdg_exporter_v2, zxdg_imported_v2, zxdg_importer_v2,
+};
 /// Only Unsupported permits a caller to use an empty portal parent_window.
 #[derive(Debug, PartialEq, Eq)]
 pub enum ForeignParent<'a> {
@@ -38,11 +40,15 @@ impl Handle {
 #[derive(Default)]
 pub(crate) struct Foreign {
     pub(crate) exporter: Option<zxdg_exporter_v2::ZxdgExporterV2>,
+    pub(crate) imported: Option<zxdg_imported_v2::ZxdgImportedV2>,
     exported: Option<zxdg_exported_v2::ZxdgExportedV2>,
     handle: Handle,
 }
 impl Foreign {
     pub(crate) fn destroy(&mut self) {
+        if let Some(imported) = self.imported.take() {
+            imported.destroy();
+        }
         if let Some(exported) = self.exported.take() {
             exported.destroy();
         }
@@ -97,6 +103,23 @@ impl Dispatch<zxdg_exported_v2::ZxdgExportedV2, ()> for Window {
     }
 }
 delegate_noop!(Window: ignore zxdg_exporter_v2::ZxdgExporterV2);
+delegate_noop!(Window: ignore zxdg_importer_v2::ZxdgImporterV2);
+impl Dispatch<zxdg_imported_v2::ZxdgImportedV2, ()> for Window {
+    fn event(
+        state: &mut Self,
+        proxy: &zxdg_imported_v2::ZxdgImportedV2,
+        event: zxdg_imported_v2::Event,
+        _: &(),
+        _: &wayland_client::Connection,
+        _: &wayland_client::QueueHandle<Self>,
+    ) {
+        if matches!(event, zxdg_imported_v2::Event::Destroyed)
+            && state.foreign.imported.as_ref() == Some(proxy)
+        {
+            state.close();
+        }
+    }
+}
 #[cfg(test)]
 mod tests {
     use super::*;

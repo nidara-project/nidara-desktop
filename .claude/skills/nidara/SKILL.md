@@ -423,13 +423,21 @@ A window's sidebar is built of `nk::SidebarEntry` (§13.8): the selected one in 
 `nk::ListBox` is the short single-selection list inside a `Group`: Up/Down move focus,
 Enter/Space choose a row and report its index, and the caller supplies the selected index.
 Settings' Power profiles use this control and the exported selected-row tint.
-`nk::files` (#1148) is the read-only file model shared by the chooser and file manager.
+`nk::files` (#1148) is the file model shared by the chooser and file manager. File browsing
+is read-only. Thumbnail generation is confined to the freedesktop cache.
 Poll `Listing` for sorted batches and keep selection by path when the snapshot changes.
 `nk::PlacesSidebar`, `nk::PathBar`, and virtualized `nk::FileList` report snapshot indices;
 in multiple mode click replaces the selection, Ctrl+click and Space toggle, Shift+click
 extends from the anchor, and Ctrl+A selects all. Keep the cursor and anchor by path.
 File type icons use the application theme; places use the `nd-` interface spec.
 The date column currently uses a local calendar date in ISO order.
+`nidara-file-chooser` hosts the OpenFile portal in a separate process. Hyalo exports and
+imports xdg-foreign-v2 windows. `run_foreign_dialog` rejects a supplied parent that cannot
+be imported and closes when the export is revoked. The pinned Smithay revision clears
+parentage without sending the revocation event, so Hyalo closes its chooser on parent loss.
+FileList's icon grid shares list selection.
+The worker reads fresh thumbnails or writes ordinary freedesktop PNGs atomically with the
+canonical URI and mtime. GTK handles saves and X11 parents until there is a native path for them.
 `nk::FontButton` previews the current face with its explicit pt/px unit. `nk::FontDialog`
 uses the parent text backend's own catalogue and loads faces only for the selected family.
 Monospace filtering checks one default face per family. Choose returns the draft; the size field

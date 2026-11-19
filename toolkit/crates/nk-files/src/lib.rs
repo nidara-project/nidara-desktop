@@ -1,12 +1,14 @@
 // SPDX-License-Identifier: LGPL-3.0-or-later
-//! Read-only desktop file model shared by choosers and the file manager.
+//! Shared file browsing and freedesktop thumbnail caching.
 mod listing;
 mod mime;
 mod places;
+mod thumbnails;
 
 pub use listing::{Entry, Listing, Options, Sort};
 pub use mime::{Filter, MimeDb};
-pub use places::{Location, Place, PlaceKind, Recent, Sources};
+pub use places::{Location, Place, PlaceKind, Recent, Sources, file_uri};
+pub use thumbnails::Preview;
 
 #[cfg(test)]
 #[test]

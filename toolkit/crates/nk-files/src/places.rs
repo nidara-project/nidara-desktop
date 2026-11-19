@@ -259,7 +259,7 @@ fn mount_path(mut bytes: &[u8]) -> PathBuf {
 
 /// Canonical URI used by GTK thumbnail producers. Encode Linux path bytes
 /// directly, retaining the URI path characters those producers leave unescaped.
-fn file_uri(path: &Path) -> Option<String> {
+pub fn file_uri(path: &Path) -> Option<String> {
     if !path.is_absolute() {
         return None;
     }

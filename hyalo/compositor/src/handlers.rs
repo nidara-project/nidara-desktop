@@ -351,6 +351,12 @@ impl DmabufHandler for Hyalo {
     }
 }
 
+impl smithay::wayland::xdg_foreign::XdgForeignHandler for Hyalo {
+    fn xdg_foreign_state(&mut self) -> &mut smithay::wayland::xdg_foreign::XdgForeignState {
+        &mut self.xdg_foreign
+    }
+}
+
 smithay::delegate_dispatch2!(Hyalo);
 
 // ── Input methods (text-input-v3 + input-method-v2) ──────────────────────────────────────────

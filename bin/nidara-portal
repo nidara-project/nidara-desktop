@@ -1,6 +1,6 @@
 #!/usr/lib/nidara/nidara-portal
 // ─────────────────────────────────────────────────────────────────────────────
-// nidara-portal — Nidara's xdg-desktop-portal Settings, Wallpaper & Access backend
+// nidara-portal — Nidara's xdg-desktop-portal Settings, Wallpaper, Access & FileChooser backend
 // Installed to /usr/bin/nidara-portal, D-Bus-activated as
 // org.freedesktop.impl.portal.desktop.nidara (see the .portal + .service
 // files installed by install.sh).
@@ -167,6 +167,24 @@ const REQUEST_IFACE_XML = `
 <node>
   <interface name="org.freedesktop.impl.portal.Request">
     <method name="Close"/>
+  </interface>
+</node>`
+
+const FILE_CHOOSER = "org.freedesktop.impl.portal.FileChooser"
+const GTK_PORTAL = "org.freedesktop.impl.portal.desktop.gtk"
+const FILE_CHOOSER_IFACE_XML = `
+<node>
+  <interface name="${FILE_CHOOSER}">
+    ${["OpenFile", "SaveFile", "SaveFiles"].map(method => `
+    <method name="${method}">
+      <arg type="o" name="handle" direction="in"/>
+      <arg type="s" name="app_id" direction="in"/>
+      <arg type="s" name="parent_window" direction="in"/>
+      <arg type="s" name="title" direction="in"/>
+      <arg type="a{sv}" name="options" direction="in"/>
+      <arg type="u" name="response" direction="out"/>
+      <arg type="a{sv}" name="results" direction="out"/>
+    </method>`).join("")}
   </interface>
 </node>`
 
@@ -510,6 +528,132 @@ class SettingsBackend {
     }
 }
 
+// FileChooser is routed as a whole. Keep GTK for saves until Nidara's Save
+// implementation lands, and for parents from XWayland.
+class FileChooserBackend {
+    OpenFileAsync(_params, invocation) { this.run("OpenFile", invocation) }
+    SaveFileAsync(_params, invocation) { this.run("SaveFile", invocation) }
+    SaveFilesAsync(_params, invocation) { this.run("SaveFiles", invocation) }
+
+    run(method, invocation) {
+        const bus = invocation.get_connection()
+        const sender = invocation.get_sender()
+        const params = invocation.get_parameters()
+        const handle = params.get_child_value(0).deep_unpack()
+        const parent = params.get_child_value(2).deep_unpack()
+        const delegate = method !== "OpenFile" || parent.startsWith("x11:")
+        let request = null
+        let watch = 0
+        let child = null
+        let forwarded = false
+        let finished = false
+
+        const reply = (value) => {
+            if (finished) return
+            finished = true
+            if (watch) bus.signal_unsubscribe(watch)
+            if (request) request.unexport()
+            invocation.return_value(value)
+        }
+        const finish = (code, results = {}) => reply(new GLib.Variant("(ua{sv})", [code, results]))
+        const cancel = () => {
+            if (finished) return
+            if (child) child.force_exit()
+            if (forwarded) {
+                bus.call(GTK_PORTAL, handle, "org.freedesktop.impl.portal.Request", "Close",
+                    null, null, Gio.DBusCallFlags.NONE, 5000, null, () => {})
+            }
+            finish(1)
+        }
+
+        try {
+            const [frontend] = bus.call_sync("org.freedesktop.DBus", "/org/freedesktop/DBus",
+                "org.freedesktop.DBus", "GetNameOwner",
+                new GLib.Variant("(s)", ["org.freedesktop.portal.Desktop"]),
+                new GLib.VariantType("(s)"), Gio.DBusCallFlags.NONE, 1000, null).deep_unpack()
+            if (sender !== frontend) {
+                invocation.return_dbus_error("org.freedesktop.DBus.Error.AccessDenied", "Only the desktop portal can open this chooser")
+                return
+            }
+
+            request = Gio.DBusExportedObject.wrapJSObject(REQUEST_IFACE_XML, {
+                CloseAsync(_args, close) {
+                    if (close.get_sender() !== sender) {
+                        close.return_dbus_error("org.freedesktop.DBus.Error.AccessDenied", "Request belongs to a different sender")
+                        return
+                    }
+                    close.return_value(null)
+                    cancel()
+                },
+            })
+            request.export(bus, handle)
+            watch = bus.signal_subscribe("org.freedesktop.DBus", "org.freedesktop.DBus",
+                "NameOwnerChanged", "/org/freedesktop/DBus", sender, Gio.DBusSignalFlags.NONE,
+                (_bus, _sender, _path, _interface, _signal, value) => {
+                    if (value.deep_unpack()[2] === "") cancel()
+                })
+
+            if (delegate) {
+                forwarded = true
+                bus.call(GTK_PORTAL, OBJECT_PATH, FILE_CHOOSER, method, params,
+                    new GLib.VariantType("(ua{sv})"), Gio.DBusCallFlags.NONE, GLib.MAXINT32, null,
+                    (connection, result) => {
+                        if (finished) return
+                        try { reply(connection.call_finish(result)) }
+                        catch (e) {
+                            printerr(`[nidara-portal] GTK FileChooser failed: ${e}`)
+                            finish(2)
+                        }
+                    })
+                return
+            }
+
+            const options = params.get_child_value(4)
+            const get = (key, sig, fallback) =>
+                options.lookup_value(key, new GLib.VariantType(sig))?.deep_unpack() ?? fallback
+            const input = JSON.stringify({
+                parent_window: parent,
+                title: params.get_child_value(3).deep_unpack(),
+                accept_label: get("accept_label", "s", ""),
+                modal: get("modal", "b", true),
+                directory: get("directory", "b", false),
+                multiple: get("multiple", "b", false),
+                filters: get("filters", "a(sa(us))", []),
+                current_filter: get("current_filter", "(sa(us))", null),
+                current_folder: Array.from(get("current_folder", "ay", [])),
+            })
+            child = Gio.Subprocess.new(["/usr/lib/nidara/nidara-file-chooser"],
+                Gio.SubprocessFlags.STDIN_PIPE | Gio.SubprocessFlags.STDOUT_PIPE)
+            child.communicate_utf8_async(input, null, (process, result) => {
+                if (finished) return
+                try {
+                    const [, stdout] = process.communicate_utf8_finish(result)
+                    if (!process.get_successful()) throw new Error("chooser exited unsuccessfully")
+                    const selection = JSON.parse(stdout)
+                    if (selection === null) {
+                        finish(1)
+                        return
+                    }
+                    if (!Array.isArray(selection.uris) || !selection.uris.length ||
+                        !selection.uris.every(uri => typeof uri === "string" && uri.startsWith("file:///")))
+                        throw new Error("invalid chooser response")
+                    const results = { uris: new GLib.Variant("as", selection.uris) }
+                    if (selection.current_filter !== null)
+                        results.current_filter = new GLib.Variant("(sa(us))", selection.current_filter)
+                    finish(0, results)
+                } catch (e) {
+                    printerr(`[nidara-portal] OpenFile failed: ${e}`)
+                    finish(2)
+                }
+            })
+        } catch (e) {
+            if (child) child.force_exit()
+            printerr(`[nidara-portal] FileChooser request failed: ${e}`)
+            finish(2)
+        }
+    }
+}
+
 // ── Access Backend ───────────────────────────────────────────────────────────
 class AccessBackend {
     AccessDialogAsync(params, invocation) {
@@ -723,6 +867,7 @@ class BackgroundBackend {
 const loop = new GLib.MainLoop(null, false)
 const settingsBackend = new SettingsBackend()
 const accessBackend = new AccessBackend()
+const fileChooserBackend = new FileChooserBackend()
 const wallpaperBackend = new WallpaperBackend()
 const dynamicLauncherBackend = new DynamicLauncherBackend()
 const accountBackend = new AccountBackend()
@@ -730,6 +875,7 @@ const backgroundBackend = new BackgroundBackend()
 
 const exportedSettings = Gio.DBusExportedObject.wrapJSObject(SETTINGS_IFACE_XML, settingsBackend)
 const exportedAccess = Gio.DBusExportedObject.wrapJSObject(ACCESS_IFACE_XML, accessBackend)
+const exportedFileChooser = Gio.DBusExportedObject.wrapJSObject(FILE_CHOOSER_IFACE_XML, fileChooserBackend)
 const exportedWallpaper = Gio.DBusExportedObject.wrapJSObject(WALLPAPER_IFACE_XML, wallpaperBackend)
 const exportedDynamicLauncher = Gio.DBusExportedObject.wrapJSObject(DYNAMIC_LAUNCHER_IFACE_XML, dynamicLauncherBackend)
 const exportedAccount = Gio.DBusExportedObject.wrapJSObject(ACCOUNT_IFACE_XML, accountBackend)
@@ -742,6 +888,7 @@ Gio.bus_own_name(
     (connection) => {
         exportedSettings.export(connection, OBJECT_PATH)
         exportedAccess.export(connection, OBJECT_PATH)
+        exportedFileChooser.export(connection, OBJECT_PATH)
         exportedWallpaper.export(connection, OBJECT_PATH)
         exportedDynamicLauncher.export(connection, OBJECT_PATH)
         exportedAccount.export(connection, OBJECT_PATH)
@@ -803,7 +950,7 @@ Gio.bus_own_name(
             })
         }
 
-        print(`[nidara-portal] serving Settings + Wallpaper + Access (+ unrouted DynamicLauncher, Account, Background) on ${BUS_NAME}`)
+        print(`[nidara-portal] serving Settings + Wallpaper + Access + FileChooser (+ unrouted DynamicLauncher, Account, Background) on ${BUS_NAME}`)
     },
     null,
     () => {

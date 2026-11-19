@@ -343,11 +343,19 @@ impl AppWindow {
     pub fn look(&self) -> &WindowLook {
         &self.look
     }
-    /// A new appearance from the portal.
+    /// Replace the images resolved by picture identifiers in the current page.
+    pub fn set_pictures(
+        &mut self,
+        pictures: std::collections::HashMap<String, std::sync::Arc<nk_render::Raster>>,
+    ) {
+        self.glyphs.set_pictures(pictures);
+        self.paint_dirty = true;
+    }
     pub fn set_app_icon_theme(&mut self, theme: &str) {
         self.glyphs.set_app_icon_theme(theme);
         self.paint_dirty = true;
     }
+    /// A new appearance from the portal.
     pub fn set_look(&mut self, look: WindowLook, reduced: bool) {
         self.look = look;
         self.reduced = reduced;
@@ -661,6 +669,23 @@ impl AppWindow {
         Ok(out)
     }
 
+    /// Offer Enter to the focused control before trying a dialog's default response.
+    /// An open popup still owns its keyboard input through `event`.
+    pub fn dialog_enter(&mut self, key: &nk_wayland::Key) -> Option<(bool, Vec<Activated>)> {
+        if self.menu.is_some() {
+            return None;
+        }
+        self.grab = key.serial;
+        self.keys = true;
+        let (handled, activation) = self.state.enter();
+        let mut out = Vec::new();
+        if let Some(activation) = activation {
+            self.route(activation, &mut out);
+        }
+        self.changed = true;
+        self.paint_dirty = true;
+        Some((handled, out))
+    }
     /// An event for the window. What it does not take (a key no control wants) comes back as
     /// `false`, for the app's own shortcuts; activations come back for the app to act on.
     pub fn event(&mut self, event: Event, window: &mut Window) -> Result<(bool, Vec<Activated>)> {
