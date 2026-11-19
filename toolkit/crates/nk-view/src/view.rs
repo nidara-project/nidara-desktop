@@ -231,6 +231,8 @@ impl Padding {
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub struct Stack {
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub equal: bool,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub list_name: Option<String>,
     pub axis: Axis,
@@ -321,6 +323,8 @@ pub struct Icon {
     pub name: String,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub app_fallback: Option<String>,
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub picture: bool,
     pub size: f64,
     pub ink: Ink,
     /// Its ink's opacity on top of the ink's own (a slider's flanking glyphs).
@@ -544,10 +548,18 @@ impl Node {
     pub(crate) fn column(key: impl Into<Key>, children: Vec<Node>) -> Self {
         Self::stack(key, Axis::Vertical, children)
     }
+    pub(crate) fn equal_row(key: impl Into<Key>, children: Vec<Node>) -> Self {
+        let mut row = Self::row(key, children);
+        if let Kind::Stack(stack) = &mut row.kind {
+            stack.equal = true;
+        }
+        row
+    }
     fn stack(key: impl Into<Key>, axis: Axis, children: Vec<Node>) -> Self {
         Self::new(
             key,
             Kind::Stack(Stack {
+                equal: false,
                 list_name: None,
                 axis,
                 gap: None,
@@ -597,6 +609,7 @@ impl Node {
             Kind::Icon(Icon {
                 name: name.into(),
                 app_fallback: None,
+                picture: false,
                 size,
                 ink: Ink::Primary,
                 alpha: 1.,

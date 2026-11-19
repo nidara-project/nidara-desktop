@@ -92,6 +92,7 @@ pub struct Glyphs {
 struct GlyphCache {
     icons: nk_icons::Icons,
     cache: HashMap<(String, u32), Option<Arc<nk_icons::Icon>>>,
+    pictures: HashMap<String, Arc<nk_render::Raster>>,
     app_theme: String,
     app_cache: HashMap<(String, u32), Option<Arc<nk_render::Raster>>>,
 }
@@ -101,10 +102,17 @@ impl Glyphs {
             inner: std::rc::Rc::new(std::cell::RefCell::new(GlyphCache {
                 icons,
                 cache: HashMap::new(),
+                pictures: HashMap::new(),
                 app_theme: "hicolor".into(),
                 app_cache: HashMap::new(),
             })),
         }
+    }
+    pub(crate) fn set_pictures(&mut self, pictures: HashMap<String, Arc<nk_render::Raster>>) {
+        self.inner.borrow_mut().pictures = pictures;
+    }
+    pub(crate) fn picture(&self, name: &str) -> Option<Arc<nk_render::Raster>> {
+        self.inner.borrow().pictures.get(name).cloned()
     }
     pub fn set_app_icon_theme(&mut self, theme: &str) {
         let mut cache = self.inner.borrow_mut();

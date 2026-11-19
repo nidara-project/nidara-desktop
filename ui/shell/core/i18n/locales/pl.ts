@@ -1,4 +1,26 @@
 export default {
+
+    // Native file chooser.
+    "fileChooser.open": "Otwórz",
+    "fileChooser.files": "Pliki",
+    "fileChooser.location": "Położenie",
+    "fileChooser.view": "Widok",
+    "fileChooser.list": "Lista",
+    "fileChooser.icons": "Ikony",
+    "fileChooser.hidden": "Pokaż ukryte pliki",
+    "fileChooser.fileType": "Typ pliku",
+    "fileChooser.loading": "Wczytywanie…",
+    "fileChooser.empty": "Katalog jest pusty",
+    "fileChooser.folderOnly": "Wybierz katalog.",
+    "fileChooser.invalidLocation": "Wpisz ścieżkę bezwzględną lub ścieżkę zaczynającą się od ~/.",
+    "fileChooser.unreadableLocation": "Nie można odczytać tego położenia.",
+    "fileChooser.home": "Katalog domowy",
+    "fileChooser.places": "Miejsca",
+    "fileChooser.bookmarks": "Zakładki",
+    "fileChooser.drives": "Dyski",
+    "fileChooser.showPlaces": "Pokaż miejsca",
+    "fileChooser.hidePlaces": "Ukryj miejsca",
+
     // Native session energy notifications.
     "power1.alert.low": "Niski poziom baterii",
     "power1.alert.critical": "Krytycznie niski poziom baterii",

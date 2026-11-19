@@ -191,7 +191,11 @@ the compositor's opaque handle prefixed with wayland:. Empty handles are errors,
 popups are refused, and repeated polls retain one export until Window destruction.
 The export is destroyed before the surface role. No blocking roundtrip or own host.
 Format reference: https://flatpak.github.io/xdg-desktop-portal/docs/window-identifiers.html
-Unit tests cover capability/state logic; native export/portal-parenting is untested.
+`run_foreign_dialog` imports a supplied `wayland:` parent before mapping, adds the
+xdg-dialog modal hint when requested and closes on export revocation. Hyalo enables the
+Smithay xdg-foreign-v2 globals and closes its chooser when the pinned Smithay revision
+clears parentage without a revocation event. An unavailable or invalid parent is logged
+and opens an independent window. An empty parent requests that behavior directly.
 
 ## Activation tokens
 

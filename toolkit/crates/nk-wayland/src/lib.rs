@@ -1217,7 +1217,7 @@ pub fn capabilities<'a>(globals: impl IntoIterator<Item = &'a str>) -> Result<Ca
     })
 }
 pub fn run(app: impl Application, options: Options, start: Instant) -> Result<()> {
-    run_inner(app, options, start, None, None, None).map(|_| ())
+    run_inner(app, options, start, None, None, None, None).map(|_| ())
 }
 /// A layer-shell root (SHELL-SURFACES.md §1) on its own connection: the one
 /// `OutputWatch::bind_output` made when `layer.output` is set, else a new one. `options.size`
@@ -1235,7 +1235,7 @@ pub fn run_layer(
     if layer.namespace.is_empty() || layer.namespace.contains('\0') {
         return Err("layer namespace must be nonempty text".into());
     }
-    run_inner(app, options, start, None, None, Some((layer, wake))).map(|_| ())
+    run_inner(app, options, start, None, None, Some((layer, wake)), None).map(|_| ())
 }
 /// A modal xdg toplevel on the SAME connection; set_parent cannot name a
 /// surface from another connection. The parent event queue resumes on close.
@@ -1263,10 +1263,36 @@ pub fn run_dialog_with_options(
         return Err("dialog needs a nonempty size".into());
     }
     options.app_id = parent.app_id;
-    let last_serial = run_inner(app, options, Instant::now(), Some(parent), None, None)?;
+    let last_serial = run_inner(app, options, Instant::now(), Some(parent), None, None, None)?;
     parent.ignore_input_before = Some(last_serial);
     parent.keyboard.reset();
     Ok(())
+}
+
+/// Open a portal dialog on its own connection. An unavailable parent falls back
+/// to an independent window. Revocation after mapping closes the dialog.
+pub fn run_foreign_dialog(
+    app: impl Application,
+    options: Options,
+    parent_window: &str,
+    modal: bool,
+) -> Result<()> {
+    let handle = parent_window
+        .strip_prefix("wayland:")
+        .filter(|handle| !handle.is_empty() && !handle.contains('\0'));
+    if !parent_window.is_empty() && handle.is_none() {
+        eprintln!("nk-wayland: invalid portal parent identifier; opening without a parent");
+    }
+    run_inner(
+        app,
+        options,
+        Instant::now(),
+        None,
+        None,
+        None,
+        Some((handle, modal)),
+    )
+    .map(|_| ())
 }
 
 fn run_inner(
@@ -1276,6 +1302,7 @@ fn run_inner(
     mut parent: Option<&mut Window>,
     popup_options: Option<(PopupPlacement, Option<u32>)>,
     layer: Option<(LayerSpec, Option<WakeSource>)>,
+    foreign_dialog: Option<(Option<&str>, bool)>,
 ) -> Result<u32> {
     let own = layer
         .as_ref()
@@ -1504,6 +1531,34 @@ fn run_inner(
             // A dialog derives its minimum from its content, not the ordinary
             // application window's historical 400x300 floor.
             top.set_parent(parent.toplevel.as_ref());
+        }
+        if let Some((Some(handle), _)) = foreign_dialog {
+            if let Some(importer) = bind!(
+                wayland_protocols::xdg::foreign::zv2::client::zxdg_importer_v2::ZxdgImporterV2,
+                1
+            ) {
+                // Wait for a possible invalid-handle event before trying to set parentage.
+                let imported = importer.import_toplevel(handle.to_owned(), &qh, ());
+                w.foreign.imported = Some(imported);
+                importer.destroy();
+                queue.borrow_mut().roundtrip(&mut w).map_err(err)?;
+                if w.foreign.import_revoked {
+                    if let Some(imported) = w.foreign.imported.take() {
+                        imported.destroy();
+                    }
+                    eprintln!(
+                        "nk-wayland: portal parent could not be imported; opening without a parent"
+                    );
+                } else if let Some(imported) = &w.foreign.imported {
+                    imported.set_parent_of(&surface);
+                }
+            } else {
+                eprintln!(
+                    "nk-wayland: compositor cannot import portal parents; opening without a parent"
+                );
+            }
+        }
+        if parent.is_some() || foreign_dialog.is_some_and(|(_, modal)| modal) {
             let manager =
                 bind!(modal::XdgWmDialogV1, 1).ok_or("modal dialog requires xdg_wm_dialog_v1")?;
             let hint = manager.get_xdg_dialog(&top, &qh, ());

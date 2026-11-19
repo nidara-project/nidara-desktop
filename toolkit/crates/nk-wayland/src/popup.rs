@@ -110,6 +110,7 @@ pub fn run_popup(
         Some(parent),
         Some((placement, grab_serial)),
         None,
+        None,
     )?;
     parent.ignore_input_before = Some(last_serial);
     parent.keyboard.reset();

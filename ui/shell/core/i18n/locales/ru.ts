@@ -1,4 +1,26 @@
 export default {
+
+    // Native file chooser.
+    "fileChooser.open": "Открыть",
+    "fileChooser.files": "Файлы",
+    "fileChooser.location": "Расположение",
+    "fileChooser.view": "Вид",
+    "fileChooser.list": "Список",
+    "fileChooser.icons": "Значки",
+    "fileChooser.hidden": "Показывать скрытые файлы",
+    "fileChooser.fileType": "Тип файла",
+    "fileChooser.loading": "Загрузка…",
+    "fileChooser.empty": "Папка пуста",
+    "fileChooser.folderOnly": "Выберите папку.",
+    "fileChooser.invalidLocation": "Введите абсолютный путь или путь, начинающийся с ~/.",
+    "fileChooser.unreadableLocation": "Не удалось прочитать это расположение.",
+    "fileChooser.home": "Домашняя папка",
+    "fileChooser.places": "Места",
+    "fileChooser.bookmarks": "Закладки",
+    "fileChooser.drives": "Диски",
+    "fileChooser.showPlaces": "Показать места",
+    "fileChooser.hidePlaces": "Скрыть места",
+
     // Native session energy notifications.
     "power1.alert.low": "Низкий заряд батареи",
     "power1.alert.critical": "Критически низкий заряд батареи",

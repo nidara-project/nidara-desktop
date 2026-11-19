@@ -56,6 +56,7 @@ pub struct Hyalo {
 
     pub compositor_state: CompositorState,
     pub xdg_shell_state: XdgShellState,
+    pub xdg_foreign: smithay::wayland::xdg_foreign::XdgForeignState,
     pub layer_shell_state: WlrLayerShellState,
     pub shm_state: ShmState,
     pub output_manager_state: OutputManagerState,
@@ -150,6 +151,7 @@ impl Hyalo {
 
         let compositor_state = CompositorState::new_v6::<Self>(&dh);
         let xdg_shell_state = XdgShellState::new::<Self>(&dh);
+        let xdg_foreign = smithay::wayland::xdg_foreign::XdgForeignState::new::<Self>(&dh);
         // The privileged globals are not advertised to a sandboxed client (sandbox.rs).
         let unrestricted = crate::sandbox::unrestricted;
         let layer_shell_state = WlrLayerShellState::new_with_filter::<Self, _>(&dh, unrestricted);
@@ -272,6 +274,7 @@ impl Hyalo {
             popups: PopupManager::default(),
             compositor_state,
             xdg_shell_state,
+            xdg_foreign,
             layer_shell_state,
             shm_state,
             output_manager_state,

@@ -588,22 +588,31 @@ impl Layouter<'_> {
                 let total: f64 = nat.iter().sum::<f64>() + gaps;
                 let give: f64 = nat.iter().zip(&min).map(|(n, m)| n - m).sum();
                 let deficit = (total - inner).max(0.);
-                let widths: Vec<f64> = nat
-                    .iter()
-                    .zip(&min)
-                    .map(|(n, m)| {
-                        if deficit > 0. && give > 0. {
-                            n - (n - m) * (deficit / give).min(1.)
-                        } else {
-                            *n
-                        }
-                    })
-                    .collect();
+                let widths: Vec<f64> = if s.equal && !s.children.is_empty() {
+                    vec![(inner - gaps).max(0.) / s.children.len() as f64; s.children.len()]
+                } else {
+                    nat.iter()
+                        .zip(&min)
+                        .map(|(n, m)| {
+                            if deficit > 0. && give > 0. {
+                                n - (n - m) * (deficit / give).min(1.)
+                            } else {
+                                *n
+                            }
+                        })
+                        .collect()
+                };
                 let children: Vec<Measure> = s
                     .children
                     .iter()
                     .zip(&widths)
-                    .map(|(c, w)| self.measure(c, *w))
+                    .map(|(c, w)| {
+                        let mut measure = self.measure(c, *w);
+                        if s.equal {
+                            measure.w = *w;
+                        }
+                        measure
+                    })
                     .collect();
                 let w = children.iter().map(|c| c.w).sum::<f64>() + gaps + pl + pr;
                 let (h, cross, first_line) = if s.align == Align::FirstLine {

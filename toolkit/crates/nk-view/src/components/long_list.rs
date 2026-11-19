@@ -26,6 +26,8 @@ pub struct LongList {
     pub count: usize,
     pub selected: Option<usize>,
     pub row_height: f64,
+    #[serde(default = "one")]
+    pub columns: usize,
     pub activate: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub multiple: Option<MultipleSelection>,
@@ -38,6 +40,10 @@ pub struct MultipleSelection {
     pub selected: BTreeSet<usize>,
     pub anchor: Option<usize>,
     pub changed: String,
+}
+
+fn one() -> usize {
+    1
 }
 
 enum Select {
@@ -118,6 +124,7 @@ impl LongList {
             count,
             selected: Some(selected),
             row_height,
+            columns: 1,
             activate: None,
             multiple: None,
             first: 0,
@@ -129,18 +136,30 @@ impl LongList {
         format!("{}/scroll", key.0).into()
     }
     pub fn range(&self, window: Option<(f64, f64)>) -> Range<usize> {
-        if self.count == 0 || !self.row_height.is_finite() || self.row_height <= 0. {
+        if self.count == 0
+            || self.columns == 0
+            || !self.row_height.is_finite()
+            || self.row_height <= 0.
+        {
             return 0..0;
         }
         let Some((offset, height)) =
             window.filter(|(o, h)| o.is_finite() && h.is_finite() && *h > 0.)
         else {
-            let start = self.current(None).unwrap_or_default();
-            return start..start + 1;
+            let start = self.current(None).unwrap_or_default() / self.columns * self.columns;
+            return start..start.saturating_add(self.columns).min(self.count);
         };
         let start = (offset.max(0.) / self.row_height).floor() as usize;
         let end = ((offset.max(0.) + height) / self.row_height).ceil() as usize;
-        start.saturating_sub(1).min(self.count)..end.saturating_add(1).min(self.count)
+        let first = start
+            .saturating_sub(1)
+            .saturating_mul(self.columns)
+            .min(self.count);
+        let last = end
+            .saturating_add(1)
+            .saturating_mul(self.columns)
+            .min(self.count);
+        first..last
     }
     /// Query metadata for visible rows (+ the selection), build only the requested range.
     pub(crate) fn node<S: ListSource + ?Sized>(
@@ -237,7 +256,12 @@ impl LongList {
         if let Some(read) = &cx.context {
             cx.effects.reveal = Some(RevealRect {
                 region: Self::scroll_key(read.key),
-                rect: [0., index as f64 * self.row_height, 0., self.row_height],
+                rect: [
+                    0.,
+                    (index / self.columns) as f64 * self.row_height,
+                    0.,
+                    self.row_height,
+                ],
             });
         }
         if before != Some(index) {
@@ -341,7 +365,8 @@ impl Component for LongList {
         Some(Box::<State>::default())
     }
     fn prepare(&self, _cx: &mut Prepare<'_>) -> Result<(), String> {
-        if !self.row_height.is_finite()
+        if self.columns == 0
+            || !self.row_height.is_finite()
             || self.row_height <= 0.
             || !(self.row_height * self.count as f64).is_finite()
         {
@@ -405,26 +430,42 @@ impl Component for LongList {
         let inset = cx.look.tokens.list.inset + cx.look.tokens.spacing.px(crate::Space::S2);
         let mut nodes = vec![Node::placeholder(
             cx.key("before"),
-            self.first as f64 * self.row_height,
+            (self.first / self.columns) as f64 * self.row_height,
         )];
-        for row in &self.rows {
-            let key = item_key(cx.key, &row.item.key);
-            nodes.push(
-                Node::row(
-                    key.clone(),
-                    vec![
-                        Node::row(format!("{}/leading", key.0), vec![]).width(inset),
-                        row.content.clone().grow(),
-                        Node::row(format!("{}/trailing", key.0), vec![]).width(inset),
-                    ],
-                )
-                .align(crate::Align::Center)
-                .height(self.row_height),
-            );
+        for band in self.rows.chunks(self.columns) {
+            let mut cells = Vec::with_capacity(self.columns);
+            for row in band {
+                let key = item_key(cx.key, &row.item.key);
+                cells.push(
+                    Node::row(
+                        key.clone(),
+                        vec![
+                            Node::row(format!("{}/leading", key.0), vec![]).width(inset),
+                            row.content.clone().grow(),
+                            Node::row(format!("{}/trailing", key.0), vec![]).width(inset),
+                        ],
+                    )
+                    .align(crate::Align::Center)
+                    .height(self.row_height)
+                    .grow(),
+                );
+            }
+            let band_key = cx.key(&format!("band/{}", band[0].index));
+            if self.columns == 1 {
+                nodes.push(cells.pop().expect("one cell"));
+            } else {
+                while cells.len() < self.columns {
+                    cells.push(
+                        Node::row(format!("{}/empty/{}", band_key.0, cells.len()), vec![]).grow(),
+                    );
+                }
+                nodes.push(Node::equal_row(band_key, cells));
+            }
         }
         nodes.push(Node::placeholder(
             cx.key("after"),
-            (self.count - self.built().end) as f64 * self.row_height,
+            (self.count.div_ceil(self.columns) - self.built().end.div_ceil(self.columns)) as f64
+                * self.row_height,
         ));
         Node::scroll(cx.key("scroll"), Node::column(cx.key("rows"), nodes))
             .presentational()
@@ -470,7 +511,7 @@ impl Component for LongList {
         if s.reveal
             && let Some(index) = selected
         {
-            let top = index as f64 * self.row_height;
+            let top = (index / self.columns) as f64 * self.row_height;
             wanted_offset = crate::layout::reveal_offset(offset, viewport[3], top, self.row_height);
             cx.effects.reveal = Some(RevealRect {
                 region: Self::scroll_key(read.key),
@@ -607,12 +648,17 @@ impl Component for LongList {
                 (r[3] / self.row_height).floor().max(1.) as usize
             });
         let index = match key {
-            Up => current.map_or(0, |i| i.saturating_sub(1)),
-            Down => current.map_or(0, |i| (i + 1).min(self.count - 1)),
+            Left if self.columns > 1 => current.map_or(0, |i| i.saturating_sub(1)),
+            Right if self.columns > 1 => current.map_or(0, |i| (i + 1).min(self.count - 1)),
+            Up => current.map_or(0, |i| i.saturating_sub(self.columns)),
+            Down => current.map_or(0, |i| i.saturating_add(self.columns).min(self.count - 1)),
             Home | LineStart => 0,
             End | LineEnd => self.count - 1,
-            PageUp => current.map_or(0, |i| i.saturating_sub(page)),
-            PageDown => current.map_or(0, |i| i.saturating_add(page).min(self.count - 1)),
+            PageUp => current.map_or(0, |i| i.saturating_sub(page.saturating_mul(self.columns))),
+            PageDown => current.map_or(0, |i| {
+                i.saturating_add(page.saturating_mul(self.columns))
+                    .min(self.count - 1)
+            }),
             Activate => {
                 cx.effects.handled = true;
                 if let (Some(action), Some(current)) = (&self.activate, current) {

@@ -1240,6 +1240,22 @@ name = "nidara-corner"
 version = "0.1.0"
 
 [[package]]
+name = "nidara-file-chooser"
+version = "0.1.0"
+dependencies = [
+ "gio",
+ "nidara-kit",
+ "nk-icons",
+ "nk-platform",
+ "nk-render",
+ "nk-text",
+ "nk-wayland",
+ "serde",
+ "serde_json",
+ "zbus",
+]
+
+[[package]]
 name = "nidara-kit"
 version = "0.1.0"
 dependencies = [
@@ -1293,7 +1309,10 @@ name = "nk-files"
 version = "0.1.0"
 dependencies = [
  "glob",
+ "image",
+ "libc",
  "md5",
+ "png 0.18.1",
  "roxmltree 0.21.1",
  "tempfile",
  "url",

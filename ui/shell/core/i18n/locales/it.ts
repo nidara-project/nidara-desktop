@@ -1,4 +1,26 @@
 export default {
+
+    // Native file chooser.
+    "fileChooser.open": "Apri",
+    "fileChooser.files": "File",
+    "fileChooser.location": "Posizione",
+    "fileChooser.view": "Vista",
+    "fileChooser.list": "Elenco",
+    "fileChooser.icons": "Icone",
+    "fileChooser.hidden": "Mostra file nascosti",
+    "fileChooser.fileType": "Tipo di file",
+    "fileChooser.loading": "Caricamento…",
+    "fileChooser.empty": "La cartella è vuota",
+    "fileChooser.folderOnly": "Seleziona una cartella.",
+    "fileChooser.invalidLocation": "Inserisci un percorso assoluto o un percorso che inizi con ~/.",
+    "fileChooser.unreadableLocation": "Impossibile leggere questa posizione.",
+    "fileChooser.home": "Cartella personale",
+    "fileChooser.places": "Posizioni",
+    "fileChooser.bookmarks": "Segnalibri",
+    "fileChooser.drives": "Unità",
+    "fileChooser.showPlaces": "Mostra posizioni",
+    "fileChooser.hidePlaces": "Nascondi posizioni",
+
     // Native session energy notifications.
     "power1.alert.low": "Batteria scarica",
     "power1.alert.critical": "Batteria quasi esaurita",
