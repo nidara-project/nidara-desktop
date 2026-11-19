@@ -631,5 +631,8 @@ fn grid_tiles_keep_their_width_and_a_header_stays_over_the_rows() {
     );
     let header = s.rect(&"title".into()).unwrap();
     let first = s.rect(&"list/item/record-0".into()).unwrap();
-    assert!(header[1] + header[3] <= first[1], "{header:?} over {first:?}");
+    assert!(
+        header[1] + header[3] <= first[1],
+        "{header:?} over {first:?}"
+    );
 }
