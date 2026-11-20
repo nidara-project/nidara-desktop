@@ -126,9 +126,10 @@ pub struct Closing {
     /// It was fullscreen: drawn over the shell's chrome, where it was.
     pub fullscreen: bool,
     pub motion: Motion,
-    /// What lay on its glass, as its own picture (its glass kept with it), and the memo its
-    /// glass forms with as it dissolves (render/forming.rs).
-    pub content: Option<crate::render::snapshot::Snapshot>,
+    /// What lay in front of each of its glasses, front to back, with that glass kept, and the
+    /// memo its glass forms with as it dissolves (render/forming.rs); `picture` is what lay
+    /// behind them all.
+    pub layers: Vec<(Option<crate::render::snapshot::Snapshot>, crate::render::GlassElement)>,
     pub memo: std::sync::Arc<smithay::utils::user_data::UserDataMap>,
 }
 
@@ -219,7 +220,7 @@ impl Hyalo {
             .get(&m.workspace)
             .and_then(|w| self.output_named(&w.output))
             .map_or(1.0, |o| o.current_scale().fractional_scale());
-        let (picture, content) = match crate::backend::snapshot_window_parts(self, &window, scale) {
+        let layers = match crate::backend::snapshot_window_layers(self, &window, scale) {
             Ok(p) => p,
             Err(err) => {
                 tracing::debug!(%err, id, "no picture of a closing window");
@@ -227,7 +228,10 @@ impl Hyalo {
             }
         };
         let motion = Motion::new(false, &self.config.animations, Instant::now());
-        self.wm.closing.push(Closing { picture, frame, fullscreen, motion, content: Some(content), memo: Default::default() });
+        let crate::render::snapshot::Layers { mut pictures, glass } = layers;
+        let Some(Some(picture)) = pictures.pop() else { return };
+        let layers = pictures.into_iter().zip(glass).collect();
+        self.wm.closing.push(Closing { picture, frame, fullscreen, motion, layers, memo: Default::default() });
         self.queue_redraw(None);
     }
 

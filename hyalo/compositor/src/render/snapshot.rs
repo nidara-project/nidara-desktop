@@ -7,8 +7,7 @@
 //! behind it, and here there is nothing behind it. The glass a client declares
 //! (`nidara-material-v1`) lies over the window itself and is kept for a capture (`take`'s
 //! `glass`); an opening or closing window is drawn as two pictures instead (render/forming.rs):
-//! the window under its glass, and what lies on its glass (`take_on_glass`), with the glass
-//! between them — drawn live and forming as it opens, kept from its last frame and dissolving
+//! what lies between its glasses (`take_layers`), with each glass live where it is among them — drawn live and forming as it opens, kept from its last frame and dissolving
 //! as it closes. A menu coming or going is pictured alone (`take_surface`), its glass the same.
 //!
 //! Drawn with the GL renderer underneath (`HyaloRenderer::gles`, the GPU that renders), like a
@@ -47,12 +46,9 @@ pub struct Snapshot {
     /// drawn, since it is drawn faded a little further each frame.
     pub id: Id,
     pub commit: std::cell::Cell<CommitCounter>,
-    /// What lies on the glass only (`take_on_glass`, `take_surface`): the glass panes it lies
+    /// What lies on the glass (`take_layers`, `take_surface`): the glass panes it may lie
     /// on, each its box (x, y, w, h) then its corner radius, texture px — where the lens works.
     pub panels: Vec<[f32; 5]>,
-    /// `take_on_glass`: its glass as it was, texture px — what a closing window's glass is drawn
-    /// from once its app has destroyed it.
-    pub glass: Vec<super::GlassElement>,
 }
 
 /// Room around the box for its line and its shadow, logical px.
@@ -68,58 +64,7 @@ fn margin(cfg: &crate::config::WindowsConfig) -> f64 {
 /// at any level and its blur come out as on the screen. An opening or closing window's picture leaves it out: there its glass is
 /// drawn live, over the screen (render/mod.rs).
 pub fn take(gles: &mut GlesRenderer, scene: &Scene<'_>, window: &Window, scale: f64, glass: bool) -> Result<Snapshot, String> {
-    take_with(gles, scene, window, scale, glass, None)
-}
-
-/// A picture of only what lies on the window's glass — every element in front of its lowest
-/// glass (front to back), the glass itself left out but kept (`Snapshot::glass`).
-pub fn take_on_glass(gles: &mut GlesRenderer, scene: &Scene<'_>, window: &Window, scale: f64) -> Result<Snapshot, String> {
-    take_with(gles, scene, window, scale, false, Some(true))
-}
-
-/// The rest — the window from its lowest glass back, what lies on its glass left out.
-pub fn take_under_glass(gles: &mut GlesRenderer, scene: &Scene<'_>, window: &Window, scale: f64) -> Result<Snapshot, String> {
-    take_with(gles, scene, window, scale, false, Some(false))
-}
-
-fn take_with(gles: &mut GlesRenderer, scene: &Scene<'_>, window: &Window, scale: f64, glass: bool, on_glass: Option<bool>) -> Result<Snapshot, String> {
-    let m = scene.wm.by_window(window).ok_or("not a window of ours")?;
-    let surface = crate::wm::surface_of(window).ok_or("no surface yet")?;
-    import_surface_tree(gles, &surface).map_err(|e| format!("{e:?}"))?;
-    for (popup, _) in PopupManager::popups_for_surface(&surface) {
-        import_surface_tree(gles, popup.wl_surface()).map_err(|e| format!("{e:?}"))?;
-    }
-    let frame = m.frame().to_f64();
-    let pad = margin(scene.windows);
-    let logical: Size<f64, Logical> = (frame.size.w + 2.0 * pad, frame.size.h + 2.0 * pad).into();
-    let size = logical.to_physical_precise_round(scale);
-    if size.w <= 0 || size.h <= 0 {
-        return Err("an empty window".into());
-    }
-    let mut texture: GlesTexture = gles.create_buffer(Fourcc::Abgr8888, (size.w, size.h).into()).map_err(|e| e.to_string())?;
-    let mut elements: Vec<OutputElement<GlesRenderer>> = Vec::new();
-    let place = crate::wm::minimize::Placement { origin: (pad, pad).into(), scale: 1.0 };
-    super::push_window(&mut elements, gles, scene, window, Some(place), Point::from((0, 0)), Scale::from(scale), size);
-    let mut panels = Vec::new();
-    let mut kept_glass = Vec::new();
-    if on_glass == Some(false)
-        && let Some(last) = elements.iter().rposition(|e| matches!(e, OutputElement::Glass(_)))
-    {
-        elements.drain(..last);
-    }
-    if on_glass == Some(true) {
-        kept_glass = elements.iter().filter_map(|e| if let OutputElement::Glass(g) = e { Some(g.clone()) } else { None }).collect();
-        let last = elements.iter().rposition(|e| matches!(e, OutputElement::Glass(_))).unwrap_or(0);
-        for e in &elements[..last] {
-            if let OutputElement::Glass(g) = e {
-                for (r, radius) in g.shape_boxes() {
-                    panels.push([r.loc.x as f32, r.loc.y as f32, r.size.w as f32, r.size.h as f32, radius as f32]);
-                }
-            }
-        }
-        elements.truncate(last);
-        elements.retain(|e| !matches!(e, OutputElement::Glass(_) | OutputElement::Scrim(_) | OutputElement::Fade(_)));
-    }
+    let (m, frame, pad, size, mut elements) = drawn(gles, scene, window, scale)?;
     // What samples the screen behind the window goes: the screen is not in this picture. Its
     // own glass lies over the window, whose background and content are drawn first here.
     elements.retain(|e| match e {
@@ -142,15 +87,109 @@ fn take_with(gles: &mut GlesRenderer, scene: &Scene<'_>, window: &Window, scale:
                 .map(OutputElement::Cursor),
         );
     }
+    picture(gles, &elements, size, scale, frame, pad, Vec::new())
+}
+
+/// A window between its glasses (render/forming.rs): what lies in front of each of its glasses,
+/// front to back, then what lies behind the last — so a window opening or closing can be drawn
+/// with its glass live between them, each glass where it is in the window. One split at its
+/// lowest glass is not enough: what a sidebar's glass covers of the window behind it (its main
+/// pane's own background) came out in FRONT of that glass, darkening it and hiding what is on
+/// it until the window had opened (owner's session, 2026-11-20).
+pub struct Layers {
+    /// `glass.len() + 1` pictures: [i] what lies in front of glass i and behind glass i − 1
+    /// (None: nothing), the last what lies behind every glass.
+    pub pictures: Vec<Option<Snapshot>>,
+    /// Its glass as it was, texture px — what a closing window's glass is drawn from once its
+    /// app has destroyed it.
+    pub glass: Vec<super::GlassElement>,
+}
+
+impl Layers {
+    /// What lies behind all its glass: the window's own picture.
+    pub fn under(&self) -> Option<&Snapshot> {
+        self.pictures.last().and_then(Option::as_ref)
+    }
+}
+
+/// `window` in layers between its glasses (`Layers`).
+pub fn take_layers(gles: &mut GlesRenderer, scene: &Scene<'_>, window: &Window, scale: f64) -> Result<Layers, String> {
+    let (_, frame, pad, size, elements) = drawn(gles, scene, window, scale)?;
+    let mut panels = Vec::new();
+    let mut glass = Vec::new();
+    let mut segments: Vec<Vec<OutputElement<GlesRenderer>>> = vec![Vec::new()];
+    for e in elements {
+        match e {
+            OutputElement::Glass(g) => {
+                for (r, radius) in g.shape_boxes() {
+                    panels.push([r.loc.x as f32, r.loc.y as f32, r.size.w as f32, r.size.h as f32, radius as f32]);
+                }
+                glass.push(g);
+                segments.push(Vec::new());
+            }
+            // What samples the screen, or veils it: drawn live, or not at all.
+            OutputElement::Scrim(_) | OutputElement::Fade(_) => {}
+            e => segments.last_mut().unwrap().push(e),
+        }
+    }
+    let mut pictures = Vec::new();
+    for segment in &segments {
+        pictures.push(if segment.is_empty() { None } else { Some(picture(gles, segment, size, scale, frame, pad, panels.clone())?) });
+    }
+    if pictures.last().is_none_or(Option::is_none) {
+        return Err("nothing behind the window's glass".into());
+    }
+    Ok(Layers { pictures, glass })
+}
+
+/// The window drawn as at `place`, its elements front to back, with its box and the room
+/// around it.
+#[allow(clippy::type_complexity)]
+fn drawn<'s>(
+    gles: &mut GlesRenderer,
+    scene: &'s Scene<'_>,
+    window: &Window,
+    scale: f64,
+) -> Result<(&'s crate::wm::Managed, Rectangle<f64, Logical>, f64, Size<i32, Physical>, Vec<OutputElement<GlesRenderer>>), String> {
+    let m = scene.wm.by_window(window).ok_or("not a window of ours")?;
+    let surface = crate::wm::surface_of(window).ok_or("no surface yet")?;
+    import_surface_tree(gles, &surface).map_err(|e| format!("{e:?}"))?;
+    for (popup, _) in PopupManager::popups_for_surface(&surface) {
+        import_surface_tree(gles, popup.wl_surface()).map_err(|e| format!("{e:?}"))?;
+    }
+    let frame = m.frame().to_f64();
+    let pad = margin(scene.windows);
+    let logical: Size<f64, Logical> = (frame.size.w + 2.0 * pad, frame.size.h + 2.0 * pad).into();
+    let size = logical.to_physical_precise_round(scale);
+    if size.w <= 0 || size.h <= 0 {
+        return Err("an empty window".into());
+    }
+    let mut elements: Vec<OutputElement<GlesRenderer>> = Vec::new();
+    let place = crate::wm::minimize::Placement { origin: (pad, pad).into(), scale: 1.0 };
+    super::push_window(&mut elements, gles, scene, window, Some(place), Point::from((0, 0)), Scale::from(scale), size);
+    Ok((m, frame, pad, size, elements))
+}
+
+/// `elements` drawn into a texture of `size`.
+fn picture(
+    gles: &mut GlesRenderer,
+    elements: &[OutputElement<GlesRenderer>],
+    size: Size<i32, Physical>,
+    scale: f64,
+    frame: Rectangle<f64, Logical>,
+    pad: f64,
+    panels: Vec<[f32; 5]>,
+) -> Result<Snapshot, String> {
+    let mut texture: GlesTexture = gles.create_buffer(Fourcc::Abgr8888, (size.w, size.h).into()).map_err(|e| e.to_string())?;
     let mut tracker = OutputDamageTracker::new(size, scale, Transform::Normal);
     {
         let mut fb = gles.bind(&mut texture).map_err(|e| e.to_string())?;
         tracker
-            .render_output(gles, &mut fb, 0, &elements, Color32F::new(0.0, 0.0, 0.0, 0.0))
+            .render_output(gles, &mut fb, 0, elements, Color32F::new(0.0, 0.0, 0.0, 0.0))
             .map_err(|e| format!("{e:?}"))?;
     }
     let frame = Rectangle::new(Point::<f64, Logical>::from((pad, pad)).to_physical(scale), frame.size.to_physical(scale));
-    Ok(Snapshot { texture, size, frame, scale, id: Id::new(), commit: Default::default(), panels, glass: kept_glass })
+    Ok(Snapshot { texture, size, frame, scale, id: Id::new(), commit: Default::default(), panels })
 }
 
 /// A picture drawn on screen: its window's box at `frame` (output physical px) scaled about
@@ -204,7 +243,7 @@ pub fn take_surface(
         }
     }
     let frame = Rectangle::from_size(size.to_f64());
-    Ok(Snapshot { texture, size, frame, scale, id: Id::new(), commit: Default::default(), panels, glass: Vec::new() })
+    Ok(Snapshot { texture, size, frame, scale, id: Id::new(), commit: Default::default(), panels })
 }
 
 /// Where a point of `snapshot` lands on screen when it is drawn at `frame` scaled by

@@ -505,43 +505,59 @@ fn scene_elements<R: HyaloRenderer>(
             if let Some(m) = managed.filter(|m| placement(m).is_none())
                 && let Some(look) = state.wm.opening(m.id, now)
             {
-                match snapshot::take_under_glass(renderer.gles(), state, w, scale.x) {
-                    Ok(picture) => {
+                match snapshot::take_layers(renderer.gles(), state, w, scale.x) {
+                    Ok(layers) => {
                         let at = place.map_or(m.frame().loc.to_f64(), |p| p.origin);
                         let frame = Rectangle::new(at - output_geo.loc.to_f64(), m.frame().size.to_f64()).to_physical(scale);
-                        // What lies on its glass, its own picture in front of the glass, coming
-                        // in over the second half through the lens; the glass in front of the
-                        // window's picture, forming over the whole (forming.rs, #764).
+                        // Its glass drawn live at the picture's scale, forming as far as it has
+                        // faded in, and between them what lies on each — a picture per stretch,
+                        // in the window's own order, coming over the second half through the lens
+                        // (forming.rs, #764); behind them all, the window's own picture. One
+                        // picture over the lowest glass hid a sidebar's glass under the window's
+                        // base surface until the end (live, 2026-11-20).
                         let program = snapshot::lens_program(renderer.gles());
-                        if let Ok(content) = snapshot::take_on_glass(renderer.gles(), state, w, scale.x) {
-                            let element = snapshot::SnapshotElement::new(&content, frame, look.scale, look.content).with_lens(
-                                program,
-                                &content.panels,
-                                content.size,
-                                forming::lens(true, look.content),
-                                forming::PINCH,
-                            );
-                            out.push(OutputElement::Snapshot(element));
-                        }
-                        // What the picture leaves out, under it: the window's glass, the blur
-                        // behind it and its veils, drawn live at the picture's scale and formed
-                        // as far as it has faded in — or the window opened without them and
-                        // they appeared at once when it had (owner, 2026-10-18).
                         let size = m.frame().size.to_f64();
                         let origin = at + Point::from((size.w, size.h)).upscale((1.0 - look.scale) / 2.0);
                         let mut live = Vec::new();
                         let place = crate::wm::minimize::Placement { origin, scale: look.scale };
                         push_window(&mut live, renderer, state, w, Some(place), output_geo.loc, scale, output_size);
+                        let on = |p: &snapshot::Snapshot| {
+                            OutputElement::Snapshot(snapshot::SnapshotElement::new(p, frame, look.scale, look.content).with_lens(
+                                program.clone(),
+                                &p.panels,
+                                p.size,
+                                forming::lens(true, look.content),
+                                forming::PINCH,
+                            ))
+                        };
                         if let Some(surface) = crate::wm::surface_of(w) {
                             with_states(&surface, |states| {
-                                out.extend(live.into_iter().filter_map(|e| match e {
-                                    OutputElement::Glass(g) => Some(OutputElement::Glass(g.forming(look.alpha as f32, &states.data_map))),
-                                    OutputElement::Scrim(v) => Some(OutputElement::Scrim(v.forming(look.alpha, &states.data_map))),
-                                    _ => None,
-                                }));
+                                // The picture of stretch k goes in front of its first glass or veil.
+                                let mut k = 0;
+                                let mut shown = false;
+                                for e in live {
+                                    let veil_or_glass = matches!(e, OutputElement::Glass(_) | OutputElement::Scrim(_));
+                                    if veil_or_glass && !shown {
+                                        if let Some(Some(p)) = layers.pictures.get(k).filter(|_| k + 1 < layers.pictures.len()) {
+                                            out.push(on(p));
+                                        }
+                                        shown = true;
+                                    }
+                                    match e {
+                                        OutputElement::Glass(g) => {
+                                            out.push(OutputElement::Glass(g.forming(look.alpha as f32, &states.data_map)));
+                                            k += 1;
+                                            shown = false;
+                                        }
+                                        OutputElement::Scrim(v) => out.push(OutputElement::Scrim(v.forming(look.alpha, &states.data_map))),
+                                        _ => {}
+                                    }
+                                }
                             });
                         }
-                        out.push(OutputElement::Snapshot(snapshot::SnapshotElement::new(&picture, frame, look.scale, look.alpha)));
+                        if let Some(p) = layers.under() {
+                            out.push(OutputElement::Snapshot(snapshot::SnapshotElement::new(p, frame, look.scale, look.alpha)));
+                        }
                         continue;
                     }
                     Err(err) => tracing::debug!(%err, id = m.id, "no picture of an opening window"),
@@ -558,20 +574,20 @@ fn scene_elements<R: HyaloRenderer>(
             let frame = Rectangle::new(c.frame.loc - output_geo.loc.to_f64(), c.frame.size).to_physical(scale);
             // The opening backwards (forming.rs, #764): what lies on its glass goes over the
             // first half, through the lens; its glass, kept, dissolves over the whole.
-            if let Some(content) = &c.content {
-                let program = snapshot::lens_program(renderer.gles());
-                let element = snapshot::SnapshotElement::new(content, frame, look.scale, look.content).with_lens(
-                    program,
-                    &content.panels,
-                    content.size,
-                    forming::lens(false, look.content),
-                    forming::PINCH,
-                );
-                out.push(OutputElement::Snapshot(element));
-                let (loc, f) = snapshot::placement(content, frame, look.scale);
-                for g in &content.glass {
-                    out.push(OutputElement::Glass(g.mapped(loc, f).forming(look.alpha as f32, &c.memo)));
+            let program = snapshot::lens_program(renderer.gles());
+            let (loc, f) = snapshot::placement(&c.picture, frame, look.scale);
+            for (content, glass) in &c.layers {
+                if let Some(content) = content {
+                    let element = snapshot::SnapshotElement::new(content, frame, look.scale, look.content).with_lens(
+                        program.clone(),
+                        &content.panels,
+                        content.size,
+                        forming::lens(false, look.content),
+                        forming::PINCH,
+                    );
+                    out.push(OutputElement::Snapshot(element));
                 }
+                out.push(OutputElement::Glass(glass.mapped(loc, f).forming(look.alpha as f32, &c.memo)));
             }
             out.push(OutputElement::Snapshot(snapshot::SnapshotElement::new(&c.picture, frame, look.scale, look.alpha)));
         }
