@@ -840,7 +840,7 @@ decides the rest. Each component has three layers, kept apart:
 | Sidebar navigator | each entry, whole row, on press; ↑↓ Home End | selected: accent (default) | `list` |
 | Tabs, segmented choice | each segment, on press; ←→ | — | `choices` |
 | Disclosure | the whole header row; › turns 90°; → opens, ← closes | open | — |
-| Back and forward | each half of one glass capsule; Alt+← / Alt+→ | enabled by history | `header` |
+| Back and forward | each half of one glass capsule, shaped as the bar's items (pad + glyph + pad wide, the capsule less its edges high), a rule between them; Alt+← / Alt+→ | enabled by history | `header` |
 | Title bar | its buttons; the rest moves the window; two presses maximise | — | `header` |
 | Text field | the whole field; caret, word and line selection; focus = the shared external ring | placeholder | `search` |
 | Password field | as a text field, plus a reveal button; Caps Lock warning; readers never read it | — | `search` |
@@ -914,6 +914,8 @@ a piece is, not who used it first.
   the row's text starts to its padding on the other side. None before or after something that is
   not a row, none after the last one, and none next to a row that is hovered, pressed or selected:
   its highlight is the boundary there. An app never draws its own.
+- **A rule** (`Node::rule`) is the same line between two things in a row or a column, along its
+  longer side and hidden next to one that is lit: back and forward have one (owner, #1156).
 - **The same row in every list.** `nk::Group` and `nk::ListBox` hold it as it is; an
   `nk::ListView`'s source may build it too, and the list then adds only the highlight's inset
   round it, so its text lines up with the same row in a group. A long list draws no separators
