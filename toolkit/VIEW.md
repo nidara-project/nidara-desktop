@@ -897,7 +897,8 @@ a piece is, not who used it first.
 
 - **Its size is the kit's.** At least `ROW_HEIGHT.single` tall (`row_floor()`, from
   `static.json`), taller when its text is, with `space-3` round its content and its text
-  centred; the second line under the title.
+  centred; the second line under the title. Both lines wrap to the row's width and never widen
+  it (`Adw.ActionRow`'s default: no line limit).
 - **Not activatable by default** (owner, 2026-11-12). The row is then no control: what it ends
   with responds on its own (a switch, a button, a mark), and a reader finds only that control.
   `disabled` puts its text in `Ink::Disabled`; the app disables the control itself.
