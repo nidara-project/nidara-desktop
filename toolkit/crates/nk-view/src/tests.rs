@@ -6135,6 +6135,12 @@ fn a_list_row_wraps_its_text_to_its_width_and_never_widens_it() {
     let row = rect(&s, "a");
     let sub = rect(&s, "a/subtitle");
     assert!(row[2] <= 200.5, "the row stays in its column: {row:?}");
-    assert!(sub[0] + sub[2] <= row[0] + row[2] + 0.5, "its text stays in the row");
-    assert!(sub[3] > 2. * 12., "the second line wraps rather than running on: {sub:?}");
+    assert!(
+        sub[0] + sub[2] <= row[0] + row[2] + 0.5,
+        "its text stays in the row"
+    );
+    assert!(
+        sub[3] > 2. * 12.,
+        "the second line wraps rather than running on: {sub:?}"
+    );
 }
