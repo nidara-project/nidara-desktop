@@ -467,6 +467,8 @@ fn status(cat: &Catalogue, t: &TypeScale) -> Vec<Node> {
             .lines(3)
             .into(),
     ];
+    // The same rows Settings shows: each component's name, what it is called elsewhere under
+    // it, its state at the end, in a group with the kit's separators.
     for (gi, g) in cat.groups.iter().enumerate() {
         let rows = g
             .items
@@ -474,28 +476,19 @@ fn status(cat: &Catalogue, t: &TypeScale) -> Vec<Node> {
             .enumerate()
             .map(|(ii, i)| {
                 let k = format!("st/{gi}/{ii}");
-                nk::Row::new(
-                    k.clone(),
-                    vec![
-                        nk::Label::new(
-                            format!("{k}/name"),
-                            &i.name,
-                            t.style(Type::Body, Weight::Medium),
-                        )
-                        .into(),
-                        nk::Label::new(
-                            format!("{k}/gtk"),
-                            if i.users.is_empty() {
-                                format!("{} · {}", i.gtk, i.appkit)
-                            } else {
-                                format!("{} · {} · used by {}", i.gtk, i.appkit, i.users)
-                            },
-                            t.style(Type::Small, Weight::Regular),
-                        )
-                        .ink(Ink::Dim)
-                        .lines(1)
-                        .grow()
-                        .into(),
+                let mut about = i.nk.join(", ");
+                for part in [&i.gtk, &i.appkit] {
+                    if !about.is_empty() {
+                        about.push_str(" · ");
+                    }
+                    about.push_str(part);
+                }
+                if !i.users.is_empty() {
+                    about.push_str(&format!(" · used by {}", i.users));
+                }
+                nk::ListRow::new(k.clone(), &i.name, t.style(Type::Body, Weight::Regular))
+                    .subtitle(about, t.style(Type::Small, Weight::Regular))
+                    .trailing(
                         nk::Label::new(
                             format!("{k}/status"),
                             status_text(&i.status),
@@ -505,23 +498,32 @@ fn status(cat: &Catalogue, t: &TypeScale) -> Vec<Node> {
                             Ink::Primary
                         } else {
                             Ink::Secondary
-                        })
-                        .into(),
-                    ],
-                )
-                .gap(Space::S3)
-                .align(Align::Center)
+                        }),
+                    )
+                    .into()
             })
-            .map(Node::from)
             .collect();
-        out.push(section(
-            &format!("st{gi}"),
-            &g.name,
-            t,
-            nk::Column::new(format!("st/{gi}"), rows)
-                .gap(Space::S2)
-                .into(),
-        ));
+        out.push(
+            nk::Column::new(
+                format!("s/st{gi}"),
+                vec![
+                    nk::Label::new(
+                        format!("s/st{gi}/cap"),
+                        &g.name,
+                        t.style(Type::Caption, Weight::Semibold),
+                    )
+                    .ink(Ink::Secondary)
+                    .into(),
+                    nk::Group::new(
+                        format!("s/st{gi}/card"),
+                        nk::Column::new(format!("st/{gi}"), rows),
+                    )
+                    .into(),
+                ],
+            )
+            .gap(Space::S2)
+            .into(),
+        );
     }
     out
 }
@@ -2019,8 +2021,9 @@ impl nk::ListSource for Records<'_> {
         }
     }
     fn build(&self, index: usize, key: &nk::Key) -> Node {
-        nk::Label::new(
-            format!("{}/label", key.0),
+        // The same row as in a group: a long list holds `nk::ListRow`s too.
+        nk::ListRow::new(
+            format!("{}/row", key.0),
             format!("Record {}", index + 1),
             self.0.style(Type::Body, Weight::Regular),
         )

@@ -531,18 +531,25 @@ fn long_list_range_uses_its_scroll_extent_when_an_outer_viewport_clips_it() {
 }
 #[test]
 fn long_list_style_reads_exported_geometry_and_rejects_invalid_values() {
-    let value = serde_json::json!({"highlight":{"inset":7,"hoverOpacity":0.12}});
-    let style = crate::list_from(&value).unwrap();
+    let value = serde_json::json!({
+        "highlight":{"inset":7,"hoverOpacity":0.12},
+        "separator":{"physicalPixels":1,"color":"--nidara-border"}
+    });
+    let set = serde_json::json!({"tokens":{"--nidara-border":"rgba(255, 255, 255, 0.1)"}});
+    let style = crate::list_from(&value, &set).unwrap();
     assert_eq!((style.inset, style.hover_opacity), (7., 0.12));
+    assert_eq!(style.separator_px, 1.);
     for (path, bad) in [
         ("/highlight/inset", serde_json::json!(-1)),
         ("/highlight/hoverOpacity", serde_json::json!(2)),
+        ("/separator/physicalPixels", serde_json::json!(0)),
+        ("/separator/color", serde_json::json!("--nidara-missing")),
     ] {
         let mut broken = value.clone();
         *broken.pointer_mut(path).unwrap() = bad;
-        assert!(crate::list_from(&broken).is_err());
+        assert!(crate::list_from(&broken, &set).is_err());
     }
-    assert!(crate::list_from(&serde_json::json!({})).is_err());
+    assert!(crate::list_from(&serde_json::json!({}), &set).is_err());
 }
 
 #[test]

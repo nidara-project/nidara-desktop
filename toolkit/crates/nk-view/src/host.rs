@@ -19,7 +19,7 @@ impl Tokens {
         let radii = Radii::from_static(&e.statics)?;
         Ok(Self {
             focus: crate::tokens::focus_from(&set.components["focus"], &colors)?,
-            list: list_from(&set.components["list"])?,
+            list: list_from(&set.components["list"], &colors)?,
             spacing: Spacing::from_static(&e.statics)?,
             check: check_from(&set.components["check"], &colors, &radii)?,
             dropdown: dropdown_from(

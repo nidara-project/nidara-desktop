@@ -417,6 +417,9 @@ state; the radios next to each other are one group, one Tab stop, the arrows mov
 §13.6; it was `SettingRow` until #1156, named after its first user): at least
 `ROW_HEIGHT.single` (`row_floor`), NOT activatable unless the app gives it an `action` — then the
 whole row is the control and what it ends with must be drawn only (a chevron, `nk::Switch::drawn`).
+The kit draws the separator between two `nk::ListRow`s next to each other (a group's rows, an
+`nk::ListBox`) and hides it next to a lit row: never draw one by hand, and use `nk::ListRow`
+(not a hand-built `nk::Row` of labels) for anything shaped like a row, or it gets none.
 A slider row is a list row ending in `nk::SliderEnd`
 (§13.7): measures from `range.slider`, its value in room for its widest text (`nk::Label::room`).
 A window's sidebar is ONE kit component, `nk::SidebarList` (§13.8), holding `nk::SidebarEntry`

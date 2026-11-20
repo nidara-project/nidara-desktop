@@ -43,7 +43,7 @@ pub(crate) fn tokens() -> Tokens {
         "--nidara-surface-back": "rgba(255, 255, 255, 0.04)", "--nidara-accent-30": "rgba(0, 136, 255, 0.3)", "--nidara-radius-pill": "9999px", "--nidara-bg": "rgba(22, 22, 34, 1.00)", "--nidara-danger":"#ff3b30"}});
     Tokens {
         focus: focus_from(&serde_json::from_str::<serde_json::Value>(include_str!("../../../tokens/focus.json")).unwrap()["default"], &set).unwrap(),
-        list: crate::tokens::ListStyle{inset:4.,hover_opacity:0.08},
+        list: crate::tokens::ListStyle{inset:4.,hover_opacity:0.08,separator_px:1.,separator:nk_render::Color::new([1.,0.,0.,1.])},
         spacing: Spacing::from_static(&statics()).unwrap(),
         radii: Radii::from_static(&statics()).unwrap(),
         motion: Motion::from_static(&statics()).unwrap(),
@@ -6028,4 +6028,119 @@ fn a_path_crumb_and_a_switch_report_their_value_when_clicked() {
     assert_eq!(click("bar/part/0"), Some(Value::Index(0)));
     assert_eq!(click("bar/part/2"), Some(Value::Index(2)));
     assert_eq!(click("sw"), Some(Value::Bool(true)));
+}
+
+/// Whether the kit's separator (pure red in the test tokens) shows on the pixel rows around `y`.
+/// The canvas gives native-endian ARGB: B, G, R, A in memory here.
+fn separator_at(px: &[u8], width: usize, y: f64) -> bool {
+    let y = y.round() as usize;
+    (y.saturating_sub(1)..=y).any(|row| {
+        (0..width).any(|x| {
+            let p = &px[(row * width + x) * 4..][..4];
+            p[2] > 0 && p[1] == 0 && p[0] == 0
+        })
+    })
+}
+
+#[test]
+fn the_kit_draws_a_separator_between_list_rows_and_nowhere_else() {
+    let t = tokens();
+    let row = |k: &str| -> Node {
+        crate::ListRow::new(k, k, style(14.))
+            .subtitle("under it", style(12.))
+            .into()
+    };
+    let view = Node::column(
+        "list",
+        vec![
+            row("a"),
+            row("b"),
+            row("c"),
+            Node::text("after", "Not a row", style(14.)),
+            row("d"),
+        ],
+    );
+    let s = laid(&view, (300., 400.), 1.);
+    let mut c = nk_render::Canvas::new(300, 400, 1.);
+    s.paint(&mut c, t.with_types(&types()), &mut |_, _| None, None)
+        .unwrap();
+    let px = c.finish();
+    let bottom = |k: &str| rect(&s, k)[1] + rect(&s, k)[3];
+    assert!(separator_at(&px, 300, bottom("a")), "between a and b");
+    assert!(separator_at(&px, 300, bottom("b")), "between b and c");
+    assert!(
+        !separator_at(&px, 300, bottom("c")),
+        "none before what is not a row"
+    );
+    assert!(
+        !separator_at(&px, 300, bottom("after")),
+        "none after it either"
+    );
+    assert!(
+        !separator_at(&px, 300, bottom("d")),
+        "none after the last row"
+    );
+    // It starts where the row's text does, not at the row's edge.
+    let y = bottom("a").round() as usize;
+    let first = (0..300)
+        .find(|&x| {
+            [y - 1, y].iter().any(|&r| {
+                let p = &px[(r * 300 + x) * 4..][..4];
+                p[2] > 0 && p[1] == 0 && p[0] == 0
+            })
+        })
+        .unwrap();
+    assert!((first as f64 - rect(&s, "a/text")[0]).abs() < 1.);
+
+    // In a list box, the selected row's highlight is the boundary: no line next to it.
+    let options = ["One", "Two", "Three", "Four"]
+        .into_iter()
+        .map(crate::ListBoxOption::new)
+        .collect();
+    let view: Node = crate::ListBox::new("lb", "Choices", "pick", options, style(14.))
+        .selected(Some(1))
+        .into();
+    let s = laid(&view, (300., 400.), 1.);
+    let mut c = nk_render::Canvas::new(300, 400, 1.);
+    s.paint(&mut c, t.with_types(&types()), &mut |_, _| None, None)
+        .unwrap();
+    let px = c.finish();
+    let bottom = |k: &str| rect(&s, k)[1] + rect(&s, k)[3];
+    assert!(
+        !separator_at(&px, 300, bottom("lb/0")),
+        "above the selected row"
+    );
+    assert!(
+        !separator_at(&px, 300, bottom("lb/1")),
+        "below the selected row"
+    );
+    assert!(
+        separator_at(&px, 300, bottom("lb/2")),
+        "between two plain rows"
+    );
+}
+
+#[test]
+fn a_list_row_wraps_its_text_to_its_width_and_never_widens_it() {
+    let long = "a second line far longer than the column it sits in, so that it has to wrap";
+    let view = Node::column(
+        "list",
+        vec![
+            crate::ListRow::new("a", "A title", style(14.))
+                .subtitle(long, style(12.))
+                .into(),
+        ],
+    );
+    let s = laid(&view, (200., 400.), 1.);
+    let row = rect(&s, "a");
+    let sub = rect(&s, "a/subtitle");
+    assert!(row[2] <= 200.5, "the row stays in its column: {row:?}");
+    assert!(
+        sub[0] + sub[2] <= row[0] + row[2] + 0.5,
+        "its text stays in the row"
+    );
+    assert!(
+        sub[3] > 2. * 12.,
+        "the second line wraps rather than running on: {sub:?}"
+    );
 }

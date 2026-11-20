@@ -35,6 +35,10 @@ pub struct Node {
     /// Decorative structure: layout/input remain, its automatic reader node is omitted.
     #[serde(default, skip_serializing_if = "std::ops::Not::not")]
     pub presentation: bool,
+    /// An `nk::ListRow`: two of them next to each other in one stack get the kit's separator
+    /// between them (`list.separator`, #1156).
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub list_row: bool,
     pub kind: Kind,
 }
 
@@ -539,6 +543,7 @@ impl Node {
             height: None,
             row_floor: false,
             presentation: false,
+            list_row: false,
             kind,
         }
     }
@@ -705,12 +710,15 @@ impl Node {
         let key = key.into();
         let ink = |normal| if row.disabled { Ink::Disabled } else { normal };
         let mut text = vec![
+            // Its text wraps to the row's width and never widens it (`Adw.ActionRow`'s
+            // title-lines and subtitle-lines, 0: no limit).
             Self::text(
                 format!("{}/title", key.0),
                 row.title.clone(),
                 row.title_style,
             )
-            .ink(ink(Ink::Primary)),
+            .ink(ink(Ink::Primary))
+            .lines(usize::MAX),
         ];
         if let Some(sub) = &row.subtitle {
             text.push(
@@ -719,7 +727,8 @@ impl Node {
                     sub.clone(),
                     row.subtitle_style,
                 )
-                .ink(ink(Ink::Dim)),
+                .ink(ink(Ink::Dim))
+                .lines(usize::MAX),
             );
         }
         let mut line: Vec<_> = row.leading.into_iter().collect();
@@ -740,7 +749,7 @@ impl Node {
             .align(Align::Center)
             .padding(Padding::all(Space::S3))
             .row_floor();
-        match row.action {
+        let mut row_node = match row.action {
             Some(action) => {
                 let mut n = Self::control(key, row.title, action, line)
                     .corner(Corner::Token(Radius::Sm))
@@ -751,7 +760,9 @@ impl Node {
                 n
             }
             None => line,
-        }
+        };
+        row_node.list_row = true;
+        row_node
     }
     /// A slider and its value, for a list row to end with (VIEW.md §13.7): the slider at the
     /// kit's width, its glyphs either side of it when it has them, and its value after it in

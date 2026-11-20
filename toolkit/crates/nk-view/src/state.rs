@@ -1067,6 +1067,21 @@ impl ViewState {
             .find(|(_, (k, t, v))| k == key && *t == kind && v == value)
             .map(|(id, _)| *id)
     }
+    /// Each `nk::ListRow` that follows another one in the same stack, to the one before it:
+    /// the pairs the kit draws a separator between.
+    pub(crate) fn separated_rows(&self) -> HashMap<usize, usize> {
+        let mut last: HashMap<Option<usize>, usize> = HashMap::new();
+        let mut above = HashMap::new();
+        for (i, p) in self.placed.iter().enumerate() {
+            if let Some(prev) = last.insert(p.parent, i)
+                && p.list_row
+                && self.placed[prev].list_row
+            {
+                above.insert(i, prev);
+            }
+        }
+        above
+    }
     fn index(&self, key: &Key) -> Option<usize> {
         self.placed.iter().position(|p| &p.key == key)
     }
@@ -2205,6 +2220,7 @@ impl ViewState {
                     ..Interaction::default()
                 })
         };
+        let above = self.separated_rows();
         for (i, p) in self.placed.iter().enumerate() {
             if !part(i) || p.control.is_some_and(|c| !self.shown(c)) || !self.shown(i) {
                 continue;
@@ -2213,6 +2229,34 @@ impl ViewState {
                 continue;
             };
             let ink = |c: nk_render::Color| c.with_alpha(c.components[3] * p.alpha as f32);
+            // The line between two `nk::ListRow`s, in the gap above this one: from where the
+            // row's text starts to its padding on the other side, and not next to a row that is
+            // lit — its highlight is the boundary there (VIEW.md §13.6).
+            if let Some(&prev) = above.get(&i) {
+                let lit =
+                    |r: usize| interactions[r].is_some_and(|x| x.hover || x.pressed || x.marked);
+                if !lit(prev) && !lit(i) && self.shown(prev) {
+                    let start = self
+                        .index(&Key(format!("{}/text", p.key.0)))
+                        .map_or(p.rect[0], |t| self.placed[t].rect[0]);
+                    let end = p.rect[0] + p.rect[2] - tokens.spacing.px(crate::Space::S3);
+                    let width = tokens.list.separator_px / self.scale.max(1.);
+                    let bottom = self.placed[prev].rect[1] + self.placed[prev].rect[3];
+                    let y = (bottom + p.rect[1]) / 2. - width / 2.;
+                    // The gap lies outside both rows: what clips it is the stack's own.
+                    let clip = p.parent.and_then(|s| self.placed[s].visible());
+                    if end > start
+                        && let Some(clip) = clip
+                    {
+                        canvas.clip(rect(&clip));
+                        canvas.rect(
+                            rect(&[start, y, end - start, width]),
+                            ink(tokens.list.separator),
+                        );
+                        canvas.pop_clip();
+                    }
+                }
+            }
             // What a control holds takes the accent while it is on, and the fill's dark where a
             // tile slider's fill has reached its middle (VIEW.md §12.1, §12.4).
             let content = |c: nk_render::Color| {

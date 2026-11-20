@@ -211,6 +211,8 @@ pub struct Placed {
     pub alpha: f64,
     /// The nearest scroll region it lies in.
     pub scroll: Option<usize>,
+    /// An `nk::ListRow` (`Node::list_row`).
+    pub list_row: bool,
 }
 impl Placed {
     /// Its rectangle as far as it shows; None when nothing of it does.
@@ -771,6 +773,7 @@ impl Layouter<'_> {
             clip: ctx.clip,
             alpha: ctx.alpha,
             scroll: ctx.scroll,
+            list_row: n.list_row,
         });
         let mut inner = Ctx {
             parent: Some(index),

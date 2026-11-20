@@ -446,6 +446,13 @@ impl Component for LongList {
             let mut cells = Vec::with_capacity(self.columns);
             for row in band {
                 let key = item_key(cx.key, &row.item.key);
+                // An `nk::ListRow` brings its own padding: the list adds only the highlight's
+                // inset around it, so its text lines up with the same row in a group.
+                let inset = if row.content.list_row {
+                    cx.look.tokens.list.inset
+                } else {
+                    inset
+                };
                 let cell = Node::row(
                     key.clone(),
                     vec![
