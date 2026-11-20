@@ -1789,7 +1789,7 @@ impl ViewState {
             .placed
             .iter()
             .filter_map(|p| match (&p.what, p.visible()) {
-                (What::Pane(c), Some(v)) if p.alpha > 0. && overlaps(v, viewport) => {
+                (What::Pane(c), Some(v)) if p.formed > 0. && overlaps(v, viewport) => {
                     let r = p.rect;
                     Some(FramePane {
                         key: p.key.clone(),
@@ -1812,7 +1812,7 @@ impl ViewState {
                             Some(v)
                         }
                         .filter(|c| *c != r),
-                        opacity: p.alpha,
+                        opacity: p.formed,
                     })
                 }
                 _ => None,

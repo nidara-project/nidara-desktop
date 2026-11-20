@@ -197,6 +197,13 @@ pub struct Bar {
     /// The Control Center, drawn while `cc_open`.
     cc: crate::cc::Cc,
     cc_open: bool,
+    /// The Control Center appearing and going: its glass forms, its content comes after
+    /// (the kit's `Appear`, #764).
+    cc_appear: nk::Appear,
+    cc_moved: bool,
+    /// The notification centre appearing and going, as the Control Center (`nk::Appear`).
+    nc_appear: nk::Appear,
+    nc_moved: bool,
     cc_layers: std::collections::HashMap<&'static str, CcLayer>,
     cc_menu_layer: Option<(nk_wayland::LayerId, [f64; 4])>,
     cc_motion_serial: u32,
@@ -291,6 +298,10 @@ impl Bar {
             tray_replies: std::sync::mpsc::channel(),
             cc: crate::cc::Cc::new(),
             cc_open: false,
+            cc_appear: nk::Appear::new(false),
+            cc_moved: false,
+            nc_appear: nk::Appear::new(false),
+            nc_moved: false,
             cc_layers: Default::default(),
             cc_menu_layer: None,
             cc_motion_serial: 10,
@@ -583,20 +594,20 @@ impl Bar {
     fn sync_surface(&mut self, w: &mut Window) {
         let banners = !self.cards.is_empty() && !self.frame.locked;
         let focus = self.card_focus.is_some() || self.card_keyboard.is_some();
-        let height = if self.cc_open || self.nc_open || banners || focus {
+        let height = if self.cc_visible() || self.nc_visible() || banners || focus {
             self.output_height
         } else {
             HEIGHT
         };
         let mode = (
             height,
-            self.cc_open || self.nc_open,
+            self.cc_visible() || self.nc_visible(),
             banners,
             focus,
             self.cc.editor.active,
         );
         if self.surface_mode != Some(mode) {
-            let mut p = placement(height, self.cc_open || self.nc_open);
+            let mut p = placement(height, self.cc_visible() || self.nc_visible());
             if focus || self.nc_open || self.cc.editor.active {
                 p.keyboard = KeyboardMode::Exclusive;
             }
@@ -964,6 +975,11 @@ impl Bar {
             }
         }
         self.cc_open = open;
+        let reduced = self
+            .look
+            .as_ref()
+            .is_some_and(|l| l.appearance.reduced_motion);
+        self.cc_appear.set(open, std::time::Instant::now(), reduced);
         self.cc.cancel();
         if !open {
             self.cc.back_by(false);
@@ -979,11 +995,12 @@ impl Bar {
     /// The centre's rect: its cards' right edge where the panels end, its scroll bar's lane
     /// past it, from under the bar's capsules to the output's foot.
     fn relayout_nc_view(&mut self, scale: f64) {
+        let visible = self.nc_visible();
         let right = self.panel_right();
         let Some(look) = self.look.as_mut() else {
             return;
         };
-        if !self.nc_open {
+        if !visible {
             self.nc_view.close();
             return;
         }
@@ -1017,6 +1034,27 @@ impl Bar {
                 w.redraw();
             }
         }
+    }
+    /// Drawn: open, or still going.
+    fn cc_visible(&self) -> bool {
+        self.cc_open || self.cc_appear.visible(std::time::Instant::now())
+    }
+    /// Its glass's formation and its content's opacity now.
+    fn cc_look(&self) -> (f64, f64) {
+        self.cc_appear.look(std::time::Instant::now())
+    }
+    /// The centre drawn: open, or still going.
+    fn nc_visible(&self) -> bool {
+        self.nc_open || self.nc_appear.visible(std::time::Instant::now())
+    }
+    /// The centre follows `nc_open`, wherever it was changed (the hub, the lock, its button).
+    fn nc_sync_appear(&mut self) {
+        let reduced = self
+            .look
+            .as_ref()
+            .is_some_and(|l| l.appearance.reduced_motion);
+        self.nc_appear
+            .set(self.nc_open, std::time::Instant::now(), reduced);
     }
     /// Whether the CC's open detail page still moves: a switch sliding (VIEW.md §12.6).
     fn cc_detail_animating(&self) -> bool {
@@ -1454,6 +1492,7 @@ impl Bar {
     }
 
     fn refresh(&mut self, w: &mut Window) {
+        self.nc_sync_appear();
         if self.cc.detail.as_ref().is_none_or(|d| d.page != "wifi") {
             self.cc_auth = None;
         }
@@ -2011,7 +2050,11 @@ fn rect(r: [f64; 4]) -> Rect {
 
 impl Application for Bar {
     fn poll_interval_ms(&self) -> u32 {
-        if (self.nc_open && self.nc_view.animating()) || self.cc_detail_animating() {
+        if (self.nc_open && self.nc_view.animating())
+            || self.cc_detail_animating()
+            || self.cc_appear.moving(std::time::Instant::now())
+            || self.nc_appear.moving(std::time::Instant::now())
+        {
             8
         } else {
             1000
@@ -2494,6 +2537,20 @@ impl Application for Bar {
 
     fn idle(&mut self, w: &mut Window) -> nk_wayland::Result<()> {
         self.auth_events(w);
+        if self.cc_appear.moving(std::time::Instant::now()) {
+            w.redraw();
+            self.cc_moved = true;
+        } else if std::mem::take(&mut self.cc_moved) {
+            // It has gone: the surface goes back to its strip.
+            self.refresh(w);
+        }
+        self.nc_sync_appear();
+        if self.nc_appear.moving(std::time::Instant::now()) {
+            w.redraw();
+            self.nc_moved = true;
+        } else if std::mem::take(&mut self.nc_moved) {
+            self.refresh(w);
+        }
         if self.nc_open {
             self.nc_view_tick(w);
         }
@@ -2642,12 +2699,17 @@ impl Application for Bar {
                 }
             }
         }
-        if self.cc_open {
+        if self.cc_visible() {
+            let (_, content) = self.cc_appear.frame(std::time::Instant::now());
             let fallback = (!f.material).then(|| self.look.as_ref().unwrap().style.row.background);
             let look = self.look.as_mut().unwrap();
+            c.push_opacity(content);
             self.cc.paint(&mut c, look, &self.frame.status, fallback)?;
+            c.pop_opacity();
         }
-        if self.nc_open {
+        if self.nc_visible() {
+            let (_, content) = self.nc_appear.frame(std::time::Instant::now());
+            c.push_opacity(content);
             let icons = &mut self.icons;
             let mut glyph = |name: &str, size: f64| {
                 if name.is_empty() {
@@ -2664,6 +2726,7 @@ impl Application for Bar {
             if let Err(e) = self.nc_view.paint(&mut c, &mut glyph, &art, f.material) {
                 eprintln!("nidara-shell: the NC view cannot be drawn: {e}");
             }
+            c.pop_opacity();
         }
         // The dots, centred in the island's capsule.
         if !self.frame.hidden {
@@ -2700,7 +2763,7 @@ impl Application for Bar {
     fn material(&self) -> Option<Material> {
         if self.frame.locked
             || self.layout.glass.is_empty()
-            || self.frame.hidden && self.cards.is_empty() && !self.nc_open
+            || self.frame.hidden && self.cards.is_empty() && !self.nc_visible()
         {
             return None;
         }
@@ -2722,7 +2785,7 @@ impl Application for Bar {
         let cards: Vec<_> = self.cards.iter().map(|c| c.pane()).collect();
         if self.frame.hidden {
             panes = cards.clone();
-            if self.nc_open && panes.is_empty() {
+            if self.nc_visible() && panes.is_empty() {
                 panes.extend(self.nc_view.first_pane());
             }
             if panes.is_empty() {
@@ -2742,11 +2805,22 @@ impl Application for Bar {
             panes[0],
         )?;
         material.shapes = panes;
-        if self.cc_open {
-            let (groups, veils) = self.cc.glass(tokens, self.frame.reduce_transparency);
+        if self.cc_visible() {
+            let (formed, content) = self.cc_look();
+            let (mut groups, mut veils) = self.cc.glass(tokens, self.frame.reduce_transparency);
+            for g in &mut groups {
+                g.opacity *= formed;
+            }
+            for v in &mut veils {
+                v.strength *= formed;
+            }
             material.groups = groups;
             material.veils = veils;
+            // What is on (a tile's white) is the content's: it comes with it.
             material.states = self.cc.states(&self.frame.status);
+            for st in &mut material.states {
+                st.wash[3] *= content;
+            }
         }
         if !self.frame.hidden
             && let Some(pane) = cards.first()
@@ -2766,7 +2840,7 @@ impl Application for Bar {
                 shapes: cards,
             });
         }
-        if self.nc_open
+        if self.nc_visible()
             && let Some(nc) = crate::material::piece(
                 tokens,
                 "controlCenter",
@@ -2775,7 +2849,14 @@ impl Application for Bar {
                 material.shapes[0],
             )
         {
-            let (groups, states) = self.nc_view.glass(nc.tone, nc.shadow);
+            let (mut groups, mut states) = self.nc_view.glass(nc.tone, nc.shadow);
+            let (formed, content) = self.nc_appear.look(std::time::Instant::now());
+            for g in &mut groups {
+                g.opacity *= formed;
+            }
+            for st in &mut states {
+                st.wash[3] *= content;
+            }
             material.groups.extend(groups);
             material.states.extend(states);
         }

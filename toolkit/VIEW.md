@@ -269,8 +269,13 @@ moves so the surface asks for another frame.
 
 **The glass goes with its content.** A pane is declared at its whole size, with what of it may
 show as a clip (`add_shape_clipped`): a card a reveal cuts is cut straight where the reveal
-ends, not drawn as a shorter card with rounded corners. Its glass is as formed as its content
-is opaque, so a reveal or a swipe fades both together, as TS did.
+ends, not drawn as a shorter card with rounded corners. A swipe fades its glass and its content
+together. A reveal does not (`nk_view::appear`, as TS's `ScaleRevealer`): its glass forms over the
+whole reveal and its content comes over the second half, so text never floats on glass not yet
+formed; closing, the other way round. A panel that is not a view's reveal (the Control Center and
+the Notification Center, drawn on the bar's surface) runs the same timing with an `nk::Appear`,
+whose clock starts at the first frame it is drawn, not when it was asked to open: a surface that
+must grow first would otherwise spend the motion before the panel is ever on screen.
 
 ## 7. Swipe to dismiss (piece 8)
 
