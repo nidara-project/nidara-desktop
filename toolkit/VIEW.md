@@ -273,9 +273,14 @@ ends, not drawn as a shorter card with rounded corners. A swipe fades its glass 
 together. A reveal does not (`nk_view::appear`, as TS's `ScaleRevealer`): its glass forms over the
 whole reveal and its content comes over the second half, so text never floats on glass not yet
 formed; closing, the other way round. A panel that is not a view's reveal (the Control Center and
-the Notification Center, drawn on the bar's surface) runs the same timing with an `nk::Appear`,
-whose clock starts at the first frame it is drawn, not when it was asked to open: a surface that
-must grow first would otherwise spend the motion before the panel is ever on screen.
+the Notification Center, drawn on the bar's surface) appears with an `nk::Appear` in a style
+(`nk::AppearStyle::POP`: TS's `OVERLAY_POP`, 0.97 → 1 in 220 ms eased out, 150 ms eased in out,
+cubic). Its `nk::AppearLook` says how formed the glass is, how shown the content (over the second
+half of the TIME, so the glass forms alone for the first half) and its scale; the panel applies it
+to what it paints (`Canvas::push_zoom` about the point it hangs from, `push_opacity`) and to the
+glass it declares (`AppearLook::material`: panes scaled and formed, washes with the content), so
+both move as one. Its clock starts at the first frame it is drawn, not when it was asked to open:
+a surface that must grow first would otherwise spend the motion before the panel is ever on screen.
 
 ## 7. Swipe to dismiss (piece 8)
 

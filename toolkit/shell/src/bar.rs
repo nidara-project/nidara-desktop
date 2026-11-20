@@ -298,9 +298,9 @@ impl Bar {
             tray_replies: std::sync::mpsc::channel(),
             cc: crate::cc::Cc::new(),
             cc_open: false,
-            cc_appear: nk::Appear::new(false),
+            cc_appear: nk::Appear::new(nk::AppearStyle::POP, false),
             cc_moved: false,
-            nc_appear: nk::Appear::new(false),
+            nc_appear: nk::Appear::new(nk::AppearStyle::POP, false),
             nc_moved: false,
             cc_layers: Default::default(),
             cc_menu_layer: None,
@@ -1039,9 +1039,14 @@ impl Bar {
     fn cc_visible(&self) -> bool {
         self.cc_open || self.cc_appear.visible(std::time::Instant::now())
     }
-    /// Its glass's formation and its content's opacity now.
-    fn cc_look(&self) -> (f64, f64) {
+    /// Where the Control Center is in its appearing.
+    fn cc_look(&self) -> nk::AppearLook {
         self.cc_appear.look(std::time::Instant::now())
+    }
+    /// The point the Control Center and the notification centre hang from, which they grow
+    /// from as they appear: under the bar, at their right edge.
+    fn panel_pivot(&self) -> (f64, f64) {
+        (self.panel_right(), f64::from(HEIGHT))
     }
     /// The centre drawn: open, or still going.
     fn nc_visible(&self) -> bool {
@@ -2700,16 +2705,20 @@ impl Application for Bar {
             }
         }
         if self.cc_visible() {
-            let (_, content) = self.cc_appear.frame(std::time::Instant::now());
+            let now = self.cc_appear.frame(std::time::Instant::now());
+            let pivot = self.panel_pivot();
             let fallback = (!f.material).then(|| self.look.as_ref().unwrap().style.row.background);
             let look = self.look.as_mut().unwrap();
-            c.push_opacity(content);
+            c.push_zoom(pivot, now.scale);
+            c.push_opacity(now.content);
             self.cc.paint(&mut c, look, &self.frame.status, fallback)?;
             c.pop_opacity();
+            c.pop_zoom();
         }
         if self.nc_visible() {
-            let (_, content) = self.nc_appear.frame(std::time::Instant::now());
-            c.push_opacity(content);
+            let now = self.nc_appear.frame(std::time::Instant::now());
+            c.push_zoom(self.panel_pivot(), now.scale);
+            c.push_opacity(now.content);
             let icons = &mut self.icons;
             let mut glyph = |name: &str, size: f64| {
                 if name.is_empty() {
@@ -2727,6 +2736,7 @@ impl Application for Bar {
                 eprintln!("nidara-shell: the NC view cannot be drawn: {e}");
             }
             c.pop_opacity();
+            c.pop_zoom();
         }
         // The dots, centred in the island's capsule.
         if !self.frame.hidden {
@@ -2806,21 +2816,13 @@ impl Application for Bar {
         )?;
         material.shapes = panes;
         if self.cc_visible() {
-            let (formed, content) = self.cc_look();
             let (mut groups, mut veils) = self.cc.glass(tokens, self.frame.reduce_transparency);
-            for g in &mut groups {
-                g.opacity *= formed;
-            }
-            for v in &mut veils {
-                v.strength *= formed;
-            }
+            let mut states = self.cc.states(&self.frame.status);
+            self.cc_look()
+                .material(self.panel_pivot(), &mut groups, &mut states, &mut veils);
             material.groups = groups;
             material.veils = veils;
-            // What is on (a tile's white) is the content's: it comes with it.
-            material.states = self.cc.states(&self.frame.status);
-            for st in &mut material.states {
-                st.wash[3] *= content;
-            }
+            material.states = states;
         }
         if !self.frame.hidden
             && let Some(pane) = cards.first()
@@ -2850,13 +2852,12 @@ impl Application for Bar {
             )
         {
             let (mut groups, mut states) = self.nc_view.glass(nc.tone, nc.shadow);
-            let (formed, content) = self.nc_appear.look(std::time::Instant::now());
-            for g in &mut groups {
-                g.opacity *= formed;
-            }
-            for st in &mut states {
-                st.wash[3] *= content;
-            }
+            self.nc_appear.look(std::time::Instant::now()).material(
+                self.panel_pivot(),
+                &mut groups,
+                &mut states,
+                &mut [],
+            );
             material.groups.extend(groups);
             material.states.extend(states);
         }
