@@ -530,21 +530,22 @@ fn scene_elements<R: HyaloRenderer>(
                                 forming::PINCH,
                             ))
                         };
+                        let body = |p: &snapshot::Snapshot| OutputElement::Snapshot(snapshot::SnapshotElement::new(p, frame, look.scale, look.alpha));
                         if let Some(surface) = crate::wm::surface_of(w) {
                             with_states(&surface, |states| {
-                                // The picture of stretch k goes in front of its first glass or veil.
+                                // Stretch k's content goes in front of its first glass or veil;
+                                // its body right in front of its glass.
                                 let mut k = 0;
                                 let mut shown = false;
                                 for e in live {
-                                    let veil_or_glass = matches!(e, OutputElement::Glass(_) | OutputElement::Scrim(_));
-                                    if veil_or_glass && !shown {
-                                        if let Some(Some(p)) = layers.pictures.get(k).filter(|_| k + 1 < layers.pictures.len()) {
-                                            out.push(on(p));
-                                        }
+                                    let stretch = layers.stretches.get(k);
+                                    if matches!(e, OutputElement::Glass(_) | OutputElement::Scrim(_)) && !shown {
+                                        out.extend(stretch.and_then(|s| s.content.as_ref()).map(&on));
                                         shown = true;
                                     }
                                     match e {
                                         OutputElement::Glass(g) => {
+                                            out.extend(stretch.and_then(|s| s.body.as_ref()).map(&body));
                                             out.push(OutputElement::Glass(g.forming(look.alpha as f32, &states.data_map)));
                                             k += 1;
                                             shown = false;
@@ -555,9 +556,7 @@ fn scene_elements<R: HyaloRenderer>(
                                 }
                             });
                         }
-                        if let Some(p) = layers.under() {
-                            out.push(OutputElement::Snapshot(snapshot::SnapshotElement::new(p, frame, look.scale, look.alpha)));
-                        }
+                        out.push(body(&layers.under));
                         continue;
                     }
                     Err(err) => tracing::debug!(%err, id = m.id, "no picture of an opening window"),
@@ -576,8 +575,8 @@ fn scene_elements<R: HyaloRenderer>(
             // first half, through the lens; its glass, kept, dissolves over the whole.
             let program = snapshot::lens_program(renderer.gles());
             let (loc, f) = snapshot::placement(&c.picture, frame, look.scale);
-            for (content, glass) in &c.layers {
-                if let Some(content) = content {
+            for (stretch, glass) in &c.layers {
+                if let Some(content) = &stretch.content {
                     let element = snapshot::SnapshotElement::new(content, frame, look.scale, look.content).with_lens(
                         program.clone(),
                         &content.panels,
@@ -586,6 +585,9 @@ fn scene_elements<R: HyaloRenderer>(
                         forming::PINCH,
                     );
                     out.push(OutputElement::Snapshot(element));
+                }
+                if let Some(body) = &stretch.body {
+                    out.push(OutputElement::Snapshot(snapshot::SnapshotElement::new(body, frame, look.scale, look.alpha)));
                 }
                 out.push(OutputElement::Glass(glass.mapped(loc, f).forming(look.alpha as f32, &c.memo)));
             }

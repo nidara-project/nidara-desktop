@@ -6,9 +6,9 @@
 //! What a picture leaves out: the blur behind a translucent window, which samples the screen
 //! behind it, and here there is nothing behind it. The glass a client declares
 //! (`nidara-material-v1`) lies over the window itself and is kept for a capture (`take`'s
-//! `glass`); an opening or closing window is drawn as two pictures instead (render/forming.rs):
-//! what lies between its glasses (`take_layers`), with each glass live where it is among them — drawn live and forming as it opens, kept from its last frame and dissolving
-//! as it closes. A menu coming or going is pictured alone (`take_surface`), its glass the same.
+//! `glass`); an opening or closing window is drawn in pictures instead (render/forming.rs):
+//! what lies between its glasses (`take_layers`), with each glass where it is among them —
+//! drawn live and forming as it opens, kept from its last frame and dissolving as it closes. A menu coming or going is pictured alone (`take_surface`), its glass the same.
 //!
 //! Drawn with the GL renderer underneath (`HyaloRenderer::gles`, the GPU that renders), like a
 //! screenshot: on tty the surfaces are imported for it first (`import_surface_tree`), as for a
@@ -97,19 +97,26 @@ pub fn take(gles: &mut GlesRenderer, scene: &Scene<'_>, window: &Window, scale: 
 /// pane's own background) came out in FRONT of that glass, darkening it and hiding what is on
 /// it until the window had opened (owner's session, 2026-11-20).
 pub struct Layers {
-    /// `glass.len() + 1` pictures: [i] what lies in front of glass i and behind glass i − 1
-    /// (None: nothing), the last what lies behind every glass.
-    pub pictures: Vec<Option<Snapshot>>,
+    /// What lies in front of each glass, front to back: [i] in front of glass i and behind
+    /// glass i − 1.
+    pub stretches: Vec<Stretch>,
+    /// What lies behind every glass: the window's own picture.
+    pub under: Snapshot,
     /// Its glass as it was, texture px — what a closing window's glass is drawn from once its
     /// app has destroyed it.
     pub glass: Vec<super::GlassElement>,
 }
 
-impl Layers {
-    /// What lies behind all its glass: the window's own picture.
-    pub fn under(&self) -> Option<&Snapshot> {
-        self.pictures.last().and_then(Option::as_ref)
-    }
+/// The stretch of a window between two of its glasses (None: nothing there).
+#[derive(Debug)]
+pub struct Stretch {
+    /// What lies on the glass behind it — text, icons: it comes and goes with the content.
+    pub content: Option<Snapshot>,
+    /// The window's own body there — its fill, its border, its shadow (`Decor`), behind that
+    /// content: it comes and goes with the window. A tinted window's fill lies in front of the
+    /// blur behind it, its lowest glass; taken as content, the window showed clear until it
+    /// had opened (headless, tinted, 2026-11-21).
+    pub body: Option<Snapshot>,
 }
 
 /// `window` in layers between its glasses (`Layers`).
@@ -117,7 +124,9 @@ pub fn take_layers(gles: &mut GlesRenderer, scene: &Scene<'_>, window: &Window, 
     let (_, frame, pad, size, elements) = drawn(gles, scene, window, scale)?;
     let mut panels = Vec::new();
     let mut glass = Vec::new();
-    let mut segments: Vec<Vec<OutputElement<GlesRenderer>>> = vec![Vec::new()];
+    // Each stretch as (content, body); the last, behind every glass, whole.
+    type Segment = (Vec<OutputElement<GlesRenderer>>, Vec<OutputElement<GlesRenderer>>);
+    let mut segments: Vec<Segment> = vec![Default::default()];
     for e in elements {
         match e {
             OutputElement::Glass(g) => {
@@ -125,21 +134,25 @@ pub fn take_layers(gles: &mut GlesRenderer, scene: &Scene<'_>, window: &Window, 
                     panels.push([r.loc.x as f32, r.loc.y as f32, r.size.w as f32, r.size.h as f32, radius as f32]);
                 }
                 glass.push(g);
-                segments.push(Vec::new());
+                segments.push(Default::default());
             }
             // What samples the screen, or veils it: drawn live, or not at all.
             OutputElement::Scrim(_) | OutputElement::Fade(_) => {}
-            e => segments.last_mut().unwrap().push(e),
+            e @ OutputElement::Decor(_) => segments.last_mut().unwrap().1.push(e),
+            e => segments.last_mut().unwrap().0.push(e),
         }
     }
-    let mut pictures = Vec::new();
-    for segment in &segments {
-        pictures.push(if segment.is_empty() { None } else { Some(picture(gles, segment, size, scale, frame, pad, panels.clone())?) });
+    let (mut content, body) = segments.pop().unwrap();
+    content.extend(body);
+    // Taken even empty: a window whose lowest glass is its whole back has nothing behind it,
+    // and its going is placed by this picture.
+    let under = picture(gles, &content, size, scale, frame, pad, panels.clone())?;
+    let mut stretches = Vec::new();
+    for (content, body) in &segments {
+        let mut take = |e: &Vec<_>| (!e.is_empty()).then(|| picture(gles, e, size, scale, frame, pad, panels.clone())).transpose();
+        stretches.push(Stretch { content: take(content)?, body: take(body)? });
     }
-    if pictures.last().is_none_or(Option::is_none) {
-        return Err("nothing behind the window's glass".into());
-    }
-    Ok(Layers { pictures, glass })
+    Ok(Layers { stretches, under, glass })
 }
 
 /// The window drawn as at `place`, its elements front to back, with its box and the room

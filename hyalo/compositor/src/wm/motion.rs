@@ -129,7 +129,7 @@ pub struct Closing {
     /// What lay in front of each of its glasses, front to back, with that glass kept, and the
     /// memo its glass forms with as it dissolves (render/forming.rs); `picture` is what lay
     /// behind them all.
-    pub layers: Vec<(Option<crate::render::snapshot::Snapshot>, crate::render::GlassElement)>,
+    pub layers: Vec<(crate::render::snapshot::Stretch, crate::render::GlassElement)>,
     pub memo: std::sync::Arc<smithay::utils::user_data::UserDataMap>,
 }
 
@@ -228,9 +228,8 @@ impl Hyalo {
             }
         };
         let motion = Motion::new(false, &self.config.animations, Instant::now());
-        let crate::render::snapshot::Layers { mut pictures, glass } = layers;
-        let Some(Some(picture)) = pictures.pop() else { return };
-        let layers = pictures.into_iter().zip(glass).collect();
+        let crate::render::snapshot::Layers { stretches, under: picture, glass } = layers;
+        let layers = stretches.into_iter().zip(glass).collect();
         self.wm.closing.push(Closing { picture, frame, fullscreen, motion, layers, memo: Default::default() });
         self.queue_redraw(None);
     }

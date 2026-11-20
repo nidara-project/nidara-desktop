@@ -1786,6 +1786,12 @@ impl Window {
     // Child windows share the parent's connection. Rust proxies alone do not send
     // destructors; close roles even when a callback or transport operation fails.
     fn destroy_surfaces(&mut self) {
+        // The window first, whole: the compositor takes the picture it fades out from when its
+        // toplevel goes. Its layers and glass destroyed before it, it faded out without its
+        // sidebar (Hyalo, #764).
+        if let Some(t) = self.toplevel.take() {
+            t.destroy();
+        }
         if let Some(hint) = self.modal_hint.take() {
             hint.destroy();
         }
@@ -1826,9 +1832,6 @@ impl Window {
         }
         if let Some(p) = self.positioner.take() {
             p.destroy();
-        }
-        if let Some(t) = self.toplevel.take() {
-            t.destroy();
         }
         if let Some(l) = self.layer_surface.take() {
             l.destroy();
