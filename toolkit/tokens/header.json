@@ -2,7 +2,8 @@
   "$comment": [
     "Owner 23-10 artifact https://claude.ai/artifact/PMiqz1sR5drU9GgiwPgpBV, Main.dc.html, default 32px header and right-side controls.",
     "Header geometry is separate from capsule.json's 72x24 window controls and Hyalo's SSD.",
-    "Title grade follows the provisional owner choice in PHASE1 D7 (20-10); native visual tuning remains required."
+    "Title grade follows the provisional owner choice in PHASE1 D7 (20-10); native visual tuning remains required.",
+    "navigation (owner, #1156, 2026-11-20): each button is shaped as the bar's items (barmodel.rs): pad + icon + pad wide, button (the capsule less 2 x edge) high, a rule in the gap between them; the icon as large as the sidebar toggle's."
   ],
   "default": {
     "band": 48,
@@ -11,7 +12,7 @@
     "icon": 16,
     "sidebarRadius": 16,
     "contentTopGap": 16,
-    "navigation": { "button": 24, "edge": 4, "gap": 4, "height": 32, "icon": 12 },
+    "navigation": { "button": 24, "edge": 4, "gap": 4, "height": 32, "icon": 16, "pad": 7 },
     "titleGap": 14,
     "titleSize": 15,
     "titleWeight": 600,

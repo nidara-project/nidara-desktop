@@ -2229,6 +2229,29 @@ impl ViewState {
                 continue;
             };
             let ink = |c: nk_render::Color| c.with_alpha(c.components[3] * p.alpha as f32);
+            // A rule: the same line along its longer side, hidden next to a lit neighbour.
+            if p.rule {
+                let same = |&j: &usize| self.placed[j].parent == p.parent;
+                let lit = |j: Option<usize>| {
+                    j.and_then(|j| self.placed[j].control)
+                        .and_then(|c| interactions[c])
+                        .is_some_and(|x| x.hover || x.pressed || x.marked)
+                };
+                let before = (0..i).rev().find(same);
+                let after = (i + 1..self.placed.len()).find(same);
+                if !lit(before) && !lit(after) {
+                    let width = tokens.list.separator_px / self.scale.max(1.);
+                    let r = p.rect;
+                    let line = if r[2] < r[3] {
+                        [r[0] + (r[2] - width) / 2., r[1], width, r[3]]
+                    } else {
+                        [r[0], r[1] + (r[3] - width) / 2., r[2], width]
+                    };
+                    canvas.clip(rect(&visible));
+                    canvas.rect(rect(&line), ink(tokens.list.separator));
+                    canvas.pop_clip();
+                }
+            }
             // The line between two `nk::ListRow`s, in the gap above this one: from where the
             // row's text starts to its padding on the other side, and not next to a row that is
             // lit — its highlight is the boundary there (VIEW.md §13.6).

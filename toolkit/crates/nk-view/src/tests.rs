@@ -2993,7 +2993,8 @@ fn frame_style() -> crate::FrameStyle {
         nav_edge: 4.,
         nav_gap: 4.,
         nav_height: 32.,
-        nav_icon: 12.,
+        nav_icon: 16.,
+        nav_pad: 7.,
         gap: 12.,
         content: 800.,
     }
@@ -3111,9 +3112,15 @@ fn the_band_places_the_toggle_back_forward_and_title_around_the_users_controls()
     // edge, in the band, never over the sidebar; the title clear of the controls.
     let s = band(&f, 250., Some(Right));
     assert_eq!(rect(&s, "band/sidebar/glass"), [258., 8., 32., 32.]);
-    assert_eq!(rect(&s, "band/nav/glass"), [298., 8., 60., 32.]);
+    assert_eq!(rect(&s, "band/nav/glass"), [298., 8., 72., 32.]);
+    // Back and forward shaped as the bar's items (owner, #1156): pad + glyph + pad wide, the
+    // capsule less its edges high, and a rule as tall as the glyph in the gap between them.
+    assert_eq!(rect(&s, "band/back"), [302., 12., 30., 24.]);
+    assert_eq!(rect(&s, "band/forward"), [336., 12., 30., 24.]);
+    assert_eq!(rect(&s, "band/nav/gap"), [332., 16., 4., 16.]);
+    assert!(placed(&s, "band/nav/gap").rule);
     let t = rect(&s, "band/title");
-    assert_eq!((t[0], t[0] + t[2]), (372., 1018. - 12.));
+    assert_eq!((t[0], t[0] + t[2]), (384., 1018. - 12.));
     // On the left, with the sidebar open, the controls sit over it and the band is as above.
     let s = band(&f, 250., Some(Left));
     assert_eq!(rect(&s, "band/sidebar/glass")[0], 258.);
@@ -5048,15 +5055,23 @@ fn a_segmented_choice_is_painted_off_glass_the_chosen_one_in_the_accent() {
         px(&press, mid(b, 3.)),
         "the chosen one pressed"
     );
-    // The ring outside the segment, over both of its neighbours.
+    // The ring round the whole control, never over a neighbour of the focused segment
+    // (owner, #1156): outside its two ends, and nothing new where the segments join.
     let (_, ringed) = painted(&view(&[(1, Shown::Focus)]), 400, 60);
-    for at in [mid(b, -3.), mid(b, b[2] + 3.)] {
+    for at in [mid(a, -3.), mid(c, c[2] + 3.)] {
         assert!(
             accent(px(&ringed, at)),
             "ring at {at:?}: {:?}",
             px(&ringed, at)
         );
         assert!(!accent(px(&rest, at)), "no ring at rest");
+    }
+    for at in [mid(b, -3.), mid(b, b[2] + 3.)] {
+        assert_eq!(
+            px(&ringed, at),
+            px(&rest, at),
+            "no ring over a neighbour at {at:?}"
+        );
     }
 }
 
@@ -5828,8 +5843,13 @@ fn disclosure_chevron_paints_the_settings_icon_and_changes_orientation() {
     assert!(bgra(&open, 120, (96., 22.))[3] > 0);
     assert_eq!(bgra(&closed, 120, (96., 22.))[3], 0);
     let (_, hovered) = painted(&h(false).shown(Shown::Hover), 120, 48);
-    assert!(bgra(&hovered, 120, (2., 2.))[3] > 0);
-    assert_eq!(bgra(&closed, 120, (2., 2.))[3], 0);
+    assert!(
+        bgra(&hovered, 120, (2., 24.))[3] > 0,
+        "the whole row is lit"
+    );
+    assert_eq!(bgra(&closed, 120, (2., 24.))[3], 0);
+    // At an activatable list row's corner, not square (#1156).
+    assert_eq!(bgra(&hovered, 120, (0., 0.))[3], 0, "its corner is rounded");
 }
 #[test]
 fn disclosure_tokens_are_shared_settings_exports_without_fallbacks() {
@@ -6142,5 +6162,56 @@ fn a_list_row_wraps_its_text_to_its_width_and_never_widens_it() {
     assert!(
         sub[3] > 2. * 12.,
         "the second line wraps rather than running on: {sub:?}"
+    );
+}
+
+#[test]
+fn a_rule_draws_the_kit_separator_and_hides_beside_a_lit_neighbour() {
+    let t = tokens();
+    let button = |k: &str| {
+        Node::control(
+            k,
+            k,
+            "noop",
+            Node::spacer(format!("{k}/b")).width(30.).height(24.),
+        )
+    };
+    let view = |lit: bool| {
+        let a = button("a");
+        Node::row(
+            "r",
+            vec![
+                if lit { a.shown(Shown::Hover) } else { a },
+                Node::rule("line").width(4.).height(16.),
+                button("b"),
+            ],
+        )
+        .align(Align::Center)
+    };
+    let paint = |lit: bool| {
+        let s = laid(&view(lit), (100., 40.), 1.);
+        let mut c = nk_render::Canvas::new(100, 40, 1.);
+        s.paint(&mut c, t.with_types(&types()), &mut |_, _| None, None)
+            .unwrap();
+        (rect(&s, "line"), c.finish())
+    };
+    let red = |px: &[u8], x: usize, y: usize| {
+        let p = &px[(y * 100 + x) * 4..][..4];
+        p[2] > 0 && p[1] == 0 && p[0] == 0
+    };
+    let (r, px) = paint(false);
+    let (cx, cy) = ((r[0] + r[2] / 2.) as usize, (r[1] + r[3] / 2.) as usize);
+    assert!(
+        red(&px, cx, cy) || red(&px, cx - 1, cy),
+        "a vertical line in the middle of the rule"
+    );
+    assert!(
+        !red(&px, cx, (r[1] - 2.) as usize),
+        "no longer than the rule"
+    );
+    let (_, px) = paint(true);
+    assert!(
+        !red(&px, cx, cy) && !red(&px, cx - 1, cy),
+        "hidden beside a lit button"
     );
 }

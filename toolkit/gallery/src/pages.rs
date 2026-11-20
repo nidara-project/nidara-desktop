@@ -58,7 +58,7 @@ fn status_text(s: &str) -> &'static str {
 }
 
 /// Each page: its id (what the check and `--page` name), its title and its glyph.
-pub const PAGES: [(&str, &str, &str); 26] = [
+pub const PAGES: [(&str, &str, &str); 25] = [
     ("status", "Status", "nd-emblem-default"),
     ("window", "Window", "nd-sidebar-show"),
     ("button", "Button", "nd-hand"),
@@ -69,7 +69,6 @@ pub const PAGES: [(&str, &str, &str); 26] = [
     ("swatches", "Swatches", "nd-view-grid"),
     ("row", "List row", "nd-preferences-system"),
     ("slider", "Slider", "nd-display-brightness"),
-    ("field", "Text field", "nd-input-keyboard"),
     ("glass", "Glass card", "nd-preferences-desktop-theme"),
     ("text", "Text", "nd-clipboard-list"),
     ("icons", "Icons", "nd-globe"),
@@ -79,7 +78,7 @@ pub const PAGES: [(&str, &str, &str); 26] = [
     ("grid", "Grid", "nd-control-center"),
     ("reveal", "Reveal", "nd-pan-end"),
     ("disclosure", "Disclosure", "nd-pan-end"),
-    ("entry", "Editable field", "nd-input-keyboard"),
+    ("entry", "Text field", "nd-input-keyboard"),
     ("search", "Search", "nd-system-search"),
     ("list", "Long list", "nd-clipboard-list"),
     ("focus", "Focus", "nd-input-keyboard"),
@@ -355,7 +354,6 @@ fn page(id: &str, m: &Model, cat: &Catalogue, t: &TypeScale, k: &Measures) -> Ve
         "swatches" => swatches(m, t, k.colors),
         "row" => rows(m, t),
         "slider" => sliders(m, t),
-        "field" => fields(t),
         "glass" => glass(t),
         "text" => text(t),
         "icons" => icons(t),
@@ -365,7 +363,13 @@ fn page(id: &str, m: &Model, cat: &Catalogue, t: &TypeScale, k: &Measures) -> Ve
         "grid" => grid(t),
         "reveal" => reveal(m, t),
         "disclosure" => disclosures(m, t),
-        "entry" => entries(m, t),
+        // One text field page (owner, #1156): the kit's field, then the CC's password field
+        // that still uses the old one.
+        "entry" => {
+            let mut nodes = entries(m, t);
+            nodes.extend(fields(t));
+            nodes
+        }
         "search" => search_field(m, t),
         "list" => long_list(m, t, k),
         "focus" => focus_page(t, k),
@@ -547,6 +551,30 @@ fn buttons(m: &Model, t: &TypeScale) -> Vec<Node> {
             in_page("off", "Disabled", &|n| n.enabled(false)),
         ],
     );
+    // The page's own action in the accent, and one that deletes in red (owner, #1156).
+    let kind = |k: &str, text: &str, label: &str, a: nk::ButtonAppearance| {
+        sample(
+            &format!("b/a/{k}"),
+            label,
+            t,
+            content_button(&format!("b/a/{k}"), text, "noop", t)
+                .appearance(a)
+                .into(),
+        )
+    };
+    let appearances = row(
+        "b/appearances",
+        vec![
+            kind("normal", "Cancel", "Normal", nk::ButtonAppearance::Normal),
+            kind("default", "Save", "Default", nk::ButtonAppearance::Default),
+            kind(
+                "destructive",
+                "Delete",
+                "Destructive",
+                nk::ButtonAppearance::Destructive,
+            ),
+        ],
+    );
     let state = |k: &str, label: &str, f: &dyn Fn(nk::Button) -> nk::Button| {
         sample(
             &format!("b/{k}"),
@@ -615,27 +643,14 @@ fn buttons(m: &Model, t: &TypeScale) -> Vec<Node> {
             ),
         ],
     );
-    // A row of a group has no glass under it: its states are the view's to paint (VIEW.md
-    // §13.2), from the same tokens Hyalo uses on glass.
-    let in_group = |k: &str, label: &str, f: &dyn Fn(nk::Button) -> nk::Button| -> Node {
-        f(button(&format!("b/g/{k}"), label, "noop", t).corner(Corner::Token(Radius::Md))).into()
-    };
-    let grouped = nk::Column::new(
-        "b/grouped",
-        vec![
-            in_group("rest", "Rest", &|n| n),
-            in_group("hover", "Hover", &|n| n.shown(Shown::Hover)),
-            in_group("press", "Pressed", &|n| n.shown(Shown::Press)),
-            in_group("selected", "Selected", &|n| {
-                n.role(Role::Toggle).marked(true)
-            }),
-            in_group("off", "Disabled", &|n| n.enabled(false)),
-        ],
-    )
-    .gap(Space::S1);
     vec![
         section("b-page", "In a page (no glass)", t, page),
-        section("b-grouped", "Rows in a group (no glass)", t, grouped.into()),
+        section(
+            "b-appearance",
+            "In a page: what it does (.appearance)",
+            t,
+            appearances,
+        ),
         section(
             "b-states",
             "Over content (glass: a window's band, a toolbar over a page)",
@@ -1408,10 +1423,15 @@ fn fields(t: &TypeScale) -> Vec<Node> {
     )
     .gap(Space::S3);
     vec![
-        section("f-states", "States", t, states.into()),
+        section(
+            "f-states",
+            "Password (nk::Field, old: the CC's, until nk::Entry has a password mode)",
+            t,
+            states.into(),
+        ),
         nk::Label::new(
             "f/note",
-            "Typing into a field belongs to its owner today (VIEW.md §12.2); one field for the kit is #1079 step 2.",
+            "nk::Field is the old field whose owner does the typing (VIEW.md §12.2). It goes when nk::Entry has a password mode and the CC moves to it.",
             t.style(Type::Small, Weight::Regular),
         )
         .ink(Ink::Secondary)
@@ -1458,19 +1478,27 @@ fn glass(t: &TypeScale) -> Vec<Node> {
         )
         .gap(Space::S4)
         .into(),
+        // A pane formed part-way is not a lighter material: it is how the CC's edit mode shows
+        // a free cell (`ccedit.rs`, 16 %), and how every pane looks while it reveals.
         nk::Row::new(
             "g/opacity",
             [
-                ("o100", "Formed 100 %", 1.),
-                ("o66", "66 %", 0.66),
-                ("o33", "33 %", 0.33),
+                ("o100", "Formed", Corner::Token(Radius::Lg), 1.),
+                ("o16", "Free cell", Corner::Pill, 0.16),
             ]
             .iter()
-            .map(|(k, l, o)| card(k, l, Corner::Token(Radius::Lg), *o))
+            .map(|(k, l, c, o)| card(k, l, *c, *o))
             .map(Node::from)
             .collect(),
         )
         .gap(Space::S4)
+        .into(),
+        nk::Label::new(
+            "g/opacity/note",
+            "Formed part-way: the CC edit mode's free cell at 16 %, and any pane while it reveals.",
+            t.style(Type::Small, Weight::Regular),
+        )
+        .ink(Ink::Secondary)
         .into(),
     ]
 }
@@ -1486,34 +1514,44 @@ fn text(t: &TypeScale) -> Vec<Node> {
         (Type::Caption, "Caption"),
         (Type::Mini, "Mini"),
     ];
-    let scale = types
-        .iter()
-        .enumerate()
-        .map(|(i, (ty, name))| {
-            nk::Row::new(
-                format!("t/{i}"),
-                [
-                    (Weight::Regular, "Regular"),
-                    (Weight::Medium, "Medium"),
-                    (Weight::Semibold, "Semibold"),
-                    (Weight::Bold, "Bold"),
-                ]
+    // A column per weight, headed by its name and its value as the kit sets it (`fw-*`); the
+    // type scale down each one, so a row is one size in every weight.
+    let weights = [
+        (Weight::Regular, "Regular"),
+        (Weight::Medium, "Medium"),
+        (Weight::Semibold, "Semibold"),
+        (Weight::Bold, "Bold"),
+    ];
+    let scale: Vec<Node> = vec![
+        nk::Row::new(
+            "t/scale",
+            weights
                 .iter()
                 .map(|(w, wn)| {
-                    nk::Label::new(
-                        format!("t/{i}/{wn}"),
-                        format!("{name} {wn}"),
-                        t.style(*ty, *w),
-                    )
+                    let head = format!("{wn} {}", t.style(Type::Body, *w).weight);
+                    let mut cells: Vec<Node> = vec![
+                        nk::Label::new(
+                            format!("t/{wn}/head"),
+                            head,
+                            t.style(Type::Caption, Weight::Semibold),
+                        )
+                        .ink(Ink::Secondary)
+                        .into(),
+                    ];
+                    cells.extend(types.iter().enumerate().map(|(i, (ty, name))| {
+                        Node::from(nk::Label::new(
+                            format!("t/{i}/{wn}"),
+                            *name,
+                            t.style(*ty, *w),
+                        ))
+                    }));
+                    Node::from(nk::Column::new(format!("t/{wn}"), cells).gap(Space::S2))
                 })
-                .map(Node::from)
                 .collect(),
-            )
-            .gap(Space::S4)
-            .align(Align::FirstLine)
-        })
-        .map(Node::from)
-        .collect();
+        )
+        .gap(Space::S6)
+        .into(),
+    ];
     let inks = row(
         "t/inks",
         [
@@ -1541,7 +1579,7 @@ fn text(t: &TypeScale) -> Vec<Node> {
             "t-scale",
             "Type scale × weight",
             t,
-            nk::Column::new("t/scale", scale).gap(Space::S2).into(),
+            nk::Column::new("t/scale/col", scale).into(),
         ),
         section("t-inks", "Inks", t, inks),
         section(
@@ -1787,29 +1825,33 @@ fn grid(t: &TypeScale) -> Vec<Node> {
         span,
         child: block(&format!("gr/{k}"), &format!("{}×{}", span.0, span.1), t),
     };
+    // The Control Center's grid as it is: its four columns of 76 with gaps of 20
+    // (`toolkit/shell/src/cclayout.rs`), and every size a tile has there, the 4×1 included.
     vec![
         nk::Grid::new(
             "gr/grid",
             4,
-            72.,
-            12.,
+            76.,
+            20.,
             vec![
-                tile("a", (0, 0), (1, 1)),
-                tile("b", (1, 0), (1, 1)),
-                tile("c", (2, 0), (2, 1)),
-                tile("d", (0, 1), (2, 2)),
-                tile("e", (2, 1), (1, 2)),
-                tile("f", (3, 1), (1, 1)),
-                tile("g", (3, 2), (1, 1)),
+                tile("single", (0, 0), (1, 1)),
+                tile("wide", (1, 0), (2, 1)),
+                tile("single2", (3, 0), (1, 1)),
+                tile("tall", (0, 1), (1, 2)),
+                tile("square", (1, 1), (2, 2)),
+                tile("single3", (3, 1), (1, 1)),
+                tile("single4", (3, 2), (1, 1)),
+                tile("full", (0, 3), (4, 1)),
             ],
         )
         .into(),
         nk::Label::new(
             "gr/note",
-            "Square cells; where each tile goes is the surface's to decide (VIEW.md §12.4).",
+            "The Control Center's grid and its five tile sizes: 1×1, 2×1, 1×2, 2×2 and 4×1. Square cells; where each tile goes is the surface's to decide (VIEW.md §12.4).",
             t.style(Type::Small, Weight::Regular),
         )
         .ink(Ink::Secondary)
+        .lines(2)
         .into(),
     ]
 }
@@ -2195,7 +2237,7 @@ fn focus_page(t: &TypeScale, k: &Measures) -> Vec<Node> {
             nk::Expander::new(key("disclosure"), name("Disclosure"), "noop", false)
                 .shown(Shown::Focus)
                 .into(),
-            nk::Entry::new(key("entry"), name("Editable field"), "noop", "Nidara")
+            nk::Entry::new(key("entry"), name("Text field"), "noop", "Nidara")
                 .width(240.)
                 .shown(Shown::Focus)
                 .into(),
