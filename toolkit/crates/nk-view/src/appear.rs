@@ -111,6 +111,10 @@ impl Look {
             s.bounds = self.rect(pivot, s.bounds);
             s.radius *= self.scale;
             s.wash[3] *= self.content;
+            // Hyalo eases a wash over its `fade_ms` toward each new value: the motion sets it
+            // every frame, so an ease would leave it behind the content (measured: the Control
+            // Center's on discs still white on empty glass, its closing is that 150 ms long).
+            s.fade_ms = 0;
         }
         for v in veils {
             let r = self.rect(
@@ -401,7 +405,7 @@ mod tests {
             },
             radius: 8.,
             wash: [1., 1., 1., 0.8],
-            fade_ms: 0,
+            fade_ms: 150,
         }];
         look.material(pivot, &mut groups, &mut states, &mut []);
         let p = groups[0].shapes[0];
@@ -412,5 +416,9 @@ mod tests {
         assert_eq!(groups[0].opacity, 0.5);
         assert_eq!(states[0].bounds.x, 80.);
         assert_eq!(states[0].wash[3], 0.2);
+        assert_eq!(
+            states[0].fade_ms, 0,
+            "a wash follows the motion frame by frame"
+        );
     }
 }
