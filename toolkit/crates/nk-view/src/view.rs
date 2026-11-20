@@ -710,12 +710,15 @@ impl Node {
         let key = key.into();
         let ink = |normal| if row.disabled { Ink::Disabled } else { normal };
         let mut text = vec![
+            // Its text wraps to the row's width and never widens it (`Adw.ActionRow`'s
+            // title-lines and subtitle-lines, 0: no limit).
             Self::text(
                 format!("{}/title", key.0),
                 row.title.clone(),
                 row.title_style,
             )
-            .ink(ink(Ink::Primary)),
+            .ink(ink(Ink::Primary))
+            .lines(usize::MAX),
         ];
         if let Some(sub) = &row.subtitle {
             text.push(
@@ -724,7 +727,8 @@ impl Node {
                     sub.clone(),
                     row.subtitle_style,
                 )
-                .ink(ink(Ink::Dim)),
+                .ink(ink(Ink::Dim))
+                .lines(usize::MAX),
             );
         }
         let mut line: Vec<_> = row.leading.into_iter().collect();
