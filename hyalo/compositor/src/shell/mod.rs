@@ -69,6 +69,7 @@ impl XdgShellHandler for Hyalo {
 
     fn new_popup(&mut self, surface: PopupSurface, _positioner: PositionerState) {
         self.unconstrain_popup(&surface);
+        crate::render::forming::begin(surface.wl_surface(), self.config.animations.enabled);
         let _ = self.popups.track_popup(PopupKind::Xdg(surface));
     }
 
@@ -82,6 +83,7 @@ impl XdgShellHandler for Hyalo {
     }
 
     fn popup_destroyed(&mut self, surface: PopupSurface) {
+        crate::backend::keep_menu_going(self, surface.wl_surface());
         self.popup_gave_keyboard_back(&surface);
         self.queue_redraw(None);
     }

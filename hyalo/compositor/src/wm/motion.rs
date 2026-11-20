@@ -71,11 +71,14 @@ pub struct Motion {
     pub fade: Duration,
 }
 
-/// What a window opening or closing looks like at a moment: scaled about its middle, faded.
+/// What a window opening or closing looks like at a moment: scaled about its middle, faded —
+/// its glass as formed as it is faded in — and what lies on its glass shown to `content`
+/// (render/forming.rs: over the second half of the fade's time coming, the first going).
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct Look {
     pub scale: f64,
     pub alpha: f64,
+    pub content: f64,
 }
 
 impl Motion {
@@ -98,10 +101,11 @@ impl Motion {
         let x = |d: Duration| if d.is_zero() { 1.0 } else { t / d.as_secs_f64() };
         let size = x(self.size);
         let fade = on(curve::EASE_OUT, x(self.fade));
+        let content = crate::render::forming::content(self.opening, x(self.fade).min(1.0));
         Some(if self.opening {
-            Look { scale: on(curve::MY_BEZIER, size), alpha: fade }
+            Look { scale: on(curve::MY_BEZIER, size), alpha: fade, content }
         } else {
-            Look { scale: 1.0 + (CLOSED_SCALE - 1.0) * on(curve::DEFAULT, size), alpha: 1.0 - fade }
+            Look { scale: 1.0 + (CLOSED_SCALE - 1.0) * on(curve::DEFAULT, size), alpha: 1.0 - fade, content }
         })
     }
 }
@@ -122,6 +126,10 @@ pub struct Closing {
     /// It was fullscreen: drawn over the shell's chrome, where it was.
     pub fullscreen: bool,
     pub motion: Motion,
+    /// What lay on its glass, as its own picture (its glass kept with it), and the memo its
+    /// glass forms with as it dissolves (render/forming.rs).
+    pub content: Option<crate::render::snapshot::Snapshot>,
+    pub memo: std::sync::Arc<smithay::utils::user_data::UserDataMap>,
 }
 
 /// An output going from one workspace to another.
@@ -211,7 +219,7 @@ impl Hyalo {
             .get(&m.workspace)
             .and_then(|w| self.output_named(&w.output))
             .map_or(1.0, |o| o.current_scale().fractional_scale());
-        let picture = match crate::backend::snapshot_window(self, &window, scale, false) {
+        let (picture, content) = match crate::backend::snapshot_window_parts(self, &window, scale) {
             Ok(p) => p,
             Err(err) => {
                 tracing::debug!(%err, id, "no picture of a closing window");
@@ -219,7 +227,7 @@ impl Hyalo {
             }
         };
         let motion = Motion::new(false, &self.config.animations, Instant::now());
-        self.wm.closing.push(Closing { picture, frame, fullscreen, motion });
+        self.wm.closing.push(Closing { picture, frame, fullscreen, motion, content: Some(content), memo: Default::default() });
         self.queue_redraw(None);
     }
 
@@ -246,7 +254,7 @@ impl Hyalo {
         self.wm.openings.retain(|o| !o.motion.done(now));
         self.wm.closing.retain(|c| !c.motion.done(now));
         self.wm.slides.retain(|s| s.progress(now).is_some());
-        count(self) > 0 || count(self) < before
+        count(self) > 0 || count(self) < before || crate::render::forming::moving(now)
     }
 }
 

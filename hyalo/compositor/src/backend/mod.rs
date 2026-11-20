@@ -370,6 +370,37 @@ pub fn snapshot_window(state: &mut Hyalo, window: &smithay::desktop::Window, sca
     }
 }
 
+/// A closing window in two pictures (render/forming.rs): the window without what lies on its
+/// glass, and what lies on its glass, its glass kept.
+pub fn snapshot_window_parts(
+    state: &mut Hyalo,
+    window: &smithay::desktop::Window,
+    scale: f64,
+) -> Result<(crate::render::snapshot::Snapshot, crate::render::snapshot::Snapshot), String> {
+    let Hyalo { backend, space, seat, cursor_status, dnd_icon, wm, lock, config, .. } = state;
+    let scene = crate::render::Scene::new(space, wm, seat, cursor_status, dnd_icon.as_ref(), lock, &config.windows, config.animations.enabled, std::time::Instant::now(), false);
+    use crate::render::snapshot::{take_on_glass, take_under_glass};
+    match backend {
+        Backend::Winit(w) => Ok((take_under_glass(w.renderer(), &scene, window, scale)?, take_on_glass(w.renderer(), &scene, window, scale)?)),
+        Backend::Tty(t) => {
+            let mut renderer = t.primary_renderer()?;
+            Ok((take_under_glass(renderer.as_mut(), &scene, window, scale)?, take_on_glass(renderer.as_mut(), &scene, window, scale)?))
+        }
+    }
+}
+
+/// A menu's app destroyed it: its last picture and glass kept for its going (render/forming.rs).
+pub fn keep_menu_going(state: &mut Hyalo, surface: &smithay::reexports::wayland_server::protocol::wl_surface::WlSurface) {
+    let now = std::time::Instant::now();
+    match &mut state.backend {
+        Backend::Winit(w) => crate::render::forming::take_closing(w.renderer(), surface, now),
+        Backend::Tty(t) => match t.primary_renderer() {
+            Ok(mut renderer) => crate::render::forming::take_closing(renderer.as_mut(), surface, now),
+            Err(err) => tracing::debug!(%err, "no renderer for a menu going"),
+        },
+    }
+}
+
 /// Draws every output with a redraw queued (`Hyalo::queue_redraw`).
 pub fn redraw_queued(state: &mut Hyalo) {
     match &state.backend {

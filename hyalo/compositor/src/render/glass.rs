@@ -365,6 +365,43 @@ impl GlassElement {
         Some(self)
     }
 
+    /// This glass moved and scaled: a point `q` of it goes to `loc + q × f` — a closing window's
+    /// or menu's glass, kept from its picture (texture px), drawn where the picture is
+    /// (render/forming.rs). It measures nothing and undoes no veil: its surface is gone.
+    pub fn mapped(&self, loc: Point<f64, Physical>, f: (f64, f64)) -> Self {
+        let r = |r: Rectangle<f64, Physical>| -> Rectangle<f64, Physical> {
+            Rectangle::new((loc.x + r.loc.x * f.0, loc.y + r.loc.y * f.1).into(), (r.size.w * f.0, r.size.h * f.1).into())
+        };
+        let k = f.0.min(f.1);
+        let mut g = self.clone();
+        for s in &mut g.shapes {
+            s.rect = r(s.rect);
+            s.radius *= k;
+            s.clip = s.clip.map(r);
+            s.pointer = None;
+        }
+        g.region = r(g.region.to_f64()).to_i32_round();
+        g.outer = g.outer.map(|mut o| {
+            o.rect = r(o.rect);
+            o.radius *= k;
+            o
+        });
+        for s in &mut g.states {
+            s.rect = r(s.rect);
+            s.radius *= k;
+        }
+        g.unshadow.scrims.clear();
+        g.unshadow.clip = None;
+        g.ink_boxes.clear();
+        g.answers.clear();
+        g
+    }
+
+    /// Its shapes — box and corner radius, output px: the panes a lens works over.
+    pub fn shape_boxes(&self) -> Vec<(Rectangle<f64, Physical>, f64)> {
+        self.shapes.iter().map(|s| (s.rect, s.radius)).collect()
+    }
+
     /// This glass cut to a rounded window's outline (a layer's, toolkit/PHASE1.md D7): what the
     /// layer's own surface shows of the corners, its glass shows too, and nothing past them.
     pub fn rounded_to(mut self, outer: glass_gl::Outer) -> Self {

@@ -11,6 +11,7 @@ pub mod controls;
 pub mod decor;
 pub mod drawn;
 pub mod fade;
+pub mod forming;
 pub mod glass;
 pub mod glass_gl;
 pub mod glass_tokens;
@@ -214,6 +215,19 @@ fn push_surface_over_glass<R: HyaloRenderer>(
     when: std::time::Instant,
     between: &mut Between<'_, R>,
 ) {
+    // Its menus going, then those coming (forming.rs), made first: the closure below holds the
+    // renderer.
+    crate::protocols::layers::prepare_input_popups(surface, when);
+    let mut menus: Vec<(WlSurface, Vec<OutputElement<R>>)> = Vec::new();
+    let mut going = Vec::new();
+    forming::push_closing(&mut going, renderer, surface, location, when);
+    for (popup, offset) in PopupManager::popups_for_surface(surface) {
+        let offset = (offset - popup.geometry().loc).to_f64().to_physical(scale).to_i32_round();
+        let mut v = Vec::new();
+        if forming::push_menu(&mut v, renderer, popup.wl_surface(), surface, location, location + offset, scale, output_size, when) {
+            menus.push((popup.wl_surface().clone(), v));
+        }
+    }
     let mut layer = |out: &mut Vec<OutputElement<R>>, s: &WlSurface, loc: Point<i32, Physical>, kind: Kind, between: Option<&mut Between<'_, R>>| {
         // Surfaces whose buffer is partly ink (nidara-material-v1 `add_ink_coverage`) are drawn
         // through the shader that recolours it.
@@ -260,9 +274,14 @@ fn push_surface_over_glass<R: HyaloRenderer>(
             out.extend(e.map(OutputElement::Scrim));
         }
     };
+    out.append(&mut going);
     crate::protocols::layers::prepare_input_popups(surface, when);
     for (popup, offset) in PopupManager::popups_for_surface(surface) {
         let offset = (offset - popup.geometry().loc).to_f64().to_physical(scale).to_i32_round();
+        if let Some(i) = menus.iter().position(|(f, _)| f == popup.wl_surface()) {
+            out.append(&mut menus[i].1);
+            continue;
+        }
         layer(out, popup.wl_surface(), location + offset, Kind::Unspecified, None);
     }
     layer(out, surface, location, Kind::ScanoutCandidate, Some(between));
@@ -486,11 +505,24 @@ fn scene_elements<R: HyaloRenderer>(
             if let Some(m) = managed.filter(|m| placement(m).is_none())
                 && let Some(look) = state.wm.opening(m.id, now)
             {
-                match snapshot::take(renderer.gles(), state, w, scale.x, false) {
+                match snapshot::take_under_glass(renderer.gles(), state, w, scale.x) {
                     Ok(picture) => {
                         let at = place.map_or(m.frame().loc.to_f64(), |p| p.origin);
                         let frame = Rectangle::new(at - output_geo.loc.to_f64(), m.frame().size.to_f64()).to_physical(scale);
-                        out.push(OutputElement::Snapshot(snapshot::SnapshotElement::new(&picture, frame, look.scale, look.alpha)));
+                        // What lies on its glass, its own picture in front of the glass, coming
+                        // in over the second half through the lens; the glass in front of the
+                        // window's picture, forming over the whole (forming.rs, #764).
+                        let program = snapshot::lens_program(renderer.gles());
+                        if let Ok(content) = snapshot::take_on_glass(renderer.gles(), state, w, scale.x) {
+                            let element = snapshot::SnapshotElement::new(&content, frame, look.scale, look.content).with_lens(
+                                program,
+                                &content.panels,
+                                content.size,
+                                forming::lens(true, look.content),
+                                forming::PINCH,
+                            );
+                            out.push(OutputElement::Snapshot(element));
+                        }
                         // What the picture leaves out, under it: the window's glass, the blur
                         // behind it and its veils, drawn live at the picture's scale and formed
                         // as far as it has faded in — or the window opened without them and
@@ -509,6 +541,7 @@ fn scene_elements<R: HyaloRenderer>(
                                 }));
                             });
                         }
+                        out.push(OutputElement::Snapshot(snapshot::SnapshotElement::new(&picture, frame, look.scale, look.alpha)));
                         continue;
                     }
                     Err(err) => tracing::debug!(%err, id = m.id, "no picture of an opening window"),
@@ -519,10 +552,27 @@ fn scene_elements<R: HyaloRenderer>(
     };
     // Windows closing: pictures of them, fading where they were — over the windows still there,
     // and a fullscreen one over the shell's chrome, as it was.
-    let push_closing = |out: &mut Vec<OutputElement<R>>, fullscreen: bool| {
+    let push_closing = |out: &mut Vec<OutputElement<R>>, renderer: &mut R, fullscreen: bool| {
         for c in state.wm.closing.iter().rev().filter(|c| c.fullscreen == fullscreen) {
             let Some(look) = c.motion.look(now) else { continue };
             let frame = Rectangle::new(c.frame.loc - output_geo.loc.to_f64(), c.frame.size).to_physical(scale);
+            // The opening backwards (forming.rs, #764): what lies on its glass goes over the
+            // first half, through the lens; its glass, kept, dissolves over the whole.
+            if let Some(content) = &c.content {
+                let program = snapshot::lens_program(renderer.gles());
+                let element = snapshot::SnapshotElement::new(content, frame, look.scale, look.content).with_lens(
+                    program,
+                    &content.panels,
+                    content.size,
+                    forming::lens(false, look.content),
+                    forming::PINCH,
+                );
+                out.push(OutputElement::Snapshot(element));
+                let (loc, f) = snapshot::placement(content, frame, look.scale);
+                for g in &content.glass {
+                    out.push(OutputElement::Glass(g.mapped(loc, f).forming(look.alpha as f32, &c.memo)));
+                }
+            }
             out.push(OutputElement::Snapshot(snapshot::SnapshotElement::new(&c.picture, frame, look.scale, look.alpha)));
         }
     };
@@ -585,7 +635,7 @@ fn scene_elements<R: HyaloRenderer>(
         let at = x.last_configure().loc - output_geo.loc;
         push_surface(&mut out, renderer, &surface, at.to_f64().to_physical_precise_round(scale), scale, output_size, false, state.when);
     }
-    push_closing(&mut out, true);
+    push_closing(&mut out, renderer, true);
     push_windows(&mut out, renderer, &above);
     // No dock to land in (it went away meanwhile): in front of the shell's chrome, as ever.
     if dock.is_none() {
@@ -595,7 +645,7 @@ fn scene_elements<R: HyaloRenderer>(
         push_layer(&mut out, renderer, l);
     }
     out.extend(ScrimElement::new(output.user_data(), floor, output_size).map(OutputElement::Scrim));
-    push_closing(&mut out, false);
+    push_closing(&mut out, renderer, false);
     push_windows(&mut out, renderer, &below);
     // The workspace left behind, sliding out: hidden, so out of the space — drawn from the
     // model, front to back, behind the one coming in.
