@@ -725,7 +725,7 @@ it means for the toolkit:
 
 Apps and shell surfaces share the view vocabulary, layout, interaction, semantics and paint:
 `VIEW.md`. They build with the public `nk` API (package `nidara-kit`, `crates/nidara-kit`):
-`nk::Button`, `nk::Row`, `nk::SettingRow`… (VIEW.md, "How an app writes it"). `Node`'s
+`nk::Button`, `nk::Row`, `nk::ListRow`… (VIEW.md, "How an app writes it"). `Node`'s
 constructors are the kit's own and not public. `AppWindow` hosts application views; the notification centre and Control Center
 host `ViewState` on shell surfaces. Built in `crates/nk-view` (its README).
 

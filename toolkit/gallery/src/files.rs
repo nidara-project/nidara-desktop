@@ -194,7 +194,7 @@ impl Browser {
         }
         let mut content = vec![
             PathBar::new("files/path", path, "files-path", body()).into(),
-            nk::SettingRow::new("files/mode", "Select multiple files", body())
+            nk::ListRow::new("files/mode", "Select multiple files", body())
                 .trailing(Switch::new(
                     "files/multi",
                     "Select multiple files",

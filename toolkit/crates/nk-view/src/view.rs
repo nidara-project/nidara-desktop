@@ -61,10 +61,11 @@ pub enum Kind {
     Placeholder(f64),
 }
 
-/// A setting row (VIEW.md §13.6), Settings' row: its title, a second line under it, and what
-/// it ends with.
+/// A list row (VIEW.md §13.6): the kit's general row in a list or a group of rows, in any
+/// app and for anything — its title, an optional second line under it, what it starts and
+/// ends with. Settings was its first user; the name says what it is (#1156).
 #[derive(Clone, Debug, Default)]
-pub struct SettingRow {
+pub struct ListRow {
     pub title: String,
     pub title_style: TextStyle,
     pub subtitle: Option<String>,
@@ -80,7 +81,7 @@ pub struct SettingRow {
     pub disabled: bool,
 }
 
-/// What a setting row ends with when its control is a slider (VIEW.md §13.7): Settings' slider
+/// What a list row ends with when its control is a slider (VIEW.md §13.7): Settings' slider
 /// row.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub struct SliderEnd {
@@ -694,13 +695,13 @@ impl Node {
             // A flip reports the state it switches TO, as a disclosure does (#1148).
             .value(crate::Value::Bool(!on))
     }
-    /// A setting row (VIEW.md §13.6): its title and second line, what it ends with, at least
+    /// A list row (VIEW.md §13.6): its title and second line, what it ends with, at least
     /// the kit's row height, its padding the kit's. Not activatable, it is no control: the
     /// control it ends with responds, and its text says the state (disabled). Activatable
     /// (`action`), the row is one control named by its title and described by its second
     /// line, with the view's hover and press off glass; set its role and `marked` as for any
     /// control (a row that flips a switch it shows is `Role::Toggle`, `marked(on)`).
-    pub(crate) fn setting_row(key: impl Into<Key>, row: SettingRow) -> Self {
+    pub(crate) fn list_row(key: impl Into<Key>, row: ListRow) -> Self {
         let key = key.into();
         let ink = |normal| if row.disabled { Ink::Disabled } else { normal };
         let mut text = vec![
@@ -752,7 +753,7 @@ impl Node {
             None => line,
         }
     }
-    /// A slider and its value, for a setting row to end with (VIEW.md §13.7): the slider at the
+    /// A slider and its value, for a list row to end with (VIEW.md §13.7): the slider at the
     /// kit's width, its glyphs either side of it when it has them, and its value after it in
     /// room for its widest text, so the slider never moves as the value changes. Measures are
     /// `style`'s, the exported `range.slider`.

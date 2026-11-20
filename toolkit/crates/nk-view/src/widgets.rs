@@ -170,7 +170,7 @@ impl Revealer {
     }
 }
 widget!(
-    /// A card on the window's own background around what it holds: Settings' group.
+    /// A card on the window's own background that groups rows (`nk::ListRow`), in any app.
     Group
 );
 impl Group {
@@ -505,7 +505,7 @@ impl Slider {
     }
     control_setters!();
 }
-/// A slider and its value, for a setting row to end with: the slider at the kit's width, its
+/// A slider and its value, for a list row to end with: the slider at the kit's width, its
 /// glyphs either side when it has them, its value after it in room for its widest text.
 #[must_use]
 pub struct SliderEnd {
@@ -882,20 +882,21 @@ impl<S: ListSource + ?Sized> From<ListView<'_, S>> for Node {
         n
     }
 }
-/// A setting row: its title, a second line under it, and what it ends with (Settings' row).
+/// A list row: its title, a second line under it, what it starts and ends with, in any list or
+/// group of rows.
 #[must_use]
-pub struct SettingRow {
+pub struct ListRow {
     key: Key,
-    row: crate::view::SettingRow,
+    row: crate::view::ListRow,
     role: Option<Role>,
     marked: Option<bool>,
     shown: Option<Shown>,
 }
-impl SettingRow {
+impl ListRow {
     pub fn new(key: impl Into<Key>, title: impl Into<String>, title_style: TextStyle) -> Self {
         Self {
             key: key.into(),
-            row: crate::view::SettingRow {
+            row: crate::view::ListRow {
                 title: title.into(),
                 title_style,
                 ..Default::default()
@@ -942,9 +943,9 @@ impl SettingRow {
         self
     }
 }
-impl From<SettingRow> for Node {
-    fn from(r: SettingRow) -> Node {
-        let mut n = Node::setting_row(r.key, r.row);
+impl From<ListRow> for Node {
+    fn from(r: ListRow) -> Node {
+        let mut n = Node::list_row(r.key, r.row);
         if let Some(role) = r.role {
             n = n.role(role);
         }
@@ -1024,7 +1025,7 @@ impl From<ListBox> for Node {
             .map(|(index, option)| {
                 let key = format!("{}/{index}", list.key.0);
                 let selected = list.selected == Some(index);
-                let mut row = SettingRow::new(key.clone(), option.title, list.style.clone())
+                let mut row = ListRow::new(key.clone(), option.title, list.style.clone())
                     .action(&list.action)
                     .role(Role::Option)
                     .enabled(list.enabled)

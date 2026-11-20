@@ -1168,7 +1168,7 @@ pub struct Tokens {
     pub swatch: SwatchStyle,
     pub disclosure: DisclosureStyle,
     pub entry: EntryStyle,
-    /// A setting row's least height (`static.json` `ts.ROW_HEIGHT.single`).
+    /// A list row's least height (`static.json` `ts.ROW_HEIGHT.single`).
     pub row_height: f64,
     /// A group's corner (`components.json` `common.groupRadius`), as Settings' cards.
     pub group_radius: f64,
