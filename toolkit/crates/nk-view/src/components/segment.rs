@@ -11,17 +11,30 @@ pub struct Segment {
 }
 impl Component for Segment {
     fn focus_outline(&self, cx: &Read<'_>) -> Option<FocusOutline> {
-        let mut outline =
-            FocusOutline::rounded(self.silhouette(cx), cx.look.tokens.segmented.radius);
-        if self.join_before {
-            outline.corners[0] = 0.;
-            outline.corners[3] = 0.;
+        // Round the whole control, its ends rounded, never one segment (owner, #1156): the
+        // focused segment is always the chosen one (one Tab stop, the arrows move the choice),
+        // so the ring says no less, and inside it the accent would sit on the accent fill.
+        let mut bounds = self.silhouette(cx);
+        let parent = cx
+            .placed
+            .iter()
+            .find(|p| &p.key == cx.key)
+            .and_then(|p| p.parent);
+        if let Some(parent) = parent {
+            for p in cx.placed.iter().filter(|p| {
+                p.parent == Some(parent) && matches!(p.what, crate::layout::What::Control(_))
+            }) {
+                let r = p.rect;
+                let (x0, y0) = (bounds[0].min(r[0]), bounds[1].min(r[1]));
+                let x1 = (bounds[0] + bounds[2]).max(r[0] + r[2]);
+                let y1 = (bounds[1] + bounds[3]).max(r[1] + r[3]);
+                bounds = [x0, y0, x1 - x0, y1 - y0];
+            }
         }
-        if self.join_after {
-            outline.corners[1] = 0.;
-            outline.corners[2] = 0.;
-        }
-        Some(outline)
+        Some(FocusOutline::rounded(
+            bounds,
+            cx.look.tokens.segmented.radius,
+        ))
     }
     fn selected(&self) -> bool {
         self.selected

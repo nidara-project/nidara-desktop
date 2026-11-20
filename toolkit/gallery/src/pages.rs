@@ -58,7 +58,7 @@ fn status_text(s: &str) -> &'static str {
 }
 
 /// Each page: its id (what the check and `--page` name), its title and its glyph.
-pub const PAGES: [(&str, &str, &str); 26] = [
+pub const PAGES: [(&str, &str, &str); 25] = [
     ("status", "Status", "nd-emblem-default"),
     ("window", "Window", "nd-sidebar-show"),
     ("button", "Button", "nd-hand"),
@@ -69,7 +69,6 @@ pub const PAGES: [(&str, &str, &str); 26] = [
     ("swatches", "Swatches", "nd-view-grid"),
     ("row", "List row", "nd-preferences-system"),
     ("slider", "Slider", "nd-display-brightness"),
-    ("field", "Text field", "nd-input-keyboard"),
     ("glass", "Glass card", "nd-preferences-desktop-theme"),
     ("text", "Text", "nd-clipboard-list"),
     ("icons", "Icons", "nd-globe"),
@@ -79,7 +78,7 @@ pub const PAGES: [(&str, &str, &str); 26] = [
     ("grid", "Grid", "nd-control-center"),
     ("reveal", "Reveal", "nd-pan-end"),
     ("disclosure", "Disclosure", "nd-pan-end"),
-    ("entry", "Editable field", "nd-input-keyboard"),
+    ("entry", "Text field", "nd-input-keyboard"),
     ("search", "Search", "nd-system-search"),
     ("list", "Long list", "nd-clipboard-list"),
     ("focus", "Focus", "nd-input-keyboard"),
@@ -355,7 +354,6 @@ fn page(id: &str, m: &Model, cat: &Catalogue, t: &TypeScale, k: &Measures) -> Ve
         "swatches" => swatches(m, t, k.colors),
         "row" => rows(m, t),
         "slider" => sliders(m, t),
-        "field" => fields(t),
         "glass" => glass(t),
         "text" => text(t),
         "icons" => icons(t),
@@ -365,7 +363,13 @@ fn page(id: &str, m: &Model, cat: &Catalogue, t: &TypeScale, k: &Measures) -> Ve
         "grid" => grid(t),
         "reveal" => reveal(m, t),
         "disclosure" => disclosures(m, t),
-        "entry" => entries(m, t),
+        // One text field page (owner, #1156): the kit's field, then the CC's password field
+        // that still uses the old one.
+        "entry" => {
+            let mut nodes = entries(m, t);
+            nodes.extend(fields(t));
+            nodes
+        }
         "search" => search_field(m, t),
         "list" => long_list(m, t, k),
         "focus" => focus_page(t, k),
@@ -547,6 +551,30 @@ fn buttons(m: &Model, t: &TypeScale) -> Vec<Node> {
             in_page("off", "Disabled", &|n| n.enabled(false)),
         ],
     );
+    // The page's own action in the accent, and one that deletes in red (owner, #1156).
+    let kind = |k: &str, text: &str, label: &str, a: nk::ButtonAppearance| {
+        sample(
+            &format!("b/a/{k}"),
+            label,
+            t,
+            content_button(&format!("b/a/{k}"), text, "noop", t)
+                .appearance(a)
+                .into(),
+        )
+    };
+    let appearances = row(
+        "b/appearances",
+        vec![
+            kind("normal", "Cancel", "Normal", nk::ButtonAppearance::Normal),
+            kind("default", "Save", "Default", nk::ButtonAppearance::Default),
+            kind(
+                "destructive",
+                "Delete",
+                "Destructive",
+                nk::ButtonAppearance::Destructive,
+            ),
+        ],
+    );
     let state = |k: &str, label: &str, f: &dyn Fn(nk::Button) -> nk::Button| {
         sample(
             &format!("b/{k}"),
@@ -617,6 +645,12 @@ fn buttons(m: &Model, t: &TypeScale) -> Vec<Node> {
     );
     vec![
         section("b-page", "In a page (no glass)", t, page),
+        section(
+            "b-appearance",
+            "In a page: what it does (.appearance)",
+            t,
+            appearances,
+        ),
         section(
             "b-states",
             "Over content (glass: a window's band, a toolbar over a page)",
@@ -1389,10 +1423,15 @@ fn fields(t: &TypeScale) -> Vec<Node> {
     )
     .gap(Space::S3);
     vec![
-        section("f-states", "States", t, states.into()),
+        section(
+            "f-states",
+            "Password (nk::Field, old: the CC's, until nk::Entry has a password mode)",
+            t,
+            states.into(),
+        ),
         nk::Label::new(
             "f/note",
-            "Typing into a field belongs to its owner today (VIEW.md §12.2); one field for the kit is #1079 step 2.",
+            "nk::Field is the old field whose owner does the typing (VIEW.md §12.2). It goes when nk::Entry has a password mode and the CC moves to it.",
             t.style(Type::Small, Weight::Regular),
         )
         .ink(Ink::Secondary)
@@ -2198,7 +2237,7 @@ fn focus_page(t: &TypeScale, k: &Measures) -> Vec<Node> {
             nk::Expander::new(key("disclosure"), name("Disclosure"), "noop", false)
                 .shown(Shown::Focus)
                 .into(),
-            nk::Entry::new(key("entry"), name("Editable field"), "noop", "Nidara")
+            nk::Entry::new(key("entry"), name("Text field"), "noop", "Nidara")
                 .width(240.)
                 .shown(Shown::Focus)
                 .into(),

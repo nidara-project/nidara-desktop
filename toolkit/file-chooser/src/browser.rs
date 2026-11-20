@@ -885,7 +885,7 @@ impl Browser {
                     Button::new("chooser/cancel", &self.strings.cancel, "cancel", body()).into(),
                     Button::new("chooser/accept", &self.accept, "accept", body())
                         .enabled(self.can_accept())
-                        .button_appearance(ButtonAppearance::Default)
+                        .appearance(ButtonAppearance::Default)
                         .into(),
                 ],
             )

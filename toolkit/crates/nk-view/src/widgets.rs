@@ -304,8 +304,12 @@ impl Button {
         /// Swiped across, its card follows the pointer and, released far enough, reports
         /// `action`.
         swipe(action: impl Into<String>);
-        /// Gallery fixture: a stable appearance.
-        button_appearance(appearance: ButtonAppearance);
+    }
+    /// In a page's content: `Default` for the action the page is for, in the accent (Save,
+    /// Open; `.suggested-action`, AppKit's default button), `Destructive` for one that
+    /// deletes or discards, in red (`.destructive-action`). `Normal` otherwise (owner, #1156).
+    pub fn appearance(self, appearance: ButtonAppearance) -> Self {
+        Self(self.0.button_appearance(appearance))
     }
 }
 widget!(

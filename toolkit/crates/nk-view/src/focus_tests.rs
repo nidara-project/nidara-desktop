@@ -305,7 +305,16 @@ fn shapes_match_marks_joins_and_search_chrome() {
             })
             .unwrap();
         match name {
-            "segment" => assert_eq!(shape.corners, [0.; 4]),
+            // Round the whole control, at its rounded ends (#1156).
+            "segment" => {
+                assert_eq!(shape.corners, [t.segmented.radius; 4]);
+                let (a, c) = (
+                    s.rect(&"c/0".into()).unwrap(),
+                    s.rect(&"c/2".into()).unwrap(),
+                );
+                assert_eq!(shape.bounds[0], a[0]);
+                assert_eq!(shape.bounds[0] + shape.bounds[2], c[0] + c[2]);
+            }
             "check" => {
                 assert_eq!(shape.bounds[2], t.check.size);
                 assert_eq!(shape.corners, [t.check.radius; 4]);

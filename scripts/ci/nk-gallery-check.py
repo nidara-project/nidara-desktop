@@ -31,9 +31,9 @@ TITLE = 'Nidara Kit Gallery'
 PAGES = [('status', 'Status'), ('button', 'Button'), ('switch', 'Switch'),
          ('check', 'Checkbox and radio'), ('dropdown', 'Dropdown'),
          ('segmented', 'Segmented choice'), ('swatches', 'Swatches'), ('row', 'List row'), ('slider', 'Slider'),
-         ('field', 'Text field'), ('glass', 'Glass card'), ('text', 'Text'), ('icons', 'Icons'),
+         ('glass', 'Glass card'), ('text', 'Text'), ('icons', 'Icons'),
          ('layout', 'Layout'), ('scroll', 'Scroll'), ('overlay', 'Overlay'), ('grid', 'Grid'),
-         ('reveal', 'Reveal'), ('disclosure', 'Disclosure'), ('entry','Editable field'), ('search','Search'), ('list','Long list')]
+         ('reveal', 'Reveal'), ('disclosure', 'Disclosure'), ('entry','Text field'), ('search','Search'), ('list','Long list')]
 if os.environ.get('NK_GALLERY_TEST') == 'vkms':
     # Only the disposable hyalo-smoke container's unprivileged test session.
     if (os.getuid() == 0

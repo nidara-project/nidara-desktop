@@ -5055,15 +5055,23 @@ fn a_segmented_choice_is_painted_off_glass_the_chosen_one_in_the_accent() {
         px(&press, mid(b, 3.)),
         "the chosen one pressed"
     );
-    // The ring outside the segment, over both of its neighbours.
+    // The ring round the whole control, never over a neighbour of the focused segment
+    // (owner, #1156): outside its two ends, and nothing new where the segments join.
     let (_, ringed) = painted(&view(&[(1, Shown::Focus)]), 400, 60);
-    for at in [mid(b, -3.), mid(b, b[2] + 3.)] {
+    for at in [mid(a, -3.), mid(c, c[2] + 3.)] {
         assert!(
             accent(px(&ringed, at)),
             "ring at {at:?}: {:?}",
             px(&ringed, at)
         );
         assert!(!accent(px(&rest, at)), "no ring at rest");
+    }
+    for at in [mid(b, -3.), mid(b, b[2] + 3.)] {
+        assert_eq!(
+            px(&ringed, at),
+            px(&rest, at),
+            "no ring over a neighbour at {at:?}"
+        );
     }
 }
 

@@ -1025,8 +1025,9 @@ Settings' dock size and gaming mode presets are this.
   outline's `border` and a line before it; the chosen one is `selectedColor` to its edges with
   `selectedText`, lighter by `selectedHoverWhite` under the pointer and darker by
   `selectedPressedBlack` while pressed. Disabled, all of it is at `disabledOpacity`.
-- **The focus ring** follows the segment's own joined corners with the shared gap (§13.4),
-  separating its accent from a chosen segment's fill.
+- **The focus ring** goes round the whole control at its rounded ends, with the shared gap
+  (§13.4), never round one segment (owner, #1156): the focused segment is always the chosen one,
+  so the ring says no less, and inside a segment the accent would sit on the accent fill.
 - **Measures, tones and the font** are `components.json` `choices.segmented`
   (`toolkit/tokens/choices.json`), read into `SegmentStyle`: 14 × 5 padding in a 1 border, a
   20 text line, the `sm` corner, `fse-small` at `fw-medium`. Nothing is a default.
