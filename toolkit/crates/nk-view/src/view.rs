@@ -39,6 +39,10 @@ pub struct Node {
     /// between them (`list.separator`, #1156).
     #[serde(default, skip_serializing_if = "std::ops::Not::not")]
     pub list_row: bool,
+    /// A rule: the kit's separator drawn along it, between the two things it stands between
+    /// (`list.separator`), and hidden next to one that is lit (#1156).
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub rule: bool,
     pub kind: Kind,
 }
 
@@ -544,6 +548,7 @@ impl Node {
             row_floor: false,
             presentation: false,
             list_row: false,
+            rule: false,
             kind,
         }
     }
@@ -706,6 +711,13 @@ impl Node {
     /// (`action`), the row is one control named by its title and described by its second
     /// line, with the view's hover and press off glass; set its role and `marked` as for any
     /// control (a row that flips a switch it shows is `Role::Toggle`, `marked(on)`).
+    /// A rule between two things in a row or a column: the kit's separator along its longer
+    /// side, centred across the shorter one (#1156).
+    pub(crate) fn rule(key: impl Into<Key>) -> Self {
+        let mut n = Self::spacer(key);
+        n.rule = true;
+        n
+    }
     pub(crate) fn list_row(key: impl Into<Key>, row: ListRow) -> Self {
         let key = key.into();
         let ink = |normal| if row.disabled { Ink::Disabled } else { normal };

@@ -213,6 +213,8 @@ pub struct Placed {
     pub scroll: Option<usize>,
     /// An `nk::ListRow` (`Node::list_row`).
     pub list_row: bool,
+    /// A rule (`Node::rule`).
+    pub rule: bool,
 }
 impl Placed {
     /// Its rectangle as far as it shows; None when nothing of it does.
@@ -774,6 +776,7 @@ impl Layouter<'_> {
             alpha: ctx.alpha,
             scroll: ctx.scroll,
             list_row: n.list_row,
+            rule: n.rule,
         });
         let mut inner = Ctx {
             parent: Some(index),

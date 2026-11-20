@@ -58,6 +58,8 @@ pub struct FrameStyle {
     pub nav_gap: f64,
     pub nav_height: f64,
     pub nav_icon: f64,
+    /// Either side of a navigation glyph: a button is pad + icon + pad wide, as the bar's.
+    pub nav_pad: f64,
     /// Between the window controls and what the band puts next to them.
     pub gap: f64,
     /// The page's room the window layout keeps beside an open sidebar; narrower, the
@@ -112,6 +114,7 @@ impl FrameStyle {
             nav_gap: number(&h["navigation"]["gap"], "header.navigation.gap")?,
             nav_height: number(&h["navigation"]["height"], "header.navigation.height")?,
             nav_icon: number(&h["navigation"]["icon"], "header.navigation.icon")?,
+            nav_pad: number(&h["navigation"]["pad"], "header.navigation.pad")?,
             gap: number(&h["search"]["gap"], "header.search.gap")?,
             content: number(
                 &e.statics["ts"]["WINDOW_LAYOUT"]["content"],
@@ -264,7 +267,10 @@ impl FrameStyle {
         };
         let tx = (edge + self.inset).max(after_controls);
         let nx = tx + self.button + self.inset;
-        let nw = 2. * self.nav_edge + 2. * self.nav_button + self.nav_gap;
+        // Each navigation button as the bar's items are (owner, #1156): as wide as its glyph and
+        // its pads, as high as the capsule less its edges; a rule between the two.
+        let nav_w = self.nav_icon + 2. * self.nav_pad;
+        let nw = 2. * self.nav_edge + 2. * nav_w + self.nav_gap;
         let title_x = nx + nw + self.title_gap;
         let right = match at {
             Some((c, (cx, _))) if c.side == ControlsSide::Right => cx - self.gap,
@@ -307,7 +313,7 @@ impl FrameStyle {
                 key,
                 label,
                 action,
-                glyph(key.into(), name, self.nav_icon, self.nav_button, enabled),
+                glyph(key.into(), name, self.nav_icon, self.nav_button, enabled).width(nav_w),
             )
             .corner(Corner::Pill)
             .enabled(enabled)
@@ -320,7 +326,9 @@ impl FrameStyle {
                 vec![
                     empty("band/nav/start").width(self.nav_edge),
                     nav_button("band/back", band.back, BACK, "nd-pan-start", band.can_back),
-                    empty("band/nav/gap").width(self.nav_gap),
+                    Node::rule("band/nav/gap")
+                        .width(self.nav_gap)
+                        .height(self.nav_icon),
                     nav_button(
                         "band/forward",
                         band.forward,
