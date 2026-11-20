@@ -1182,8 +1182,9 @@ accepts a reader request. No new Configure property or view-specific dispatch is
 new components receive their data in their constructor.
 
 Measures and tones match Settings' existing nk-widgets disclosure: common padding,
-ROW_HEIGHT.single, body text and disabled inks, full-row neutral hover and the shared focus
-outline (§13.4). rows.disclosure exports the 16px icon and the nd-pan-end 24-unit path/stroke;
+ROW_HEIGHT.single, body text and disabled inks, a full-row neutral hover and the shared focus
+outline (§13.4), both at the `sm` corner of an activatable list row (§13.6): square, they looked
+like no other row in the kit (owner, #1156). rows.disclosure exports the 16px icon and the nd-pan-end 24-unit path/stroke;
 turning it by 90 degrees reproduces nd-pan-down, with intermediate angles supplied by
 the generic target motion. The body reserves its icon slot with a fixed empty row,
 not a flex spacer. The gallery catalogue now records both implementations; Settings

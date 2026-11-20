@@ -2,7 +2,7 @@
 use super::*;
 use crate::components::{Disclosure, EditableField, Search};
 use crate::tests::{backend, tokens, types};
-use crate::{Corner, Node, Padding, Shown, Space, Type, Weight, view::Slider};
+use crate::{Corner, Node, Padding, Radius, Shown, Space, Type, Weight, view::Slider};
 fn cases() -> Vec<(&'static str, Node, &'static str)> {
     let style = types().style(Type::Body, Weight::Regular);
     vec![
@@ -317,7 +317,8 @@ fn shapes_match_marks_joins_and_search_chrome() {
             ),
             "search" => assert_eq!(shape.bounds, s.rect(&"c".into()).unwrap()),
             "editable" => assert_eq!(shape.corners, [t.entry.radius.min(shape.bounds[3] / 2.); 4]),
-            "disclosure" => assert_eq!(shape.corners, [0.; 4]),
+            // The corner of an activatable list row, as its hover (#1156, owner 16-11).
+            "disclosure" => assert_eq!(shape.corners, [t.radii.px(Radius::Sm); 4]),
             "empty-list" => assert_eq!(
                 shape.clip, None,
                 "the empty ring must not be clipped to its inside"

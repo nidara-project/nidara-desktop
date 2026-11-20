@@ -53,7 +53,11 @@ impl Disclosure {
 }
 impl Component for Disclosure {
     fn focus_outline(&self, cx: &Read<'_>) -> Option<FocusOutline> {
-        Some(FocusOutline::rounded(self.silhouette(cx), 0.))
+        // The corner of an activatable list row, the row it is drawn as (VIEW.md §13.6).
+        Some(FocusOutline::rounded(
+            self.silhouette(cx),
+            cx.look.tokens.radii.px(crate::Radius::Sm),
+        ))
     }
     fn body(&self, cx: &Build<'_>) -> Node {
         Node::row(
@@ -132,8 +136,11 @@ impl Component for Disclosure {
         };
         cx.canvas.clip(rect(&cx.visible));
         if cx.interaction.enabled && (cx.interaction.hover || cx.interaction.pressed) {
-            cx.canvas
-                .rounded_rect(rect(&r), 0., cx.ink(ink.with_alpha(t.hover_opacity as f32)));
+            cx.canvas.rounded_rect(
+                rect(&r),
+                cx.look.tokens.radii.px(crate::Radius::Sm),
+                cx.ink(ink.with_alpha(t.hover_opacity as f32)),
+            );
         }
         let Some(slot) = cx.read.part("chevron") else {
             return;

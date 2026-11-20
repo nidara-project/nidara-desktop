@@ -5828,8 +5828,13 @@ fn disclosure_chevron_paints_the_settings_icon_and_changes_orientation() {
     assert!(bgra(&open, 120, (96., 22.))[3] > 0);
     assert_eq!(bgra(&closed, 120, (96., 22.))[3], 0);
     let (_, hovered) = painted(&h(false).shown(Shown::Hover), 120, 48);
-    assert!(bgra(&hovered, 120, (2., 2.))[3] > 0);
-    assert_eq!(bgra(&closed, 120, (2., 2.))[3], 0);
+    assert!(
+        bgra(&hovered, 120, (2., 24.))[3] > 0,
+        "the whole row is lit"
+    );
+    assert_eq!(bgra(&closed, 120, (2., 24.))[3], 0);
+    // At an activatable list row's corner, not square (#1156).
+    assert_eq!(bgra(&hovered, 120, (0., 0.))[3], 0, "its corner is rounded");
 }
 #[test]
 fn disclosure_tokens_are_shared_settings_exports_without_fallbacks() {
