@@ -68,6 +68,8 @@ pub struct Canvas {
     /// The logical point at the canvas's top left: what is laid out in a window's
     /// coordinates paints into a layer placed at `origin` (`Canvas::at`).
     origin: (f64, f64),
+    /// What is painted now is scaled about a point (`push_zoom`): the stack's product.
+    zoom: Vec<Affine>,
 }
 impl Canvas {
     pub fn new(width: u16, height: u16, scale: f64) -> Self {
@@ -83,10 +85,28 @@ impl Canvas {
             resources: Resources::new(),
             scale,
             origin,
+            zoom: Vec::new(),
         }
     }
     fn base(&self) -> Affine {
-        Affine::scale(self.scale) * Affine::translate((-self.origin.0, -self.origin.1))
+        Affine::scale(self.scale)
+            * Affine::translate((-self.origin.0, -self.origin.1))
+            * self.zoom.last().copied().unwrap_or(Affine::IDENTITY)
+    }
+    /// Everything painted until `pop_zoom` is scaled by `k` about `pivot` (logical px): a panel
+    /// appearing (`nk::Appear`) grows about the point it hangs from. Paint only: what is hit
+    /// and laid out stays where it is.
+    pub fn push_zoom(&mut self, pivot: (f64, f64), k: f64) {
+        let z = self.zoom.last().copied().unwrap_or(Affine::IDENTITY)
+            * Affine::translate(pivot)
+            * Affine::scale(k)
+            * Affine::translate((-pivot.0, -pivot.1));
+        self.zoom.push(z);
+        self.context.set_transform(self.base());
+    }
+    pub fn pop_zoom(&mut self) {
+        self.zoom.pop();
+        self.context.set_transform(self.base());
     }
     pub fn image(&mut self, image: &Raster, bounds: Rect, fit: ImageFit) {
         if bounds.width <= 0. || bounds.height <= 0. {

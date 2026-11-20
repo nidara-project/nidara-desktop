@@ -929,7 +929,8 @@ fn a_reveal_unrolls_with_the_tokens_and_what_is_below_follows_without_sliding() 
     let a = placed(&s, "a/pane").alpha;
     assert!(a > 0. && a < 1.);
     let f = s.frame(&t, half);
-    // Declared whole, cut straight where the reveal ends, its glass as formed as its content.
+    // Declared whole, cut straight where the reveal ends; its glass formed as far as the reveal
+    // is open, ahead of its content (#764, `appear`).
     let cards = rect(&s, "cards");
     let b = rect(&s, "b/pane");
     assert!(
@@ -942,7 +943,12 @@ fn a_reveal_unrolls_with_the_tokens_and_what_is_below_follows_without_sliding() 
         .find(|p| p.key == Key::from("b/pane"))
         .unwrap();
     assert_eq!(fb.pane.height, b[3]);
-    assert_eq!(fb.opacity, a);
+    let formed = placed(&s, "b/pane").formed;
+    assert_eq!(fb.opacity, formed);
+    assert!(
+        formed > a,
+        "the glass forms ahead of what lies on it ({formed} vs {a})"
+    );
     let cut = fb
         .clip
         .expect("a pane cut by the reveal is declared with its clip");

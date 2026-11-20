@@ -392,6 +392,8 @@ impl MotionState {
                 let r = placed[i].rect;
                 placed[i].rect = [snap(r[0] + dx), r[1], r[2], r[3]];
                 placed[i].alpha *= alpha;
+                // Its glass goes with it: a card swiped away leaves whole, glass and all.
+                placed[i].formed *= alpha;
                 placed[i].clip = match placed[i].clip {
                     Some(c) if Some(c) == outside => Some([0., c[1], width, c[3]]),
                     Some(c) => Some([snap(c[0] + dx), c[1], c[2], c[3]]),

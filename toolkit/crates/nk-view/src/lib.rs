@@ -7,7 +7,9 @@
 //! and what an `Activated` means.
 pub mod components;
 pub use components::{ListSource, RowInfo};
+pub mod appear;
 pub mod diagnostics;
+pub use appear::{Appear, Look as AppearLook, Style as AppearStyle};
 mod host;
 mod layout;
 mod motion;

@@ -207,8 +207,12 @@ pub struct Placed {
     pub control: Option<usize>,
     /// What of it may show: the reveals it lies in, intersected. None: all of it.
     pub clip: Option<Rect>,
-    /// Its content's opacity: the product of the reveals' progress it lies in.
+    /// Its content's opacity: the reveals it lies in (`appear::formation`'s content) and the
+    /// panes' own opacity.
     pub alpha: f64,
+    /// How formed the glass it lies in (or is) is: the reveals' progress — glass forms over the
+    /// whole reveal, its content comes over the second half (#764, `appear`).
+    pub formed: f64,
     /// The nearest scroll region it lies in.
     pub scroll: Option<usize>,
     /// An `nk::ListRow` (`Node::list_row`).
@@ -268,6 +272,7 @@ struct Ctx {
     control: Option<usize>,
     clip: Option<Rect>,
     alpha: f64,
+    formed: f64,
     scroll: Option<usize>,
 }
 
@@ -312,6 +317,7 @@ impl Layouter<'_> {
             control: None,
             clip: None,
             alpha: 1.,
+            formed: 1.,
             scroll: None,
         };
         self.place(root, &m, bounds, ctx, &mut out);
@@ -774,6 +780,7 @@ impl Layouter<'_> {
             },
             clip: ctx.clip,
             alpha: ctx.alpha,
+            formed: ctx.formed,
             scroll: ctx.scroll,
             list_row: n.list_row,
             rule: n.rule,
@@ -787,6 +794,8 @@ impl Layouter<'_> {
                 inner.pane = Some(index);
                 out[index].alpha *= p.opacity;
                 inner.alpha *= p.opacity;
+                out[index].formed *= p.opacity;
+                inner.formed *= p.opacity;
                 self.place(&p.child, &m.children[0], r, inner, out)
             }
             Kind::Group(g) => self.place(&g.child, &m.children[0], r, inner, out),
@@ -858,7 +867,9 @@ impl Layouter<'_> {
                     Some(c) => intersect(c, rect).unwrap_or([rect[0], rect[1], 0., 0.]),
                     None => rect,
                 });
-                inner.alpha *= p;
+                let (formed, content) = crate::appear::formation(p);
+                inner.alpha *= content;
+                inner.formed *= formed;
                 let child = &m.children[0];
                 self.place(&rv.child, child, [r[0], r[1], r[2], child.h], inner, out)
             }
