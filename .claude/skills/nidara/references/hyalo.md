@@ -327,6 +327,25 @@ the sharp backdrop (two images at once, which is what it was until #764).
   Notification Center an `Appear` each (toolkit/VIEW.md §6). The content follows the TIME, not the
   eased progress: tied to the progress it arrived at ~20 % of the motion and the glass was barely
   seen forming.
+- **Windows and menus are formed by Hyalo itself** (`render/forming.rs`), with the same rule: the
+  glass forms over the whole motion and what lies on it comes over the second half of the TIME
+  (`forming::content`), through a lens over each pane (`SnapshotElement::with_lens`,
+  magnified where it first shows); going, the content leaves over the first half and the glass,
+  kept from the last frame (`Layers::glass`, `GlassElement::mapped`, pointer included), dissolves.
+  A window is one picture per STRETCH between its glasses (`snapshot::take_layers`), interleaved
+  with each glass in the window's order — one picture over the lowest glass hid a sidebar's glass
+  under the window's back. Each stretch keeps the window's body (`Decor`: fill, border, shadow)
+  apart from what lies on the glass: the body fades with the window, the content comes late
+  through the lens (a tinted window's fill lies in front of its blur glass). The picture behind
+  every glass is taken even empty. The kit destroys a window's toplevel FIRST
+  (`nk-wayland` `destroy_surfaces`): Hyalo pictures a closing window when its toplevel goes, and
+  layers destroyed before it are missing. Test with `level = "tinted"` too, not only opaque.
+  Window motion keeps its own sizes and curves (wm/motion.rs, `Look::content`). A menu (xdg popup) has the kit's timing, 220 ms in and
+  150 ms out, cubic; its clock starts at its first frame with something in it, none with reduce
+  motion (`forming::begin` in `new_popup`); at `popup_destroyed` its last picture and glass are
+  kept on its ROOT surface and drawn by it where it was (`push_closing` in `push_surface_over_glass`
+  and window.rs — both, or a window's menus vanish at once). Frames are kept coming by
+  `forming::moving`, read in `step_motions`.
 - **Instrument**: `formationHold = f` in `glass-tuning.conf` holds every pane at `f` (0 = off); the
   glass lab has it as «Formación (congelar)». Measured nested over a checkerboard (detail under the
   dock, std of grey levels): bare backdrop 24.7, f 0.01 → 24.6, 0.25 → 18.9, 0.5 → 13.5, 0.75 → 7.2,

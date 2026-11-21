@@ -11,6 +11,7 @@ pub mod controls;
 pub mod decor;
 pub mod drawn;
 pub mod fade;
+pub mod forming;
 pub mod glass;
 pub mod glass_gl;
 pub mod glass_tokens;
@@ -214,6 +215,19 @@ fn push_surface_over_glass<R: HyaloRenderer>(
     when: std::time::Instant,
     between: &mut Between<'_, R>,
 ) {
+    // Its menus going, then those coming (forming.rs), made first: the closure below holds the
+    // renderer.
+    crate::protocols::layers::prepare_input_popups(surface, when);
+    let mut menus: Vec<(WlSurface, Vec<OutputElement<R>>)> = Vec::new();
+    let mut going = Vec::new();
+    forming::push_closing(&mut going, renderer, surface, location, when);
+    for (popup, offset) in PopupManager::popups_for_surface(surface) {
+        let offset = (offset - popup.geometry().loc).to_f64().to_physical(scale).to_i32_round();
+        let mut v = Vec::new();
+        if forming::push_menu(&mut v, renderer, popup.wl_surface(), surface, location, location + offset, scale, output_size, when) {
+            menus.push((popup.wl_surface().clone(), v));
+        }
+    }
     let mut layer = |out: &mut Vec<OutputElement<R>>, s: &WlSurface, loc: Point<i32, Physical>, kind: Kind, between: Option<&mut Between<'_, R>>| {
         // Surfaces whose buffer is partly ink (nidara-material-v1 `add_ink_coverage`) are drawn
         // through the shader that recolours it.
@@ -260,9 +274,14 @@ fn push_surface_over_glass<R: HyaloRenderer>(
             out.extend(e.map(OutputElement::Scrim));
         }
     };
+    out.append(&mut going);
     crate::protocols::layers::prepare_input_popups(surface, when);
     for (popup, offset) in PopupManager::popups_for_surface(surface) {
         let offset = (offset - popup.geometry().loc).to_f64().to_physical(scale).to_i32_round();
+        if let Some(i) = menus.iter().position(|(f, _)| f == popup.wl_surface()) {
+            out.append(&mut menus[i].1);
+            continue;
+        }
         layer(out, popup.wl_surface(), location + offset, Kind::Unspecified, None);
     }
     layer(out, surface, location, Kind::ScanoutCandidate, Some(between));
@@ -486,29 +505,58 @@ fn scene_elements<R: HyaloRenderer>(
             if let Some(m) = managed.filter(|m| placement(m).is_none())
                 && let Some(look) = state.wm.opening(m.id, now)
             {
-                match snapshot::take(renderer.gles(), state, w, scale.x, false) {
-                    Ok(picture) => {
+                match snapshot::take_layers(renderer.gles(), state, w, scale.x) {
+                    Ok(layers) => {
                         let at = place.map_or(m.frame().loc.to_f64(), |p| p.origin);
                         let frame = Rectangle::new(at - output_geo.loc.to_f64(), m.frame().size.to_f64()).to_physical(scale);
-                        out.push(OutputElement::Snapshot(snapshot::SnapshotElement::new(&picture, frame, look.scale, look.alpha)));
-                        // What the picture leaves out, under it: the window's glass, the blur
-                        // behind it and its veils, drawn live at the picture's scale and formed
-                        // as far as it has faded in — or the window opened without them and
-                        // they appeared at once when it had (owner, 2026-10-18).
+                        // Its glass drawn live at the picture's scale, forming as far as it has
+                        // faded in, and between them what lies on each — a picture per stretch,
+                        // in the window's own order, coming over the second half through the lens
+                        // (forming.rs, #764); behind them all, the window's own picture. One
+                        // picture over the lowest glass hid a sidebar's glass under the window's
+                        // base surface until the end (live, 2026-11-20).
+                        let program = snapshot::lens_program(renderer.gles());
                         let size = m.frame().size.to_f64();
                         let origin = at + Point::from((size.w, size.h)).upscale((1.0 - look.scale) / 2.0);
                         let mut live = Vec::new();
                         let place = crate::wm::minimize::Placement { origin, scale: look.scale };
                         push_window(&mut live, renderer, state, w, Some(place), output_geo.loc, scale, output_size);
+                        let on = |p: &snapshot::Snapshot| {
+                            OutputElement::Snapshot(snapshot::SnapshotElement::new(p, frame, look.scale, look.content).with_lens(
+                                program.clone(),
+                                &p.panels,
+                                p.size,
+                                forming::lens(true, look.content),
+                                forming::PINCH,
+                            ))
+                        };
+                        let body = |p: &snapshot::Snapshot| OutputElement::Snapshot(snapshot::SnapshotElement::new(p, frame, look.scale, look.alpha));
                         if let Some(surface) = crate::wm::surface_of(w) {
                             with_states(&surface, |states| {
-                                out.extend(live.into_iter().filter_map(|e| match e {
-                                    OutputElement::Glass(g) => Some(OutputElement::Glass(g.forming(look.alpha as f32, &states.data_map))),
-                                    OutputElement::Scrim(v) => Some(OutputElement::Scrim(v.forming(look.alpha, &states.data_map))),
-                                    _ => None,
-                                }));
+                                // Stretch k's content goes in front of its first glass or veil;
+                                // its body right in front of its glass.
+                                let mut k = 0;
+                                let mut shown = false;
+                                for e in live {
+                                    let stretch = layers.stretches.get(k);
+                                    if matches!(e, OutputElement::Glass(_) | OutputElement::Scrim(_)) && !shown {
+                                        out.extend(stretch.and_then(|s| s.content.as_ref()).map(&on));
+                                        shown = true;
+                                    }
+                                    match e {
+                                        OutputElement::Glass(g) => {
+                                            out.extend(stretch.and_then(|s| s.body.as_ref()).map(&body));
+                                            out.push(OutputElement::Glass(g.forming(look.alpha as f32, &states.data_map)));
+                                            k += 1;
+                                            shown = false;
+                                        }
+                                        OutputElement::Scrim(v) => out.push(OutputElement::Scrim(v.forming(look.alpha, &states.data_map))),
+                                        _ => {}
+                                    }
+                                }
                             });
                         }
+                        out.push(body(&layers.under));
                         continue;
                     }
                     Err(err) => tracing::debug!(%err, id = m.id, "no picture of an opening window"),
@@ -519,10 +567,30 @@ fn scene_elements<R: HyaloRenderer>(
     };
     // Windows closing: pictures of them, fading where they were — over the windows still there,
     // and a fullscreen one over the shell's chrome, as it was.
-    let push_closing = |out: &mut Vec<OutputElement<R>>, fullscreen: bool| {
+    let push_closing = |out: &mut Vec<OutputElement<R>>, renderer: &mut R, fullscreen: bool| {
         for c in state.wm.closing.iter().rev().filter(|c| c.fullscreen == fullscreen) {
             let Some(look) = c.motion.look(now) else { continue };
             let frame = Rectangle::new(c.frame.loc - output_geo.loc.to_f64(), c.frame.size).to_physical(scale);
+            // The opening backwards (forming.rs, #764): what lies on its glass goes over the
+            // first half, through the lens; its glass, kept, dissolves over the whole.
+            let program = snapshot::lens_program(renderer.gles());
+            let (loc, f) = snapshot::placement(&c.picture, frame, look.scale);
+            for (stretch, glass) in &c.layers {
+                if let Some(content) = &stretch.content {
+                    let element = snapshot::SnapshotElement::new(content, frame, look.scale, look.content).with_lens(
+                        program.clone(),
+                        &content.panels,
+                        content.size,
+                        forming::lens(false, look.content),
+                        forming::PINCH,
+                    );
+                    out.push(OutputElement::Snapshot(element));
+                }
+                if let Some(body) = &stretch.body {
+                    out.push(OutputElement::Snapshot(snapshot::SnapshotElement::new(body, frame, look.scale, look.alpha)));
+                }
+                out.push(OutputElement::Glass(glass.mapped(loc, f).forming(look.alpha as f32, &c.memo)));
+            }
             out.push(OutputElement::Snapshot(snapshot::SnapshotElement::new(&c.picture, frame, look.scale, look.alpha)));
         }
     };
@@ -585,7 +653,7 @@ fn scene_elements<R: HyaloRenderer>(
         let at = x.last_configure().loc - output_geo.loc;
         push_surface(&mut out, renderer, &surface, at.to_f64().to_physical_precise_round(scale), scale, output_size, false, state.when);
     }
-    push_closing(&mut out, true);
+    push_closing(&mut out, renderer, true);
     push_windows(&mut out, renderer, &above);
     // No dock to land in (it went away meanwhile): in front of the shell's chrome, as ever.
     if dock.is_none() {
@@ -595,7 +663,7 @@ fn scene_elements<R: HyaloRenderer>(
         push_layer(&mut out, renderer, l);
     }
     out.extend(ScrimElement::new(output.user_data(), floor, output_size).map(OutputElement::Scrim));
-    push_closing(&mut out, false);
+    push_closing(&mut out, renderer, false);
     push_windows(&mut out, renderer, &below);
     // The workspace left behind, sliding out: hidden, so out of the space — drawn from the
     // model, front to back, behind the one coming in.

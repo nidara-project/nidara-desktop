@@ -146,6 +146,7 @@ fn compose(
                 scale,
                 id: Id::new(),
                 commit: Default::default(),
+                panels: Vec::new(),
             },
             tracker: OutputDamageTracker::new(size, scale, Transform::Normal),
             scale,

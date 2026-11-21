@@ -646,9 +646,14 @@ pub fn push<R: HyaloRenderer>(
     // shadow margin — were drawn that much up and left of where the pointer reached them
     // (owner, 2026-10-04: "the hover lights with the pointer below the item").
     let geometry_loc = window.geometry().loc;
+    // Its menus going, in front of those it has (render/forming.rs).
+    super::forming::push_closing(out, renderer, &surface, location, when);
     crate::protocols::layers::prepare_input_popups(&surface, when);
     for (popup, offset) in PopupManager::popups_for_surface(&surface) {
         let offset = (geometry_loc + offset - popup.geometry().loc).to_f64().to_physical(scale).to_i32_round();
+        if super::forming::push_menu(out, renderer, popup.wl_surface(), &surface, location, location + offset, scale, output_size, when) {
+            continue;
+        }
         super::push_tree(out, renderer, popup.wl_surface(), location + offset, scale, output_size, Kind::Unspecified, when);
     }
     let radius = if look.rounded { cfg.rounding * scale.x } else { 0.0 };
