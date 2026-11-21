@@ -1147,27 +1147,32 @@ looks pale", 02-10). Now, with Hyprland's numbers (`[windows]` in `config/hyalo/
 ## The window controls are Hyalo's (#708 point 5, 2026-10-03)
 
 The owner's design, chosen on a mockup: Hyalo draws a window's close, minimize and maximize
-OVER the app's own header, in the same row — no bar of its own for our apps — as **one capsule**
-(ours, never three coloured circles). **One button size in every window** (owner, 2026-10-03):
+OVER the app's own header, in the same row — no bar of its own for our apps — as **one glass
+circle per button** (#1128; ours, never three coloured dots). **One button size in every window** (owner, 2026-10-03):
 the controls are the system's, so they do not take their size from each app's header
-(`window_controls::BUTTON_H`). **They are the classic loose window buttons held in a capsule,
-as small as it can be** (owner, 2026-10-23, #921) — not header buttons, so Hyalo's title bar
-stays thin: **24 high, each button's hover a 16 px circle, 4 from the capsule's ends and 8 from
-the next** (`HOVER_D`, `EDGE`, `GAP`): a button takes 24 (`PITCH = HOVER_D + GAP`) and the
-capsule `24 × n − 8 + 8` — **24, 48, 72**. From 2026-10-04 to #921 it was a header button's
+(`window_controls::BUTTON_H`). **Each button is a glass circle of its own, 24 across, 12 from the next** (owner,
+2026-11-21, #1128: `BUTTON_H`, `GAP`): a button takes 36 (`PITCH = BUTTON_H + GAP`, the bar's
+icon rhythm) and the row `36 × n − 12` — **24, 60, 96**. Its hover and press tint the WHOLE
+circle, so a close-only window's one button turns red entirely; the gap between two circles
+is no button's (`button_at` hits the circle only; in Hyalo's bar the gap moves the window, over
+an app's header it is the app's). Every circle is a `Shape` of its own in the controls'
+material, each measuring its own backdrop; the glyphs' ink follows the first one's answer. From
+#921 (2026-10-23) to #1128 they were 16 px hover circles inside ONE 24-high capsule, 4 from its
+ends and 8 apart (24, 48, 72): the red dot floating inside a close-only circle is what the owner
+rejected. From 2026-10-04 to #921 it was a header button's
 size, 32 high with 24 px circles 4 apart (32, 60, 88: the bar's rule for a capsule of icon
 buttons, design-system.md); that made the SSD bar 48 and, in a sidebar, put the controls out of
 line with the header unless the header grew. Before 2026-10-06 a button was a 30 px slot whose
-hover FILLED it, cut by the capsule. The shader takes `HOVER_D`/`EDGE`/`PITCH`/`GAP` from
-`set_geometry`. **The hover is the glass itself** (owner, 2026-10-23): over the shell's glass
+hover FILLED it, cut by the capsule. The shader takes the radius and `PITCH` from
+`set_geometry` and draws each circle by its own distance. **The hover is the glass itself** (owner, 2026-10-23): over the shell's glass
 (D7) each button's hover and press are a wash INSIDE the glass shader (`state_regions`,
 `glass_final.glsl`), never a disc painted over it; close's red the destructive wash. Without a
-token export (no glass) the capsule paints its own fill and a flat circle, `HOVER_A`/`PRESS_A`. A press between two circles goes to the
-nearer one (the boundary is halfway, `button_at`). Close turns red on hover — a red circle. Right by default (close last), left as a setting (close first).
+token export (no glass) each circle paints its own fill, tinted whole on hover, `HOVER_A`/`PRESS_A`.
+Close turns red on hover — the whole circle. Right by default (close last), left as a setting (close first).
 
 **Which buttons** (owner, 2026-10-04, `window_controls::shown`). A button that does nothing for
 a window is NOT drawn — hidden, not disabled, as GNOME and Windows do and as an app's own title
-bar must (it cannot disable one) — and the capsule shrinks by 28 px. A window shows a button
+bar must (it cannot disable one) — and the row shrinks by 36 px. A window shows a button
 when ALL of these say yes, close always:
 - **the user chose it** — `[windows.controls] buttons`, which the shell keeps equal to
   `org.gnome.desktop.wm.preferences button-layout` (below);
@@ -1176,8 +1181,8 @@ when ALL of these say yes, close always:
 - **no rule took it away** — a rule's `controls = ["close"]` (`Managed::controls`, the bits);
 - **it can do it** — maximize only while the window can change size (minimum ≠ maximum);
   minimize never on a dialog (a window with a parent: it goes with that one — "Minimizing").
-So by default a resizable window has minimize, maximize and close (72×24), a fixed-size window
-minimize and close (48×24), a dialog maximize and close or close alone, About close alone (24×24).
+So by default a resizable window has minimize, maximize and close (96×24), a fixed-size window
+minimize and close (60×24), a dialog maximize and close or close alone, About close alone (24×24).
 
 - **The protocol is ours**, `protocols/nidara-window-controls-v1.xml`, both ends in this repo
   (server `protocols/window_controls.rs`, client `lib/nidara-wl`): `get_window_controls(wl_surface)`
@@ -1311,7 +1316,7 @@ minimize and close (48×24), a dialog maximize and close or close alone, About c
   places its own two slots beside its close button. `NIDARA_WINDOW_CONTROLS=0` turns it off.
 - `nidara-hyalo msg windows` → each window's `controls`: `[x, y, w, h]`, global logical, or null.
 - CI: `scripts/ci/hyalo-window-controls-check.sh` (C probe `hyalo-window-controls-probe.c`,
-  leaving room as the kit does): the layout told (72×24), the controls where the app placed them,
+  leaving room as the kit does): the layout told (96×24), the controls where the app placed them,
   the pointer the app's over its body and not over its controls, maximize and restore, the side
   switched live and followed; close alone from the user's buttons and from the app's
   `set_buttons` (SIGUSR1), minimize and close while it cannot change size even asking for all
@@ -1669,12 +1674,13 @@ headers, the title centred. `render/title_bar.rs`.
   (`update_title_bar`): an app that switches its frame while it runs gains or loses the bar,
   with the layout following. A rule's `title_bar = false` takes it from one app.
 - **Its place**: on top of the client's box, INSIDE the window's — `Managed::bar()` (32, 0 in
-  fullscreen), `frame()` = the box with the bar. 32 = the capsule's 24 and the same 4 px above,
-  below and beside it (`window_controls::BAR_MARGIN`; owner 2026-10-03: equal gaps; #921, owner
-  2026-10-23: in Hyalo's bar the capsule sits 4 from the window's edges, which keeps the bar
-  thin — it was 48 with the 32 px capsule 8 from them). Not the same total: a kit window's header starts 8 below the window's edge (its
-  floating sidebar card's margin), Hyalo's bar at the edge, so the capsule is 12/12 from the
-  corner in ours (inside the sidebar card) and 4/4 in the bar — centred on its row's line in
+  fullscreen), `frame()` = the box with the bar. 32 = the buttons' 24 and 4 px above and
+  below them (`window_controls::BAR_MARGIN`; #921, owner 2026-10-23: keeps the bar thin — it was
+  48 with the 32 px capsule 8 from the edges), and **12 beside them** (`BAR_SIDE`, #1128, owner
+  2026-11-21: at 4 they pressed into the window's rounded corner; 12 is a kit window's
+  `windowInset`). A kit window's header starts 8 below the window's edge (its floating sidebar
+  card's margin), Hyalo's bar at the edge, so the buttons are 12/12 from the corner in ours
+  (inside the sidebar card) and 12 across, 4 down in the bar — centred on its row's line in
   both, as macOS centres its window buttons in whatever bar they are in. A tiled or maximized window's tile is the frame
   and the client gets the rest; a floating window keeps the size it asked for and the bar sits
   above it, clamped by the frame (`clamp_floating_with_bar`: the bar, not the client, may never

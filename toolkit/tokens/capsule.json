@@ -2,13 +2,14 @@
   "$comment": [
     "Owner #921 geometry, 2026-10-23: matches Hyalo protocols/window_controls.rs; kit header live acceptance remains separate.",
     "Exported in components.json mode variants; pitch is button + gap; edge is only the outer inset.",
-    "Hyalo keeps an independently usable layout mirror, to be checked against this export by CI."
+    "Hyalo keeps an independently usable layout mirror, to be checked against this export by CI.",
+    "Owner #1128, 2026-11-21: each button is a glass circle of its own, `button` = `height` across, `gap` apart, with no capsule round them (`edge` 0). In Hyalo's title bar they sit 12 from the window's side (BAR_SIDE), like `windowInset` here."
   ],
   "default": {
     "height": 24,
-    "button": 16,
-    "edge": 4,
-    "gap": 8,
+    "button": 24,
+    "edge": 0,
+    "gap": 12,
     "windowInset": 12,
     "glyph": {
       "size": 14,

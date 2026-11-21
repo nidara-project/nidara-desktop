@@ -340,10 +340,10 @@ impl TitleBarElement {
             let strip = cb.to_buffer(cb.b.loc.x, cb.b.loc.y + cb.px, cb.b.size.w, cb.px);
             Some((tex, strip, cb.transform))
         });
-        // The title, centred in the bar, never under the capsule: as wide as what the capsule
-        // leaves on BOTH sides, so centred it stays clear of it.
+        // The title, centred in the bar, never under the buttons: as wide as what they leave on
+        // BOTH sides, with their distance from the side, so centred it stays clear of them.
         let capsule = bar.controls.as_ref().map_or(0.0, |(r, _)| r.size.w);
-        let reserve = capsule + 2.0 * crate::protocols::window_controls::BAR_MARGIN * s;
+        let reserve = capsule + 2.0 * crate::protocols::window_controls::BAR_SIDE * s;
         let max_w = (geo.size.w - 2.0 * reserve).floor() as i32;
         let title = title_raster(surface, &bar.title, &bar.family, (TITLE_PX * s).round(), max_w).map(|r| {
             let x = (bar_rect.loc.x + (bar_rect.size.w - r.w as f64) / 2.0).round() as i32;

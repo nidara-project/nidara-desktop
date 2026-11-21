@@ -777,6 +777,7 @@ pub(crate) fn push_window<R: HyaloRenderer>(
             dark: crate::wm::surface_of(&m.window).is_some_and(|s| crate::protocols::window_controls::dark_ink(&s)),
             moving: place.is_some(),
             ink: None,
+            hover_ink: None,
             reduce_motion: state.reduce_motion,
         };
         Some((rect, controls))

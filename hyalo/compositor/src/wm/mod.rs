@@ -173,9 +173,9 @@ impl Managed {
 }
 
 /// The height of the title bar Hyalo draws for an app that asks for one (render/title_bar.rs),
-/// logical px: the capsule and the same gap above, below and beside it (owner, 2026-10-03:
-/// equal gaps) — `window_controls::BAR_MARGIN`: 24 + 4 + 4 = 32 (owner, 2026-10-23, #921: the
-/// small capsule, 4 from the edges, keeps the bar thin). It was 48 while the capsule was 32.
+/// logical px: the buttons and `window_controls::BAR_MARGIN` above and below them: 24 + 4 + 4 =
+/// 32 (owner, 2026-10-23, #921: keeps the bar thin). Beside them is `BAR_SIDE`, 12 (#1128; it
+/// was the same 4 until then). It was 48 while the capsule was 32.
 pub const TITLE_BAR_H: i32 = 32;
 
 /// The client's box `r` with a bar of `bar` px on top of it: the window's whole box.

@@ -677,7 +677,11 @@ pub fn push<R: HyaloRenderer>(
         // or, in Hyalo's title bar, the bar's own pass draws it as before.
         let under = !glass.is_empty();
         if under || apart.is_none() {
-            let controls = if under { super::controls::Controls { ink, ..controls } } else { controls };
+            let controls = if under {
+                super::controls::Controls { ink: ink.map(|i| i[0]), hover_ink: ink.map(|i| i[1]), ..controls }
+            } else {
+                controls
+            };
             out.push(OutputElement::Controls(super::controls::ControlsElement::new(&surface, rect, scale, controls, under)));
             out.extend(glass.into_iter().map(OutputElement::Glass));
             out.extend(shadow.map(OutputElement::Scrim));

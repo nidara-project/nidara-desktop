@@ -4,9 +4,9 @@
 # Chrome with "Use system title bar and borders"). Run INSIDE a Hyalo session started with
 # HYALO_CONTROL, with `hyalo-title-bar-probe` in PATH, on a floating workspace.
 #
-#   1. the probe asks for server-side: it gets a 32 px bar on top of its box, and the capsule
-#      in it (72×24 — minimize, maximize and close — the same 4 px from the right as above and
-#      below it);
+#   1. the probe asks for server-side: it gets a 32 px bar on top of its box, and its controls
+#      in it (96×24 — minimize, maximize and close, three circles 12 apart — 12 px from the
+#      right, 4 above and below them: #1128);
 #   2. one piece: the bar's pixel is the colour of the app's top row (light), and its ink is
 #      dark on it (the title's darkest pixel) — also for an app that draws into a subsurface
 #      over a transparent toplevel, as Firefox does;
@@ -61,9 +61,9 @@ sleep 0.8
 
 # 1. The bar and its capsule.
 [ "$(field title_bar)" = 32 ] || fail "no title bar: title_bar = $(field title_bar) (32 expected)"
-want=$(win | jq -r '"\(.x + .width - 4 - 72) \(.y - 32 + 4) 72 24"')
+want=$(win | jq -r '"\(.x + .width - 12 - 96) \(.y - 32 + 4) 96 24"')
 got=$(win | jq -r '.controls | map(floor) | join(" ")')
-[ "$got" = "$want" ] || fail "the capsule at '$got', '$want' expected (4 px in from the right, above and below)"
+[ "$got" = "$want" ] || fail "the capsule at '$got', '$want' expected (12 px in from the right, 4 above and below)"
 echo "ok    a 32 px bar on top of the window, the capsule in it"
 
 # 2. One piece, and dark ink on a light bar.
@@ -186,6 +186,7 @@ echo "ok    the app switched to its own frame and the bar went; back, and it cam
 
 # 6. Close.
 sleep 0.4
-echo "click $(in_capsule 0.75)" >"$C"
+# The middle of close, the third circle (#1128: the gaps between circles are the bar's).
+echo "click $(in_capsule 0.875)" >"$C"
 wait_line '^CLOSED' || fail "close in the bar did not ask the window to close"
 echo "ok    close in the bar asks the window to close"
