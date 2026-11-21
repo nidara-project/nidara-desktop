@@ -97,7 +97,22 @@ struct StatesJson {
 struct StateJson {
     wash: Rgba,
     #[serde(default)]
+    levels: Option<LevelsJson>,
+    #[serde(default)]
     ink: Option<Rgba>,
+}
+
+#[derive(Debug, Clone, Copy, Deserialize)]
+struct LevelsJson {
+    lift: Rgb,
+    gain: Rgb,
+}
+
+#[derive(Debug, Clone, Copy, Deserialize)]
+struct Rgb {
+    r: f64,
+    g: f64,
+    b: f64,
 }
 
 #[derive(Debug, Clone, Copy, Deserialize)]
@@ -166,10 +181,12 @@ pub struct ControlLook {
     pub ink: [[f64; 4]; 2],
 }
 
-/// One state's wash over the glass, and the ink it takes instead of the mix (destructive ones).
+/// One state of the glass: its levels (lift rgb, gain rgb: the glass's own, `set_state_levels`)
+/// or, without them, its wash over it; and the ink it takes instead of the mix, if any.
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct State {
     pub wash: [f64; 4],
+    pub levels: Option<[f64; 6]>,
     pub ink: Option<[f64; 4]>,
 }
 
@@ -246,7 +263,11 @@ fn rgba(c: Rgba) -> [f64; 4] {
 
 fn control(step: &Step) -> Option<ControlLook> {
     let (states, ink) = (step.states?, step.ink?);
-    let state = |s: StateJson| State { wash: rgba(s.wash), ink: s.ink.map(rgba) };
+    let state = |s: StateJson| State {
+        wash: rgba(s.wash),
+        levels: s.levels.map(|l| [l.lift.r, l.lift.g, l.lift.b, l.gain.r, l.gain.g, l.gain.b]),
+        ink: s.ink.map(rgba),
+    };
     Some(ControlLook {
         response: step.response.map(|r| Response {
             luma: [r.luma_low, r.luma_high],

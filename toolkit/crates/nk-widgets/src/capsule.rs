@@ -166,6 +166,8 @@ impl Tree {
 #[derive(Clone, Copy, Debug)]
 pub struct CapsuleStateStyle {
     pub wash: [f64; 4],
+    /// The glass's own levels in this state (`nk_wayland::StateRegion::levels`).
+    pub levels: Option<[f64; 6]>,
     pub ink: Option<[f64; 4]>,
 }
 #[derive(Clone, Debug)]
@@ -233,6 +235,14 @@ impl Tree {
     }
     /// Match Hyalo's server controls: idle keeps the hover hue at zero alpha.
     /// Interpolating straight RGBA from transparent black changes the fade itself.
+    /// The levels of its state, or while idle those of its hover: a fade-out keeps its levels.
+    pub(crate) fn capsule_levels(&self, id: NodeId, style: &CapsuleStyle) -> Option<[f64; 6]> {
+        match self.capsule_state(id, style) {
+            Some(state) => state.levels,
+            None if self.nodes[&id].destructive => style.destructive_hover.levels,
+            None => style.hover.levels,
+        }
+    }
     pub(crate) fn capsule_wash(&self, id: NodeId, style: &CapsuleStyle) -> [f64; 4] {
         if let Some(state) = self.capsule_state(id, style) {
             return state.wash;
@@ -289,6 +299,7 @@ impl Tree {
                 radius: self.highlight_shape(*button).1 as f64,
                 // Keep idle regions with the same IDs for compositor-owned fade-out.
                 wash: self.capsule_wash(*button, style),
+                levels: self.capsule_levels(*button, style),
                 fade_ms: style.fade_ms(reduce_motion),
             });
             // Keep actual coloured selection pixels out of the adaptive ink mask.

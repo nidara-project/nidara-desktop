@@ -2118,7 +2118,11 @@ mod tests {
             ambient_lift: 0.,
             ambient_gain: 1.,
         };
-        let state = |wash, ink| CapsuleStateStyle { wash, ink };
+        let state = |wash, ink| CapsuleStateStyle {
+            wash,
+            levels: None,
+            ink,
+        };
         let style = CapsuleStyle {
             material: ControlMaterial {
                 base: Material {

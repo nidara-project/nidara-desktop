@@ -1433,6 +1433,7 @@ impl Bar {
                     },
                     radius,
                     wash: [1., 1., 1., 0.12],
+                    levels: None,
                     fade_ms: 150,
                 });
             }

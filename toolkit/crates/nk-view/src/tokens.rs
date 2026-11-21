@@ -299,9 +299,23 @@ pub struct Washes {
     pub press: [f64; 4],
     pub destructive_hover: [f64; 4],
     pub destructive_press: [f64; 4],
+    /// The glass's own levels in the destructive states (lift rgb, gain rgb; `levels` in the
+    /// export): a red glass, not red laid over it. None: an export without them.
+    pub destructive_levels: [Option<[f64; 6]>; 2],
     pub fade_ms: u32,
 }
 impl Washes {
+    /// The levels a state region of this wash shows the glass in: a destructive hover's or
+    /// press's — matched by its colour, which no other state shares, so its fade-out (the same
+    /// colour at no opacity) keeps them. The neutral washes are already levels of the glass (a
+    /// white wash at a lifts it by a), so they need none.
+    pub fn levels_of(&self, wash: [f64; 4]) -> Option<[f64; 6]> {
+        [self.destructive_hover, self.destructive_press]
+            .iter()
+            .zip(self.destructive_levels)
+            .find(|(w, _)| w[..3] == wash[..3])
+            .and_then(|(_, l)| l)
+    }
     pub fn from_glass(
         glass: &Value,
         dark: bool,
@@ -328,11 +342,28 @@ impl Washes {
             }
             Ok(out)
         };
+        let levels = |name: &str| -> Result<Option<[f64; 6]>, String> {
+            let l = &states[name]["levels"];
+            if l.is_null() {
+                return Ok(None);
+            }
+            let mut out = [0.; 6];
+            for (k, part) in ["lift", "gain"].iter().enumerate() {
+                for (i, c) in ["r", "g", "b"].iter().enumerate() {
+                    out[3 * k + i] = l[part][c]
+                        .as_f64()
+                        .filter(|v| v.is_finite())
+                        .ok_or_else(|| format!("glass.json: {name}.levels.{part}.{c}"))?;
+                }
+            }
+            Ok(Some(out))
+        };
         Ok(Self {
             hover: wash("hover")?,
             press: wash("press")?,
             destructive_hover: wash("destructiveHover")?,
             destructive_press: wash("destructivePress")?,
+            destructive_levels: [levels("destructiveHover")?, levels("destructivePress")?],
             fade_ms: states["fadeMs"]
                 .as_u64()
                 .and_then(|v| u32::try_from(v).ok())

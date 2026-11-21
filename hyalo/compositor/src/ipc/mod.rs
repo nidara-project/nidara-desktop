@@ -136,8 +136,12 @@ pub struct ShapeAnswerInfo {
 #[derive(Debug, Clone, Serialize, PartialEq)]
 pub struct WashInfo {
     pub id: u32,
-    /// Straight sRGB and its opacity, as it shows now.
-    pub wash: [f64; 4],
+    /// The state as it shows now (protocols/material.rs `tone_of`): the toned glass colour c
+    /// becomes mix(c, lift + (gain - lift) * c, strength). A wash laid over: lift = gain = its
+    /// colour, strength its opacity.
+    pub strength: f64,
+    pub lift: [f64; 3],
+    pub gain: [f64; 3],
     pub settled: bool,
 }
 

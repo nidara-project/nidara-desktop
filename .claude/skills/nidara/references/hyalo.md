@@ -941,8 +941,16 @@ controls and Hyalo's own window controls on the same paths:
   mixed towards its `set_ink_tone` by r, every stage (`Tone::mix`), its shadow's opacity times
   `1 + shadow_white·r + shadow_text·c` (`scrim::scrims_of`), and an answering shape ignores the
   binary ink. Nothing waits: the measurement is the ink's fence/PBO.
-- **`add_state_region`**: a wash over the toned glass, in a rounded rectangle and only where there
-  is glass (`glass_gl::StatePx`, the shader's `s_*`, at most 8 per draw), under the rim.
+- **`add_state_region`**: a state of the toned glass, in a rounded rectangle and only where there
+  is glass (`glass_gl::StatePx`, the shader's `s_*`, at most 8 per draw), under the rim. **A state
+  is a property of the glass, not a colour laid over it** (owner, 2026-11-21): `set_state_levels`
+  (same id, after it) gives the glass's own levels inside it, `c → lift + (gain − lift)·c` per
+  channel, so the backdrop keeps its detail and the ink stays the glass's — close's red is a red
+  glass (lift ≈ 0.30/0.04/0.05, gain 1/0.42/0.44, picked over five backdrops), lighter over a
+  light header, deep over a dark one. Without levels the region is its colour at opacity a —
+  which is the same formula with lift = gain = the colour (`material::tone_of`), so a neutral
+  white wash at a IS lift a, gain 1; what a wash cannot do is a slope per channel, the tint. Its
+  a > 0 then only says the state is on; turning off it fades keeping its levels.
 - **Easing** (`material::Presenting`, in `Current`): each answer by shape index, each wash by id.
   A first answer and a new id show at once; a change eases linearly over `settle_ms` / `fade_ms`
   from what was SHOWN; an id gone is gone. `presented(surface, when)` fills the state as it
@@ -963,7 +971,7 @@ controls and Hyalo's own window controls on the same paths:
   locks the surface twice and Hyalo hangs at its first frame (seen headless, 2026-10-21).
 - **What shows is reported** (`msg windows`): each layer's `answers` and the window's
   `controls_answers` — per answering shape `measured`, `r`, `c`, `settled`, `shadow_gain`, per
-  wash its colour now and `settled` (`Presenting::info`). A check waits for `measured && settled`
+  state its `strength`, `lift`, `gain` now and `settled` (`Presenting::info`). A check waits for `measured && settled`
   instead of sleeping before its capture; the checks below do. Each report has a `revision`:
   it moves with every material state Hyalo takes in, changed or not — a client commit applied
   (a layer's with its parent's), or for the window controls a hover, a press or a material drawn
@@ -1165,8 +1173,9 @@ buttons, design-system.md); that made the SSD bar 48 and, in a sidebar, put the 
 line with the header unless the header grew. Before 2026-10-06 a button was a 30 px slot whose
 hover FILLED it, cut by the capsule. The shader takes the radius and `PITCH` from
 `set_geometry` and draws each circle by its own distance. **The hover is the glass itself** (owner, 2026-10-23): over the shell's glass
-(D7) each button's hover and press are a wash INSIDE the glass shader (`state_regions`,
-`glass_final.glsl`), never a disc painted over it; close's red the destructive wash. Without a
+(D7) each button's hover and press are a state INSIDE the glass shader (`state_regions`,
+`glass_final.glsl`), never a disc painted over it; close's red the destructive state's levels — a
+red glass, its glyph keeping the glass's ink (no white forced over it since 2026-11-21). Without a
 token export (no glass) each circle paints its own fill, tinted whole on hover, `HOVER_A`/`PRESS_A`.
 Close turns red on hover — the whole circle. Right by default (close last), left as a setting (close first).
 
@@ -1227,7 +1236,7 @@ minimize and close (60×24), a dialog maximize and close or close alone, About c
   `controls::response_measured`, eased in a `Presenting` kept on the window's surface
   (`PresentMemo`). Its tone mixes towards the ink tone, its shadow grows, and the glyphs' ink
   (`Controls::ink`, the shader's `ink_rgba`) is the export's light ink mixed towards its dark one
-  by the same r — the destructive state's own ink over a hovered close. The hover and the press
+  by the same r (a state's own `ink` in the export would replace it over its button; none has one). The hover and the press
   are WASHES in the glass, one state region per button (its circle, `HOVER_R`), the hovered
   one's at the export's hover/press (destructive for close), the others at alpha 0 so they fade
   out over `states.fadeMs` (0 with reduce motion, `Scene::reduce_motion`): the opaque disc is
@@ -1241,7 +1250,8 @@ minimize and close (60×24), a dialog maximize and close or close alone, About c
   blurred inside the capsule, sharp beside it; `HYALO_PROBE_HEADER`: dark glyphs over f0f0f0,
   white over 303030, the app asking nothing; `hyalo-title-bar-probe`: over its light bar the
   light glass, brighter than the bar, and dark glyphs; the pointer over close (`move` on
-  HYALO_CONTROL): a red wash that differs over the light and the dark header; `glass = false`
+  HYALO_CONTROL): a red glass, ≥ 40 lighter over the light header than over the dark one, close's
+  glyph and minimize's still dark over the light one; `glass = false`
   must fail all four — its hover is the opaque disc, the same over both).
   `hyalo-window-controls-check.sh` checks the app's ink on the plain capsule.
 - **A capture says where moving windows were in it** (with `HYALO_CONTROL`): `<shot>.capture.json`

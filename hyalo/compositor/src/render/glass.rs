@@ -144,7 +144,7 @@ impl GlassElement {
         let px = |x: f64, y: f64, w: f64, h: f64| {
             Rectangle::<f64, Physical>::new(location.to_f64() + Point::from((x * scale.x, y * scale.y)), (w * scale.x, h * scale.y).into())
         };
-        // The washes over the glass, as they show now (`material::presented`): only where the
+        // The states of the glass, as they show now (`material::presented`): only where the
         // compositor paints it.
         let states: Vec<glass_gl::StatePx> = if glass.is_some() {
             m.state_regions
@@ -152,7 +152,7 @@ impl GlassElement {
                 .map(|r| glass_gl::StatePx {
                     rect: px(r.x, r.y, r.w, r.h),
                     radius: r.radius * scale.x,
-                    wash: r.wash.map(|v| v as f32),
+                    tone: r.tone.map(|v| v as f32),
                 })
                 .collect()
         } else {

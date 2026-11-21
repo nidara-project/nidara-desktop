@@ -26,6 +26,10 @@ pub struct StateRegion {
     pub bounds: MaterialRect,
     pub radius: f64,
     pub wash: [f64; 4],
+    /// The glass's own levels in its state, lift rgb then gain rgb (`set_state_levels`): the
+    /// state is a property of the glass, `wash` only says whether it is on (its alpha) and is
+    /// what a client without the compositor's glass paints. None: the wash laid over the glass.
+    pub levels: Option<[f64; 6]>,
     pub fade_ms: u32,
 }
 #[derive(Clone, Copy, Debug)]
@@ -225,6 +229,9 @@ impl ControlMaterial {
                 c[3],
                 region.fade_ms,
             );
+            if let Some(l) = region.levels {
+                m.set_state_levels(region.id, l[0], l[1], l[2], l[3], l[4], l[5]);
+            }
         }
         for coverage in &self.coverage {
             let p = coverage.bounds;
@@ -303,6 +310,7 @@ mod tests {
                 },
                 radius: 5.,
                 wash: [0.; 4],
+                levels: None,
                 fade_ms: 150,
             }],
             coverage: vec![InkCoverage {
