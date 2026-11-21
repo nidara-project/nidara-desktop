@@ -4,7 +4,7 @@
 # them there and takes their clicks; only the buttons that do something are drawn. Run INSIDE a
 # Hyalo session started with HYALO_CONTROL, with `hyalo-window-controls-probe` in PATH.
 #
-#   1. the probe is told the box (72×24: minimize, maximize and close) and the side (right),
+#   1. the probe is told the box (96×24: minimize, maximize and close, three circles 12 apart) and the side (right),
 #      and Hyalo reports the controls where the probe placed them;
 #   2. the pointer over the window reaches the app, over its controls it does not (the app
 #      gets a leave);
@@ -13,14 +13,14 @@
 #      the left, and Hyalo reports it there; then back to the right;
 #   5. the buttons: the user's choice of close alone (the settings layer) gives a 24 px box;
 #      the app asking for close alone (set_buttons) too; asking for all again while it cannot
-#      change size, minimize and close (48); resizable again, maximize comes back;
+#      change size, minimize and close (60); resizable again, maximize comes back;
 #   5b. the ink: white glyphs over the probe's dark window; the app asks for dark ink
 #      (set_ink) and the brightest pixel of its controls falls below its own window's grey;
 #      asked again, light again;
 #   6. a rule's `controls = ["close"]` gives a new window of the app a 24 px box;
 #   7. close closes: the probe gets xdg_toplevel.close.
 # The controls: the same probe against a Hyalo without the protocol prints NO_CONTROLS (step 1);
-# against one that shows no minimize (before #724), the first layout is 48 wide (step 1);
+# against one that shows no minimize (before #724), the first layout is 60 wide (step 1);
 # against one that ignores set_buttons, step 5 waits for a 24 px box that never comes.
 # Minimizing itself is hyalo-minimize-check.sh.
 #
@@ -48,19 +48,20 @@ sleep 0.5
 # 1. The box and the side; the controls where the probe put them.
 last_layout() { grep '^LAYOUT' "$out" | tail -n 1; }
 wait_layout() { for _ in $(seq 1 20); do [ "$(last_layout)" = "LAYOUT $1" ] && return 0; sleep 0.25; done; return 1; }
-wait_layout 'right 72 24' || fail "the first layout is '$(last_layout)', not 'LAYOUT right 72 24'"
+wait_layout 'right 96 24' || fail "the first layout is '$(last_layout)', not 'LAYOUT right 96 24'"
 sleep 0.4
 w=$(win)
 [ -n "$w" ] || fail "the probe's window is not listed"
-want=$(echo "$w" | jq -r '"\(.x + 400 - 12 - 72) \(.y + 12) 72 24"')
+want=$(echo "$w" | jq -r '"\(.x + 400 - 12 - 96) \(.y + 12) 96 24"')
 got=$(echo "$w" | jq -r '.controls | map(floor) | join(" ")')
 [ "$got" = "$want" ] || fail "controls at '$got', the probe placed them at '$want'"
-echo "ok    the box (72×24, right: minimize, maximize and close) is told, and the controls are where the app placed them"
+echo "ok    the box (96×24, right: minimize, maximize and close) is told, and the controls are where the app placed them"
 
 # 2. The pointer: the app's over its body, Hyalo's over the controls.
 echo "$w" | jq -r '"move \(.x + 40) \(.y + 150)"' >"$C"; sleep 0.4
 grep -q '^POINTER enter' "$out" || fail "the pointer over the window's body never reached the app"
-echo "move $(at 0.75)" >"$C"; sleep 0.4
+# The middle of close, the third circle: the gaps between circles are the app's (#1128).
+echo "move $(at 0.875)" >"$C"; sleep 0.4
 [ "$(grep '^POINTER' "$out" | tail -n 1)" = "POINTER leave" ] || fail "over the controls, the app still has the pointer"
 echo "ok    the pointer reaches the app, and not over its controls"
 
@@ -74,14 +75,14 @@ echo "ok    maximize maximizes and restores; the app saw no click"
 
 # 4. The left side, live, and back.
 $MSG settings '{"windows":{"controls":{"side":"left"}}}' >/dev/null
-wait_layout 'left 72 24' || fail "the side changed and the app was not told: '$(last_layout)'"
+wait_layout 'left 96 24' || fail "the side changed and the app was not told: '$(last_layout)'"
 sleep 0.5
 w=$(win)
 want=$(echo "$w" | jq -r '"\(.x + 12) \(.y + 12)"')
 got=$(echo "$w" | jq -r '.controls[0:2] | map(floor) | join(" ")')
 [ "$got" = "$want" ] || fail "on the left, controls at '$got', placed at '$want'"
 $MSG settings '{"windows":null}' >/dev/null
-wait_layout 'right 72 24' || fail "back to the right, the app was not told: '$(last_layout)'"
+wait_layout 'right 96 24' || fail "back to the right, the app was not told: '$(last_layout)'"
 sleep 0.5
 echo "ok    the side switched live: the app is told, and the controls follow"
 
@@ -91,16 +92,16 @@ $MSG settings '{"windows":{"controls":{"buttons":["close"]}}}' >/dev/null
 wait_layout 'right 24 24' || fail "the user chose close alone, and the app was told '$(last_layout)'"
 sleep 0.4; [ "$(width)" = 24 ] || fail "the user chose close alone, and the controls are $(width) wide"
 $MSG settings '{"windows":null}' >/dev/null
-wait_layout 'right 72 24' || fail "the user's buttons back, and the app was told '$(last_layout)'"
+wait_layout 'right 96 24' || fail "the user's buttons back, and the app was told '$(last_layout)'"
 kill -USR1 "$pid"
 wait_layout 'right 24 24' || fail "the app asked for close alone, and was told '$(last_layout)'"
 sleep 0.4; [ "$(width)" = 24 ] || fail "the app asked for close alone, and the controls are $(width) wide"
 kill -USR2 "$pid"
 wait_line '^ASKED 12' || fail "the probe did not ask again"
 sleep 0.6
-[ "$(last_layout)" = "LAYOUT right 48 24" ] || fail "every button asked, but it cannot change size: told '$(last_layout)', not minimize and close"
+[ "$(last_layout)" = "LAYOUT right 60 24" ] || fail "every button asked, but it cannot change size: told '$(last_layout)', not minimize and close"
 kill -HUP "$pid"
-wait_layout 'right 72 24' || fail "it can change size again, and was told '$(last_layout)'"
+wait_layout 'right 96 24' || fail "it can change size again, and was told '$(last_layout)'"
 echo "ok    close alone when the user chooses it, when the app asks for it, and maximize only while it can change size"
 
 # 5b. The ink. The brightest and the darkest pixel inside the controls, from a raw PPM (P6:
@@ -122,7 +123,7 @@ span() {
             s = 0 } }
         END { printf "%d %d\n", lo, hi }'
 }
-# The GLYPHS' ink, on the plain capsule: the shell's glass under it (on by default) takes the
+# The GLYPHS' ink, on the plain buttons: the shell's glass under it (on by default) takes the
 # light face under dark glyphs, brighter than the window by design — that face is
 # hyalo-controls-glass-check.py's to check.
 $MSG settings '{"windows":{"controls":{"glass":false}}}' >/dev/null

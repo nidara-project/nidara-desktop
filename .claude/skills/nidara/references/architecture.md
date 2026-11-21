@@ -2848,7 +2848,7 @@ provisional recipe is identified in `titlebar-provisional.json`, not in transpor
 The sidebar's margin/radius come from `Tree::set_sidebar_frame` with app tokens.
 Native Settings supplies that title style explicitly from `toolkit/tokens/header.json`
 (via components.json), including reduced-transparency fallback. Its 48px band,
-32px header controls and 60×32 navigation are distinct from 72×24 window controls
+32px header controls and 60×32 navigation are distinct from the 96×24 window controls (three 24 px circles, #1128)
 at y12. A sidebar icon keeps its full accessible name without painting that name.
 `Composition::sync_with_layout` positions floating controls on the same sampled
 sidebar timeline before painting. A SearchInput inside ControlCapsule uses that

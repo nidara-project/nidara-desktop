@@ -1,8 +1,8 @@
 //! A window's controls, drawn by Hyalo over the app's header where the app reserved room for
-//! them (protocols/window_controls.rs, #708 point 5): one capsule of one to three buttons — the
-//! shape of the back/forward pair in Settings' header. Painted in one pass by a shader of ours,
-//! in output pixels: the capsule, its inset edge, the hovered button's circle (close's red), and
-//! the glyphs, all anti-aliased at the output's scale. The colours are the mockup's, the
+//! them (protocols/window_controls.rs, #708 point 5): one to three buttons, each a glass circle
+//! of its own (#1128). Painted in one pass by a shader of ours, in output pixels: each circle,
+//! its inset edge, the hovered one tinted whole (close's red), and the glyphs, all anti-aliased
+//! at the output's scale. The colours are the mockup's, the
 //! owner's choice (2026-10-03): white, like the pair beside it — or dark, when the app says its
 //! header is light (`set_ink`: white glyphs were invisible on Settings' light header, owner,
 //! 2026-10-08).
@@ -32,14 +32,14 @@ pub(crate) const GLYPH_MAXIMIZE_RADIUS: f64 = 1.6;
 pub(crate) const GLYPH_CLOSE_HALF: f64 = 3.0;
 const _: () = assert!(GLYPH_SIZE >= 2.0 * (GLYPH_MAXIMIZE_HALF + GLYPH_STROKE / 2.0));
 
-/// The capsule's GLSL, shared with Hyalo's title bar (render/title_bar.rs), which draws the
-/// same capsule in its own pass: its uniforms, and `controls(p, dark)` — the capsule's colour at
-/// output pixel `p`, premultiplied, transparent outside it; `dark` 1 draws it with dark ink, for
+/// The buttons' GLSL, shared with Hyalo's title bar (render/title_bar.rs), which draws the
+/// same buttons in its own pass: its uniforms, and `controls(p, dark)` — their colour at
+/// output pixel `p`, premultiplied, transparent outside their circles; `dark` 1 draws it with dark ink, for
 /// a light title bar.
 macro_rules! controls_glsl {
     () => {
         r#"
-uniform vec4 rect;      // the capsule, output px
+uniform vec4 rect;      // the row of buttons, output px
 uniform float px;       // output px per logical px
 uniform vec3 glyphs;    // per slot, left to right: 0 minimize, 1 maximize, 2 close
 uniform float count;    // how many slots: 1 to 3
@@ -48,6 +48,7 @@ uniform float pressed;  // 1 while that button is held
 uniform float active;   // 1: the window has the focus
 uniform float glass_under; // 1: the shell's glass is drawn under the capsule
 uniform vec4 ink_rgba;    // over that glass: the glyphs' ink, straight (render/controls.rs `glass`)
+uniform vec4 hover_ink_rgba; // and the hovered button's glyph's: white over close's red (#1128)
 float box(vec2 p, vec2 h, float r) {
     vec2 q = abs(p) - h + vec2(r);
     return length(max(q, 0.0)) + min(max(q.x, q.y), 0.0) - r;
@@ -65,13 +66,11 @@ float glyph(float g, vec2 p) {
     return min(seg(p, vec2(-glyph_close_half), vec2(glyph_close_half)), seg(p, vec2(glyph_close_half, -glyph_close_half), vec2(-glyph_close_half, glyph_close_half))) - glyph_geometry.x;
 }
 vec4 over(vec4 top, vec4 under) { return top + under * (1.0 - top.a); }
-// window_controls::{HOVER_D, EDGE, GAP, PITCH}, given by Rust (`set_geometry`): each button a
-// circle HOVER_D across, EDGE from the capsule's ends and GAP from the next one.
-uniform vec4 geometry;  // the circle's radius, the edge, the pitch, the gap — logical px
-#define HOVER_R geometry.x
-#define EDGE geometry.y
+// window_controls::{BUTTON_H, GAP, PITCH}, given by Rust (`set_geometry`): each button a
+// circle BUTTON_H across, GAP from the next one (#1128).
+uniform vec4 geometry;  // the circle's radius, unused, the pitch, the gap — logical px
+#define BUTTON_R geometry.x
 #define PITCH geometry.z
-#define GAP geometry.w
 // The hover and the press, as the bar's pills (GLASS_STATE_MIX in the kit's tokens.ts: the
 // same numbers there, white ink and dark): one hover across the desktop (owner, 2026-10-06).
 const vec2 HOVER_A = vec2(0.08, 0.06);
@@ -79,34 +78,38 @@ const vec2 PRESS_A = vec2(0.20, 0.14);
 vec4 controls(vec2 p_out, float dark) {
     vec2 size = rect.zw / px;
     vec2 p = (p_out - rect.xy) / px;
-    float d = box(p - size * 0.5, size * 0.5, size.y * 0.5);
+    // The button whose slot this is, and its circle: the gap between two is neither's.
+    float slot = clamp(floor(p.x / PITCH), 0.0, count - 1.0);
+    vec2 centre = vec2(BUTTON_R + slot * PITCH, size.y * 0.5);
+    float d = length(p - centre) - BUTTON_R;
     float inside = clamp(0.5 - d * px, 0.0, 1.0);
     if (inside <= 0.0) return vec4(0.0);
     vec4 ink = dark > 0.5 ? vec4(0.0, 0.0, 0.0, 1.0) : vec4(1.0);
-    // Over the glass the glyphs take the ink its answer to the backdrop mixes, and the hover and
-    // the press are washes in the glass itself (render/glass_gl.rs `StatePx`): no disc here.
-    if (glass_under > 0.5) ink = vec4(ink_rgba.rgb * ink_rgba.a, ink_rgba.a);
-    float slot = clamp(floor((p.x - EDGE + GAP * 0.5) / PITCH), 0.0, count - 1.0);
-    vec2 centre = vec2(EDGE + HOVER_R + slot * PITCH, size.y * 0.5);
     float g = slot < 0.5 ? glyphs.x : (slot < 1.5 ? glyphs.y : glyphs.z);
+    bool hov = abs(slot - hover) < 0.5;
+    // Over the glass the glyphs take the ink its answer to the backdrop mixes — the hovered
+    // one its own, so close's white over its red leaves the others' ink alone — and the hover
+    // and the press are washes in the glass itself (render/glass_gl.rs `StatePx`): no fill here.
+    if (glass_under > 0.5) {
+        vec4 k = hov ? hover_ink_rgba : ink_rgba;
+        ink = vec4(k.rgb * k.a, k.a);
+    }
     bool on = active > 0.5;
-    // Over the shell's glass (`glass_under`, render/controls.rs `glass`) the capsule is the
-    // glass's — its tone, its rim — and only the state and the glyphs are drawn here.
+    // Over the shell's glass (`glass_under`, render/controls.rs `glass`) each circle is the
+    // glass's — its tone, its rim — and only the glyphs are drawn here.
     vec4 c = vec4(0.0);
     if (glass_under < 0.5) {
         c = ink * (on ? 0.08 : 0.04);
         // The inset edge: one physical pixel inside the rim.
         c = over(ink * 0.07 * clamp(1.0 - abs(d * px + 0.5), 0.0, 1.0), c);
     }
-    bool hov = abs(slot - hover) < 0.5;
     bool red = hov && g > 1.5 && glass_under < 0.5;
     if (hov && glass_under < 0.5) {
         float a = pressed > 0.5 ? (dark > 0.5 ? PRESS_A.y : PRESS_A.x) : (dark > 0.5 ? HOVER_A.y : HOVER_A.x);
         vec4 fill = ink * a;
         if (red) fill = pressed > 0.5 ? vec4(0.69, 0.16, 0.18, 1.0) : vec4(0.82, 0.20, 0.22, 1.0);
-        // A circle round the button's glyph, never the slot cut by the capsule.
-        float disc = clamp(0.5 - (length(p - centre) - HOVER_R) * px, 0.0, 1.0);
-        c = over(fill * disc, c);
+        // The whole button: its circle is `inside`, applied below.
+        c = over(fill, c);
     }
     float ga = clamp(0.5 - glyph(g, p - centre) * px, 0.0, 1.0);
     float k = hov ? 1.0 : (on ? 0.80 : 0.36);
@@ -132,13 +135,13 @@ void main() {
 "#
 );
 
-/// The capsule's geometry for the shader (its `geometry` uniform): the one copy, window_controls.rs.
+/// The buttons' geometry for the shader (its `geometry` uniform): the one copy, window_controls.rs.
 pub(super) unsafe fn set_geometry(gl: &smithay::backend::renderer::gles::ffi::Gles2, p: &glass_gl::Program) {
-    use crate::protocols::window_controls::{EDGE, GAP, HOVER_D, PITCH};
+    use crate::protocols::window_controls::{BUTTON_H, GAP, PITCH};
     unsafe {
         gl.Uniform4f(p.loc(gl, c"glyph_geometry"), (GLYPH_STROKE / 2.0) as f32, GLYPH_MINIMIZE_HALF as f32, GLYPH_MAXIMIZE_HALF as f32, GLYPH_MAXIMIZE_RADIUS as f32);
         gl.Uniform1f(p.loc(gl, c"glyph_close_half"), GLYPH_CLOSE_HALF as f32);
-        gl.Uniform4f(p.loc(gl, c"geometry"), (HOVER_D / 2.0) as f32, EDGE as f32, PITCH as f32, GAP as f32) };
+        gl.Uniform4f(p.loc(gl, c"geometry"), (BUTTON_H / 2.0) as f32, 0.0, PITCH as f32, GAP as f32) };
 }
 
 /// What the capsule shows: its buttons left to right (only those that do something), the one
@@ -158,6 +161,9 @@ pub struct Controls {
     pub moving: bool,
     /// Over the shell's glass: the glyphs' ink, straight sRGB and alpha (`glass`). None: `dark`.
     pub ink: Option<[f32; 4]>,
+    /// Over the shell's glass: the hovered button's glyph's ink (`glass`; close's white over its
+    /// red). None: `ink`.
+    pub hover_ink: Option<[f32; 4]>,
     /// Reduce motion: the washes change at once.
     pub reduce_motion: bool,
 }
@@ -239,6 +245,8 @@ impl ControlsElement {
             gl.Uniform1f(p.loc(gl, c"glass_under"), if self.glass_under { 1.0 } else { 0.0 });
             let ink = c.ink.unwrap_or([1.0; 4]);
             gl.Uniform4f(p.loc(gl, c"ink_rgba"), ink[0], ink[1], ink[2], ink[3]);
+            let hover_ink = c.hover_ink.unwrap_or(ink);
+            gl.Uniform4f(p.loc(gl, c"hover_ink_rgba"), hover_ink[0], hover_ink[1], hover_ink[2], hover_ink[3]);
             for d in damage {
                 let q = Rectangle::new(d.loc + dst.loc, d.size);
                 gl.Uniform4f(p.loc(gl, c"dst_rect"), q.loc.x as f32, q.loc.y as f32, q.size.w as f32, q.size.h as f32);
@@ -273,13 +281,14 @@ struct PresentState {
     revision: u64,
 }
 
-/// The capsule's one shape.
+/// The first button's shape: its answer to the backdrop mixes the glyphs' ink, the same for
+/// every button (one ink per row; their backdrops are 36 px apart on one header).
 const SHAPE: usize = 0;
 
-/// Each button a circle `HOVER_D` across, `EDGE` from the capsule's ends and `GAP` from the next
-/// one — where its wash lies (protocols/window_controls.rs, the one copy of these in Hyalo).
-use crate::protocols::window_controls::{EDGE, HOVER_D, PITCH};
-const HOVER_R: f64 = HOVER_D / 2.0;
+/// Each button a circle `BUTTON_H` across and `GAP` from the next — a shape of glass of its own,
+/// and its wash all of it (protocols/window_controls.rs, the one copy of these in Hyalo).
+use crate::protocols::window_controls::{BUTTON_H, PITCH};
+const BUTTON_R: f64 = BUTTON_H / 2.0;
 
 /// The shell's glass under the capsule (toolkit/PHASE1.md D7: the window controls use the
 /// shell's glass) — the glass of a `control` pane of the token export, the same in every respect
@@ -288,7 +297,7 @@ const HOVER_R: f64 = HOVER_D / 2.0;
 /// hovered or pressed button a wash in the glass, and the glyphs' ink mixed by the same answer.
 /// It blurs only `window` (its box, output px). Empty without an export that has the control's
 /// answer, states and inks: the capsule paints its own fill then, and the app's `set_ink` says
-/// its ink. With it, the glyphs' ink is returned.
+/// its ink. With it, the glyphs' ink is returned, and the hovered button's.
 #[allow(clippy::too_many_arguments)]
 pub fn glass(
     surface: &WlSurface,
@@ -299,15 +308,15 @@ pub fn glass(
     reduce_transparency: bool,
     controls: &Controls,
     when: std::time::Instant,
-) -> (Vec<super::GlassElement>, Option<[f32; 4]>, Option<super::ScrimElement>) {
+) -> (Vec<super::GlassElement>, Option<[[f32; 4]; 2]>, Option<super::ScrimElement>) {
     use crate::protocols::material::{Current, MaterialState, Shape, StateRegion};
-    let (x, y, w, h) = (rect.loc.x / scale.x, rect.loc.y / scale.y, rect.size.w / scale.x, rect.size.h / scale.y);
+    let (x, y, h) = (rect.loc.x / scale.x, rect.loc.y / scale.y, rect.size.h / scale.y);
     // The bar's face: the shell's skin is dark whatever the mode.
-    let Some(pane) = super::glass_tokens::pane("control", w.min(h), true, reduce_transparency) else { return (Vec::new(), None, None) };
+    let Some(pane) = super::glass_tokens::pane("control", BUTTON_H, true, reduce_transparency) else { return (Vec::new(), None, None) };
     let Some(look) = pane.control else { return (Vec::new(), None, None) };
     let (glyphs, count) = controls.buttons.glyphs();
     let fade_ms = if controls.reduce_motion { 0 } else { look.fade_ms };
-    // A wash per button, where its circle is: the hovered one's state, the others' none — at
+    // A wash per button, all of its circle: the hovered one's state, the others' none — at
     // their own colour, so one fading out keeps its hue.
     let state_regions: Vec<StateRegion> = (0..count as usize)
         .map(|i| {
@@ -318,31 +327,32 @@ pub fn glass(
             if !on {
                 wash[3] = 0.0;
             }
-            let cx = x + EDGE + HOVER_R + i as f64 * PITCH;
-            let cy = y + h / 2.0;
-            StateRegion { id: i as u32, x: cx - HOVER_R, y: cy - HOVER_R, w: 2.0 * HOVER_R, h: 2.0 * HOVER_R, radius: HOVER_R, wash, fade_ms }
+            let (bx, by) = (x + i as f64 * PITCH, y + h / 2.0 - BUTTON_R);
+            StateRegion { id: i as u32, x: bx, y: by, w: BUTTON_H, h: BUTTON_H, radius: BUTTON_R, wash, fade_ms }
         })
         .collect();
     let mut state = MaterialState {
-        shapes: vec![Shape {
-            x,
-            y,
-            w,
-            h,
-            radius: h / 2.0,
-            exponent: 2.0,
-            opacity: 1.0,
-            clip: None,
-            pointer: None,
-            fusion: None,
-            tone: Some(pane.tone),
-            ink_tone: pane.ink_tone,
-            blur: None,
-            shadow: pane.shadow,
-            grade: None,
-            response: look.response,
-            answer: None,
-        }],
+        shapes: (0..count as usize)
+            .map(|i| Shape {
+                x: x + i as f64 * PITCH,
+                y: y + h / 2.0 - BUTTON_R,
+                w: BUTTON_H,
+                h: BUTTON_H,
+                radius: BUTTON_R,
+                exponent: 2.0,
+                opacity: 1.0,
+                clip: None,
+                pointer: None,
+                fusion: None,
+                tone: Some(pane.tone),
+                ink_tone: pane.ink_tone,
+                blur: None,
+                shadow: pane.shadow,
+                grade: None,
+                response: look.response,
+                answer: None,
+            })
+            .collect(),
         glass: Some(pane.glass),
         lensing: pane.lensing,
         state_regions,
@@ -365,14 +375,13 @@ pub fn glass(
     if easing {
         crate::protocols::material::mark_easing();
     }
-    // The glyphs' ink: the hovered destructive button's own, else the mix by the answer.
+    // The glyphs' ink, the mix by the answer; the hovered button's, the destructive button's
+    // own over its red — that glyph's alone (#1128: it whitened the others over a light header).
     let hovered_close = controls.hover.is_some_and(|i| glyphs.get(i).is_some_and(|g| *g > 1.5));
     let destructive_ink = if controls.pressed { look.destructive_press.ink } else { look.destructive_hover.ink };
     let r = state.shapes[SHAPE].answer.map_or(0.0, |a| a[0]);
-    let ink = match destructive_ink.filter(|_| hovered_close) {
-        Some(i) => i,
-        None => std::array::from_fn(|k| look.ink[0][k] + (look.ink[1][k] - look.ink[0][k]) * r),
-    };
+    let ink: [f64; 4] = std::array::from_fn(|k| look.ink[0][k] + (look.ink[1][k] - look.ink[0][k]) * r);
+    let hover_ink = destructive_ink.filter(|_| hovered_close).unwrap_or(ink);
     // Its commit moves when what it shows does: the answers and washes are in the state.
     let key = format!("{state:?}");
     let commit = with_states(surface, |states| {
@@ -403,7 +412,7 @@ pub fn glass(
         let memo = states.data_map.get_or_insert(ShadowMemo::default);
         super::ScrimElement::new(&memo.0, scrims, output_size)
     });
-    (elements, Some(ink.map(|v| v as f32)), shadow)
+    (elements, Some([ink.map(|v| v as f32), hover_ink.map(|v| v as f32)]), shadow)
 }
 
 /// The controls' shadow element's id and what it last drew, apart from the surface's own.
@@ -413,12 +422,18 @@ struct ShadowMemo(UserDataMap);
 /// A measurement of the glass under a window's controls came back (render/glass_gl.rs): their
 /// answer to the backdrop moves on. Whether it changed (the frame is redrawn).
 pub fn response_measured(surface: &WlSurface, answers: &[(usize, f32, f32)]) -> bool {
-    let Some(&(_, mean, sigma)) = answers.iter().find(|(i, _, _)| *i == SHAPE) else { return false };
+    // Every button is a shape of its own (#1128), each answering its own backdrop.
+    if answers.is_empty() { return false; }
     with_states(surface, |states| {
         let Some(memo) = states.data_map.get::<PresentMemo>() else { return false };
         let mut memo = memo.0.borrow_mut();
         let Some(response) = memo.response else { return false };
-        memo.presenting.measured(SHAPE, &response, mean as f64, sigma as f64, std::time::Instant::now())
+        let now = std::time::Instant::now();
+        let mut changed = false;
+        for &(i, mean, sigma) in answers {
+            changed |= memo.presenting.measured(i, &response, mean as f64, sigma as f64, now);
+        }
+        changed
     })
 }
 

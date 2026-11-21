@@ -10,14 +10,18 @@ The probe's header (its top 60 rows) is 4 px white and black columns (HYALO_PROB
 the whole window one colour (HYALO_PROBE_HEADER); its controls sit on it. How sharp the columns are is their
 contrast along a row: the luminance's standard deviation, ≈ 127 sharp, near 0 blurred.
 
-  1. inside the capsule the columns are blurred, beside it they are sharp;
+  1. inside a button the columns are blurred, beside the controls and in the gap between two
+     buttons they are sharp: each button is a glass circle of its own (#1128);
   2. the ink is the glass's: over a light header the glyphs are dark, over a dark one white —
      the app having said nothing about its header (no set_ink);
   3. in Hyalo's own title bar (an app that leaves its decorations to it) the same: over a light
      bar, the glass's light face and dark glyphs;
   4. the hovered close button is a red WASH in the glass (toolkit/CONTRACT.md, "Floating control
      capsule": the same state regions as the toolkit's controls), not a disc over it: red, and
-     the header shows through it — it differs over the light and the dark header;
+     the header shows through it — it differs over the light and the dark header. It tints the
+     whole circle: the red is read 9 px from its centre, outside the 8 px dot it was until #1128;
+     and only close's glyph turns white: over a light header minimize's stays dark (until #1128
+     the hovered close whitened every glyph of the row);
   5. Hyalo reports the answer its controls' glass shows (`msg windows`, `controls_answers`): r ≈ 1
      over the light header, ≈ 0 over the dark one;
   6. the controls: `[windows.controls] glass = false` in the settings layer — the columns show
@@ -99,9 +103,10 @@ def measure(name, env, app=APP, ready='PLACED', hover=False):
         win = next(w for w in msg('windows')['windows'] if w['app_id'] == app)
         x, y, w, h = win['controls']
         scale = msg('outputs')['outputs'][0]['scale']
-        # The close button: the rightmost of the capsule's circles, 24 across, 4 from its end
-        # (render/controls.rs HOVER_R, EDGE).
-        close = (x + w - 4 - 12, y + h / 2)
+        # The close button: the rightmost circle, 24 across, at the row's end (#1128;
+        # protocols/window_controls.rs BUTTON_H), and the gap before it, 12 wide (GAP).
+        close = (x + w - 12, y + h / 2)
+        gap = x + w - 24 - 6
         if hover:
             Path(os.environ['HYALO_CONTROL']).write_text(f'move {close[0]} {close[1]}\n')
             time.sleep(.8)
@@ -109,20 +114,26 @@ def measure(name, env, app=APP, ready='PLACED', hover=False):
             time.sleep(.3)
         image = shot(name)
         p = lambda v: int(v * scale)
-        # 5 px under the capsule's top: above the glyphs (14 px, centred), clear of its round ends.
-        top = [lum(image, i, p(y + 5)) for i in range(p(x + 16), p(x + w - 16))]
+        # 5 px under the close button's top: above its glyph (14 px, centred), inside its circle
+        # (the chord there is ±9.7).
+        top = [lum(image, i, p(y + 5)) for i in range(p(close[0] - 8), p(close[0] + 8))]
+        # The gap's middle 6 px, at the buttons' middle: no glass there.
+        between = [lum(image, i, p(y + h / 2)) for i in range(p(gap - 3), p(gap + 3))]
         beside = [lum(image, i, p(y + 5)) for i in range(p(win['x'] + 12), p(x - 12))]
         # The header (or bar) near the window's left edge: clear of a centred title.
         edge = [lum(image, i, p(y + 5)) for i in range(p(win['x'] + 12), p(win['x'] + 60))]
-        # The glyphs' row: through their middle.
-        mid = [lum(image, i, p(y + h / 2)) for i in range(p(x + 6), p(x + w - 6))]
+        # The close glyph's row: through its middle, inside its circle.
+        mid = [lum(image, i, p(y + h / 2)) for i in range(p(close[0] - 9), p(close[0] + 9))]
         return {
             'controls': [x, y, w, h],
             'inside': statistics.pstdev(top),
             'beside': statistics.pstdev(beside),
+            'between': statistics.pstdev(between),
             'glass': statistics.fmean(top),
             'header': statistics.fmean(edge),
             'darkest': min(mid),
+            # The first button's glyph (minimize), through its middle.
+            'first_darkest': min(lum(image, i, p(y + h / 2)) for i in range(p(x + 12 - 9), p(x + 12 + 9))),
             'brightest': max(mid),
             'asked_ink': 'ASKED' in out.read_text(),
             # What Hyalo reports its glass shows (`msg windows`, `controls_answers`).
@@ -138,7 +149,8 @@ def measure(name, env, app=APP, ready='PLACED', hover=False):
 
 def blurred(m):
     assert m['beside'] > SHARP, f'the header beside the controls is not sharp ({m["beside"]:.1f}): nothing to measure'
-    assert m['inside'] < BLURRED, f'inside the capsule the header is sharp ({m["inside"]:.1f}): no glass under the controls'
+    assert m['inside'] < BLURRED, f'inside the close button the header is sharp ({m["inside"]:.1f}): no glass under the controls'
+    assert m['between'] > SHARP, f'between two buttons the header is blurred ({m["between"]:.1f}): one capsule, not separate buttons'
 
 
 def inked(light, dark):
@@ -169,6 +181,14 @@ def hover_washed(light, dark):
         f'the hovered close button is {light["close_wash"]} over a light header and {dark["close_wash"]} over a dark one: opaque, not a wash in the glass'
 
 
+def others_keep_ink(light):
+    """Close hovered over a light header: its glyph is white on its red, the others stay dark."""
+    # Dark ink on a 1.6 px stroke straddling a pixel row, at a resting glyph's 80 %: ≈ 90
+    # (measured); the whitened glyph read 247 over glass near 240.
+    assert light['first_darkest'] < 150, \
+        f'with close hovered over a light header minimize\'s glyph is {light["first_darkest"]:.0f}: the red\'s white ink reached the other buttons'
+
+
 def bar_glass(m):
     """Hyalo's title bar over a light app: the same capsule as over a light header — the
     glass's light face over the bar, brighter than it, and dark glyphs."""
@@ -185,7 +205,8 @@ def check():
         msg('do', 'set-workspace-mode', 93, 'floating')
         results['stripes'] = s = measure('stripes', {'HYALO_PROBE_STRIPES': '1'})
         blurred(s)
-        print(f'ok    inside the capsule the header is blurred ({s["inside"]:.1f}), beside it sharp ({s["beside"]:.1f})', flush=True)
+        print(f'ok    inside a button the header is blurred ({s["inside"]:.1f}), beside the controls ({s["beside"]:.1f}) '
+              f'and between two buttons ({s["between"]:.1f}) sharp', flush=True)
 
         results['light'] = light = measure('light-header', {'HYALO_PROBE_HEADER': LIGHT_HEADER})
         results['dark'] = dark = measure('dark-header', {'HYALO_PROBE_HEADER': DARK_HEADER})
@@ -199,8 +220,9 @@ def check():
         results['hover_light'] = hl = measure('hover-light', {'HYALO_PROBE_HEADER': LIGHT_HEADER}, hover=True)
         results['hover_dark'] = hd = measure('hover-dark', {'HYALO_PROBE_HEADER': DARK_HEADER}, hover=True)
         hover_washed(hl, hd)
+        others_keep_ink(hl)
         print(f'ok    the hovered close button is a wash in the glass: {hl["close_wash"]} over a light header, '
-              f'{hd["close_wash"]} over a dark one', flush=True)
+              f'{hd["close_wash"]} over a dark one; the other glyphs keep their ink ({hl["first_darkest"]:.0f})', flush=True)
 
         # Hyalo's own title bar (an app that left its decorations to it, light at its top): the
         # same controls as over our apps' headers.

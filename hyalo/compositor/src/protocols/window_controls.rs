@@ -36,22 +36,22 @@ use crate::{
     },
 };
 
-/// The capsule's height, logical px — the same over an app's header and in Hyalo's title bar:
+/// The buttons' height, and each one's diameter (#1128), logical px — the same over an app's
+/// header and in Hyalo's title bar:
 /// one size of controls in every window (owner, 2026-10-03; the window controls are the
 /// system's, not the app's). As small as it can be (owner, 2026-10-23, #921): the controls are
-/// the classic loose window buttons held in a capsule, not header buttons, so Hyalo's title bar
-/// stays thin. From 2026-10-04 to #921 it was 32, a header button's height.
+/// the classic loose window buttons, not header buttons, so Hyalo's title bar stays thin. From 2026-10-04 to #921 it was 32, a header button's height.
 pub const BUTTON_H: f64 = 24.0;
 
-/// Each button is a circle `HOVER_D` across — its hover — `EDGE` from the capsule's ends and
-/// `GAP` from the next circle (#921): a button takes `PITCH` and the capsule
-/// `PITCH × n − GAP + 2 × EDGE`: 24, 48, 72. Until #921 the gap was the edge (24 px circles,
-/// 4 apart: 32, 60, 88, the bar's rule for a capsule of icon buttons). The shader takes these
-/// numbers from here (render/controls.rs `set_geometry`).
-pub const HOVER_D: f64 = 16.0;
-pub const EDGE: f64 = 4.0;
-pub const GAP: f64 = 8.0;
-pub const PITCH: f64 = HOVER_D + GAP;
+/// Each button is a glass circle of its own, `BUTTON_H` across, `GAP` from the next (#1128,
+/// owner 2026-11-21): its hover and press tint the whole circle, so a close-only window's one
+/// button turns red entirely. A button takes `PITCH` and the row `PITCH × n − GAP`: 24, 60, 96.
+/// The gap is the air around a button in our apps, and puts the centres 36 apart, the bar's
+/// icon rhythm. From #921 to #1128 the buttons were circles of 16 inside one capsule, 4 from
+/// its ends and 8 apart (24, 48, 72). The shader takes these numbers from here
+/// (render/controls.rs `set_geometry`).
+pub const GAP: f64 = 12.0;
+pub const PITCH: f64 = BUTTON_H + GAP;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 #[serde(rename_all = "lowercase")]
@@ -101,10 +101,9 @@ impl Buttons {
         &self.slots[..self.len]
     }
 
-    /// The capsule's width, logical px: one `PITCH` per button, less the last gap, and an
-    /// `EDGE` at each end.
+    /// The row's width, logical px: one `PITCH` per button, less the last gap.
     pub fn width(&self) -> f64 {
-        PITCH * self.len as f64 - GAP + 2.0 * EDGE
+        PITCH * self.len as f64 - GAP
     }
 
     /// The shader's glyph per slot (render/controls.rs), and how many slots.
@@ -206,11 +205,15 @@ pub fn dark_ink(surface: &WlSurface) -> bool {
     })
 }
 
-/// The capsule's gap in Hyalo's own title bar (render/title_bar.rs), logical px: the same on
-/// the side the user chose as above and below it — the bar is the capsule's height and twice
-/// this (`wm::TITLE_BAR_H`): 24 + 4 + 4 = 32 (owner, 2026-10-23, #921: in Hyalo's bar the
-/// capsule sits 4 from the window's edges; in a kit window, 12, inside the sidebar's card).
+/// The buttons' air above and below them in Hyalo's own title bar (render/title_bar.rs),
+/// logical px: the bar is their height and twice this (`wm::TITLE_BAR_H`): 24 + 4 + 4 = 32
+/// (owner, 2026-10-23, #921: keeps the bar thin).
 pub const BAR_MARGIN: f64 = 4.0;
+const _: () = assert!(crate::wm::TITLE_BAR_H as f64 == BUTTON_H + 2.0 * BAR_MARGIN);
+/// Their distance from the window's side in that bar: the same as in a kit window
+/// (`capsule.windowInset`). Until #1128 it was `BAR_MARGIN`, which pressed the buttons into
+/// the window's rounded corner (owner, 2026-11-21).
+pub const BAR_SIDE: f64 = 12.0;
 
 /// Where a window's controls are, surface-local logical px, and its buttons: in Hyalo's title
 /// bar when it has one (above the surface, so `y` is negative), else where the app placed them.
@@ -224,8 +227,8 @@ pub fn managed_rect(m: &crate::wm::Managed, cfg: &ControlsConfig) -> Option<(Rec
         let geo = m.window.geometry().to_f64();
         let w = buttons.width();
         let x = match cfg.side {
-            ControlsSide::Right => geo.loc.x + visible.w - BAR_MARGIN - w,
-            ControlsSide::Left => geo.loc.x + BAR_MARGIN,
+            ControlsSide::Right => geo.loc.x + visible.w - BAR_SIDE - w,
+            ControlsSide::Left => geo.loc.x + BAR_SIDE,
         };
         let x = x.clamp(geo.loc.x, geo.loc.x + visible.w - w);
         let y = geo.loc.y - bar + (bar - BUTTON_H) / 2.0;
@@ -247,10 +250,13 @@ pub fn button_at(r: Rectangle<f64, Logical>, local: Point<f64, Logical>, buttons
     if !r.contains(local) || buttons.len == 0 {
         return None;
     }
-    // The boundary between two buttons is halfway between their circles, half a GAP into the
-    // gap: the end buttons reach the capsule's ends.
-    let i = (((local.x - r.loc.x - EDGE + GAP / 2.0) / PITCH).floor().max(0.0) as usize).min(buttons.len - 1);
-    Some(buttons.as_slice()[i])
+    // Each button is its own circle: the gap between two belongs to neither (in a title bar it
+    // is the bar, which moves the window; over an app's header, the app's).
+    let r_ = BUTTON_H / 2.0;
+    let i = (((local.x - r.loc.x) / PITCH).floor().max(0.0) as usize).min(buttons.len - 1);
+    let centre = (r.loc.x + r_ + i as f64 * PITCH, r.loc.y + r_);
+    let (dx, dy) = (local.x - centre.0, local.y - centre.1);
+    (dx * dx + dy * dy <= r_ * r_).then(|| buttons.as_slice()[i])
 }
 
 fn side_of(side: ControlsSide) -> Side {
@@ -391,7 +397,8 @@ mod tests {
         let token: serde_json::Value = serde_json::from_str(include_str!(
             "../../../../toolkit/tokens/capsule.json"
         )).unwrap();
-        for (key, value) in [("height", BUTTON_H), ("button", HOVER_D), ("edge", EDGE), ("gap", GAP)] {
+        // Separate circles (#1128): the button is the height, with no capsule round it.
+        for (key, value) in [("height", BUTTON_H), ("button", BUTTON_H), ("edge", 0.0), ("gap", GAP)] {
             assert_eq!(token["default"][key].as_f64(), Some(value), "capsule {key} mirror drift");
         }
         use crate::render::controls::*;
@@ -400,7 +407,7 @@ mod tests {
             ("maximizeRadius", GLYPH_MAXIMIZE_RADIUS), ("closeHalf", GLYPH_CLOSE_HALF)] {
             assert_eq!(token["default"]["glyph"][key].as_f64(), Some(value), "glyph {key} mirror drift");
         }
-        assert_eq!(PITCH, HOVER_D + GAP);
+        assert_eq!(PITCH, BUTTON_H + GAP);
     }
 
     fn of(list: &[Button]) -> Buttons {
@@ -413,39 +420,43 @@ mod tests {
     }
 
     #[test]
-    fn a_button_is_one_slot_of_whichever_capsule() {
-        // Two buttons (48 wide), in the title bar above the surface.
+    fn a_button_is_its_own_circle() {
+        // Two buttons (24 + 12 + 24 = 60), in the title bar above the surface.
         let two = of(&[Button::Maximize, Button::Close]);
         let r = Rectangle::new((340.0, -32.0).into(), (two.width(), BUTTON_H).into());
         let at = |x: f64| button_at(r, Point::from((x, -20.0)), &two);
-        assert_eq!(two.width(), 48.0);
-        assert_eq!(at(341.0), Some(Button::Maximize));
-        assert_eq!(at(363.9), Some(Button::Maximize));
-        assert_eq!(at(364.0), Some(Button::Close));
-        assert_eq!(at(388.0), None);
+        assert_eq!(two.width(), 60.0);
+        assert_eq!(at(340.5), Some(Button::Maximize));
+        assert_eq!(at(363.5), Some(Button::Maximize));
+        assert_eq!(at(370.0), None, "the gap is neither button's");
+        assert_eq!(at(376.5), Some(Button::Close));
+        assert_eq!(at(399.5), Some(Button::Close));
+        assert_eq!(at(401.0), None);
         assert_eq!(button_at(r, Point::from((350.0, 0.0)), &two), None, "below it: the app");
-        // Close alone: one slot, the whole capsule — a circle, 24 × 24.
+        // The circle, not its square: the corner of the slot is not the button.
+        assert_eq!(button_at(r, Point::from((341.0, -31.0)), &two), None);
+        // Close alone: one circle, 24 × 24, all of it the button.
         let one = of(&[Button::Close]);
         assert_eq!(one.width(), 24.0);
         let r = Rectangle::new((364.0, -32.0).into(), (one.width(), BUTTON_H).into());
-        assert_eq!(button_at(r, Point::from((365.0, -20.0)), &one), Some(Button::Close));
-        assert_eq!(button_at(r, Point::from((387.0, -20.0)), &one), Some(Button::Close));
-        // Three (#921): 72 × 24 — circles of 16, 4 from the ends and 8 apart — the boundaries
-        // at 24 and 48, halfway between the circles.
+        assert_eq!(button_at(r, Point::from((364.5, -20.0)), &one), Some(Button::Close));
+        assert_eq!(button_at(r, Point::from((387.5, -20.0)), &one), Some(Button::Close));
+        // Three (#1128): 96 × 24, circles of 24, 12 apart, centres 36 apart.
         let three = of(&[Button::Minimize, Button::Maximize, Button::Close]);
-        assert_eq!(three.width(), 72.0);
+        assert_eq!(three.width(), 96.0);
         assert_eq!(BUTTON_H, 24.0);
         let r = Rectangle::new((0.0, 0.0).into(), (three.width(), BUTTON_H).into());
         let at = |x: f64| button_at(r, Point::from((x, 12.0)), &three);
-        assert_eq!(at(23.9), Some(Button::Minimize));
-        assert_eq!(at(24.0), Some(Button::Maximize));
-        assert_eq!(at(47.9), Some(Button::Maximize));
-        assert_eq!(at(48.0), Some(Button::Close));
-        assert_eq!(at(71.9), Some(Button::Close));
-        // Each circle is centred in its slot: 4 + 8 + 24·i.
+        assert_eq!(at(0.5), Some(Button::Minimize));
+        assert_eq!(at(23.5), Some(Button::Minimize));
+        assert_eq!(at(30.0), None);
+        assert_eq!(at(36.5), Some(Button::Maximize));
+        assert_eq!(at(59.5), Some(Button::Maximize));
+        assert_eq!(at(66.0), None);
+        assert_eq!(at(72.5), Some(Button::Close));
+        assert_eq!(at(95.5), Some(Button::Close));
         for i in 0..3 {
-            let centre = EDGE + HOVER_D / 2.0 + i as f64 * PITCH;
-            assert_eq!(centre, 12.0 + 24.0 * i as f64);
+            assert_eq!(BUTTON_H / 2.0 + i as f64 * PITCH, 12.0 + 36.0 * i as f64);
         }
     }
 

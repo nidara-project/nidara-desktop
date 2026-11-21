@@ -1645,6 +1645,9 @@ in #952: the toolkit's window glyphs 3–9 % off Hyalo's, with another hover).
 - **The window controls are Hyalo's entirely** — glyphs, clicks, which buttons show and on
   which side (`nidara-window-controls-v1`). An app with its own header reserves the room the
   layout gives it and says where; it draws none of them.
+  Each button is a glass circle of its own (24 across, 12 apart) and its hover and press tint
+  the whole circle, close's red included (#1128): never a dot inside a button, never one
+  capsule round them.
 - **The app draws its content on the glass** — icons, text, rows and lists and their
   selection, menus' rows, the scroll bar, the keyboard focus ring — and owns input, focus and
   accessibility. A highlighted row in a list on glass is content, as in any toolkit; the glass
@@ -4233,7 +4236,7 @@ circles 3 from the edge with a hairline between.
 
 | capsule | where | how |
 |---|---|---|
-| window controls (1–3) | Hyalo, `render/controls.rs` + `protocols/window_controls.rs` | NOT this rule since #921 (owner, 2026-10-23): 16 px circles, 4 from the ends, 8 apart, 24 high (24, 48, 72) — the loose window buttons in a capsule as small as it can be; hyalo.md → "The window controls are Hyalo's" |
+| window controls (1–3) | Hyalo, `render/controls.rs` + `protocols/window_controls.rs` | NOT a capsule since #1128 (owner, 2026-11-21): one glass circle per button, 24 across, 12 apart (24, 60, 96), hover and press tinting the whole circle; 12 from the side in Hyalo's bar. From #921 to #1128: 16 px hover circles in one capsule (24, 48, 72). hyalo.md → "The window controls are Hyalo's" |
 | Settings back/forward | `_settings.scss` `.navigation-capsule` + `Settings.tsx` | 1 border + 3 padding, buttons 24 (14 glyph + 5 + 5), `spacing: 4` |
 | CC detail back | `_control-center.scss` `.cc-detail-back-capsule` + `IslandGrid.tsx` | the same, one button |
 
