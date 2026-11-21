@@ -27,9 +27,27 @@ fn rgba(v: &Value) -> Result<[f64; 4]> {
     }
     Ok(rgba)
 }
+/// A state's levels (`levels`: lift and gain, each r, g, b), when the export has them.
+fn levels(v: &Value) -> Result<Option<[f64; 6]>> {
+    let l = &v["levels"];
+    if l.is_null() {
+        return Ok(None);
+    }
+    let mut out = [0.; 6];
+    for (k, part) in ["lift", "gain"].iter().enumerate() {
+        for (i, c) in ["r", "g", "b"].iter().enumerate() {
+            out[3 * k + i] = l[part][c]
+                .as_f64()
+                .filter(|v| v.is_finite())
+                .ok_or("control export: invalid levels")?;
+        }
+    }
+    Ok(Some(out))
+}
 fn state(v: &Value) -> Result<StateStyle> {
     Ok(StateStyle {
         wash: rgba(&v["wash"])?,
+        levels: levels(v)?,
         ink: v
             .get("ink")
             .filter(|v| !v.is_null())
@@ -224,7 +242,12 @@ mod tests {
                 assert_eq!(style.hover.wash[3], if dark { 0.08 } else { 0.06 });
                 assert_eq!(style.press.wash[3], if dark { 0.20 } else { 0.14 });
                 assert_eq!(style.destructive_hover.wash, [0.82, 0.20, 0.22, 0.9]);
-                assert_eq!(style.destructive_press.ink, Some([1., 1., 1., 1.]));
+                // Close's red is a red glass, its glyph the glass's own ink (#1128).
+                assert_eq!(style.destructive_press.ink, None);
+                assert_eq!(
+                    style.destructive_hover.levels,
+                    Some([0.30, 0.04, 0.05, 1.0, 0.42, 0.44])
+                );
                 assert_eq!(style.fade_ms(false), 150);
                 assert_eq!(style.fade_ms(true), 0);
                 let pane = Pane {

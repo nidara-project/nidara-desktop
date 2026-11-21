@@ -354,13 +354,13 @@ pub const MAX_INK_BOXES: usize = 64;
 pub const MAX_ANSWER_BOXES: usize = 16;
 const MEASURE_WIDTH: usize = MAX_INK_BOXES + MAX_ANSWER_BOXES;
 
-/// A wash over the toned glass (`add_state_region`), output pixels, as it shows now.
+/// A state of the toned glass (`add_state_region`), output pixels, as it shows now.
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct StatePx {
     pub rect: Rectangle<f64, Physical>,
     pub radius: f64,
-    /// Straight sRGB and its opacity.
-    pub wash: [f32; 4],
+    /// [strength, lift rgb, gain rgb] (protocols/material.rs `tone_of`).
+    pub tone: [f32; 7],
 }
 
 /// The most washes one draw lays over its glass (the shader's arrays); past it the rest are not
@@ -1469,19 +1469,23 @@ pub unsafe fn draw(
             gl.Uniform2f(p.loc(gl, c"grade"), grade[0], grade[1]);
             // The washes over this draw's glass: those that reach its bounds.
             let mut rects = [0f32; 4 * STATE_MAX];
-            let mut washes = [0f32; 4 * STATE_MAX];
+            let mut lifts = [0f32; 4 * STATE_MAX];
+            let mut gains = [0f32; 4 * STATE_MAX];
             let mut radii = [0f32; STATE_MAX];
             let mut n = 0;
-            for w in states.iter().filter(|w| w.wash[3] > 0.0 && w.rect.overlaps(sr)).take(STATE_MAX) {
+            for w in states.iter().filter(|w| w.tone[0] > 0.0 && w.rect.overlaps(sr)).take(STATE_MAX) {
+                let t = &w.tone;
                 rects[4 * n..4 * n + 4].copy_from_slice(&[w.rect.loc.x as f32, w.rect.loc.y as f32, w.rect.size.w as f32, w.rect.size.h as f32]);
-                washes[4 * n..4 * n + 4].copy_from_slice(&w.wash);
+                lifts[4 * n..4 * n + 4].copy_from_slice(&[t[1], t[2], t[3], t[0]]);
+                gains[4 * n..4 * n + 4].copy_from_slice(&[t[4], t[5], t[6], 0.0]);
                 radii[n] = w.radius as f32;
                 n += 1;
             }
             gl.Uniform1f(p.loc(gl, c"s_count"), n as f32);
             if n > 0 {
                 gl.Uniform4fv(p.loc(gl, c"s_rect"), STATE_MAX as i32, rects.as_ptr());
-                gl.Uniform4fv(p.loc(gl, c"s_wash"), STATE_MAX as i32, washes.as_ptr());
+                gl.Uniform4fv(p.loc(gl, c"s_lift"), STATE_MAX as i32, lifts.as_ptr());
+                gl.Uniform4fv(p.loc(gl, c"s_gain"), STATE_MAX as i32, gains.as_ptr());
                 gl.Uniform1fv(p.loc(gl, c"s_radius"), STATE_MAX as i32, radii.as_ptr());
             }
             for c in clip {

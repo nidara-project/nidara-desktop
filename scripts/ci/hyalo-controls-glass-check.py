@@ -16,12 +16,13 @@ contrast along a row: the luminance's standard deviation, ≈ 127 sharp, near 0 
      the app having said nothing about its header (no set_ink);
   3. in Hyalo's own title bar (an app that leaves its decorations to it) the same: over a light
      bar, the glass's light face and dark glyphs;
-  4. the hovered close button is a red WASH in the glass (toolkit/CONTRACT.md, "Floating control
-     capsule": the same state regions as the toolkit's controls), not a disc over it: red, and
-     the header shows through it — it differs over the light and the dark header. It tints the
-     whole circle: the red is read 9 px from its centre, outside the 8 px dot it was until #1128;
-     and only close's glyph turns white: over a light header minimize's stays dark (until #1128
-     the hovered close whitened every glyph of the row);
+  4. the hovered close button is a red GLASS (toolkit/CONTRACT.md, "Floating control capsule":
+     the same state regions as the toolkit's controls, their levels set_state_levels), not a
+     disc over it: red, and the header shows through it — far lighter over the light header than
+     over the dark one. It tints the whole circle: the red is read 9 px from its centre, outside
+     the 8 px dot it was until #1128; and every glyph keeps the glass's ink: over a light header
+     close's and minimize's stay dark (until #1128 the hovered close whitened every glyph of the
+     row; until its red was a glass, close's own turned white);
   5. Hyalo reports the answer its controls' glass shows (`msg windows`, `controls_answers`): r ≈ 1
      over the light header, ≈ 0 over the dark one;
   6. the controls: `[windows.controls] glass = false` in the settings layer — the columns show
@@ -172,17 +173,20 @@ def controls_reported(light, dark):
 
 
 def hover_washed(light, dark):
-    """The hovered close button over a light and a dark header: red, and not the same."""
+    """The hovered close button over a light and a dark header: red, and a red glass — what is
+    behind it decides how light it is (the red laid over at 0.9 it was differed by ≈ 10)."""
     for m in (light, dark):
         r, g, b = m['close_wash']
-        assert r > 120 and r - g > 60, f'the hovered close button is {m["close_wash"]}: not red'
+        assert r - g > 40 and r - b > 40, f'the hovered close button is {m["close_wash"]}: not red'
     l = lambda c: 0.2126 * c[0] + 0.7152 * c[1] + 0.0722 * c[2]
-    assert abs(l(light['close_wash']) - l(dark['close_wash'])) > 6, \
-        f'the hovered close button is {light["close_wash"]} over a light header and {dark["close_wash"]} over a dark one: opaque, not a wash in the glass'
+    assert l(light['close_wash']) - l(dark['close_wash']) > 40, \
+        f'the hovered close button is {light["close_wash"]} over a light header and {dark["close_wash"]} over a dark one: a red laid over the glass, not a red glass'
 
 
 def others_keep_ink(light):
-    """Close hovered over a light header: its glyph is white on its red, the others stay dark."""
+    """Close hovered over a light header: every glyph keeps the glass's dark ink, close's too."""
+    assert light['darkest'] < 150, \
+        f"with close hovered over a light header its glyph is {light['darkest']:.0f}: an ink forced over the red, not the glass's"
     # Dark ink on a 1.6 px stroke straddling a pixel row, at a resting glyph's 80 %: ≈ 90
     # (measured); the whitened glyph read 247 over glass near 240.
     assert light['first_darkest'] < 150, \
@@ -221,8 +225,9 @@ def check():
         results['hover_dark'] = hd = measure('hover-dark', {'HYALO_PROBE_HEADER': DARK_HEADER}, hover=True)
         hover_washed(hl, hd)
         others_keep_ink(hl)
-        print(f'ok    the hovered close button is a wash in the glass: {hl["close_wash"]} over a light header, '
-              f'{hd["close_wash"]} over a dark one; the other glyphs keep their ink ({hl["first_darkest"]:.0f})', flush=True)
+        print(f'ok    the hovered close button is a red glass: {hl["close_wash"]} over a light header, '
+              f'{hd["close_wash"]} over a dark one; the glyphs keep its ink (close {hl["darkest"]:.0f}, '
+              f'minimize {hl["first_darkest"]:.0f})', flush=True)
 
         # Hyalo's own title bar (an app that left its decorations to it, light at its top): the
         # same controls as over our apps' headers.

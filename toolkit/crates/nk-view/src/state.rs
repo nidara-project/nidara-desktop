@@ -1894,6 +1894,7 @@ impl ViewState {
                 },
                 radius: corner.of(r[2], r[3], &tokens.radii),
                 wash,
+                levels: washes.levels_of(wash),
                 fade_ms: washes.fade_ms,
             });
         }

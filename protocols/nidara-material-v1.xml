@@ -547,5 +547,29 @@
       <arg name="top" type="fixed" summary="the strength at the top edge, 0..1"/>
       <arg name="bottom" type="fixed" summary="the strength at the bottom edge, 0..1"/>
     </request>
+
+    <request name="set_state_levels">
+      <description summary="pending: a state region changes the glass's own levels">
+        For the state region of this id declared since the last clear_shapes
+        (add_state_region; none: ignored): its state is a property of the
+        glass, not a colour laid over it. Inside the region the toned glass
+        colour c becomes lift + (gain - lift) * c, per channel (sRGB, the
+        same stage as the tone's levels), so what is behind keeps its detail
+        and only the glass changes: lighter, denser, or a coloured glass (a
+        destructive red). The region's r, g, b are then not used; its a > 0
+        means the state is on (the levels at full strength), a = 0 off, and
+        the change eases over its fade_ms both ways, keeping the levels it
+        had while it fades out. Without this request a region is the colour
+        laid over the glass at opacity a, as before. Clients without the
+        compositor's glass still paint their own fallback from r, g, b, a.
+      </description>
+      <arg name="id" type="uint"/>
+      <arg name="lift_r" type="fixed"/>
+      <arg name="lift_g" type="fixed"/>
+      <arg name="lift_b" type="fixed"/>
+      <arg name="gain_r" type="fixed"/>
+      <arg name="gain_g" type="fixed"/>
+      <arg name="gain_b" type="fixed"/>
+    </request>
   </interface>
 </protocol>

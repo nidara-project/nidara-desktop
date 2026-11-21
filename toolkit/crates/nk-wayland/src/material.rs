@@ -184,6 +184,9 @@ pub(super) fn send_material(
         m.add_state_region(
             r.id, b.x, b.y, b.width, b.height, r.radius, red, green, blue, alpha, r.fade_ms,
         );
+        if let Some(l) = r.levels {
+            m.set_state_levels(r.id, l[0], l[1], l[2], l[3], l[4], l[5]);
+        }
     }
 }
 

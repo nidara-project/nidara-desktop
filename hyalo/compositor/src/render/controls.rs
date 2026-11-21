@@ -316,19 +316,20 @@ pub fn glass(
     let Some(look) = pane.control else { return (Vec::new(), None, None) };
     let (glyphs, count) = controls.buttons.glyphs();
     let fade_ms = if controls.reduce_motion { 0 } else { look.fade_ms };
-    // A wash per button, all of its circle: the hovered one's state, the others' none — at
-    // their own colour, so one fading out keeps its hue.
+    // A state per button, all of its circle: the hovered one's on, the others' off — at their own
+    // levels, so one fading out keeps its hue.
     let state_regions: Vec<StateRegion> = (0..count as usize)
         .map(|i| {
             let close = glyphs[i] > 1.5;
             let (hover, press) = if close { (look.destructive_hover, look.destructive_press) } else { (look.hover, look.press) };
             let on = controls.hover == Some(i);
-            let mut wash = if on && controls.pressed { press.wash } else { hover.wash };
+            let state = if on && controls.pressed { press } else { hover };
+            let mut wash = state.wash;
             if !on {
                 wash[3] = 0.0;
             }
             let (bx, by) = (x + i as f64 * PITCH, y + h / 2.0 - BUTTON_R);
-            StateRegion { id: i as u32, x: bx, y: by, w: BUTTON_H, h: BUTTON_H, radius: BUTTON_R, wash, fade_ms }
+            StateRegion::new(i as u32, bx, by, BUTTON_H, BUTTON_H, BUTTON_R, wash, state.levels, fade_ms)
         })
         .collect();
     let mut state = MaterialState {

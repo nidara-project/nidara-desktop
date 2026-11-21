@@ -10,7 +10,13 @@
     "lightBelow/darkAbove), the band the binary ink used to switch in; hover/press washes = the",
     "kit's GLASS_STATE_MIX (hover 0.08/0.06, open 0.20/0.14); the destructive reds and the inks =",
     "the window controls' own until now (render/controls.rs). The contrast band, the shadow's",
-    "gains and the two durations have no source yet."
+    "gains and the two durations have no source yet.",
+    "A state is a property of the glass, not a colour laid over it (owner, 2026-11-21): 'levels'",
+    "change the toned glass's own levels inside the button (lift + (gain - lift) * c per channel,",
+    "set_state_levels), so the backdrop keeps its detail and the glyph keeps the glass's ink — no",
+    "white ink forced over close's red. 'wash' stays only for a client without the compositor's",
+    "glass, which paints its own fallback (D5). The neutral levels are the washes' own (a white wash",
+    "at a is lift a, gain 1); the reds are the comparison over detailed backdrops (#1128)."
   ],
   "default": {
     "response": {
@@ -21,10 +27,10 @@
     },
     "states": {
       "fadeMs": 150,
-      "hover": {"wash": {"r": 1, "g": 1, "b": 1, "a": 0.08}},
-      "press": {"wash": {"r": 1, "g": 1, "b": 1, "a": 0.20}},
-      "destructiveHover": {"wash": {"r": 0.82, "g": 0.20, "b": 0.22, "a": 0.9}, "ink": {"r": 1, "g": 1, "b": 1, "a": 1}},
-      "destructivePress": {"wash": {"r": 0.69, "g": 0.16, "b": 0.18, "a": 0.9}, "ink": {"r": 1, "g": 1, "b": 1, "a": 1}}
+      "hover": {"wash": {"r": 1, "g": 1, "b": 1, "a": 0.08}, "levels": {"lift": {"r": 0.08, "g": 0.08, "b": 0.08}, "gain": {"r": 1, "g": 1, "b": 1}}},
+      "press": {"wash": {"r": 1, "g": 1, "b": 1, "a": 0.20}, "levels": {"lift": {"r": 0.2, "g": 0.2, "b": 0.2}, "gain": {"r": 1, "g": 1, "b": 1}}},
+      "destructiveHover": {"wash": {"r": 0.82, "g": 0.20, "b": 0.22, "a": 0.9}, "levels": {"lift": {"r": 0.3, "g": 0.04, "b": 0.05}, "gain": {"r": 1.0, "g": 0.42, "b": 0.44}}},
+      "destructivePress": {"wash": {"r": 0.69, "g": 0.16, "b": 0.18, "a": 0.9}, "levels": {"lift": {"r": 0.24, "g": 0.03, "b": 0.04}, "gain": {"r": 0.86, "g": 0.34, "b": 0.36}}}
     },
     "ink": {
       "light": {"r": 1, "g": 1, "b": 1, "a": 1},
@@ -36,10 +42,10 @@
       "dark": false,
       "states": {
         "fadeMs": 150,
-        "hover": {"wash": {"r": 0, "g": 0, "b": 0, "a": 0.06}},
-        "press": {"wash": {"r": 0, "g": 0, "b": 0, "a": 0.14}},
-        "destructiveHover": {"wash": {"r": 0.82, "g": 0.20, "b": 0.22, "a": 0.9}, "ink": {"r": 1, "g": 1, "b": 1, "a": 1}},
-        "destructivePress": {"wash": {"r": 0.69, "g": 0.16, "b": 0.18, "a": 0.9}, "ink": {"r": 1, "g": 1, "b": 1, "a": 1}}
+        "hover": {"wash": {"r": 0, "g": 0, "b": 0, "a": 0.06}, "levels": {"lift": {"r": 0, "g": 0, "b": 0}, "gain": {"r": 0.94, "g": 0.94, "b": 0.94}}},
+        "press": {"wash": {"r": 0, "g": 0, "b": 0, "a": 0.14}, "levels": {"lift": {"r": 0, "g": 0, "b": 0}, "gain": {"r": 0.86, "g": 0.86, "b": 0.86}}},
+        "destructiveHover": {"wash": {"r": 0.82, "g": 0.20, "b": 0.22, "a": 0.9}, "levels": {"lift": {"r": 0.3, "g": 0.04, "b": 0.05}, "gain": {"r": 1.0, "g": 0.42, "b": 0.44}}},
+        "destructivePress": {"wash": {"r": 0.69, "g": 0.16, "b": 0.18, "a": 0.9}, "levels": {"lift": {"r": 0.24, "g": 0.03, "b": 0.04}, "gain": {"r": 0.86, "g": 0.34, "b": 0.36}}}
       },
       "ink": {
         "light": {"r": 0, "g": 0, "b": 0, "a": 1},

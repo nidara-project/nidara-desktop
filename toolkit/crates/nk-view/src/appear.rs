@@ -405,6 +405,7 @@ mod tests {
             },
             radius: 8.,
             wash: [1., 1., 1., 0.8],
+            levels: None,
             fade_ms: 150,
         }];
         look.material(pivot, &mut groups, &mut states, &mut []);

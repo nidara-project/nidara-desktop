@@ -1602,8 +1602,8 @@ surfaces, not an app's window, so that cause does not apply to them. They were n
 2. **Ink** (glyphs and text): mixed by the same answer.
 3. **Shadow**: the measured law by size, its opacity growing with the same answer
    (`shadow_white`, `shadow_text`).
-4. **States**: hover and press as washes in the glass, faded over the export's duration; the
-   destructive button its own colours.
+4. **States**: hover and press as states OF the glass (its own levels, `set_state_levels`), faded
+   over the export's duration; the destructive button a red glass, its ink still the glass's.
 
 **There is no older path** (owner, 2026-10-21): a piece that behaves differently does so as a
 declared case below, through the same mechanism — never on code left over from before the base.
@@ -1640,8 +1640,9 @@ in #952: the toolkit's window glyphs 3–9 % off Hyalo's, with another hover).
 - **Hyalo draws the glass AND the states of anything whose body is glass** — a capsule, a
   header button, a control: rest, hover, press, the destructive red, and the ink that answers
   the backdrop. The app *declares* them through `nidara-material-v1` (its shapes,
-  `add_state_region` per button id, `add_ink_coverage`) and never paints a wash, tint, blur,
-  rim or shadow over glass itself.
+  `add_state_region` per button id with its `set_state_levels`, `add_ink_coverage`) and never
+  paints a wash, tint, blur, rim or shadow over glass itself. A state changes the glass's own
+  levels (`levels` in `toolkit/tokens/control.json`); its `wash` is only the D5 fallback's paint.
 - **The window controls are Hyalo's entirely** — glyphs, clicks, which buttons show and on
   which side (`nidara-window-controls-v1`). An app with its own header reserves the room the
   layout gives it and says where; it draws none of them.

@@ -93,9 +93,10 @@ fn smoothstep(edges: [f64; 2], x: f64) -> f64 {
     t * t * (3.0 - 2.0 * t)
 }
 
-/// A wash over the toned glass (`add_state_region`), surface-local logical px: a button's hover or
-/// press. `wash` is straight sRGB with its opacity; when it is drawn (`presented`) it is the wash
-/// as it is shown, eased from the last one of the same `id`.
+/// A state of the toned glass (`add_state_region`), surface-local logical px: a button's hover or
+/// press. `wash` is straight sRGB with its opacity; `levels` (`set_state_levels`), when set, the
+/// glass's own levels instead — lift then gain, per channel. When it is drawn (`presented`),
+/// `tone` is the state as it shows, eased from the last one of the same `id`.
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct StateRegion {
     pub id: u32,
@@ -105,7 +106,28 @@ pub struct StateRegion {
     pub h: f64,
     pub radius: f64,
     pub wash: [f64; 4],
+    pub levels: Option<[f64; 6]>,
     pub fade_ms: u32,
+    /// [strength, lift rgb, gain rgb]: the toned glass colour c becomes
+    /// mix(c, lift + (gain - lift) * c, strength) — `tone_of` before it is eased.
+    pub tone: [f64; 7],
+}
+
+/// The tone a state asks for: with levels, those at full strength while it is on; without, its
+/// wash — lift and gain both its colour, the strength its opacity, the colour laid over the glass.
+pub fn tone_of(wash: [f64; 4], levels: Option<[f64; 6]>) -> [f64; 7] {
+    match levels {
+        Some(l) => [if wash[3] > 0.0 { 1.0 } else { 0.0 }, l[0], l[1], l[2], l[3], l[4], l[5]],
+        None => [wash[3], wash[0], wash[1], wash[2], wash[0], wash[1], wash[2]],
+    }
+}
+
+impl StateRegion {
+    /// A state region as declared, not yet eased.
+    #[allow(clippy::too_many_arguments)]
+    pub fn new(id: u32, x: f64, y: f64, w: f64, h: f64, radius: f64, wash: [f64; 4], levels: Option<[f64; 6]>, fade_ms: u32) -> Self {
+        Self { id, x, y, w, h, radius, wash, levels, fade_ms, tone: tone_of(wash, levels) }
+    }
 }
 
 /// Where the surface's buffer is ink (`add_ink_coverage`), surface-local logical px; `over`: the
@@ -434,7 +456,7 @@ pub struct Presenting {
     /// By the shape's index.
     answers: std::collections::BTreeMap<usize, Ease<2>>,
     /// By the region's id.
-    washes: std::collections::BTreeMap<u32, Ease<4>>,
+    washes: std::collections::BTreeMap<u32, Ease<7>>,
     /// What was last drawn, to move the commit when that changes.
     shown: Vec<u64>,
 }
@@ -458,18 +480,22 @@ impl Presenting {
         }
     }
 
-    /// A state committed: each region's wash eases from what it showed over its `fade_ms`; a new
-    /// id shows its wash at once, an id gone is forgotten. Answers of shapes no longer answering
-    /// are forgotten too.
+    /// A state committed: each region's tone eases from what it showed over its `fade_ms`; a new
+    /// id shows its tone at once, an id gone is forgotten. A state turning off keeps the levels it
+    /// had while its strength fades. Answers of shapes no longer answering are forgotten too.
     pub fn committed(&mut self, state: &MaterialState, now: std::time::Instant) {
         let mut washes = std::collections::BTreeMap::new();
         for r in &state.state_regions {
+            let mut to = tone_of(r.wash, r.levels);
             let e = match self.washes.remove(&r.id) {
                 Some(mut e) => {
-                    e.retarget(r.wash, r.fade_ms, now);
+                    if to[0] == 0.0 {
+                        to[1..].copy_from_slice(&e.to[1..]);
+                    }
+                    e.retarget(to, r.fade_ms, now);
                     e
                 }
-                None => Ease::at_once(r.wash, now),
+                None => Ease::at_once(to, now),
             };
             washes.insert(r.id, e);
         }
@@ -495,9 +521,9 @@ impl Presenting {
         for r in &mut state.state_regions {
             if let Some(e) = self.washes.get(&r.id) {
                 easing |= !e.settled(now);
-                r.wash = e.at(now);
+                r.tone = e.at(now);
             }
-            shown.extend(r.wash.iter().map(|v| v.to_bits()));
+            shown.extend(r.tone.iter().map(|v| v.to_bits()));
         }
         let changed = shown != self.shown;
         self.shown = shown;
@@ -532,9 +558,12 @@ impl Presenting {
             .iter()
             .map(|reg| {
                 let e = self.washes.get(&reg.id);
+                let t = e.map_or(reg.tone, |e| e.at(now));
                 crate::ipc::WashInfo {
                     id: reg.id,
-                    wash: e.map_or(reg.wash, |e| e.at(now)),
+                    strength: t[0],
+                    lift: [t[1], t[2], t[3]],
+                    gain: [t[4], t[5], t[6]],
                     settled: e.is_none_or(|e| e.settled(now)),
                 }
             })
@@ -1135,11 +1164,22 @@ impl Dispatch2<NidaraMaterialV1, Hyalo> for MaterialData {
                 let ok = [x, y, width, height, corner_radius, r, g, b, a].iter().all(|v| v.is_finite());
                 if ok && width > 0.0 && height > 0.0 {
                     let wash = [r.clamp(0.0, 1.0), g.clamp(0.0, 1.0), b.clamp(0.0, 1.0), a.clamp(0.0, 1.0)];
-                    let region = StateRegion { id, x, y, w: width, h: height, radius: corner_radius.max(0.0), wash, fade_ms: fade_ms.min(10_000) };
+                    let region = StateRegion::new(id, x, y, width, height, corner_radius.max(0.0), wash, None, fade_ms.min(10_000));
                     self.pending(|m| {
                         // One wash per id: a second declaration of it replaces the first.
                         m.state_regions.retain(|s| s.id != id);
                         m.state_regions.push(region);
+                    });
+                }
+            }
+            Request::SetStateLevels { id, lift_r, lift_g, lift_b, gain_r, gain_g, gain_b } => {
+                let levels = [lift_r, lift_g, lift_b, gain_r, gain_g, gain_b];
+                if levels.iter().all(|v| v.is_finite()) {
+                    let levels = levels.map(|v| v.clamp(-1.0, 2.0));
+                    self.pending(|m| {
+                        if let Some(r) = m.state_regions.iter_mut().find(|r| r.id == id) {
+                            *r = StateRegion::new(r.id, r.x, r.y, r.w, r.h, r.radius, r.wash, Some(levels), r.fade_ms);
+                        }
                     });
                 }
             }
@@ -1306,22 +1346,22 @@ mod tests {
 
     #[test]
     fn a_wash_fades_from_what_it_showed_and_a_new_id_shows_at_once() {
-        let region = |id, a| StateRegion { id, x: 0.0, y: 0.0, w: 24.0, h: 24.0, radius: 12.0, wash: [1.0, 1.0, 1.0, a], fade_ms: 100 };
+        let region = |id, a| StateRegion::new(id, 0.0, 0.0, 24.0, 24.0, 12.0, [1.0, 1.0, 1.0, a], None, 100);
         let t0 = std::time::Instant::now();
         let ms = |n: u64| t0 + std::time::Duration::from_millis(n);
         let mut p = Presenting::default();
         let mut m = MaterialState { state_regions: vec![region(1, 0.2)], ..Default::default() };
         p.committed(&m, t0);
         assert_eq!(p.present(&mut m, t0), (false, true), "new: at once");
-        assert_eq!(m.state_regions[0].wash[3], 0.2);
+        assert_eq!(m.state_regions[0].tone[0], 0.2);
         let mut m = MaterialState { state_regions: vec![region(1, 0.0)], ..Default::default() };
         p.committed(&m, ms(0));
         assert!(p.present(&mut m, ms(50)).0, "hover-out eases");
-        assert!((m.state_regions[0].wash[3] - 0.1).abs() < 1e-9);
+        assert!((m.state_regions[0].tone[0] - 0.1).abs() < 1e-9);
         // Committed again mid-fade with the same target: it keeps fading, it does not restart.
         p.committed(&MaterialState { state_regions: vec![region(1, 0.0)], ..Default::default() }, ms(50));
         p.present(&mut m, ms(75));
-        assert!((m.state_regions[0].wash[3] - 0.05).abs() < 1e-9, "{}", m.state_regions[0].wash[3]);
+        assert!((m.state_regions[0].tone[0] - 0.05).abs() < 1e-9, "{}", m.state_regions[0].tone[0]);
         let mut gone = MaterialState::default();
         p.committed(&gone, ms(80));
         assert!(!p.present(&mut gone, ms(80)).0, "an id gone is gone at once");

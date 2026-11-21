@@ -57,12 +57,14 @@ uniform vec4 f_rect[FUSE_MAX];   // each member, output px: x, y, w, h
 uniform vec4 f_par[FUSE_MAX];    // radius, exponent, formed (`opacity`), ink_dark (unused here)
 uniform vec4 f_clip[FUSE_MAX];   // what of it may show, output px; w 0 = no clip
 uniform float f_refr[FUSE_MAX];  // its refraction, output px
-// The washes over the toned glass (add_state_region, glass_gl.rs `StatePx`): a button's hover or
-// press, laid over the glass inside a rounded rectangle — the backdrop still shows through.
+// The states of the toned glass (add_state_region, set_state_levels, glass_gl.rs `StatePx`): a
+// button's hover or press, the glass's own levels inside a rounded rectangle — lift + (gain - lift)
+// * c per channel, at a strength. A wash laid over is lift = gain = its colour at its opacity.
 #define STATE_MAX 8
 uniform float s_count;
 uniform vec4 s_rect[STATE_MAX];  // output px: x, y, w, h
-uniform vec4 s_wash[STATE_MAX];  // straight sRGB, its opacity
+uniform vec4 s_lift[STATE_MAX];  // the level black becomes, rgb; its strength in a
+uniform vec4 s_gain[STATE_MAX];  // the level white becomes, rgb
 uniform float s_radius[STATE_MAX]; // its corners, circular, output px
 varying vec2 v_out;
 varying vec2 v_fb;
@@ -450,12 +452,13 @@ void main() {
     }
 #endif
     vec3 c = tone_of(bg, formed);
-    // The washes, over the tone and under the rim, growing with the glass like its tone.
+    // The states, on the tone and under the rim, growing with the glass like its tone.
     for (int i = 0; i < STATE_MAX; i++) {
         if (float(i) >= s_count) break;
         vec4 r = s_rect[i];
         float sd = box_sdf(v_out, r.xy + r.zw * 0.5, r.zw * 0.5, min(s_radius[i], min(r.z, r.w) * 0.5), 2.0);
-        c = mix(c, s_wash[i].rgb, clamp(0.5 - sd, 0.0, 1.0) * s_wash[i].a * formed);
+        vec3 leveled = s_lift[i].rgb + (s_gain[i].rgb - s_lift[i].rgb) * c;
+        c = mix(c, leveled, clamp(0.5 - sd, 0.0, 1.0) * s_lift[i].a * formed);
     }
     // Specular rim: a band of light along the edge where it faces the light (top-left) and again
     // on the opposite side, nothing between — two highlights across a diagonal, as the reference

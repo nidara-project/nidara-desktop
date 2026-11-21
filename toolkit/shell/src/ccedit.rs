@@ -1413,6 +1413,7 @@ impl Editor {
                     b[2].min(b[3]) / 2.
                 },
                 wash: self.accent,
+                levels: None,
                 fade_ms: 150,
             });
         }
