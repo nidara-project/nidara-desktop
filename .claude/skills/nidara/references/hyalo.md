@@ -331,9 +331,16 @@ the sharp backdrop (two images at once, which is what it was until #764).
   glass forms over the whole motion and what lies on it comes over the second half of the TIME
   (`forming::content`), through a lens over each pane (`SnapshotElement::with_lens`,
   magnified where it first shows); going, the content leaves over the first half and the glass,
-  kept from the last frame (`Snapshot::glass`, `GlassElement::mapped`), dissolves. A window is two
-  pictures, under and on its glass (`take_under_glass` / `take_on_glass`), with its own sizes and
-  curves (wm/motion.rs, `Look::content`). A menu (xdg popup) has the kit's timing, 220 ms in and
+  kept from the last frame (`Layers::glass`, `GlassElement::mapped`, pointer included), dissolves.
+  A window is one picture per STRETCH between its glasses (`snapshot::take_layers`), interleaved
+  with each glass in the window's order — one picture over the lowest glass hid a sidebar's glass
+  under the window's back. Each stretch keeps the window's body (`Decor`: fill, border, shadow)
+  apart from what lies on the glass: the body fades with the window, the content comes late
+  through the lens (a tinted window's fill lies in front of its blur glass). The picture behind
+  every glass is taken even empty. The kit destroys a window's toplevel FIRST
+  (`nk-wayland` `destroy_surfaces`): Hyalo pictures a closing window when its toplevel goes, and
+  layers destroyed before it are missing. Test with `level = "tinted"` too, not only opaque.
+  Window motion keeps its own sizes and curves (wm/motion.rs, `Look::content`). A menu (xdg popup) has the kit's timing, 220 ms in and
   150 ms out, cubic; its clock starts at its first frame with something in it, none with reduce
   motion (`forming::begin` in `new_popup`); at `popup_destroyed` its last picture and glass are
   kept on its ROOT surface and drawn by it where it was (`push_closing` in `push_surface_over_glass`
