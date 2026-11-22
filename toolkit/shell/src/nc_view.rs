@@ -29,8 +29,6 @@ use std::{
 const REGIONS: u32 = 60_000;
 /// The scroll bar's lane, right of the cards.
 const LANE: Space = Space::S3;
-/// The app icon and the thumbnail beside the text, as the TS card had them.
-const ART: f64 = 44.;
 /// A collapsed group's ghost layers under its card (`makeGroupStack`): the card's least
 /// height, how far the nearest ghost peeks, and how much more each deeper one does.
 const GHOST_H: f64 = 76.;
@@ -39,16 +37,6 @@ const STEP: f64 = 10.;
 
 /// A clear's cascade: the cards leave one after another this far apart (TS's `cascadeOut`).
 const CASCADE: Duration = Duration::from_millis(45);
-
-/// A card's corner, the CC's 4×1 (owner, 2026-11-10): `lg` of the radius scale, which a test
-/// holds equal to `cc::wide_radius`.
-const CARD: Radius = Radius::Lg;
-/// An open card shows its picture across its whole width when the source is at least this
-/// wide; a smaller one (a chat avatar is 64 to 160 px) would only be blurred by it, and
-/// keeps its thumbnail. The height follows the picture, between the two bounds. As TS had it.
-const HERO_SOURCE: u32 = 240;
-const HERO_HEIGHT: (f64, f64) = (72., 200.);
-const HERO_CORNER: Radius = Radius::Md;
 
 /// The kit's tokens for the shell's skin (always dark) in this appearance.
 pub fn tokens(
@@ -639,25 +627,19 @@ impl View {
     /// that is big enough.
     fn hero(&self, b: &Banner) -> Option<f64> {
         let path = thumbnail(b)?;
-        let (w, h) = *self
+        let size = *self
             .sizes
             .borrow_mut()
             .entry(path)
             .or_insert_with_key(|path| image::image_dimensions(path).ok())
             .as_ref()?;
-        let pad = self.tokens.as_ref()?.spacing.px(Space::S3);
-        let across = self.width - 2. * pad;
-        (w >= HERO_SOURCE && across > 0.).then(|| {
-            (across * f64::from(h) / f64::from(w))
-                .round()
-                .clamp(HERO_HEIGHT.0, HERO_HEIGHT.1)
-        })
+        let tokens = self.tokens.as_ref()?;
+        let across = self.width - 2. * tokens.spacing.px(Space::S3);
+        tokens.notification.hero_height(across, size)
     }
 
     fn card(&self, b: &Banner, m: &Model<'_>, group: Option<(&String, usize)>) -> Node {
         let lead = if group.is_some() { 'f' } else { 'n' };
-        let k = |s: &str| format!("{lead}{}/{s}", b.instance);
-        let pane = k("pane");
         let (i, c) = (b.instance, b.content);
         let summary = plain(&b.notice.summary);
         let body = plain(&b.notice.body);
@@ -683,183 +665,63 @@ impl View {
         let hero = group.is_none().then(|| self.hero(b)).flatten();
         let expandable =
             group.is_none() && (!actions.is_empty() || body.chars().count() > 70 || hero.is_some());
-        // Open, a big picture spans the card under its text, with the actions under it.
-        let hero = hero.filter(|_| expanded);
         let close_action = match group {
             Some((key, _)) => format!("clear-group:{key}"),
             None => format!("close:{i}:{c}"),
         };
-        let age = nk::Label::new(
-            k("age"),
+        let Some(tokens) = self.tokens.as_ref() else {
+            return nk::Placeholder::new(format!("{lead}{i}/pane"), self.card_guess).into();
+        };
+        let mut card = nk::NotificationCard::new(
+            format!("{lead}{i}"),
+            title.clone(),
             nc::age(b.notice.time, m.now),
-            style(m.text, 11., 400.),
+            &tokens.notification,
+            m.text,
         )
-        .ink(Ink::Dim);
-        // The chevron shows on hover in the age's place, as TS swapped them, so the title
-        // line never moves.
-        let age = if expandable {
-            nk::Overlay::new(k("when"), age.hidden_with(pane.clone()))
-                .layer(
-                    Align::Center,
-                    Align::Center,
-                    Padding::default(),
-                    nk::Button::with_child(
-                        k("more"),
-                        if expanded { "Show less" } else { "Show more" },
-                        format!("item:{i}"),
-                        nk::Image::new(
-                            k("more/icon"),
-                            if expanded { "nd-pan-up" } else { "nd-pan-down" },
-                            13.,
-                        ),
-                    )
-                    .revealed_with(pane.clone()),
-                )
-                .into()
-        } else {
-            age.into()
-        };
-        let mut head: Vec<Node> = vec![
-            nk::Label::new(k("title"), title.clone(), style(m.text, 13., 700.))
-                .lines(1)
-                .grow()
-                .into(),
-            age,
-        ];
-        if let Some((_, count)) = group {
-            head.push(
-                nk::Label::new(k("count"), count.to_string(), style(m.text, 11., 600.))
-                    .ink(Ink::Secondary)
-                    .into(),
-            );
-        }
-        let mut text: Vec<Node> = vec![
-            nk::Row::new(k("head"), head)
-                .gap(Space::S2)
-                .align(Align::Center)
-                .into(),
-        ];
-        if !body.is_empty() {
-            text.push(
-                // Two lines however short, so every card of its kind is one height (TS).
-                nk::Label::new(k("body"), body, style(m.text, 12., 400.))
-                    .lines(if expanded { 4 } else { 2 })
-                    .reserve(if expanded { 0 } else { 2 })
-                    .ink(Ink::Secondary)
-                    .into(),
-            );
-        }
-        let mut actions = (expanded && !actions.is_empty()).then(|| {
-            nk::Row::new(
-                k("actions"),
-                actions
-                    .iter()
-                    .map(|a| {
-                        nk::Button::with_child(
-                            format!("n{i}/act/{}", a.id),
-                            a.label.clone(),
-                            format!("act:{i}:{c}:{}", a.id),
-                            nk::Row::new(
-                                format!("n{i}/act/{}/pad", a.id),
-                                vec![
-                                    nk::Label::new(
-                                        format!("n{i}/act/{}/text", a.id),
-                                        a.label.clone(),
-                                        style(m.text, 12., 400.),
-                                    )
-                                    .lines(1)
-                                    .into(),
-                                ],
-                            )
-                            .padding(Padding::symmetric(Space::S1, Space::S3)),
-                        )
-                        .into()
-                    })
-                    .collect(),
-            )
-            .gap(Space::S2)
-        });
-        if hero.is_none()
-            && let Some(row) = actions.take()
-        {
-            text.push(row.into());
-        }
-        if !b.error.is_empty() {
-            text.push(
-                nk::Label::new(k("error"), b.error.clone(), style(m.text, 12., 400.))
-                    .lines(2)
-                    .into(),
-            );
-        }
-        let mut row: Vec<Node> = vec![
-            nk::Image::new(k("app"), "", ART).into(),
-            nk::Column::new(k("text"), text)
-                .gap(Space::S1)
-                .grow()
-                .into(),
-        ];
-        if hero.is_none() && thumbnail(b).is_some() {
-            row.push(nk::Image::new(k("thumb"), "", ART).into());
-        }
-        let mut body: Vec<Node> = vec![
-            nk::Row::new(k("row"), row)
-                .gap(Space::S3)
-                .align(Align::Center)
-                .into(),
-        ];
-        if let Some(h) = hero {
-            body.push(nk::Placeholder::new(k("hero"), h).into());
-        }
-        body.extend(actions.map(Node::from));
-        let open = match group {
-            Some((key, _)) => format!("group:{key}"),
-            None => format!("open:{i}:{c}"),
-        };
-        let content = nk::Button::with_child(
-            k("card"),
+        .body(body)
+        .error(b.error.clone())
+        .description(said)
+        .open(
+            match group {
+                Some((key, _)) => format!("group:{key}"),
+                None => format!("open:{i}:{c}"),
+            },
             match group {
                 Some((_, n)) => format!("{title}, {n} notifications, expand"),
                 None => title,
             },
-            open,
-            nk::Column::new(k("body-col"), body)
-                .gap(Space::S3)
-                .padding(Padding::all(Space::S3)),
         )
-        .description(said)
-        .wash(Wash::None)
-        .corner(Corner::Token(CARD))
-        .swipe(close_action.clone());
-        let close = nk::Button::with_child(
-            k("close"),
+        .close(
+            close_action,
             match group {
                 Some(_) => format!("Clear {}", b.notice.app_name),
                 None => "Close notification".into(),
             },
-            close_action,
-            nk::Row::new(
-                k("close/pad"),
-                vec![nk::Image::new(k("close/icon"), "nd-window-close", 13.).into()],
-            )
-            .padding(Padding::all(Space::S1)),
         )
-        .wash(Wash::Destructive)
-        .revealed_with(pane.clone());
-        nk::Pane::new(
-            pane,
-            Corner::Token(CARD),
-            nk::Overlay::new(k("over"), content).layer(
-                Align::Start,
-                Align::Start,
-                Padding {
-                    top: Some(Space::S1),
-                    left: Some(Space::S1),
-                    ..Padding::default()
-                },
-                close,
-            ),
-        )
-        .into()
+        .actions(
+            actions
+                .iter()
+                .map(|a| nk::NotificationAction {
+                    key: format!("n{i}/act/{}", a.id).into(),
+                    label: a.label.clone(),
+                    action: format!("act:{i}:{c}:{}", a.id),
+                })
+                .collect(),
+        );
+        if let Some((_, n)) = group {
+            card = card.count(n);
+        }
+        if expandable {
+            card = card.more(expanded, format!("item:{i}"));
+        }
+        if thumbnail(b).is_some() {
+            card = card.thumbnail();
+        }
+        if let Some(h) = hero {
+            card = card.hero(h);
+        }
+        card.into()
     }
 
     /// Rebuilds the view from the history and the month shown, and lays it out. `cards`:
@@ -1164,7 +1026,7 @@ impl View {
             return (vec![], vec![]);
         };
         let frame = &self.last;
-        let radius = tokens.radii.px(CARD);
+        let radius = tokens.radii.px(tokens.notification.corner);
         let mut groups = vec![];
         for (key, list) in groups_of(&self.history) {
             if list.len() < 2 || self.groups_open.contains(&key) {
@@ -1259,8 +1121,14 @@ impl View {
             c.clip(rect(visible));
             let (corner, fit) = match slot {
                 "app" => (0., ImageFit::Contain),
-                "thumb" => (ART * crate::geometry::ICON_CORNER, ImageFit::Contain),
-                _ => (tokens.radii.px(HERO_CORNER), ImageFit::Cover),
+                "thumb" => (
+                    tokens.notification.art * crate::geometry::ICON_CORNER,
+                    ImageFit::Contain,
+                ),
+                _ => (
+                    tokens.radii.px(tokens.notification.hero_corner),
+                    ImageFit::Cover,
+                ),
             };
             if corner > 0. {
                 c.clip_rounded_rect(rect(p.rect), corner);

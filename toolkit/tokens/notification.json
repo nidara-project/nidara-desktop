@@ -1,0 +1,20 @@
+{
+  "$comment": [
+    "The kit's notification card (nk::NotificationCard; #1156 step 3, point 5): one notification on its own glass, as the notification centre draws it today (toolkit/shell/src/nc_view.rs), which is the spec; final values require the owner's live review.",
+    "corner: the card's corner on the radius scale (the CC's 4×1, owner 2026-11-10); heroCorner: an open card's big picture. art: the app icon and the thumbnail beside the text.",
+    "text: the title and its weight, the age, a group's count and its weight, the body, an action's label and an error; lineHeight for all of them. lines: the body folded (and the room it keeps however short) and open, and an error.",
+    "glyph: the close and show-more glyphs. hero: a picture spans an open card when its source is at least source px wide; its height follows the picture between min and max.",
+    "Default applies to every dark/reduceTransparency variant; exported once as notification in each components.json variant."
+  ],
+  "default": {
+    "corner": "lg",
+    "heroCorner": "md",
+    "art": 44,
+    "lineHeight": 1.35,
+    "text": {"title": 13, "titleWeight": 700, "age": 11, "count": 11, "countWeight": 600, "body": 12, "action": 12, "error": 12},
+    "lines": {"folded": 2, "open": 4, "error": 2},
+    "glyph": 13,
+    "hero": {"source": 240, "min": 72, "max": 200}
+  },
+  "variants": []
+}
