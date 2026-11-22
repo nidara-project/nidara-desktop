@@ -58,7 +58,7 @@ fn status_text(s: &str) -> &'static str {
 }
 
 /// Each page: its id (what the check and `--page` name), its title and its glyph.
-pub const PAGES: [(&str, &str, &str); 25] = [
+pub const PAGES: [(&str, &str, &str); 26] = [
     ("status", "Status", "nd-emblem-default"),
     ("window", "Window", "nd-sidebar-show"),
     ("button", "Button", "nd-hand"),
@@ -76,6 +76,7 @@ pub const PAGES: [(&str, &str, &str); 25] = [
     ("scroll", "Scroll", "nd-pan-down"),
     ("overlay", "Overlay", "nd-sidebar-show"),
     ("grid", "Grid", "nd-control-center"),
+    ("tile", "Tile", "nd-control-center"),
     ("reveal", "Reveal", "nd-pan-end"),
     ("disclosure", "Disclosure", "nd-pan-end"),
     ("entry", "Text field", "nd-input-keyboard"),
@@ -159,6 +160,7 @@ impl Default for Model {
 /// The kit's measures a page needs besides its type: the slider's, and the frame's glyph size.
 pub struct Measures<'a> {
     pub dropdown: &'a DropdownStyle,
+    pub tile: &'a nk::TileStyle,
     pub colors: &'a [(String, nk_render::Color)],
     pub glyph: f64,
     pub row_height: f64,
@@ -360,7 +362,8 @@ fn page(id: &str, m: &Model, cat: &Catalogue, t: &TypeScale, k: &Measures) -> Ve
         "layout" => layout(t),
         "scroll" => scroll(t),
         "overlay" => overlay(t),
-        "grid" => grid(t),
+        "grid" => grid(t, k.tile),
+        "tile" => tiles(m, t, k.tile),
         "reveal" => reveal(m, t),
         "disclosure" => disclosures(m, t),
         // One text field page (owner, #1156): the kit's field, then the CC's password field
@@ -1819,20 +1822,20 @@ fn overlay(t: &TypeScale) -> Vec<Node> {
     ]
 }
 
-fn grid(t: &TypeScale) -> Vec<Node> {
+fn grid(t: &TypeScale, s: &nk::TileStyle) -> Vec<Node> {
     let tile = |k: &str, at: (usize, usize), span: (usize, usize)| Cell {
         at,
         span,
         child: block(&format!("gr/{k}"), &format!("{}×{}", span.0, span.1), t),
     };
-    // The Control Center's grid as it is: its four columns of 76 with gaps of 20
-    // (`toolkit/shell/src/cclayout.rs`), and every size a tile has there, the 4×1 included.
+    // The Control Center's grid as it is: its four columns, its cell and gap from the tile
+    // tokens (`toolkit/tokens/tile.json`), and every size a tile has there, the 4×1 included.
     vec![
         nk::Grid::new(
             "gr/grid",
             4,
-            76.,
-            20.,
+            s.cell,
+            s.gap,
             vec![
                 tile("single", (0, 0), (1, 1)),
                 tile("wide", (1, 0), (2, 1)),
@@ -1852,6 +1855,184 @@ fn grid(t: &TypeScale) -> Vec<Node> {
         )
         .ink(Ink::Secondary)
         .lines(2)
+        .into(),
+    ]
+}
+
+/// The kit's tiles (#1156 step 4): `nk::Tile` in each of its contents and `nk::SliderTile`, on
+/// the tile grid with its tokens (`toolkit/tokens/tile.json`) — the Control Center's tiles,
+/// usable by any surface. Pictures and values are slots its surface paints (here: empty).
+fn tiles(m: &Model, t: &TypeScale, s: &nk::TileStyle) -> Vec<Node> {
+    use nk::{TileAction, TileContent, TileSize};
+    let base = t.style(Type::Body, Weight::Regular);
+    let action = |k: &str, icon: &str, name: &str, primary: bool| TileAction {
+        key: format!("ti/{k}").into(),
+        action: "press".into(),
+        icon: icon.into(),
+        name: name.into(),
+        enabled: true,
+        primary,
+    };
+    // Each player tile has keys of its own: the page's keys are unique.
+    let player = |id: &str| TileContent::Picture {
+        title: "Song title".into(),
+        subtitle: "Artist".into(),
+        actions: vec![
+            action(
+                &format!("{id}/prev"),
+                "nd-media-skip-backward",
+                "Previous",
+                false,
+            ),
+            action(
+                &format!("{id}/play"),
+                "nd-media-playback-start",
+                "Play",
+                true,
+            ),
+            action(
+                &format!("{id}/next"),
+                "nd-media-skip-forward",
+                "Next",
+                false,
+            ),
+        ],
+    };
+    let cell = |at: (usize, usize), span: (usize, usize), child: Node| Cell { at, span, child };
+    let tile = |id: &str, size: TileSize, content: TileContent| {
+        nk::Tile::new(format!("ti-{id}"), size, content, s, &base)
+    };
+    let grid = nk::Grid::new(
+        "ti/grid",
+        4,
+        s.cell,
+        s.gap,
+        vec![
+            cell(
+                (0, 0),
+                (1, 1),
+                tile(
+                    "focus",
+                    TileSize::Single,
+                    TileContent::Icon("nd-notifications-disabled".into()),
+                )
+                .control("ti/focus", "Focus")
+                .action("toggle")
+                .toggle(m.toggle)
+                .into(),
+            ),
+            cell(
+                (1, 0),
+                (2, 1),
+                tile(
+                    "bt",
+                    TileSize::Wide,
+                    TileContent::Badge {
+                        icon: "nd-bluetooth-active".into(),
+                        title: "Bluetooth".into(),
+                        subtitle: if m.toggle { "On" } else { "Off" }.into(),
+                        toggle: Some("ti/bt/badge".into()),
+                        lit: m.toggle,
+                    },
+                )
+                .control("ti/bt", "Bluetooth")
+                .action("press")
+                .into(),
+            ),
+            cell(
+                (3, 0),
+                (1, 1),
+                tile("cover", TileSize::Single, player("cover"))
+                    .control("ti/cover", "Now playing")
+                    .action("press")
+                    .into(),
+            ),
+            cell(
+                (0, 1),
+                (1, 2),
+                nk::SliderTile::new(
+                    "ti-tall",
+                    TileSize::Tall,
+                    "ti/tall",
+                    nk::SliderRange::new(0., 100., 5., m.tile),
+                    ("nd-display-brightness-low", 14., "nd-display-brightness"),
+                    s,
+                )
+                .named("Brightness", "tile")
+                .into(),
+            ),
+            cell(
+                (1, 1),
+                (2, 2),
+                tile("player", TileSize::Square, player("player"))
+                    .control("ti/player", "Now playing")
+                    .action("press")
+                    .into(),
+            ),
+            cell(
+                (3, 1),
+                (1, 1),
+                tile(
+                    "icon",
+                    TileSize::Single,
+                    TileContent::Icon("nd-screenshot".into()),
+                )
+                .control("ti/icon", "Screenshot")
+                .action("press")
+                .into(),
+            ),
+            cell(
+                (0, 3),
+                (4, 1),
+                nk::SliderTile::new(
+                    "ti-full",
+                    TileSize::Full,
+                    "ti/full",
+                    nk::SliderRange::new(0., 100., 5., m.tile),
+                    ("nd-audio-volume-low", 16., "nd-audio-volume-high"),
+                    s,
+                )
+                .named("Volume", "tile")
+                .into(),
+            ),
+            cell(
+                (0, 4),
+                (2, 1),
+                tile(
+                    "download",
+                    TileSize::Wide,
+                    TileContent::Picture {
+                        title: "Report.pdf".into(),
+                        subtitle: "12 of 40 MB".into(),
+                        actions: vec![action("pause", "nd-media-playback-pause", "Pause", true)],
+                    },
+                )
+                .control("ti/download", "Report.pdf")
+                .action("press")
+                .into(),
+            ),
+            cell(
+                (2, 4),
+                (2, 1),
+                tile("wide-player", TileSize::Wide, player("wide-player"))
+                    .control("ti/wide-player", "Now playing")
+                    .action("press")
+                    .into(),
+            ),
+        ],
+    );
+    vec![
+        section("ti-grid", "Every content and size, on the tile grid", t, grid.into()),
+        nk::Label::new(
+            "ti/note",
+            format!(
+                "nk::Tile: a glyph, a badge with its titles, a picture with up to three actions (a player, a download), or its surface's own content; the whole tile one control, a toggle or not. nk::SliderTile: 4×1 and 1×2. Pictures and values are slots the surface paints. Presses: {}.",
+                m.presses
+            ),
+            t.style(Type::Small, Weight::Regular),
+        )
+        .ink(Ink::Secondary)
+        .lines(4)
         .into(),
     ]
 }
@@ -2487,6 +2668,13 @@ mod tests {
                 &t,
                 &Measures {
                     dropdown: &dropdown(),
+                    tile: &nk::tile_from(
+                        &serde_json::from_str::<serde_json::Value>(include_str!(
+                            "../../tokens/tile.json"
+                        ))
+                        .unwrap()["default"],
+                    )
+                    .unwrap(),
                     colors: &[
                         ("Blue".into(), nk_render::rgba(0, 128, 255, 255)),
                         ("Red".into(), nk_render::rgba(255, 0, 0, 255)),
@@ -2570,6 +2758,7 @@ mod catalogue_tests {
         let lib = include_str!("../../crates/nk-view/src/lib.rs");
         let mut public: BTreeSet<String> = exported(lib, "widgets").into_iter().collect();
         public.extend(exported(lib, "file_views"));
+        public.extend(exported(lib, "tiles"));
         public.extend(["AppWindow", "Alert", "Dialog", "FontDialog"].map(String::from));
         let cat = Catalogue::load().unwrap();
         let pages: BTreeSet<&str> = PAGES.iter().map(|(id, _, _)| *id).collect();

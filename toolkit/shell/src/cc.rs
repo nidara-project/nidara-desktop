@@ -32,16 +32,10 @@ use std::sync::Arc;
 pub const PAD: f64 = 16.;
 /// Below the bar's glass (`PANEL_HANG`).
 pub const HANG: f64 = 8.;
-/// A tile's content inset from its glass; a 1×2's fill reaches 2 from it.
-const TILE_PAD: f64 = 10.;
-const TALL_PAD: f64 = 2.;
-/// The Control Center's corner: a 2×2's (owner, 2026-11-03: it stays 38).
+/// The Control Center's corner: a 2×2's (owner, 2026-11-03: it stays 38) — the kit tile's
+/// `cornerSquare` (`toolkit/tokens/tile.json`; a test keeps them one).
 pub const SQUARE_RADIUS: f64 = 38.;
-/// The capsule's badge and its gap to the text (`CAPSULE_ICON_SIZE`, `_GAP`), from 4 in.
-const BADGE: f64 = 44.;
-const BADGE_GAP: f64 = 8.;
-const BADGE_IN: f64 = 4.;
-const ICON: f64 = 28.;
+/// The sizes of a slider's value (the kit tile's title and small sizes; a test keeps them one).
 const TEXT: f32 = 14.;
 const SMALL: f32 = 12.;
 const BOLD: f32 = 700.;
@@ -221,7 +215,7 @@ impl Cc {
             self.detail_scale,
         );
         self.tiles = self.editor.tiles.clone();
-        let view = grid_view(&self.tiles, status, Some(look), &base);
+        let view = grid_view(&self.tiles, status, Some(look), &base, &tokens.tile);
         self.lay_view(&view, &tokens, &mut look.text);
     }
     fn lay_view(&mut self, view: &nk::Node, tokens: &nk::Tokens, text: &mut dyn TextBackend) {
@@ -836,7 +830,7 @@ impl Cc {
         placed.rect[0] = 6.;
         placed.rect[1] = 6.;
         let base = look.styles.text.clone();
-        let view = tile_view(&placed, status, Some(look), &base);
+        let view = tile_view(&placed, status, Some(look), &base, &tokens.tile);
         let state = self.layers.entry(id).or_insert_with(|| {
             let mut s = nk::ViewState::new(REGIONS);
             s.set_slides(false);
@@ -1109,16 +1103,6 @@ fn primary(id: &'static str, size: Size) -> Target {
     }
 }
 
-/// A tile's corner, as `radius_of` gives its glass: a 2×2 takes its 1×1's, the 4×1 the
-/// dock's, the rest are capsules and circles.
-fn corner_of(size: Size) -> nk::Corner {
-    match size {
-        Size::Square => nk::Corner::Fixed(SQUARE_RADIUS as u32),
-        Size::FullWidth => nk::Corner::Fixed(wide_radius().round() as u32),
-        _ => nk::Corner::Pill,
-    }
-}
-
 /// Whether a player's button can act now.
 fn enabled(t: Target, s: &Status) -> bool {
     s.media.as_ref().is_some_and(|m| match t {
@@ -1128,8 +1112,24 @@ fn enabled(t: Target, s: &Status) -> bool {
     })
 }
 
+/// A tile's corner, as `radius_of` gives its glass and the kit's tile takes it: a 2×2 the
+/// square corner, the 4×1 the dock's, the rest capsules and circles (the editor's cells).
+fn corner_of(size: Size) -> nk::Corner {
+    match size {
+        Size::Square => nk::Corner::Fixed(SQUARE_RADIUS as u32),
+        Size::FullWidth => nk::Corner::Fixed(wide_radius().round() as u32),
+        _ => nk::Corner::Pill,
+    }
+}
+
 /// The grid: each tile on its cells, the editor's placement (VIEW.md §12.4).
-fn grid_view(tiles: &[Placed], status: &Status, look: Option<&Look>, base: &TextStyle) -> nk::Node {
+fn grid_view(
+    tiles: &[Placed],
+    status: &Status,
+    look: Option<&Look>,
+    base: &TextStyle,
+    style: &nk::TileStyle,
+) -> nk::Node {
     let cells = tiles
         .iter()
         .map(|p| nk::Cell {
@@ -1138,7 +1138,7 @@ fn grid_view(tiles: &[Placed], status: &Status, look: Option<&Look>, base: &Text
                 p.tile.size.cells().0 as usize,
                 p.tile.size.cells().1 as usize,
             ),
-            child: tile_view(p, status, look, base),
+            child: tile_view(p, status, look, base, style),
         })
         .collect();
     nk::Grid::new(
@@ -1156,19 +1156,6 @@ fn strut(key: String, px: f64) -> nk::Slot {
     nk::Slot::new(key, px)
 }
 
-/// A glyph of `size` centred in a box of `room`.
-fn boxed(key: String, name: &str, size: f64, room: f64, ink: nk::Ink) -> nk::Node {
-    use nk::{Align, Padding};
-    nk::Overlay::new(format!("{key}/box"), strut(format!("{key}/room"), room))
-        .layer(
-            Align::Center,
-            Align::Center,
-            Padding::default(),
-            nk::Image::new(key, name, size).ink(ink),
-        )
-        .into()
-}
-
 /// `child` laid in the middle of the tile, both ways.
 fn centred_in(key: String, child: nk::Node) -> nk::Node {
     use nk::{Align, Justify};
@@ -1180,62 +1167,37 @@ fn centred_in(key: String, child: nk::Node) -> nk::Node {
 
 /// One tile: a pane of the CC's glass in its size's corner, holding its controls and what
 /// they show, as the TS tiles laid them (`tile.ts`, `BaseIsland.tsx`).
-fn tile_view(p: &Placed, status: &Status, look: Option<&Look>, base: &TextStyle) -> nk::Node {
-    use nk::{Align, Ink, Justify, Node, Padding, Role};
+fn tile_view(
+    p: &Placed,
+    status: &Status,
+    look: Option<&Look>,
+    base: &TextStyle,
+    style: &nk::TileStyle,
+) -> nk::Node {
+    use nk::{Align, Ink, Justify, Node, TileContent, TileSize};
     let id = p.tile.id;
-    let size = p.tile.size;
+    let size = match p.tile.size {
+        Size::Single => TileSize::Single,
+        Size::Wide => TileSize::Wide,
+        Size::Square => TileSize::Square,
+        Size::Tall => TileSize::Tall,
+        Size::FullWidth => TileSize::Full,
+    };
     let k = |part: &str| format!("{id}/{part}");
     let on = active(id, status);
-    let corner = corner_of(size);
     let (title, sub) = look.map_or((id.to_string(), String::new()), |l| texts(id, status, l));
     let text = |part: &str, t: String, size: f32, weight: f32| {
         nk::Label::new(k(part), t, sized(base, size, weight))
     };
-    let whole = |key: Option<nk::Key>, name: String, child: Node| {
-        nk::Button::with_child(key.unwrap(), name, "", child).corner(corner)
+    let detail = has_detail(id).then(|| key_of(Target::OpenDetail(id)).unwrap());
+    let tile = |content: TileContent| {
+        nk::Tile::new(id, size, content, style, base).full_corner(wide_radius())
     };
-    // A detail under the tile's own control: keys and readers only.
-    let detail_layer = |base: Node| -> Node {
-        if has_detail(id) {
-            nk::Overlay::new(k("layers"), base)
-                .layer(
-                    Align::Stretch,
-                    Align::Stretch,
-                    Padding::default(),
-                    nk::Button::with_child(
-                        key_of(Target::OpenDetail(id)).unwrap(),
-                        "",
-                        "",
-                        nk::Spacer::new(k("d")),
-                    )
-                    .corner(corner)
-                    .keys_only(),
-                )
-                .into()
-        } else {
-            base
-        }
-    };
-    let titles = |title: String, sub: String| {
-        let lines = if sub.is_empty() { 2 } else { 1 };
-        let mut col: Vec<Node> = vec![text("title", title, TEXT, BOLD).lines(lines).into()];
-        if !sub.is_empty() {
-            col.push(
-                text("sub", sub, TEXT, 400.)
-                    .lines(1)
-                    .ink(Ink::Secondary)
-                    .into(),
-            );
-        }
-        nk::Column::new(k("titles"), col)
-            .justify(Justify::Center)
-            .grow()
-    };
-    let content = match (id, size) {
+    match (id, p.tile.size) {
         ("cpu_memory", _) => {
-            let large = size == Size::Square;
+            let large = p.tile.size == Size::Square;
             let ring = if large { 56. } else { 34. };
-            let names: &[&str] = if size == Size::Single {
+            let names: &[&str] = if p.tile.size == Size::Single {
                 &["CPU"]
             } else {
                 &["CPU", "RAM"]
@@ -1251,7 +1213,7 @@ fn tile_view(p: &Placed, status: &Status, look: Option<&Look>, base: &TextStyle)
                         vec![
                             nk::Slot::new(k(&format!("ring{n}")), ring).into(),
                             strut(k(&format!("under{n}")), 3.).into(),
-                            text(&format!("name{n}"), (*name).into(), SMALL, 400.)
+                            text(&format!("name{n}"), (*name).into(), style.small, 400.)
                                 .ink(Ink::Secondary)
                                 .into(),
                         ],
@@ -1260,39 +1222,40 @@ fn tile_view(p: &Placed, status: &Status, look: Option<&Look>, base: &TextStyle)
                     .into(),
                 );
             }
-            centred_in(
+            tile(TileContent::Custom(centred_in(
                 k("centre"),
                 nk::Row::new(k("gauges"), row).align(Align::Start).into(),
-            )
+            )))
+            .into()
         }
-        ("battery", size) => {
+        ("battery", sz) => {
             let percent = status
                 .battery
                 .map_or(String::new(), |b| format!("{:.0}%", b.fraction * 100.));
             let state = battery_text(status, look);
-            let body = match size {
+            let body = match sz {
                 Size::Single => centred_in(
                     k("centre"),
                     nk::Column::new(
                         k("stack"),
                         vec![
-                            nk::Slot::new(k("glyph"), 28.).into(),
+                            nk::Slot::new(k("glyph"), style.icon).into(),
                             strut(k("under"), 3.).into(),
-                            text("percent", percent, TEXT, 400.).into(),
+                            text("percent", percent, style.title, 400.).into(),
                         ],
                     )
                     .align(Align::Center)
                     .into(),
                 ),
                 Size::Square => {
-                    let mut centre = sized(base, SMALL, 400.);
+                    let mut centre = sized(base, style.small, 400.);
                     centre.alignment = nk_text::Alignment::Center;
                     nk::Column::new(
                         k("stack"),
                         vec![
                             nk::Slot::new(k("glyph"), 56.).into(),
                             strut(k("under"), 3.).into(),
-                            text("percent", percent, TEXT, 400.).into(),
+                            text("percent", percent, style.title, 400.).into(),
                             nk::Row::new(
                                 k("state-row"),
                                 vec![
@@ -1316,13 +1279,13 @@ fn tile_view(p: &Placed, status: &Status, look: Option<&Look>, base: &TextStyle)
                     k("row"),
                     vec![
                         strut(k("lead"), 18.).into(),
-                        nk::Slot::new(k("glyph"), 28.).into(),
+                        nk::Slot::new(k("glyph"), style.icon).into(),
                         strut(k("gap"), 16.).into(),
                         nk::Column::new(
                             k("texts"),
                             vec![
-                                text("percent", percent, TEXT, 400.).into(),
-                                text("state", state, SMALL, 400.)
+                                text("percent", percent, style.title, 400.).into(),
+                                text("state", state, style.small, 400.)
                                     .lines(2)
                                     .ink(Ink::Dim)
                                     .into(),
@@ -1337,243 +1300,102 @@ fn tile_view(p: &Placed, status: &Status, look: Option<&Look>, base: &TextStyle)
                 .align(Align::Center)
                 .into(),
             };
-            whole(key_of(Target::OpenDetail(id)), title, body).into()
+            tile(TileContent::Custom(body))
+                .control(key_of(Target::OpenDetail(id)).unwrap(), title)
+                .into()
         }
-        ("media", size) => {
+        ("media", _) => {
             let media = status.media.clone().unwrap_or_default();
-            let button = |t: Target, icon: &str, room: f64| {
-                let ink = if enabled(t, status) {
-                    Ink::Primary
-                } else {
-                    Ink::Dim
-                };
-                let key = key_of(t).unwrap();
-                nk::Button::with_child(
-                    key.clone(),
-                    "",
-                    "",
-                    boxed(format!("{}/glyph", key.0), icon, 18., room, ink),
-                )
-                .enabled(enabled(t, status))
+            let action = |t: Target, icon: &str, primary: bool| nk::TileAction {
+                key: key_of(t).unwrap(),
+                action: String::new(),
+                icon: icon.into(),
+                name: String::new(),
+                enabled: enabled(t, status),
+                primary,
             };
             let play = if media.playing {
                 "nd-media-playback-pause"
             } else {
                 "nd-media-playback-start"
             };
-            let body: Node = match size {
-                Size::Single => nk::Slot::new(k("cover"), layout::UNIT).into(),
-                Size::Wide => nk::Row::new(
-                    k("row"),
-                    vec![
-                        strut(k("lead"), 14.).into(),
-                        nk::Slot::new(k("cover"), 44.).into(),
-                        strut(k("gap"), 12.).into(),
-                        titles(title.clone(), media.artist.clone()).into(),
-                        strut(k("before"), 12.).into(),
-                        button(Target::PlayPause, play, 32.).into(),
-                        strut(k("end"), 14.).into(),
-                    ],
-                )
-                .align(Align::Center)
-                .into(),
-                _ => {
-                    let mut centre = sized(base, TEXT, BOLD);
-                    centre.alignment = nk_text::Alignment::Center;
-                    let mut artist = sized(base, TEXT, 400.);
-                    artist.alignment = nk_text::Alignment::Center;
-                    let line = |part: &str, child: Node| -> Node {
-                        nk::Row::new(
-                            k(part),
-                            vec![
-                                strut(k(&format!("{part}-l")), 16.).into(),
-                                child.grow(),
-                                strut(k(&format!("{part}-r")), 16.).into(),
-                            ],
-                        )
-                        .into()
-                    };
-                    nk::Column::new(
-                        k("stack"),
-                        vec![
-                            nk::Row::new(k("art"), vec![nk::Slot::new(k("cover"), 62.).into()])
-                                .justify(Justify::Center)
-                                .into(),
-                            strut(k("under-art"), 4.).into(),
-                            line(
-                                "title-line",
-                                nk::Label::new(k("title"), title.clone(), centre)
-                                    .lines(2)
-                                    .into(),
-                            ),
-                            line(
-                                "artist-line",
-                                nk::Label::new(k("artist"), media.artist.clone(), artist)
-                                    .lines(1)
-                                    .ink(Ink::Secondary)
-                                    .into(),
-                            ),
-                            strut(k("above-controls"), 4.).into(),
-                            nk::Row::new(
-                                k("controls"),
-                                vec![
-                                    button(Target::Previous, "nd-media-skip-backward", 24.).into(),
-                                    button(Target::PlayPause, play, 24.).into(),
-                                    button(Target::Next, "nd-media-skip-forward", 24.).into(),
-                                ],
-                            )
-                            .gap(nk::Space::S4)
-                            .justify(Justify::Center)
-                            .into(),
-                        ],
-                    )
-                    .justify(Justify::Center)
-                    .into()
-                }
-            };
-            whole(key_of(Target::OpenDetail(id)), title, body).into()
+            tile(TileContent::Picture {
+                title: title.clone(),
+                subtitle: media.artist.clone(),
+                actions: vec![
+                    action(Target::Previous, "nd-media-skip-backward", false),
+                    action(Target::PlayPause, play, true),
+                    action(Target::Next, "nd-media-skip-forward", false),
+                ],
+            })
+            .control(key_of(Target::OpenDetail(id)).unwrap(), title)
+            .into()
         }
-        ("volume" | "brightness", Size::FullWidth) => {
-            let (low, low_size, high) = if id == "brightness" {
+        ("volume" | "brightness", Size::FullWidth | Size::Tall) => {
+            let icons = if id == "brightness" {
                 ("nd-display-brightness-low", 14., "nd-display-brightness")
+            } else if p.tile.size == Size::Tall {
+                let high = status
+                    .volume
+                    .map_or("nd-audio-volume-high", crate::status::volume_icon);
+                ("nd-audio-volume-low", 16., high)
             } else {
                 ("nd-audio-volume-low", 16., "nd-audio-volume-high")
             };
-            let slider = nk::Slider::new(
+            nk::SliderTile::new(
+                id,
+                size,
                 key_of(Target::Slider(id)).unwrap(),
-                "",
-                "",
                 nk::SliderRange::new(0., 100., 5., (value_of(id, status) * 100.).round()),
+                icons,
+                style,
             )
-            .grow();
-            let row = nk::Row::new(
-                k("row"),
-                vec![
-                    strut(k("lead"), 14.).into(),
-                    boxed(k("low"), low, low_size, 16., Ink::Dim),
-                    strut(k("before"), 12.).into(),
-                    slider.into(),
-                    strut(k("after"), 12.).into(),
-                    boxed(k("high"), high, 16., 16., Ink::Dim),
-                    strut(k("gap"), 12.).into(),
-                    nk::Slot::new(k("value"), VALUE_W).into(),
-                    strut(k("end"), 14.).into(),
-                ],
-            )
-            .align(Align::Center);
-            nk::Overlay::new(
-                k("layers"),
-                whole(
-                    key_of(Target::OpenDetail(id)),
-                    title,
-                    nk::Spacer::new(k("body")).into(),
-                ),
-            )
-            .layer(Align::Stretch, Align::Center, Padding::default(), row)
+            .detail(key_of(Target::OpenDetail(id)).unwrap(), title)
+            .full_corner(wide_radius())
             .into()
         }
-        ("volume" | "brightness", Size::Tall) => {
-            let icon = if id == "brightness" {
-                "nd-display-brightness"
-            } else {
-                status
-                    .volume
-                    .map_or("nd-audio-volume-high", crate::status::volume_icon)
-            };
-            let fill = nk::Column::new(
-                k("fill"),
-                vec![
-                    strut(k("top"), 12.).into(),
-                    nk::Slot::new(k("value"), 24.).into(),
-                    nk::Spacer::new(k("middle")).into(),
-                    nk::Image::new(k("icon"), icon, ICON).into(),
-                    strut(k("bottom"), 24.).into(),
-                ],
-            )
-            .align(Align::Center);
-            let slider = nk::Slider::new(
-                key_of(Target::Slider(id)).unwrap(),
-                "",
-                "",
-                nk::SliderRange::new(0., 100., 5., (value_of(id, status) * 100.).round()).fill(),
-            )
-            .corner(nk::Corner::Pill)
-            .child(fill);
-            // The fill reaches 2 from the glass.
-            let inset = nk::Row::new(
-                k("inset-row"),
-                vec![
-                    strut(k("inset-l"), TALL_PAD).into(),
-                    nk::Column::new(
-                        k("inset"),
-                        vec![
-                            strut(k("inset-t"), TALL_PAD).into(),
-                            slider.grow().into(),
-                            strut(k("inset-b"), TALL_PAD).into(),
-                        ],
-                    )
-                    .grow()
-                    .into(),
-                    strut(k("inset-r"), TALL_PAD).into(),
-                ],
-            );
-            detail_layer(inset.into())
-        }
         (_, Size::Single) => {
-            let glyph = centred_in(
-                k("centre"),
-                nk::Image::new(k("icon"), icon_of(id, status), ICON).into(),
-            );
+            let t = tile(TileContent::Icon(icon_of(id, status).into()));
             if toggles(id) {
-                detail_layer(
-                    whole(key_of(Target::Tile(id)), title, glyph)
-                        .role(Role::Toggle)
-                        .on(on)
-                        .into(),
-                )
+                let t = t
+                    .control(key_of(Target::Tile(id)).unwrap(), title)
+                    .toggle(on);
+                match detail {
+                    Some(d) => t.detail(d),
+                    None => t,
+                }
+                .into()
             } else {
-                whole(key_of(primary(id, size)), title, glyph).into()
+                t.control(key_of(primary(id, p.tile.size)).unwrap(), title)
+                    .into()
             }
         }
         _ => {
             // A capsule: the badge, then the title over its subtitle.
-            let lit = on && has_state(id);
-            let face = boxed(k("icon"), icon_of(id, status), ICON, BADGE, Ink::Primary);
-            let badge = match primary(id, size) {
-                Target::Badge(_) => {
-                    nk::Button::with_child(key_of(Target::Badge(id)).unwrap(), "", "", face)
-                        .role(Role::Toggle)
-                }
-                // A badge that is only a picture of the state: no pointer, no Tab stop.
-                _ => nk::Button::with_child(k("well"), "", "", face).enabled(false),
-            }
-            .surface()
-            .on(lit);
-            let row = nk::Row::new(
-                k("row"),
-                vec![
-                    strut(k("lead"), TILE_PAD + BADGE_IN).into(),
-                    badge.into(),
-                    strut(k("gap"), BADGE_GAP).into(),
-                    titles(title.clone(), sub).into(),
-                    strut(k("end"), TILE_PAD).into(),
-                ],
-            )
-            .align(Align::Center);
-            let key = match primary(id, size) {
+            let badge = match primary(id, p.tile.size) {
+                Target::Badge(_) => key_of(Target::Badge(id)),
+                _ => None,
+            };
+            let key = match primary(id, p.tile.size) {
                 Target::Tile(_) => key_of(Target::Tile(id)),
                 _ => key_of(Target::OpenDetail(id)),
             };
-            let control = whole(key, title, row.into());
-            if toggles(id) && primary(id, size) == Target::Tile(id) {
-                control.role(Role::Toggle)
+            let t = tile(TileContent::Badge {
+                icon: icon_of(id, status).into(),
+                title: title.clone(),
+                subtitle: sub,
+                toggle: badge,
+                lit: on && has_state(id),
+            })
+            .control(key.unwrap(), title);
+            if toggles(id) && primary(id, p.tile.size) == Target::Tile(id) {
+                t.toggle_in_badge()
             } else {
-                control
+                t
             }
             .into()
         }
-    };
-    nk::Pane::new(format!("p:{id}"), corner, content).into()
+    }
 }
 
 /// What the surface paints itself in the view's slots: covers, the battery's glyph, the
@@ -1869,9 +1691,6 @@ fn set_value(id: &str, value: f64, s: &Status) -> Option<Act> {
         _ => None,
     }
 }
-
-/// The value's room: five digits at the small size (`width_chars: 5`).
-const VALUE_W: f64 = 36.;
 
 pub(super) fn wired(s: &Status) -> Option<&serde_json::Value> {
     s.details.network.as_ref()?["devices"]
@@ -2542,7 +2361,7 @@ mod tests {
         let tokens = crate::nc_view::exported_tokens()?;
         cc.tokens = Some(tokens.clone());
         cc.types = Some(crate::nc_view::exported_types()?);
-        let view = grid_view(&cc.tiles, s, None, &TextStyle::default());
+        let view = grid_view(&cc.tiles, s, None, &TextStyle::default(), &tokens.tile);
         let mut text =
             nk_text::ParleyBackend::new(Arc::new(nk_text::FontSet::discover_required().unwrap()))
                 .unwrap();
@@ -2625,11 +2444,23 @@ mod tests {
     }
 
     #[test]
-    fn clicks_land_on_what_acts() {
-        let mut s = status();
-        let Some((mut cc, _)) = laid(&s, &Default::default()) else {
+    fn the_cc_grid_and_corner_are_the_kit_tiles() {
+        let Some((_, tokens)) = laid(&status(), &Default::default()) else {
             return;
         };
+        let t = &tokens.tile;
+        assert_eq!((layout::UNIT, layout::GAP), (t.cell, t.gap));
+        assert_eq!(SQUARE_RADIUS, t.corner_square);
+        assert_eq!((TEXT, SMALL, BOLD), (t.title, t.small, t.title_weight));
+    }
+
+    #[test]
+    fn clicks_land_on_what_acts() {
+        let mut s = status();
+        let Some((mut cc, tokens)) = laid(&s, &Default::default()) else {
+            return;
+        };
+        let t = &tokens.tile;
         // Appearance at 2×1: the whole capsule.
         let dark = placed(&cc, "dark_mode");
         assert_eq!(click(&mut cc, centre(dark.rect), &s), Some(Act::Dark(true)));
@@ -2639,10 +2470,10 @@ mod tests {
         assert_eq!(
             badge,
             [
-                night.rect[0] + TILE_PAD + BADGE_IN,
-                night.rect[1] + (night.rect[3] - BADGE) / 2.,
-                BADGE,
-                BADGE
+                night.rect[0] + t.pad + t.badge_inset,
+                night.rect[1] + (night.rect[3] - t.badge) / 2.,
+                t.badge,
+                t.badge
             ]
         );
         assert_eq!(click(&mut cc, centre(badge), &s), Some(Act::Night(true)));
@@ -2777,6 +2608,7 @@ mod tests {
         let Some((mut cc, tokens)) = laid(&s, &stored) else {
             return;
         };
+        let t = &tokens.tile;
         let washes = |cc: &mut Cc| {
             cc.last = cc.state.frame(&tokens, std::time::Instant::now());
             cc.states(&s)
@@ -2795,10 +2627,10 @@ mod tests {
         let dark = placed(&cc, "dark_mode");
         assert!(at(&w, dark.rect).iter().all(|x| x[3] == 0.));
         let badge = [
-            dark.rect[0] + TILE_PAD + BADGE_IN,
-            dark.rect[1] + (dark.rect[3] - BADGE) / 2.,
-            BADGE,
-            BADGE,
+            dark.rect[0] + t.pad + t.badge_inset,
+            dark.rect[1] + (dark.rect[3] - t.badge) / 2.,
+            t.badge,
+            t.badge,
         ];
         let rest = at(&w, badge);
         assert_eq!(rest.len(), 1);

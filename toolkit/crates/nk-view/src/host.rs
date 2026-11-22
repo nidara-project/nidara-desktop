@@ -44,6 +44,7 @@ impl Tokens {
             slider: slider_from(&set.components["range"])?,
             switch: switch_from(&set.components["switch"], &colors)?,
             button: button_from(&set.components["button"], &colors)?,
+            tile: crate::tokens::tile_from(&set.components["tile"])?,
 
             row_height: e.statics["ts"]["ROW_HEIGHT"]["single"]
                 .as_f64()

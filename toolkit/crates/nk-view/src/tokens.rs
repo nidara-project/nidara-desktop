@@ -1199,10 +1199,105 @@ pub struct Tokens {
     pub swatch: SwatchStyle,
     pub disclosure: DisclosureStyle,
     pub entry: EntryStyle,
+    pub tile: TileStyle,
     /// A list row's least height (`static.json` `ts.ROW_HEIGHT.single`).
     pub row_height: f64,
     /// A group's corner (`components.json` `common.groupRadius`), as Settings' cards.
     pub group_radius: f64,
+}
+
+/// The kit's tiles (`components.json` `tile`, from `toolkit/tokens/tile.json`): `nk::Tile` and
+/// `nk::SliderTile`, and the grid they lie on.
+#[derive(Clone, Debug, PartialEq)]
+pub struct TileStyle {
+    /// A grid cell and the gap between two.
+    pub cell: f64,
+    pub gap: f64,
+    /// A 2×2's corner.
+    pub corner_square: f64,
+    /// A row's distance from the tile's edge; a tall slider's fill from the glass.
+    pub pad: f64,
+    pub tall_pad: f64,
+    /// A badge's circle, its gap to the titles and its inset from the pad.
+    pub badge: f64,
+    pub badge_gap: f64,
+    pub badge_inset: f64,
+    /// A tile's glyph.
+    pub icon: f64,
+    /// Title and subtitle sizes, the title's weight, the small size.
+    pub title: f32,
+    pub title_weight: f32,
+    pub subtitle: f32,
+    pub small: f32,
+    /// A picture tile: its picture wide and square, the row's lead and gap, its actions'
+    /// glyph and the room each takes wide and square, the square's text side.
+    pub picture_wide: f64,
+    pub picture_square: f64,
+    pub picture_lead: f64,
+    pub picture_gap: f64,
+    pub action_glyph: f64,
+    pub action_room_wide: f64,
+    pub action_room_square: f64,
+    pub picture_side: f64,
+    /// Above and below a square picture tile's titles.
+    pub picture_between: f64,
+    /// A 1×2 slider: its value's distance from the top and its height, its icon's from the
+    /// bottom.
+    pub tall_top: f64,
+    pub tall_value: f64,
+    pub tall_bottom: f64,
+    /// A 4×1 slider: its lead, its icons, their gap to the slider, the value's width.
+    pub slider_lead: f64,
+    pub slider_icon: f64,
+    pub slider_gap: f64,
+    pub slider_value: f64,
+    /// A ring's track opacity.
+    pub track: f64,
+}
+pub fn tile_from(v: &Value) -> Result<TileStyle, String> {
+    let n = |path: &[&str]| -> Result<f64, String> {
+        path.iter()
+            .fold(v, |v, k| &v[*k])
+            .as_f64()
+            .filter(|x| x.is_finite() && *x >= 0.)
+            .ok_or_else(|| format!("tile: no {}", path.join(".")))
+    };
+    Ok(TileStyle {
+        cell: n(&["grid", "cell"])?,
+        gap: n(&["grid", "gap"])?,
+        corner_square: n(&["cornerSquare"])?,
+        pad: n(&["pad"])?,
+        tall_pad: n(&["tallPad"])?,
+        badge: n(&["badge", "size"])?,
+        badge_gap: n(&["badge", "gap"])?,
+        badge_inset: n(&["badge", "inset"])?,
+        icon: n(&["icon"])?,
+        title: n(&["text", "title"])? as f32,
+        title_weight: n(&["text", "titleWeight"])? as f32,
+        subtitle: n(&["text", "subtitle"])? as f32,
+        small: n(&["text", "small"])? as f32,
+        picture_wide: n(&["picture", "wide"])?,
+        picture_square: n(&["picture", "square"])?,
+        picture_lead: n(&["picture", "lead"])?,
+        picture_gap: n(&["picture", "gap"])?,
+        action_glyph: n(&["picture", "glyph"])?,
+        action_room_wide: n(&["picture", "roomWide"])?,
+        action_room_square: n(&["picture", "roomSquare"])?,
+        picture_side: n(&["picture", "side"])?,
+        picture_between: n(&["picture", "between"])?,
+        tall_top: n(&["tall", "top"])?,
+        tall_value: n(&["tall", "value"])?,
+        tall_bottom: n(&["tall", "bottom"])?,
+        slider_lead: n(&["slider", "lead"])?,
+        slider_icon: n(&["slider", "icon"])?,
+        slider_gap: n(&["slider", "gap"])?,
+        slider_value: n(&["slider", "value"])?,
+        track: n(&["track"]).and_then(|t| {
+            (t <= 1.)
+                .then_some(t)
+                .ok_or_else(|| "tile: track above 1".to_string())
+        })?,
+    })
 }
 
 #[derive(Clone, Debug, PartialEq)]

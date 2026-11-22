@@ -78,6 +78,11 @@ pub(crate) fn tokens() -> Tokens {
         .unwrap(),
         disclosure: disclosure_from(&json!({"common":{"padding":12}, "list":{"highlight":{"hoverOpacity":0.08}}, "rows":serde_json::from_str::<serde_json::Value>(include_str!("../../../tokens/rows.json")).unwrap()["default"]}), &json!({"ts":{"ROW_HEIGHT":{"single":48}}})).unwrap(),
         entry: entry_from(&serde_json::from_str::<serde_json::Value>(include_str!("../../../tokens/search.json")).unwrap()["default"], &set, &serde_json::from_str::<serde_json::Value>(include_str!("../../../tokens/header.json")).unwrap()["default"]["navigation"]).unwrap(),
+        tile: crate::tokens::tile_from(
+            &serde_json::from_str::<serde_json::Value>(include_str!("../../../tokens/tile.json"))
+                .unwrap()["default"],
+        )
+        .unwrap(),
         row_height: 48.,
         group_radius: 16.,
     }
