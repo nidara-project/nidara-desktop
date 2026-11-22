@@ -1878,9 +1878,24 @@ fn tiles(m: &Model, t: &TypeScale, s: &nk::TileStyle) -> Vec<Node> {
         title: "Song title".into(),
         subtitle: "Artist".into(),
         actions: vec![
-            action(&format!("{id}/prev"), "nd-media-skip-backward", "Previous", false),
-            action(&format!("{id}/play"), "nd-media-playback-start", "Play", true),
-            action(&format!("{id}/next"), "nd-media-skip-forward", "Next", false),
+            action(
+                &format!("{id}/prev"),
+                "nd-media-skip-backward",
+                "Previous",
+                false,
+            ),
+            action(
+                &format!("{id}/play"),
+                "nd-media-playback-start",
+                "Play",
+                true,
+            ),
+            action(
+                &format!("{id}/next"),
+                "nd-media-skip-forward",
+                "Next",
+                false,
+            ),
         ],
     };
     let cell = |at: (usize, usize), span: (usize, usize), child: Node| Cell { at, span, child };
