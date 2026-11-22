@@ -83,6 +83,13 @@ pub(crate) fn tokens() -> Tokens {
                 .unwrap()["default"],
         )
         .unwrap(),
+        notification: crate::tokens::notification_from(
+            &serde_json::from_str::<serde_json::Value>(include_str!(
+                "../../../tokens/notification.json"
+            ))
+            .unwrap()["default"],
+        )
+        .unwrap(),
         row_height: 48.,
         group_radius: 16.,
     }

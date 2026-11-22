@@ -426,6 +426,12 @@ icon, a badge with its titles, a picture with up to three actions (a player, a d
 surface's own; `nk::SliderTile` is a 4×1 or 1×2 slider tile. Every measure is in
 `toolkit/tokens/tile.json` (`Tokens::tile`); pictures and values are slots its surface paints
 (`{id}/cover`, `{id}/value`). Never compose a tile by hand from buttons, rows and struts.
+A notification on its own glass is `nk::NotificationCard` (#1156; the NC's, any surface's that
+lists notices): the app's icon, the title with its age (a chevron in its place on hover when it
+opens), the body, a thumbnail or a picture across the open card, `nk::NotificationAction`s, and
+its close on hover; the whole card one control, a swipe its close. Measures in
+`toolkit/tokens/notification.json` (`Tokens::notification`); icons and pictures are slots its
+surface paints (`{id}/app`, `{id}/thumb`, `{id}/hero`).
 A slider row is a list row ending in `nk::SliderEnd`
 (§13.7): measures from `range.slider`, its value in room for its widest text (`nk::Label::room`).
 A window's sidebar is ONE kit component, `nk::SidebarList` (§13.8), holding `nk::SidebarEntry`

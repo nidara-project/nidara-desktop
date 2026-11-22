@@ -58,7 +58,7 @@ fn status_text(s: &str) -> &'static str {
 }
 
 /// Each page: its id (what the check and `--page` name), its title and its glyph.
-pub const PAGES: [(&str, &str, &str); 26] = [
+pub const PAGES: [(&str, &str, &str); 27] = [
     ("status", "Status", "nd-emblem-default"),
     ("window", "Window", "nd-sidebar-show"),
     ("button", "Button", "nd-hand"),
@@ -77,6 +77,7 @@ pub const PAGES: [(&str, &str, &str); 26] = [
     ("overlay", "Overlay", "nd-sidebar-show"),
     ("grid", "Grid", "nd-control-center"),
     ("tile", "Tile", "nd-control-center"),
+    ("notification", "Notification card", "nd-notifications"),
     ("reveal", "Reveal", "nd-pan-end"),
     ("disclosure", "Disclosure", "nd-pan-end"),
     ("entry", "Text field", "nd-input-keyboard"),
@@ -161,6 +162,7 @@ impl Default for Model {
 pub struct Measures<'a> {
     pub dropdown: &'a DropdownStyle,
     pub tile: &'a nk::TileStyle,
+    pub notification: &'a nk::NotificationStyle,
     pub colors: &'a [(String, nk_render::Color)],
     pub glyph: f64,
     pub row_height: f64,
@@ -364,6 +366,7 @@ fn page(id: &str, m: &Model, cat: &Catalogue, t: &TypeScale, k: &Measures) -> Ve
         "overlay" => overlay(t),
         "grid" => grid(t, k.tile),
         "tile" => tiles(m, t, k.tile),
+        "notification" => notifications(m, t, k),
         "reveal" => reveal(m, t),
         "disclosure" => disclosures(m, t),
         // One text field page (owner, #1156): the kit's field, then the CC's password field
@@ -1859,6 +1862,75 @@ fn grid(t: &TypeScale, s: &nk::TileStyle) -> Vec<Node> {
     ]
 }
 
+/// The kit's notification card (#1156 step 3, point 5): `nk::NotificationCard` folded, open
+/// with its actions, fronting a group and with an error, at the notification centre's width
+/// (the tile grid's) with its tokens (`toolkit/tokens/notification.json`). The app icons,
+/// thumbnails and pictures are slots its surface paints (here: empty).
+fn notifications(m: &Model, t: &TypeScale, k: &Measures) -> Vec<Node> {
+    let base = t.style(Type::Body, Weight::Regular);
+    let s = k.notification;
+    let width = 4. * k.tile.cell + 3. * k.tile.gap;
+    let card = |id: &str, title: &str, age: &str| {
+        nk::NotificationCard::new(format!("no-{id}"), title, age, s, &base)
+            .open("press", title)
+            .close("press", "Close notification")
+    };
+    let body = "The quarterly report is ready to review. Open it to see the figures and the notes left for you.";
+    let cards: Vec<Node> = vec![
+        card("folded", "Report ready", "5 min")
+            .body(body)
+            .more(false, "press")
+            .thumbnail()
+            .into(),
+        card("open", "New message", "now")
+            .body("Are we still on for tomorrow at ten?")
+            .more(true, "press")
+            .actions(vec![
+                nk::NotificationAction {
+                    key: "no-open/act/reply".into(),
+                    label: "Reply".into(),
+                    action: "press".into(),
+                },
+                nk::NotificationAction {
+                    key: "no-open/act/mark".into(),
+                    label: "Mark as read".into(),
+                    action: "press".into(),
+                },
+            ])
+            .into(),
+        card("group", "Download complete", "1 h")
+            .body("Report.pdf, 40 MB")
+            .count(3)
+            .into(),
+        card("error", "Backup", "2 h")
+            .body("Nightly backup to the external disk.")
+            .error("The disk could not be found.")
+            .into(),
+    ];
+    vec![
+        section(
+            "no-cards",
+            "Folded, open with its actions, fronting a group, with an error",
+            t,
+            nk::Column::new("no/list", cards)
+                .gap(Space::S4)
+                .width(width)
+                .into(),
+        ),
+        nk::Label::new(
+            "no/note",
+            format!(
+                "nk::NotificationCard: the app's icon, the title with its age (a chevron in its place on hover when it opens), the body, a thumbnail or a picture across the open card, its actions and its close on hover; the whole card one control, a swipe its close. Icons and pictures are slots the surface paints. Presses: {}.",
+                m.presses
+            ),
+            t.style(Type::Small, Weight::Regular),
+        )
+        .ink(Ink::Secondary)
+        .lines(4)
+        .into(),
+    ]
+}
+
 /// The kit's tiles (#1156 step 4): `nk::Tile` in each of its contents and `nk::SliderTile`, on
 /// the tile grid with its tokens (`toolkit/tokens/tile.json`) — the Control Center's tiles,
 /// usable by any surface. Pictures and values are slots its surface paints (here: empty).
@@ -2675,6 +2747,13 @@ mod tests {
                         .unwrap()["default"],
                     )
                     .unwrap(),
+                    notification: &nk::notification_from(
+                        &serde_json::from_str::<serde_json::Value>(include_str!(
+                            "../../tokens/notification.json"
+                        ))
+                        .unwrap()["default"],
+                    )
+                    .unwrap(),
                     colors: &[
                         ("Blue".into(), nk_render::rgba(0, 128, 255, 255)),
                         ("Red".into(), nk_render::rgba(255, 0, 0, 255)),
@@ -2759,6 +2838,7 @@ mod catalogue_tests {
         let mut public: BTreeSet<String> = exported(lib, "widgets").into_iter().collect();
         public.extend(exported(lib, "file_views"));
         public.extend(exported(lib, "tiles"));
+        public.extend(exported(lib, "notification_card"));
         public.extend(["AppWindow", "Alert", "Dialog", "FontDialog"].map(String::from));
         let cat = Catalogue::load().unwrap();
         let pages: BTreeSet<&str> = PAGES.iter().map(|(id, _, _)| *id).collect();

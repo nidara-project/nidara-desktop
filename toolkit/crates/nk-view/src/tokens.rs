@@ -1200,6 +1200,8 @@ pub struct Tokens {
     pub disclosure: DisclosureStyle,
     pub entry: EntryStyle,
     pub tile: TileStyle,
+    /// The notification card's measures (`toolkit/tokens/notification.json`).
+    pub notification: NotificationStyle,
     /// A list row's least height (`static.json` `ts.ROW_HEIGHT.single`).
     pub row_height: f64,
     /// A group's corner (`components.json` `common.groupRadius`), as Settings' cards.
@@ -1297,6 +1299,90 @@ pub fn tile_from(v: &Value) -> Result<TileStyle, String> {
                 .then_some(t)
                 .ok_or_else(|| "tile: track above 1".to_string())
         })?,
+    })
+}
+
+/// `nk::NotificationCard`'s measures (`toolkit/tokens/notification.json`).
+#[derive(Clone, Debug, PartialEq)]
+pub struct NotificationStyle {
+    /// The card's corner, and an open card's big picture's, on the radius scale.
+    pub corner: Radius,
+    pub hero_corner: Radius,
+    /// The app icon and the thumbnail beside the text.
+    pub art: f64,
+    pub line_height: f32,
+    pub title: f32,
+    pub title_weight: f32,
+    pub age: f32,
+    pub count: f32,
+    pub count_weight: f32,
+    pub body: f32,
+    pub action: f32,
+    pub error: f32,
+    /// The body's lines folded (and the room it keeps however short) and open; an error's.
+    pub lines_folded: usize,
+    pub lines_open: usize,
+    pub lines_error: usize,
+    /// The close and show-more glyphs.
+    pub glyph: f64,
+    /// A picture spans an open card when its source is at least this wide, at a height
+    /// between the two bounds.
+    pub hero_source: u32,
+    pub hero_min: f64,
+    pub hero_max: f64,
+}
+impl NotificationStyle {
+    /// How tall a `w`×`h` picture is across `across` px of an open card: None when it is too
+    /// small to span it (a chat avatar), and keeps its thumbnail.
+    pub fn hero_height(&self, across: f64, (w, h): (u32, u32)) -> Option<f64> {
+        (w >= self.hero_source && w > 0 && across > 0.).then(|| {
+            (across * f64::from(h) / f64::from(w))
+                .round()
+                .clamp(self.hero_min, self.hero_max)
+        })
+    }
+}
+pub fn notification_from(v: &Value) -> Result<NotificationStyle, String> {
+    let n = |path: &[&str]| -> Result<f64, String> {
+        path.iter()
+            .fold(v, |v, k| &v[*k])
+            .as_f64()
+            .filter(|x| x.is_finite() && *x >= 0.)
+            .ok_or_else(|| format!("notification: no {}", path.join(".")))
+    };
+    let radius = |k: &str| -> Result<Radius, String> {
+        let name = v[k]
+            .as_str()
+            .ok_or_else(|| format!("notification: no {k}"))?;
+        Radius::ALL
+            .into_iter()
+            .find(|r| r.token() == name)
+            .ok_or_else(|| format!("notification: {k} {name} is not on the radius scale"))
+    };
+    let (min, max) = (n(&["hero", "min"])?, n(&["hero", "max"])?);
+    if min > max {
+        return Err("notification: hero.min above hero.max".into());
+    }
+    Ok(NotificationStyle {
+        corner: radius("corner")?,
+        hero_corner: radius("heroCorner")?,
+        art: n(&["art"])?,
+        line_height: n(&["lineHeight"])? as f32,
+        title: n(&["text", "title"])? as f32,
+        title_weight: n(&["text", "titleWeight"])? as f32,
+        age: n(&["text", "age"])? as f32,
+        count: n(&["text", "count"])? as f32,
+        count_weight: n(&["text", "countWeight"])? as f32,
+        body: n(&["text", "body"])? as f32,
+        action: n(&["text", "action"])? as f32,
+        error: n(&["text", "error"])? as f32,
+        lines_folded: n(&["lines", "folded"])? as usize,
+        lines_open: n(&["lines", "open"])? as usize,
+        lines_error: n(&["lines", "error"])? as usize,
+        glyph: n(&["glyph"])?,
+        hero_source: n(&["hero", "source"])? as u32,
+        hero_min: min,
+        hero_max: max,
     })
 }
 

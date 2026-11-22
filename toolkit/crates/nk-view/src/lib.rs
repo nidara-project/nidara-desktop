@@ -21,6 +21,8 @@ mod file_views;
 pub use file_views::{FileList, PathBar, PlacesSidebar};
 mod tiles;
 pub use tiles::{SliderTile, Tile, TileAction, TileContent, TileSize};
+mod notification_card;
+pub use notification_card::{NotificationAction, NotificationCard};
 mod font_dialog;
 pub use font_dialog::{FontChoice, FontDialog, FontDialogLabels, FontSize};
 pub use nk_text::FontFace;
@@ -32,10 +34,10 @@ pub use layout::{Fitted, Placed, Rect, TextCache, What, first_line_centre};
 pub use state::{Activated, BUDGET, Frame, FramePane, KeyInput, ScrollBy, Ticked, ViewState};
 pub use tokens::{
     Bezier, ButtonStyle, CheckStyle, DisclosureStyle, DropdownStyle, EntryStyle, ListStyle, Look,
-    MenuStyle, Motion, Radii, Radius, SegmentStyle, SliderStyle, Space, Spacing, SwatchStyle,
-    SwitchStyle, TileStyle, Tokens, TriggerStyle, Washes, button_from, check_from, disclosure_from,
-    dropdown_from, entry_from, list_from, parse_color, scrollbar_from, segmented_from, slider_from,
-    swatch_from, switch_from, tile_from,
+    MenuStyle, Motion, NotificationStyle, Radii, Radius, SegmentStyle, SliderStyle, Space, Spacing,
+    SwatchStyle, SwitchStyle, TileStyle, Tokens, TriggerStyle, Washes, button_from, check_from,
+    disclosure_from, dropdown_from, entry_from, list_from, notification_from, parse_color,
+    scrollbar_from, segmented_from, slider_from, swatch_from, switch_from, tile_from,
 };
 pub use view::{
     Align, Axis, Cell, Corner, Ink, Justify, Key, Kind, Layer, Node, Padding, Role, Shown, Wash,

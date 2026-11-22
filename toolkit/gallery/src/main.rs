@@ -52,6 +52,7 @@ impl Gallery {
             &pages::Measures {
                 dropdown: &look.tokens.dropdown,
                 tile: &look.tokens.tile,
+                notification: &look.tokens.notification,
                 colors,
                 glyph: look.frame.icon,
                 files_window: host.scroll_window(&nk::FileList::scroll_key(&model.files.key())),

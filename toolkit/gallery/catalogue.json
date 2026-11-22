@@ -70,6 +70,7 @@
         {"name": "Tile grid", "nk": ["nk::Grid"], "gtk": "Gtk.GridView", "appkit": "NSCollectionView", "status": "view", "users": "CC; Apps by hand", "page": "grid"},
         {"name": "Tile", "nk": ["nk::Tile", "nk::TileContent", "nk::TileSize", "nk::TileAction"], "gtk": "—", "appkit": "— (Control Center module)", "status": "view", "users": "CC", "page": "tile"},
         {"name": "Slider tile", "nk": ["nk::SliderTile"], "gtk": "—", "appkit": "— (Control Center module)", "status": "view", "users": "CC", "page": "tile"},
+        {"name": "Notification card", "nk": ["nk::NotificationCard", "nk::NotificationAction"], "gtk": "—", "appkit": "— (Notification Center card)", "status": "view", "users": "NC", "page": "notification"},
         {"name": "Tree", "nk": [], "gtk": "Gtk.TreeListModel + Gtk.ListView", "appkit": "NSOutlineView", "status": "missing", "users": ""},
         {"name": "Table", "nk": [], "gtk": "Gtk.ColumnView", "appkit": "NSTableView (columns)", "status": "missing", "users": ""},
         {"name": "Wrapping group", "nk": [], "gtk": "Gtk.FlowBox", "appkit": "NSCollectionView (flow)", "status": "missing", "users": ""}
