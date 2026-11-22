@@ -1873,13 +1873,14 @@ fn tiles(m: &Model, t: &TypeScale, s: &nk::TileStyle) -> Vec<Node> {
         enabled: true,
         primary,
     };
-    let player = || TileContent::Picture {
+    // Each player tile has keys of its own: the page's keys are unique.
+    let player = |id: &str| TileContent::Picture {
         title: "Song title".into(),
         subtitle: "Artist".into(),
         actions: vec![
-            action("prev", "nd-media-skip-backward", "Previous", false),
-            action("play", "nd-media-playback-start", "Play", true),
-            action("next", "nd-media-skip-forward", "Next", false),
+            action(&format!("{id}/prev"), "nd-media-skip-backward", "Previous", false),
+            action(&format!("{id}/play"), "nd-media-playback-start", "Play", true),
+            action(&format!("{id}/next"), "nd-media-skip-forward", "Next", false),
         ],
     };
     let cell = |at: (usize, usize), span: (usize, usize), child: Node| Cell { at, span, child };
@@ -1926,7 +1927,7 @@ fn tiles(m: &Model, t: &TypeScale, s: &nk::TileStyle) -> Vec<Node> {
             cell(
                 (3, 0),
                 (1, 1),
-                tile("cover", TileSize::Single, player())
+                tile("cover", TileSize::Single, player("cover"))
                     .control("ti/cover", "Now playing")
                     .action("press")
                     .into(),
@@ -1948,7 +1949,7 @@ fn tiles(m: &Model, t: &TypeScale, s: &nk::TileStyle) -> Vec<Node> {
             cell(
                 (1, 1),
                 (2, 2),
-                tile("player", TileSize::Square, player())
+                tile("player", TileSize::Square, player("player"))
                     .control("ti/player", "Now playing")
                     .action("press")
                     .into(),
@@ -1998,7 +1999,7 @@ fn tiles(m: &Model, t: &TypeScale, s: &nk::TileStyle) -> Vec<Node> {
             cell(
                 (2, 4),
                 (2, 1),
-                tile("wide-player", TileSize::Wide, player())
+                tile("wide-player", TileSize::Wide, player("wide-player"))
                     .control("ti/wide-player", "Now playing")
                     .action("press")
                     .into(),
