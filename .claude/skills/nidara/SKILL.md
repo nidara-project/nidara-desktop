@@ -420,6 +420,12 @@ whole row is the control and what it ends with must be drawn only (a chevron, `n
 The kit draws the separator between two `nk::ListRow`s next to each other (a group's rows, an
 `nk::ListBox`) and hides it next to a lit row: never draw one by hand, and use `nk::ListRow`
 (not a hand-built `nk::Row` of labels) for anything shaped like a row, or it gets none.
+A tile on the tile grid is `nk::Tile` (#1156 step 4; the CC's, any surface's): a glass pane,
+the whole of it one control, sized `nk::TileSize` (1×1, 2×1, 2×2, 1×2, 4×1), its content an
+icon, a badge with its titles, a picture with up to three actions (a player, a download), or the
+surface's own; `nk::SliderTile` is a 4×1 or 1×2 slider tile. Every measure is in
+`toolkit/tokens/tile.json` (`Tokens::tile`); pictures and values are slots its surface paints
+(`{id}/cover`, `{id}/value`). Never compose a tile by hand from buttons, rows and struts.
 A slider row is a list row ending in `nk::SliderEnd`
 (§13.7): measures from `range.slider`, its value in room for its widest text (`nk::Label::room`).
 A window's sidebar is ONE kit component, `nk::SidebarList` (§13.8), holding `nk::SidebarEntry`

@@ -151,6 +151,7 @@ const rows = JSON.parse(readFileSync(join(repo, "toolkit/tokens/rows.json"), "ut
 
 const header = JSON.parse(readFileSync(join(repo, "toolkit/tokens/header.json"), "utf8"))
 const capsule = JSON.parse(readFileSync(join(repo, "toolkit/tokens/capsule.json"), "utf8"))
+const tile = JSON.parse(readFileSync(join(repo, "toolkit/tokens/tile.json"), "utf8"))
 const variantFor = (recipe, dark, reduceTransparency) => recipe.variants
     .filter(o => (o.dark ?? dark) === dark && (o.reduceTransparency ?? reduceTransparency) === reduceTransparency)
     .reduce((acc, o) => ({ ...acc, ...Object.fromEntries(Object.entries(o).filter(([k]) => k !== "dark" && k !== "reduceTransparency")) }),
@@ -199,6 +200,7 @@ for (const dark of [true, false])
             scrollbar: variantFor(scrollbar, dark, reduceTransparency),
 
             capsule: variantFor(capsule, dark, reduceTransparency),
+            tile: variantFor(tile, dark, reduceTransparency),
             header: variantFor(header, dark, reduceTransparency),
             search: variantFor(search, dark, reduceTransparency),
             wallpaper: variantFor(wallpaper, dark, reduceTransparency),

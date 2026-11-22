@@ -1,0 +1,25 @@
+{
+  "$comment": [
+    "The kit's tiles (nk::Tile, nk::SliderTile; #1156 step 4): a glass pane on the tile grid, the whole of it one control. Taken from the Control Center as it is drawn today (toolkit/shell/src/cc.rs, cclayout.rs), which is the spec; final values require the owner's live review.",
+    "grid: a cell and the gap between two, square cells (the CC's 4 columns). cornerSquare: a 2×2's corner, a 1×1's circle grown. pad: a row's distance from the tile's edge; tallPad: a tall slider's fill from the glass.",
+    "badge: the circle of a badge tile (size), its gap to the titles and how far it sits in from the pad. icon: a tile's glyph. text: title and subtitle sizes, the title's weight, and the small size (a ring's name, a state).",
+    "picture: the picture of a picture tile in its wide and square sizes, the row's lead and gap, its actions' glyph and the room each takes (wide, square).",
+    "picture.between: above and below the square's titles. tall: a 1×2 slider's value from the top, its height, and the icon's distance from the bottom.",
+    "slider: a 4×1's lead, its low and high icons and the gap between them and the slider, and the value's width. track: a ring's track opacity (the CPU and memory rings).",
+    "Default applies to every dark/reduceTransparency variant; exported once as tile in each components.json variant."
+  ],
+  "default": {
+    "grid": {"cell": 76, "gap": 20},
+    "cornerSquare": 38,
+    "pad": 10,
+    "tallPad": 2,
+    "badge": {"size": 44, "gap": 8, "inset": 4},
+    "icon": 28,
+    "text": {"title": 14, "titleWeight": 700, "subtitle": 14, "small": 12},
+    "picture": {"wide": 44, "square": 62, "lead": 14, "gap": 12, "between": 4, "glyph": 18, "roomWide": 32, "roomSquare": 24, "side": 16},
+    "tall": {"top": 12, "value": 24, "bottom": 24},
+    "slider": {"lead": 14, "icon": 16, "gap": 12, "value": 36},
+    "track": 0.18
+  },
+  "variants": []
+}
