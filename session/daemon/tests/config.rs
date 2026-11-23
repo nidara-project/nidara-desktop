@@ -1494,6 +1494,170 @@ async fn the_performance_profile_is_power_profiles_daemons() {
     }
 }
 
+struct Timedated(String);
+#[zbus::interface(name = "org.freedesktop.timedate1")]
+impl Timedated {
+    #[zbus(property)]
+    fn timezone(&self) -> String {
+        self.0.clone()
+    }
+    async fn set_timezone(
+        &mut self,
+        zone: String,
+        _interactive: bool,
+        #[zbus(signal_emitter)] emitter: zbus::object_server::SignalEmitter<'_>,
+    ) {
+        self.0 = zone;
+        let _ = self.timezone_changed(&emitter).await;
+    }
+}
+
+/// #1103 8b: the zone is the system's, through timedated; the regional format is this
+/// user's environment.d file. Each is announced whoever writes it.
+#[tokio::test(flavor = "multi_thread")]
+async fn the_region_keys_live_in_timedated_and_environment_d() {
+    use futures_util::StreamExt;
+    const PATH: &str = "/org/freedesktop/timedate1";
+    let mut env = setup();
+    let timedated = connect(&env.address).await;
+    timedated
+        .object_server()
+        .at(PATH, Timedated("Africa/Nairobi".into()))
+        .await
+        .unwrap();
+    timedated
+        .request_name("org.freedesktop.timedate1")
+        .await
+        .unwrap();
+    env.start();
+    let conn = connect(&env.address).await;
+    wait_for_config(&conn).await;
+    let get = |key: &'static str| {
+        let conn = conn.clone();
+        async move {
+            let values: HashMap<String, OwnedValue> =
+                call(&conn, "Get", &(vec![key],)).await.unwrap();
+            String::try_from(values.get(key).unwrap().try_clone().unwrap()).unwrap()
+        }
+    };
+    let apply = |key: &'static str, value: String| {
+        let conn = conn.clone();
+        async move {
+            call::<(u64, OwnedValue)>(
+                &conn,
+                "Apply",
+                &(key, OwnedValue::try_from(Value::from(value)).unwrap()),
+            )
+            .await
+        }
+    };
+    let (_, _, raw): (u64, u64, String) = call(&conn, "Snapshot", &()).await.unwrap();
+    let schema: serde_json::Value = serde_json::from_str(&raw).unwrap();
+
+    // The zone, where tzdata is installed.
+    let zone = &schema["keys"]["region.timezone"];
+    if std::path::Path::new("/usr/share/zoneinfo/tzdata.zi").exists() {
+        assert_eq!(zone["available"], true);
+        assert_eq!(zone["value"], "Africa/Nairobi", "timedated is the home");
+        let catalogue = zone["catalogue"].as_array().unwrap();
+        assert!(catalogue.contains(&"America/Managua".into()));
+        assert_eq!(
+            error_name(
+                apply("region.timezone", "Atlantis/Nowhere".into())
+                    .await
+                    .unwrap_err()
+            ),
+            "org.nidara.Config1.Error.Invalid"
+        );
+        apply("region.timezone", "America/Managua".into())
+            .await
+            .unwrap();
+        let iface = timedated
+            .object_server()
+            .interface::<_, Timedated>(PATH)
+            .await
+            .unwrap();
+        for n in 0..80 {
+            if get("region.timezone").await == "America/Managua" {
+                break;
+            }
+            assert!(n < 79, "the zone set was never read back");
+            tokio::time::sleep(Duration::from_millis(50)).await;
+        }
+        assert_eq!(iface.get().await.0, "America/Managua");
+        // Another writer (timedatectl): timedated's signal refreshes Config1.
+        iface.get_mut().await.0 = "Asia/Manila".into();
+        iface
+            .get()
+            .await
+            .timezone_changed(iface.signal_emitter())
+            .await
+            .unwrap();
+        for n in 0..80 {
+            if get("region.timezone").await == "Asia/Manila" {
+                break;
+            }
+            assert!(n < 79, "an external zone change was not observed");
+            tokio::time::sleep(Duration::from_millis(50)).await;
+        }
+    } else {
+        assert_eq!(zone["available"], false);
+    }
+
+    // The regional format: "" is the language's, no file.
+    let format = &schema["keys"]["region.regionalFormat"];
+    assert_eq!(format["value"], "");
+    assert_eq!(format["ui"]["control"], "dropdown");
+    assert_eq!(
+        format["ui"]["options"][0],
+        serde_json::json!({"value": "", "i18n": "settings.region.locale.regional.same"})
+    );
+    let file = env.dir.join("config/environment.d/nidara-locale.conf");
+    assert_eq!(
+        error_name(
+            apply("region.regionalFormat", "xx_YY.UTF-8".into())
+                .await
+                .unwrap_err()
+        ),
+        "org.nidara.Config1.Error.Invalid",
+        "only a locale the system has"
+    );
+    if let Some(locale) = format["values"][1].as_str() {
+        apply("region.regionalFormat", locale.into()).await.unwrap();
+        let written = std::fs::read_to_string(&file).unwrap();
+        assert!(written.contains(&format!("LC_TIME={locale}\n")));
+        assert!(written.contains(&format!("LC_MEASUREMENT={locale}\n")));
+        assert!(!written.contains("LANG="), "the language is not the format");
+        assert_eq!(get("region.regionalFormat").await, locale);
+        apply("region.regionalFormat", String::new()).await.unwrap();
+        assert!(!file.exists(), "the language's format is no file");
+    }
+    // Another writer (the TypeScript Settings): the file's monitor announces it.
+    let proxy = zbus::Proxy::new(
+        &conn,
+        "org.nidara.Config",
+        "/org/nidara/Config",
+        "org.nidara.Config1",
+    )
+    .await
+    .unwrap();
+    let mut updated = proxy.receive_signal("Updated").await.unwrap();
+    std::fs::create_dir_all(file.parent().unwrap()).unwrap();
+    std::fs::write(&file, "LC_TIME=de_DE.UTF-8\n").unwrap();
+    let announced = tokio::time::timeout(Duration::from_secs(5), async {
+        while let Some(signal) = updated.next().await {
+            let (_, _, values): Updated = signal.body().deserialize().unwrap();
+            if let Some(v) = values.get("region.regionalFormat") {
+                return String::try_from(v.try_clone().unwrap()).unwrap();
+            }
+        }
+        String::new()
+    })
+    .await
+    .expect("an external format was never announced");
+    assert_eq!(announced, "de_DE.UTF-8");
+}
+
 #[tokio::test(flavor = "multi_thread")]
 async fn ordinary_keys_are_unavailable_when_their_home_is_missing() {
     let mut env = setup_without(Some("text-scaling-factor"));

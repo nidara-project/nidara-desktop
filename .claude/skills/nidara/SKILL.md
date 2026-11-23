@@ -586,7 +586,9 @@ facts come from a worker the window polls. A count in words is `Exports::count(k
 `{key}.one|few|many|other` by the locale's CLDR category (`nk_platform::exports::plural`),
 falling back to `.other` and then English; add only the categories a language has.
 `power.profile` is PPD's ActiveProfile on the system bus, announced by PPD's own
-signals; Config1 tests set `DBUS_SYSTEM_BUS_ADDRESS` to their private bus. Step 7c adds the six Desktop workspace-mode keys in Hyalo's `[workspaces]` layer; a
+signals; Config1 tests set `DBUS_SYSTEM_BUS_ADDRESS` to their private bus.
+`region.timezone` is timedated's, set asynchronously behind polkit: `Apply` answers the old zone and the new one is
+announced when set. `region.regionalFormat` is the user's environment.d file (next login). Step 7c adds the six Desktop workspace-mode keys in Hyalo's `[workspaces]` layer; a
 write also clears runtime modes so Settings wins, as TS did.
 Read session/daemon/src/config/README.md for homes, followers, keyboard catalogue and
 physical-session limits. A dropdown reserves its widest option only within its available
