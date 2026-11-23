@@ -905,6 +905,37 @@ impl ViewState {
                 .or_else(|| self.typed_value(&self.placed[i].key)),
         })
     }
+    /// Down from a search field that names a suggestion list goes to the list's first row; Up
+    /// from that first row goes back to the field. Positions are in `order`.
+    fn suggestion_step(&self, order: &[usize], at: Option<usize>, k: KeyInput) -> Option<usize> {
+        let a = at?;
+        let list_of = |search: &str| match self.placed[self.index(&search.into())?].part()? {
+            crate::components::Part::Search(s) => s.suggestions.clone(),
+            _ => None,
+        };
+        let in_list = |j: usize, list: &Key| matches!(self.membership(order[j]), Membership::List { key, .. } if &key == list);
+        match k {
+            KeyInput::Down => {
+                let search = self.placed[order[a]].key.0.strip_suffix("/input")?;
+                let list = list_of(search)?;
+                (0..order.len()).find(|&j| in_list(j, &list))
+            }
+            KeyInput::Up => {
+                let Membership::List { key: list, .. } = self.membership(order[a]) else {
+                    return None;
+                };
+                if a > 0 && in_list(a - 1, &list) {
+                    return None;
+                }
+                (0..order.len()).find(|&j| {
+                    let key = &self.placed[order[j]].key.0;
+                    key.strip_suffix("/input")
+                        .is_some_and(|s| list_of(s).as_ref() == Some(&list))
+                })
+            }
+            _ => None,
+        }
+    }
     fn membership(&self, i: usize) -> Membership {
         self.placed[i]
             .part()
@@ -1463,6 +1494,14 @@ impl ViewState {
         };
         match k {
             KeyInput::Left | KeyInput::Right | KeyInput::Up | KeyInput::Down => {
+                // A search field and the list of its suggestions are one column to the arrows.
+                if let Some(next) = self.suggestion_step(&order, at, k) {
+                    let i = order[next];
+                    self.focus = Some(self.placed[i].key.clone());
+                    self.focus_visible = true;
+                    self.scroll_to_focus(i);
+                    return None;
+                }
                 // A list moves focus. A radio group also changes its choice.
                 let a = at.filter(|&a| grouped(a))?;
                 let g = run(a);

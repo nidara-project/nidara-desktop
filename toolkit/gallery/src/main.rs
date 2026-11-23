@@ -171,6 +171,19 @@ impl Gallery {
                     self.model.search = text;
                 }
             }
+            "city-edit" => {
+                if let Some(nk::Value::Text(text)) = a.value {
+                    self.model.city = text;
+                }
+            }
+            "city-choose" => {
+                if let Some(nk::Value::Index(index)) = a.value
+                    && let Some(&city) = crate::pages::city_matches(&self.model.city).get(index)
+                {
+                    self.model.city = crate::pages::CITIES[city].0.into();
+                    self.model.city_chosen = Some(city);
+                }
+            }
             "entry-submit" | "search-submit" => self.model.submitted += 1,
             "press" => self.model.presses += 1,
             "check" => self.model.check = !self.model.check,

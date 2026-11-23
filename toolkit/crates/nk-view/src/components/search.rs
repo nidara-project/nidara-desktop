@@ -11,6 +11,10 @@ pub struct Search {
     /// Gallery-only stable keyboard-focus sample of the inner editor.
     #[serde(default)]
     pub shown: Option<(usize, crate::Shown)>,
+    /// The list that holds this field's suggestions: Down in the field goes to its first row,
+    /// Up on that row comes back.
+    #[serde(default)]
+    pub suggestions: Option<Key>,
 }
 impl Search {
     pub(crate) fn node(self, key: impl Into<Key>) -> Node {

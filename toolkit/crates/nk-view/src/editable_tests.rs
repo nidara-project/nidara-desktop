@@ -254,6 +254,7 @@ fn search_normalizes_its_clear_control_visibility_with_the_entry() {
         &mut s,
         &Search {
             shown: None,
+            suggestions: None,
             field: EditableField::new("\n"),
             name: "Search".into(),
             changed: "search".into(),
@@ -457,6 +458,7 @@ fn editor_search_escape_boundary_and_clear_are_composed_through_the_host() {
     let search = |value: &str| {
         Search {
             shown: None,
+            suggestions: None,
             field: EditableField::new(value),
             name: "Search".into(),
             changed: "search".into(),
@@ -695,6 +697,7 @@ fn editor_latest_paste_intent_wins_and_targets_cannot_cross_view_instances() {
 fn search_composes_exactly_one_source_chrome_around_its_entry() {
     let search = Search {
         shown: None,
+        suggestions: None,
         field: EditableField::new(""),
         name: "Search".into(),
         changed: "changed".into(),

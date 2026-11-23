@@ -115,6 +115,9 @@ pub struct Model {
     pub expanded: bool,
     pub entry: String,
     pub search: String,
+    /// The suggestions sample: what is typed, and the city last chosen from its list.
+    pub city: String,
+    pub city_chosen: Option<usize>,
     pub submitted: u32,
     pub selected_row: usize,
     pub list_opened: u32,
@@ -147,6 +150,8 @@ impl Default for Model {
             expanded: false,
             entry: "Nidara".into(),
             search: String::new(),
+            city: String::new(),
+            city_chosen: None,
             submitted: 0,
             selected_row: 0,
             list_opened: 0,
@@ -2337,6 +2342,49 @@ fn search_field(m: &Model, t: &TypeScale) -> Vec<Node> {
         .gap(Space::S3)
         .into(),
     )];
+    // Suggestions: the matches sit under the field, in the flow, never in a popup that would
+    // take the keyboard from it. Down goes to them and Up from the first comes back.
+    let matches = city_matches(&m.city);
+    let mut suggest = vec![
+        nk::SearchEntry::new("q/city", "City", "city-edit", m.city.clone(), "Clear city")
+            .placeholder("Search for a city")
+            .suggestions("q/cities")
+            .into(),
+    ];
+    if !matches.is_empty() {
+        suggest.push(
+            nk::ListBox::new(
+                "q/cities",
+                "Matching cities",
+                "city-choose",
+                matches
+                    .iter()
+                    .map(|&i| nk::ListBoxOption::new(CITIES[i].0).subtitle(CITIES[i].1))
+                    .collect(),
+                t.style(Type::Body, Weight::Regular),
+            )
+            .subtitle_style(t.style(Type::Small, Weight::Regular))
+            .into(),
+        );
+    }
+    suggest.push(
+        nk::Label::new(
+            "q/city-chosen",
+            match m.city_chosen {
+                Some(i) => format!("Chosen: {} — {}", CITIES[i].0, CITIES[i].1),
+                None => "Chosen: none".into(),
+            },
+            t.style(Type::Body, Weight::Regular),
+        )
+        .ink(Ink::Secondary)
+        .into(),
+    );
+    out.push(section(
+        "search-suggest",
+        "With suggestions: type, then Down to the matches; Up from the first returns",
+        t,
+        nk::Column::new("q/suggest", suggest).gap(Space::S3).into(),
+    ));
     let specimen = |key: &str, name: &str, value: &str, disabled: bool| -> Node {
         nk::SearchEntry::new(key, name, "noop", value, format!("Clear {name}"))
             .placeholder("Search")
@@ -2359,6 +2407,29 @@ fn search_field(m: &Model, t: &TypeScale) -> Vec<Node> {
         .into(),
     ));
     out
+}
+
+/// The suggestions sample's cities, with the region each is shown under.
+pub const CITIES: [(&str, &str); 8] = [
+    ("Madrid", "Europe"),
+    ("Managua", "Americas"),
+    ("Manila", "Asia"),
+    ("Marseille", "Europe"),
+    ("Melbourne", "Australia"),
+    ("Mexico City", "Americas"),
+    ("Montevideo", "Americas"),
+    ("Nairobi", "Africa"),
+];
+/// The cities whose name starts with what is typed (none for an empty query, or once the
+/// text is exactly a city: it was chosen).
+pub fn city_matches(query: &str) -> Vec<usize> {
+    let q = query.trim().to_lowercase();
+    if q.is_empty() || CITIES.iter().any(|c| c.0.to_lowercase() == q) {
+        return vec![];
+    }
+    (0..CITIES.len())
+        .filter(|&i| CITIES[i].0.to_lowercase().starts_with(&q))
+        .collect()
 }
 
 struct Records<'a>(&'a TypeScale);
