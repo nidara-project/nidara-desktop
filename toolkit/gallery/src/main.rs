@@ -53,6 +53,7 @@ impl Gallery {
                 dropdown: &look.tokens.dropdown,
                 tile: &look.tokens.tile,
                 notification: &look.tokens.notification,
+                icon_grid: &look.tokens.icon_grid,
                 colors,
                 glyph: look.frame.icon,
                 files_window: host.scroll_window(&nk::FileList::scroll_key(&model.files.key())),

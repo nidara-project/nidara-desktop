@@ -1663,7 +1663,12 @@ impl ViewState {
         let Some(s) = self.placed[i].scroll else {
             return;
         };
-        let (mut r, v) = (self.placed[i].rect, self.placed[s].rect);
+        let (mut r, mut v) = (self.placed[i].rect, self.placed[s].rect);
+        // What floats over the region's top hides what lies under it.
+        if let What::Scroll { floating, .. } = self.placed[s].what {
+            let f = floating.min(v[3]);
+            v = [v[0], v[1] + f, v[2], v[3] - f];
+        }
         // Revealing only the input box cuts off an external keyboard outline.
         // Keep the original target (notably a list's viewport), plus any outline
         // outside it. Inner outline clips still apply; ancestor clips must not
@@ -1706,7 +1711,10 @@ impl ViewState {
     fn bar_geometry(&self, s: usize) -> Option<BarGeometry> {
         let t = self.tokens.as_ref()?;
         let p = &self.placed[s];
-        let What::Scroll { content, .. } = p.what else {
+        let What::Scroll {
+            content, floating, ..
+        } = p.what
+        else {
             return None;
         };
         let v = p.visible()?;
@@ -1724,6 +1732,8 @@ impl ViewState {
                 }
             }
         }
+        // The bar starts below what floats over the region's top.
+        let top = top.max(floating as f32);
         t.scrollbar
             .geometry(rect(&v), content as f32, self.offset(s) as f32, top, bottom)
     }

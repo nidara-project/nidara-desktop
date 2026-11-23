@@ -159,6 +159,14 @@ impl Scroll {
     pub fn new(key: impl Into<Key>, child: impl Into<Node>) -> Self {
         Self(Node::scroll(key, child.into()))
     }
+    /// Something floats over its top `px` (a search over a grid): what is brought into view
+    /// lands below it, and the bar starts below it.
+    pub fn floating_top(mut self, px: f64) -> Self {
+        if let Kind::Scroll(s) = &mut self.0.kind {
+            s.floating = px.max(0.);
+        }
+        self
+    }
 }
 widget!(
     /// Something that opens and closes in place, unrolling downward (`Gtk.Revealer`).

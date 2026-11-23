@@ -189,6 +189,11 @@ impl Grid {
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub struct Scroll {
     pub child: Box<Node>,
+    /// A band at its top that something floats over (a search over a grid): the content
+    /// scrolls under it, a control brought into view lands below it, and the bar starts
+    /// below it.
+    #[serde(default)]
+    pub floating: f64,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
@@ -672,6 +677,7 @@ impl Node {
             key,
             Kind::Scroll(Scroll {
                 child: Box::new(child),
+                floating: 0.,
             }),
         )
     }

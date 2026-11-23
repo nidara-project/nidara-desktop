@@ -1200,6 +1200,8 @@ pub struct Tokens {
     pub disclosure: DisclosureStyle,
     pub entry: EntryStyle,
     pub tile: TileStyle,
+    /// The icon grid's measures (`toolkit/tokens/icon-grid.json`).
+    pub icon_grid: IconGridStyle,
     /// The notification card's measures (`toolkit/tokens/notification.json`).
     pub notification: NotificationStyle,
     /// A list row's least height (`static.json` `ts.ROW_HEIGHT.single`).
@@ -1383,6 +1385,84 @@ pub fn notification_from(v: &Value) -> Result<NotificationStyle, String> {
         hero_source: n(&["hero", "source"])? as u32,
         hero_min: min,
         hero_max: max,
+    })
+}
+
+/// `nk::IconItem`'s and an icon grid's measures (`toolkit/tokens/icon-grid.json`).
+#[derive(Clone, Debug, PartialEq)]
+pub struct IconGridStyle {
+    /// A square cell, its icon, from its top to the icon and from the icon to the name.
+    pub cell: f64,
+    pub icon: f64,
+    pub top: f64,
+    pub name_gap: f64,
+    pub name: f32,
+    pub name_weight: f32,
+    pub lines: usize,
+    /// The highlight's corner, and the "new" dot's size.
+    pub corner: f64,
+    pub dot: f64,
+    /// Between two cells; at most this many columns and rows in view.
+    pub gap: f64,
+    pub columns: usize,
+    pub rows: usize,
+    /// A panel of icons under a floating search: from its edge to the search (top, side),
+    /// the search's height, from it to the first row at rest, the panel's corner, and the
+    /// graded blur from the panel's top edge to the search's bottom.
+    pub inset_top: f64,
+    pub inset_side: f64,
+    pub search: f64,
+    pub below: f64,
+    pub panel_corner: f64,
+    pub blur_curve: Vec<f64>,
+}
+pub fn icon_grid_from(v: &Value) -> Result<IconGridStyle, String> {
+    let n = |path: &[&str]| -> Result<f64, String> {
+        path.iter()
+            .fold(v, |v, k| &v[*k])
+            .as_f64()
+            .filter(|x| x.is_finite() && *x >= 0.)
+            .ok_or_else(|| format!("iconGrid: no {}", path.join(".")))
+    };
+    let count = |path: &[&str]| -> Result<usize, String> {
+        n(path).and_then(|x| {
+            (x >= 1.)
+                .then_some(x as usize)
+                .ok_or_else(|| format!("iconGrid: {} below 1", path.join(".")))
+        })
+    };
+    let blur_curve: Vec<f64> = v["panel"]["blurCurve"]
+        .as_array()
+        .ok_or("iconGrid: no panel.blurCurve")?
+        .iter()
+        .map(|x| {
+            x.as_f64()
+                .filter(|x| (0.0..=1.0).contains(x))
+                .ok_or_else(|| "iconGrid: panel.blurCurve outside 0..1".to_string())
+        })
+        .collect::<Result<_, _>>()?;
+    if blur_curve.len() < 2 {
+        return Err("iconGrid: panel.blurCurve needs two steps".into());
+    }
+    Ok(IconGridStyle {
+        cell: n(&["item", "cell"])?,
+        icon: n(&["item", "icon"])?,
+        top: n(&["item", "top"])?,
+        name_gap: n(&["item", "nameGap"])?,
+        name: n(&["item", "name"])? as f32,
+        name_weight: n(&["item", "nameWeight"])? as f32,
+        lines: count(&["item", "lines"])?,
+        corner: n(&["item", "corner"])?,
+        dot: n(&["item", "dot"])?,
+        gap: n(&["grid", "gap"])?,
+        columns: count(&["grid", "columns"])?,
+        rows: count(&["grid", "rows"])?,
+        inset_top: n(&["panel", "inset", "top"])?,
+        inset_side: n(&["panel", "inset", "side"])?,
+        search: n(&["panel", "search"])?,
+        below: n(&["panel", "below"])?,
+        panel_corner: n(&["panel", "corner"])?,
+        blur_curve,
     })
 }
 

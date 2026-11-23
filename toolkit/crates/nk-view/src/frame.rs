@@ -367,31 +367,7 @@ impl FrameStyle {
     /// The header layer's graded blur: one pane per step of the curve, their shared edges
     /// on physical pixels so no sharp line shows between two bands.
     pub fn graded(&self, width: f64, height: f64, scale: f64) -> Vec<nk_wayland::GradedPane> {
-        let count = self.curve.len() - 1;
-        let edge = |i: usize| {
-            if i == count {
-                height
-            } else {
-                (height * i as f64 / count as f64 * scale).round() / scale
-            }
-        };
-        self.curve
-            .windows(2)
-            .enumerate()
-            .map(|(i, v)| nk_wayland::GradedPane {
-                pane: nk_wayland::Pane {
-                    x: 0.,
-                    y: edge(i),
-                    width,
-                    height: edge(i + 1) - edge(i),
-                    radius: 0.,
-                    exponent: 2.,
-                    pointer: None,
-                },
-                top: v[0],
-                bottom: v[1],
-            })
-            .collect()
+        graded_panes(&self.curve, width, height, scale)
     }
 
     /// How strongly the window's background covers the band at its top and its bottom: what
@@ -504,4 +480,40 @@ impl Sidebar {
         self.start
             .is_some_and(|s| now.duration_since(s) < motion.base)
     }
+}
+
+/// A graded blur `width` × `height` from `curve` (its strength at evenly spaced steps, top to
+/// bottom): one pane per step, their shared edges on physical pixels so no sharp line shows
+/// between two bands. A window's header and what floats over a panel (Apps' search) use it.
+pub fn graded_panes(
+    curve: &[f64],
+    width: f64,
+    height: f64,
+    scale: f64,
+) -> Vec<nk_wayland::GradedPane> {
+    let count = curve.len().saturating_sub(1).max(1);
+    let edge = |i: usize| {
+        if i == count {
+            height
+        } else {
+            (height * i as f64 / count as f64 * scale).round() / scale
+        }
+    };
+    curve
+        .windows(2)
+        .enumerate()
+        .map(|(i, v)| nk_wayland::GradedPane {
+            pane: nk_wayland::Pane {
+                x: 0.,
+                y: edge(i),
+                width,
+                height: edge(i + 1) - edge(i),
+                radius: 0.,
+                exponent: 2.,
+                pointer: None,
+            },
+            top: v[0],
+            bottom: v[1],
+        })
+        .collect()
 }

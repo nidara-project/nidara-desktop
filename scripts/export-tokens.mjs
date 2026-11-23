@@ -152,6 +152,7 @@ const rows = JSON.parse(readFileSync(join(repo, "toolkit/tokens/rows.json"), "ut
 const header = JSON.parse(readFileSync(join(repo, "toolkit/tokens/header.json"), "utf8"))
 const capsule = JSON.parse(readFileSync(join(repo, "toolkit/tokens/capsule.json"), "utf8"))
 const tile = JSON.parse(readFileSync(join(repo, "toolkit/tokens/tile.json"), "utf8"))
+const iconGrid = JSON.parse(readFileSync(join(repo, "toolkit/tokens/icon-grid.json"), "utf8"))
 const notification = JSON.parse(readFileSync(join(repo, "toolkit/tokens/notification.json"), "utf8"))
 const variantFor = (recipe, dark, reduceTransparency) => recipe.variants
     .filter(o => (o.dark ?? dark) === dark && (o.reduceTransparency ?? reduceTransparency) === reduceTransparency)
@@ -202,6 +203,7 @@ for (const dark of [true, false])
 
             capsule: variantFor(capsule, dark, reduceTransparency),
             tile: variantFor(tile, dark, reduceTransparency),
+            iconGrid: variantFor(iconGrid, dark, reduceTransparency),
             notification: variantFor(notification, dark, reduceTransparency),
             header: variantFor(header, dark, reduceTransparency),
             search: variantFor(search, dark, reduceTransparency),
