@@ -6048,6 +6048,67 @@ fn list_box_moves_focus_before_activating_and_publishes_one_selected_row() {
     assert_eq!(selected_names(&mut rebuilt), ["Power Saver"]);
 }
 
+/// #1103 8b: a search field and the suggestions under it are one column to the arrows, as a
+/// city search with its matches is; the suggestions still report the row chosen.
+#[test]
+fn down_from_a_search_reaches_its_suggestions_and_up_comes_back() {
+    let view: Node = crate::Column::new(
+        "root",
+        vec![
+            crate::SearchEntry::new("city", "City", "typed", "Ma", "Clear")
+                .suggestions("matches")
+                .into(),
+            crate::ListBox::new(
+                "matches",
+                "Matching cities",
+                "choose",
+                vec![
+                    crate::ListBoxOption::new("Madrid").subtitle("Europe"),
+                    crate::ListBoxOption::new("Managua").subtitle("Americas"),
+                ],
+                style(14.),
+            )
+            .subtitle_style(style(12.))
+            .into(),
+        ],
+    )
+    .into();
+    let mut view = laid(&view, (400., 300.), 1.);
+    view.key(KeyInput::Tab);
+    assert_eq!(view.focus(), Some(&Key::from("city/input")));
+    assert!(view.key(KeyInput::Down).is_none());
+    assert_eq!(view.focus(), Some(&Key::from("matches/0")));
+    view.key(KeyInput::Down);
+    assert_eq!(view.focus(), Some(&Key::from("matches/1")));
+    view.key(KeyInput::Up);
+    view.key(KeyInput::Up);
+    assert_eq!(view.focus(), Some(&Key::from("city/input")));
+    view.key(KeyInput::Down);
+    let action = view.key(KeyInput::Activate).unwrap();
+    assert_eq!(action.action, "choose");
+    assert!(matches!(action.value, Some(Value::Index(0))));
+    // A field that names no list keeps Down to itself.
+    let plain: Node = crate::Column::new(
+        "root",
+        vec![
+            crate::SearchEntry::new("city", "City", "typed", "Ma", "Clear").into(),
+            crate::ListBox::new(
+                "matches",
+                "Matching cities",
+                "choose",
+                vec![crate::ListBoxOption::new("Madrid")],
+                style(14.),
+            )
+            .into(),
+        ],
+    )
+    .into();
+    let mut plain = laid(&plain, (400., 300.), 1.);
+    plain.key(KeyInput::Tab);
+    plain.key(KeyInput::Down);
+    assert_eq!(plain.focus(), Some(&Key::from("city/input")));
+}
+
 /// #1148: a crumb said which folder and a switch which state only in the app's head; the
 /// click reached the app with no value, and the app ignored it.
 #[test]
