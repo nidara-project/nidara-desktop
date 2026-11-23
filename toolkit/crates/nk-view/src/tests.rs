@@ -6301,3 +6301,65 @@ fn a_rule_draws_the_kit_separator_and_hides_beside_a_lit_neighbour() {
         "hidden beside a lit button"
     );
 }
+
+/// #1103 8c: a time of day is one field and one Tab stop; the arrows pick and step its
+/// parts round the clock, digits type them, and every change reports "HH:MM".
+#[test]
+fn a_time_field_steps_and_types_its_hours_and_minutes() {
+    let view: Node = crate::Column::new(
+        "root",
+        vec![
+            crate::TimeField::new("from", "Turns on", "set", "23:30", style(14.)).into(),
+            crate::Button::new("after", "After", "after", style(14.)).into(),
+        ],
+    )
+    .into();
+    let mut view = laid(&view, (300., 100.), 1.);
+    let digit = |view: &mut ViewState, d: &str| {
+        let key = nk_wayland::Key {
+            serial: None,
+            sym: 0x30 + d.parse::<u32>().unwrap(),
+            text: d.into(),
+            shift: false,
+            ctrl: false,
+            alt: false,
+        };
+        let (handled, action) = view.key_event(&key);
+        assert!(handled, "{d}");
+        action.and_then(|a| a.value)
+    };
+    let text = |v: Option<Value>| match v {
+        Some(Value::Text(t)) => t,
+        other => panic!("{other:?}"),
+    };
+    view.key(KeyInput::Tab);
+    assert_eq!(view.focus(), Some(&Key::from("from")));
+    let up = view.key(KeyInput::Up).unwrap();
+    assert_eq!(up.action, "set");
+    assert_eq!(text(up.value), "00:30", "the hour goes round");
+    view.key(KeyInput::Right);
+    assert_eq!(text(view.key(KeyInput::Down).unwrap().value), "00:29");
+    view.key(KeyInput::Left);
+    assert_eq!(text(digit(&mut view, "1")), "01:29");
+    assert_eq!(
+        text(digit(&mut view, "5")),
+        "15:29",
+        "two digits make the hour"
+    );
+    assert_eq!(
+        text(digit(&mut view, "7")),
+        "15:07",
+        "then the minutes; a 7 cannot start two"
+    );
+    view.key(KeyInput::Left);
+    assert_eq!(text(digit(&mut view, "7")), "07:07");
+    assert_eq!(
+        text(digit(&mut view, "4")),
+        "07:04",
+        "an hour of 7 is whole: the next digit is a minute"
+    );
+    assert!(
+        view.key(KeyInput::Tab).is_none() && view.focus() == Some(&Key::from("after")),
+        "one Tab stop"
+    );
+}

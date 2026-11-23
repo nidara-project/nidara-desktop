@@ -93,6 +93,7 @@ the reader tree through the common Reveal, as in the existing Settings implement
 | Fixed option picker **(proposal)** | [Gtk.DropDown]; [Gtk.ComboBox] is a deprecated porting reference (4.10), not the suggested new widget | [NSPopUpButton]; fixed selection, unlike editable [NSComboBox] | `COMBO_BOX`, `LIST_ITEM` options and Selection interface | Inspect choices/current value: `none`; open/choose/close: `reversible`, subject to bound effect | yes, popup pane only | 0 |
 | Editable option picker **(proposal)** | [Gtk.ComboBox] with entry is a deprecated porting reference; compose [Gtk.Entry] and a choice popup for new work | [NSComboBox]; arbitrary input as well as list selection | `COMBO_BOX` with `ENTRY` and option children | Inspect nonsecret value/options: `none`; edit/choose: `reversible`, subject to bound effect | yes, popup pane only | later |
 | Date choice **(proposal)** | [Gtk.Calendar]; month/date selection, not a complete time editor | [NSDatePicker]; date/time editing modes exceed a calendar | `CALENDAR`; `DATE_EDITOR` for an editable date field | Inspect supported calendar/range: `none`; set date: `reversible`, subject to bound effect | no | later |
+| `nk::TimeField` (time of day) | Two [Gtk.SpinButton]s, hours and minutes | [NSDatePicker] in its hour-and-minute mode: one field, parts picked by the arrows | `TEXT` with the time as its text ("HH:MM"), the chosen part as its selection | Inspect time: `none`; set time: `reversible`, subject to bound effect | no | 1 |
 
 ## Text
 

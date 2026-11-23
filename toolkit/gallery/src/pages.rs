@@ -58,7 +58,7 @@ fn status_text(s: &str) -> &'static str {
 }
 
 /// Each page: its id (what the check and `--page` name), its title and its glyph.
-pub const PAGES: [(&str, &str, &str); 28] = [
+pub const PAGES: [(&str, &str, &str); 29] = [
     ("status", "Status", "nd-emblem-default"),
     ("window", "Window", "nd-sidebar-show"),
     ("button", "Button", "nd-hand"),
@@ -83,6 +83,7 @@ pub const PAGES: [(&str, &str, &str); 28] = [
     ("disclosure", "Disclosure", "nd-pan-end"),
     ("entry", "Text field", "nd-input-keyboard"),
     ("search", "Search", "nd-system-search"),
+    ("time", "Time field", "nd-preferences-system-time"),
     ("list", "Long list", "nd-clipboard-list"),
     ("focus", "Focus", "nd-input-keyboard"),
     ("dialog", "Dialog and alert", "nd-dialog-information"),
@@ -117,6 +118,8 @@ pub struct Model {
     pub search: String,
     /// The suggestions sample: what is typed, and the city last chosen from its list.
     pub city: String,
+    /// The time field's sample, "HH:MM".
+    pub time: String,
     pub city_chosen: Option<usize>,
     pub submitted: u32,
     pub selected_row: usize,
@@ -151,6 +154,7 @@ impl Default for Model {
             entry: "Nidara".into(),
             search: String::new(),
             city: String::new(),
+            time: "22:30".into(),
             city_chosen: None,
             submitted: 0,
             selected_row: 0,
@@ -385,6 +389,7 @@ fn page(id: &str, m: &Model, cat: &Catalogue, t: &TypeScale, k: &Measures) -> Ve
             nodes
         }
         "search" => search_field(m, t),
+        "time" => time_field(m, t),
         "list" => long_list(m, t, k),
         "focus" => focus_page(t, k),
         "dialog" => dialogs(m, t),
@@ -2407,6 +2412,49 @@ fn search_field(m: &Model, t: &TypeScale) -> Vec<Node> {
         .into(),
     ));
     out
+}
+
+fn time_field(m: &Model, t: &TypeScale) -> Vec<Node> {
+    let body = t.style(Type::Body, Weight::Regular);
+    let specimen = |key: &str, name: &str, time: &str| {
+        nk::TimeField::new(key, name, "noop", time, body.clone())
+    };
+    vec![
+        section(
+            "time-live",
+            "Try it: Left and Right pick the part, Up and Down step it, digits type it",
+            t,
+            nk::Column::new(
+                "t/live",
+                vec![
+                    nk::TimeField::new("t/time", "Turns on", "time-set", &m.time, body.clone())
+                        .into(),
+                    nk::Label::new("t/value", format!("Value: {}", m.time), body.clone()).into(),
+                ],
+            )
+            .gap(Space::S3)
+            .into(),
+        ),
+        section(
+            "time-states",
+            "States",
+            t,
+            nk::Column::new(
+                "t/states",
+                vec![
+                    specimen("t/rest", "At rest", "07:05").into(),
+                    specimen("t/focus", "Keyboard focus", "18:45")
+                        .shown(Shown::Focus)
+                        .into(),
+                    specimen("t/disabled", "Disabled", "23:59")
+                        .enabled(false)
+                        .into(),
+                ],
+            )
+            .gap(Space::S3)
+            .into(),
+        ),
+    ]
 }
 
 /// The suggestions sample's cities, with the region each is shown under.

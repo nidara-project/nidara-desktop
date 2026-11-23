@@ -457,6 +457,11 @@ Settings' Power profiles use this control and the exported selected-row tint. It
 may carry a subtitle (city over region). A search with suggestions is a `SearchEntry` that
 names its list (`.suggestions(key)`) and a `ListBox` under it in the flow, never the dropdown
 popup, which takes the keyboard: Down goes from the field to the first row, Up from that row back.
+`nk::TimeField` (#1103 8c) is a time of day as one field and one Tab stop (owner, 23-11: one
+field, not two steppers): Left/Right pick hours or minutes, Up/Down step round the clock,
+digits type a part (a digit no second can follow, "7" for an hour, completes it). Every change
+reports "HH:MM" (24 h); readers get that text with the chosen part as its selection, and
+SetText sets it. Its frame is the entry's (`editable::chrome`).
 `nk::files` (#1148) is the file model shared by the chooser and file manager. File browsing
 is read-only. Thumbnail generation is confined to the freedesktop cache.
 Poll `Listing` for sorted batches and keep selection by path when the snapshot changes.

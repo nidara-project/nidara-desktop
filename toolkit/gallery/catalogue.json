@@ -40,6 +40,7 @@
         {"name": "Number field", "nk": [], "gtk": "Gtk.SpinButton", "appkit": "NSStepper + NSTextField", "status": "widgets", "users": "Settings"},
         {"name": "Dropdown", "nk": ["nk::DropDown"], "gtk": "Gtk.DropDown", "appkit": "NSPopUpButton", "status": "both", "users": "Settings", "page": "dropdown"},
         {"name": "Editable combo", "nk": [], "gtk": "Gtk.ComboBox (entry)", "appkit": "NSComboBox", "status": "missing", "users": ""},
+        {"name": "Time of day", "nk": ["nk::TimeField"], "gtk": "two Gtk.SpinButton", "appkit": "NSDatePicker (hour and minute)", "status": "view", "users": "Settings night light (#1103 8c)", "page": "time"},
         {"name": "Date", "nk": [], "gtk": "Gtk.Calendar", "appkit": "NSDatePicker", "status": "hand", "users": "NC calendar"},
         {"name": "Colour swatch", "nk": ["nk::Swatches"], "gtk": "composite button", "appkit": "NSColorWell", "status": "both", "users": "Settings, Appearance", "page": "swatches"}
       ]
