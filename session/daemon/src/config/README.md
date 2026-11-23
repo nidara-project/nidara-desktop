@@ -111,3 +111,19 @@ PPD's `PropertiesChanged` and its `NameOwnerChanged` re-read the profile and ann
 key; there is no polling. Without PPD the key is unavailable, and so is the Power page.
 The tests point `DBUS_SYSTEM_BUS_ADDRESS` at their private bus, so the host's PPD never
 leaks in.
+
+## Region (#1103 8b)
+
+`region.rs` serves two keys, each in the home that decides it:
+
+- `region.timezone` is the system's, systemd-timedated's `Timezone`. When timedated cannot
+  be asked, it falls back to `/etc/localtime`'s link. A write is `SetTimezone` with
+  interactive polkit, and it is asynchronous because the password prompt waits for the
+  person. `Apply` answers the zone still in force, and the new one is announced once
+  timedated has set it. A refused or cancelled prompt changes nothing and announces nothing.
+  Valid zones are `timedatectl list-timezones`' (tzdata.zi's zones and links), offered as
+  `catalogue`. There is no generic control for it: the Region page draws its own city search.
+- `region.regionalFormat` is this user's `~/.config/environment.d/nidara-locale.conf`. It
+  sets the seven format `LC_*` variables (never `LANG`) for the next login. "" removes the
+  file and follows the language. Values come from `locale -a` spelled `.UTF-8`, plus a saved
+  one the system stopped listing. A file monitor announces any writer's change.
