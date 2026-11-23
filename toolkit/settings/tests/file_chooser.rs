@@ -179,6 +179,7 @@ fn start(chooser: &mut Chooser, connection: &Connection, request: u64) {
                 parent: "wayland:synthetic-parent".into(),
                 title: "Choose wallpaper".into(),
                 images_label: "Images".into(),
+                mimes: nk_settings::file_chooser::WALLPAPER_IMAGES,
                 current_folder: Some("/home/test".into()),
             },
         ) {

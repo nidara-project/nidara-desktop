@@ -958,6 +958,11 @@ impl ListRow {
         self.row.subtitle_style = style;
         self
     }
+    /// What it starts with, before its title: an icon (`Adw.ActionRow`'s prefix).
+    pub fn leading(mut self, start: impl Into<Node>) -> Self {
+        self.row.leading = Some(start.into());
+        self
+    }
     /// What it ends with. In a row that is not activatable, a control that responds on its own;
     /// in an activatable one, what it shows, drawn only.
     pub fn trailing(mut self, end: impl Into<Node>) -> Self {

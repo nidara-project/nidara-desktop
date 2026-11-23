@@ -504,3 +504,138 @@ fn the_appearance_page_writes_its_accent_schedule_and_fonts_and_has_no_wallpaper
         "the wallpaper has its own page"
     );
 }
+
+/// Settings → Top bar on AppWindow (#1103 8e): the window title's switch, the system menu's
+/// icon back to the mark, a tray icon hidden and shown, and the Clock subpage's three keys,
+/// each written only from the page that shows it.
+#[test]
+fn the_top_bar_page_writes_its_items_tray_and_clock() {
+    let root = std::env::var_os("NK_SETTINGS_DATA")
+        .map(PathBuf::from)
+        .unwrap_or_else(|| {
+            PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../build/settings-data")
+        });
+    let e = Exports::load(&root).expect("generate settings-data before running Settings tests");
+    let (mut session, _) = Session::start();
+    session.handle(Raw::Snapshot(Ok((7,1,json!({"schemaVersion":1,"keys":{
+        "bar.appTitle":{"type":"boolean","value":true,"available":true,"writable":true,"ui":{"i18n":"settings.bar.app-title"}},
+        "bar.launcherIcon":{"type":"string","value":"/home/a/mark.png","available":true,"writable":true},
+        "bar.trayHidden":{"type":"list","value":["steam"],"available":true,"writable":true,"values":["nm-applet","steam"],
+            "ui":{"items":[{"value":"nm-applet","title":"Network","icon":"nm-device-wireless"},{"value":"steam","title":"Steam","icon":"/home/a/steam.png"}]}},
+        "region.timeFormat":{"type":"enum","value":"24h","available":true,"writable":true,"values":["24h","12h"],
+            "ui":{"control":"dropdown","title":"Time format","options":[{"value":"24h","label":"24"},{"value":"12h","label":"12"}]}},
+        "region.dateFormat":{"type":"enum","value":"short","available":true,"writable":true,"values":["none","short"],
+            "ui":{"control":"dropdown","title":"Date format","options":[{"value":"none","label":"None"},{"value":"short","label":"Short"}]}},
+        "region.showSeconds":{"type":"boolean","value":false,"available":true,"writable":true,"ui":{"control":"toggle","title":"Seconds"}}
+    }}).to_string()))));
+    let mut f = Fake {
+        session,
+        sent: vec![],
+    };
+    let mut m = Model::default();
+    m.reconcile(&e, &f.session);
+    let now = Instant::now();
+    let act = |m: &mut Model, f: &mut Fake, name: &str, value: Option<nk::Value>| {
+        m.activate(action(name, value), false, f, &e, now).unwrap();
+    };
+    // The clock's keys are not the Top bar page's own: only its subpage writes them.
+    act(&mut m, &mut f, "page:bar", None);
+    assert_eq!(m.selected(), Some("bar"));
+    act(&mut m, &mut f, "set:region.showSeconds", None);
+    act(&mut m, &mut f, "bar:appTitle", None);
+    act(&mut m, &mut f, "bar:icon:default", None);
+    act(&mut m, &mut f, "bar:tray:nm-applet", None);
+    act(&mut m, &mut f, "bar:tray:steam", None);
+    act(&mut m, &mut f, "bar:tray:not-offered", None);
+    act(&mut m, &mut f, "bar:icon:change", None);
+    assert!(m.take_icon_request(), "Change icon opens the chooser");
+    m.icon_chosen(std::path::Path::new("/home/a/new.svg"), &mut f, &e)
+        .unwrap();
+    act(&mut m, &mut f, "page:bar/clock", None);
+    assert_eq!(m.selected(), Some("bar/clock"));
+    act(&mut m, &mut f, "set:region.showSeconds", None);
+    act(
+        &mut m,
+        &mut f,
+        "set:region.dateFormat",
+        Some(nk::Value::Index(0)),
+    );
+    // And the bar's own keys are not the subpage's.
+    act(&mut m, &mut f, "bar:appTitle", None);
+    assert_eq!(
+        f.sent,
+        vec![
+            ("bar.appTitle".into(), Value::Bool(false)),
+            ("bar.launcherIcon".into(), Value::Text("nidara".into())),
+            (
+                "bar.trayHidden".into(),
+                Value::List(vec!["nm-applet".into(), "steam".into()])
+            ),
+            ("region.showSeconds".into(), Value::Bool(true)),
+            ("region.dateFormat".into(), Value::Text("none".into())),
+        ]
+    );
+    // A key's next value waits for Config1's answer to the first; the page reads it.
+    assert_eq!(
+        f.session.shown("bar.trayHidden"),
+        Some(&Value::List(vec!["nm-applet".into()]))
+    );
+    assert_eq!(
+        f.session.shown("bar.launcherIcon"),
+        Some(&Value::Text("/home/a/new.svg".into()))
+    );
+    // Both build: the Top bar's rows and the tray apps, then the subpage's preview and keys.
+    let appearance = nk_platform::portal::Appearance {
+        accent: [0., 136. / 255., 1.],
+        dark: true,
+        reduce_transparency: false,
+        window_background: "tinted".into(),
+        reduced_motion: false,
+        font: "Inter 11".into(),
+        text_scale: 1.,
+    };
+    let reference =
+        PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../ui/shell/assets/icons/nidara");
+    let host = nk::AppWindow::new(
+        nk::WindowLook::load(&e, &appearance).unwrap(),
+        nk::Labels {
+            show_sidebar: "s".into(),
+            hide_sidebar: "h".into(),
+            back: "b".into(),
+            forward: "f".into(),
+        },
+        "Settings",
+        Box::new(
+            nk_text::ParleyBackend::with_system_fonts(std::sync::Arc::new(
+                nk_text::FontSet::discover_required().unwrap(),
+            ))
+            .unwrap(),
+        ),
+        nk::Glyphs::new(nk_icons::Icons::new("", &[], &reference).unwrap()),
+        false,
+    );
+    let clock = m.page(&host, &f.session, &e).unwrap();
+    let text = format!("{:?}", clock.content);
+    for expected in [
+        "bar/clock/preview",
+        "key/region.dateFormat",
+        "key/region.timeFormat",
+        "key/region.showSeconds",
+    ] {
+        assert!(text.contains(expected), "{expected}");
+    }
+    assert_eq!(clock.title, e.text("settings.bar.item.clock").unwrap());
+    act(&mut m, &mut f, nk::BACK, None);
+    let bar = format!("{:?}", m.page(&host, &f.session, &e).unwrap().content);
+    for expected in [
+        "bar/row/clock",
+        "bar/row/control-center",
+        "key/bar.appTitle",
+        "bar/row/system-menu",
+        "bar/picture//home/a/new.svg",
+        "bar/tray/nm-applet",
+        "bar/picture//home/a/steam.png",
+    ] {
+        assert!(bar.contains(expected), "{expected}");
+    }
+}

@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: LGPL-3.0-or-later
-//! A setting's value as `Config1` carries it: the registry has three types, and the service
-//! sends them as `b`, `d` and `s` (`ui/shell/core/ConfigService.ts`, `variant`).
+//! A setting's value as `Config1` carries it: the service sends them as `b`, `d`, `s`, and
+//! `as` for a list key (`session/daemon/src/config/mod.rs`, `variant`).
 
 use zbus::zvariant::{OwnedValue, Value as Variant};
 
@@ -11,6 +11,8 @@ pub enum Value {
     Number(f64),
     /// Enums and strings alike: an enum is a string the schema lists the choices of.
     Text(String),
+    /// A list key's members (`bar.trayHidden`), some of its `values`.
+    List(Vec<String>),
 }
 
 impl Value {
@@ -20,6 +22,11 @@ impl Value {
             serde_json::Value::Bool(b) => Some(Self::Bool(*b)),
             serde_json::Value::Number(n) => n.as_f64().map(Self::Number),
             serde_json::Value::String(s) => Some(Self::Text(s.clone())),
+            serde_json::Value::Array(a) => a
+                .iter()
+                .map(|v| v.as_str().map(str::to_owned))
+                .collect::<Option<Vec<_>>>()
+                .map(Self::List),
             _ => None,
         }
     }
@@ -36,6 +43,14 @@ impl Value {
             Variant::U64(n) => Self::Number(*n as f64),
             Variant::Str(s) => Self::Text(s.as_str().to_owned()),
             Variant::Value(inner) => return Self::from_variant(inner),
+            Variant::Array(a) => Self::List(
+                a.iter()
+                    .map(|v| match v {
+                        Variant::Str(s) => Some(s.as_str().to_owned()),
+                        _ => None,
+                    })
+                    .collect::<Option<Vec<_>>>()?,
+            ),
             _ => return None,
         })
     }
@@ -46,6 +61,8 @@ impl Value {
             Self::Number(n) => OwnedValue::from(*n),
             Self::Text(s) => OwnedValue::try_from(Variant::from(s.as_str()))
                 .expect("a string variant holds no file descriptor"),
+            Self::List(l) => OwnedValue::try_from(Variant::from(l.clone()))
+                .expect("a string list holds no file descriptor"),
         }
     }
 
@@ -57,6 +74,7 @@ impl Value {
             Self::Bool(b) => b.to_string(),
             Self::Number(n) => n.to_string(),
             Self::Text(s) => s.clone(),
+            Self::List(l) => l.join(","),
         }
     }
 
@@ -77,6 +95,13 @@ impl Value {
     pub fn as_text(&self) -> Option<&str> {
         match self {
             Self::Text(s) => Some(s),
+            _ => None,
+        }
+    }
+
+    pub fn as_list(&self) -> Option<&[String]> {
+        match self {
+            Self::List(l) => Some(l),
             _ => None,
         }
     }
@@ -101,6 +126,8 @@ mod tests {
             Value::Bool(true),
             Value::Number(4500.0),
             Value::Text("tinted".into()),
+            Value::List(vec!["nm-applet".into(), "steam".into()]),
+            Value::List(vec![]),
         ] {
             let owned = v.to_variant();
             assert_eq!(Value::from_variant(&owned), Some(v));

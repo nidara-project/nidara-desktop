@@ -20,6 +20,7 @@
 
 pub mod about;
 pub mod appearance;
+pub mod bar;
 pub mod builders;
 pub mod client;
 pub mod dropdown;
