@@ -41,9 +41,10 @@ impl Settings {
         })?;
         Ok(())
     }
-    fn actions(&mut self, actions: Vec<nk::Activated>) -> Result<()> {
+    fn actions(&mut self, actions: Vec<nk::Activated>, window: &mut Window) -> Result<()> {
         self.dirty |= !actions.is_empty();
         for a in actions {
+            let launcher = a.key.clone();
             let dragging = self.pointer_down && self.host.captured() == Some(&a.key);
             if self
                 .model
@@ -51,7 +52,70 @@ impl Settings {
             {
                 self.host.to_top();
             }
+            if let Some((key, initial)) = self.model.take_font_request() {
+                self.choose_font(window, &launcher, &key, initial)?;
+            }
         }
+        Ok(())
+    }
+    /// A font row's dialog, modal over the window; its answer is written by the model.
+    fn choose_font(
+        &mut self,
+        window: &mut Window,
+        launcher: &nk::Key,
+        key: &str,
+        initial: nk::FontChoice,
+    ) -> Result<()> {
+        let e = &self.exports;
+        let t = |k: &str| e.text(k).map(str::to_owned);
+        let title = if key == "appearance.monoFont" {
+            "settings.appearance.mono-font"
+        } else {
+            "settings.appearance.interface-font"
+        };
+        let labels = nk::FontDialogLabels {
+            title: t(title)?,
+            close: t("settings.window.close")?,
+            cancel: t("settings.native.cancel")?,
+            choose: t("settings.native.select")?,
+            search: t("settings.native.font.search")?,
+            clear_search: t("settings.native.font.clear")?,
+            family: t("settings.native.font.families")?,
+            style: t("settings.native.font.styles")?,
+            size: t("settings.native.font.points")?,
+            no_matches: t("settings.native.font.none")?,
+            sample: t("settings.native.font.preview")?,
+        };
+        let (portal, model, client) = (&self.portal, &self.model, &self.client);
+        let chosen = nk::FontDialog::new(initial)
+            .labels(labels)
+            .monospace_only(key == "appearance.monoFont")
+            .choose(
+                &mut self.host,
+                window,
+                launcher,
+                || {
+                    Ok(if portal.changed() {
+                        let a = portal.read()?;
+                        nk::DialogUpdate {
+                            appearance: Some((WindowLook::load(e, &a)?, a.reduced_motion)),
+                            ..Default::default()
+                        }
+                    } else {
+                        nk::DialogUpdate::default()
+                    })
+                },
+                |host| {
+                    model
+                        .page(host, client.session(), e)
+                        .expect("validated manifest page")
+                },
+            )?;
+        if let Some(choice) = chosen {
+            self.model
+                .font_chosen(key, &choice, &mut self.client, &self.exports)?;
+        }
+        self.dirty = true;
         Ok(())
     }
 }
@@ -82,7 +146,7 @@ impl Application for Settings {
         self.dirty |= self.model.about.poll();
         self.dirty |= self.model.region.poll();
         let actions = self.host.idle()?;
-        self.actions(actions)?;
+        self.actions(actions, window)?;
         self.dirty |= self
             .model
             .flush(&mut self.client, &self.exports, Instant::now())?;
@@ -105,7 +169,7 @@ impl Application for Settings {
             self.commit(window)?;
         }
         let (_, actions) = self.host.event(event, window)?;
-        self.actions(actions)?;
+        self.actions(actions, window)?;
         self.commit(window)
     }
     fn paint(&mut self, frame: Frame) -> Result<Vec<u8>> {

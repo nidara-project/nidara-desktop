@@ -817,6 +817,8 @@ export default {
     "settings.native.unavailable": "Settings service unavailable",
     "settings.native.font.search": "Search fonts",
     "settings.native.font.placeholder": "Search fonts…",
+    "settings.native.font.clear": "Clear search",
+    "settings.native.font.none": "No matching font families",
     "settings.native.font.families": "Font families",
     "settings.native.font.styles": "Font styles",
     "settings.native.font.unnamed": "Unnamed style",

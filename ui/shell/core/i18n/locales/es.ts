@@ -59,6 +59,8 @@ export default {
     "settings.native.unavailable": "El servicio de configuración no está disponible",
     "settings.native.font.search": "Buscar fuentes",
     "settings.native.font.placeholder": "Buscar fuentes…",
+    "settings.native.font.clear": "Borrar la búsqueda",
+    "settings.native.font.none": "Ninguna familia coincide",
     "settings.native.font.families": "Familias de fuentes",
     "settings.native.font.styles": "Estilos de fuente",
     "settings.native.font.unnamed": "Estilo sin nombre",

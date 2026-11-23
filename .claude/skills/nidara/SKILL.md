@@ -595,6 +595,12 @@ A page module writes only the Config1 keys it names (Region: `region::KEYS`, che
 `Model::items` like any other row. Region (8b) picks the zone by city: a `SearchEntry` with
 its suggestions `ListBox` (cities under their area, tzdata aliases left out), and choosing one
 applies it. The language keeps Apply because it opens a password prompt.
+Appearance (8c) is a page module too (`appearance.rs`): its schema-control keys are ordinary
+rows; the accent is `nk::Swatches` in Config1's value order with the exported colours, the night
+schedule two `nk::TimeField`s, each font an `nk::FontButton` whose press asks the window
+(`Model::take_font_request`) to run `nk::FontDialog` modally, the answer written in points as
+a Pango description (`font_value`). The wallpaper group is neither drawn nor writable there: it
+moves to its own page (#1146, owner 23-11).
 `power.profile` is PPD's ActiveProfile on the system bus, announced by PPD's own
 signals; Config1 tests set `DBUS_SYSTEM_BUS_ADDRESS` to their private bus.
 `region.timezone` is timedated's, set asynchronously behind polkit: `Apply` answers the old zone and the new one is
