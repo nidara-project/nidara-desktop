@@ -180,7 +180,10 @@ mod tests {
         let l = panel_layout(&s, (1920., 1080.));
         // The search's rounded ends hold the grid's edge columns, names included.
         assert_eq!(l.grid[0], l.search[0] + s.search / 2.);
-        assert_eq!(l.grid[0] + l.grid[2], l.search[0] + l.search[2] - s.search / 2.);
+        assert_eq!(
+            l.grid[0] + l.grid[2],
+            l.search[0] + l.search[2] - s.search / 2.
+        );
         assert_eq!(l.grid[1], l.search[1] + l.search[3] + s.below);
     }
 }
