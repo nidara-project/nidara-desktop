@@ -16,7 +16,7 @@ use std::{
 
 /// A page with a module of its own here rather than rows from the manifest.
 fn own(page: &Page) -> bool {
-    page.builder.as_deref() == Some("about") || page.id == "region"
+    page.builder.as_deref() == Some("about") || page.id == "region" || page.id == "appearance"
 }
 /// Whether this window draws `page`: its own module, or every row of it ordinary.
 pub fn listed(page: &Page, session: &Session) -> bool {
@@ -60,8 +60,34 @@ pub struct Model {
     status: Option<String>,
     pub about: crate::about::About,
     pub region: crate::region::Region,
+    /// A font row pressed: its key and current choice, for the window to open the dialog.
+    font_request: Option<(String, nk::FontChoice)>,
 }
 impl Model {
+    /// The font row pressed since last asked: its key and its current choice.
+    pub fn take_font_request(&mut self) -> Option<(String, nk::FontChoice)> {
+        self.font_request.take()
+    }
+    /// The font dialog's answer for `key`: written when it is a different font.
+    pub fn font_chosen(
+        &mut self,
+        key: &str,
+        choice: &nk::FontChoice,
+        editor: &mut dyn Editor,
+        e: &Exports,
+    ) -> Result<(), String> {
+        if !crate::appearance::KEYS.contains(&key) || !self.editable(key, editor.session(), e) {
+            return Ok(());
+        }
+        let value = crate::appearance::font_value(choice)?;
+        let now = editor.session().shown(key).and_then(Value::as_text);
+        let same = now.and_then(|n| nk_platform::font_description::Description::parse(n).ok())
+            == nk_platform::font_description::Description::parse(&value).ok();
+        if !same {
+            self.send(key, Value::Text(value), editor, e)?;
+        }
+        Ok(())
+    }
     pub fn selected(&self) -> Option<&str> {
         self.history.get(self.at).map(String::as_str)
     }
@@ -212,6 +238,42 @@ impl Model {
             }
             return Ok(false);
         }
+        if let Some(action) = a.action.strip_prefix("appearance:") {
+            let session = editor.session();
+            let effect = match (action, a.value) {
+                ("accent", Some(nk::Value::Index(i))) => session
+                    .store()
+                    .and_then(|s| s.key("appearance.accent"))
+                    .and_then(|k| k.entry["values"][i].as_str().map(str::to_owned))
+                    .map(|v| ("appearance.accent".to_owned(), Value::Text(v))),
+                (time, Some(nk::Value::Text(t))) if time.starts_with("time:") => {
+                    let key = &time["time:".len()..];
+                    crate::appearance::KEYS
+                        .contains(&key)
+                        .then(|| (key.to_owned(), Value::Text(t)))
+                }
+                (font, _) if font.starts_with("font:") => {
+                    let key = &font["font:".len()..];
+                    if crate::appearance::KEYS.contains(&key) && self.editable(key, session, e) {
+                        let raw = session
+                            .shown(key)
+                            .and_then(Value::as_text)
+                            .unwrap_or_default();
+                        let choice = crate::appearance::font_choice(raw)
+                            .unwrap_or_else(|| nk::FontChoice::new(raw, nk::FontSize::Points(11.)));
+                        self.font_request = Some((key.to_owned(), choice));
+                    }
+                    None
+                }
+                _ => None,
+            };
+            if let Some((key, value)) = effect
+                && self.editable(&key, editor.session(), e)
+            {
+                self.send(&key, value, editor, e)?;
+            }
+            return Ok(false);
+        }
         if let Some(action) = a.action.strip_prefix("region:") {
             if let crate::region::Effect::Apply(key, value) =
                 self.region.act(action, a.value, editor.session())
@@ -316,8 +378,12 @@ impl Model {
             && self.selected().and_then(|id| e.page(id)).is_some_and(|p| {
                 // A page module writes the keys it names, and no other.
                 (p.id == "region" && crate::region::KEYS.contains(&key))
+                    || (p.id == "appearance" && crate::appearance::KEYS.contains(&key))
                     || p.groups.iter().enumerate().any(|(i, g)| {
-                        allowed(&g.items, key, s, &self.open, &format!("{}/{i}", p.id))
+                        // Appearance leaves its wallpaper out (#1146): not drawn, not written.
+                        !(p.id == "appearance"
+                            && g.i18n.as_deref() == Some(crate::appearance::WALLPAPER_GROUP))
+                            && allowed(&g.items, key, s, &self.open, &format!("{}/{i}", p.id))
                     })
             })
     }
@@ -386,6 +452,77 @@ impl Model {
                 )
                 .into(),
             );
+        } else if let Some(p) = page.filter(|p| p.id == "appearance") {
+            for (i, g) in p.groups.iter().enumerate() {
+                if g.i18n.as_deref() == Some(crate::appearance::WALLPAPER_GROUP) {
+                    continue;
+                }
+                let id = format!("{}/{i}", p.id);
+                let mut rows = vec![];
+                for (n, item) in g.items.iter().enumerate() {
+                    if item.visible_when().is_some_and(|w| !w.holds(session)) {
+                        continue;
+                    }
+                    let shown = |key: &str| {
+                        self.held
+                            .get(key)
+                            .map(|h| h.value.clone())
+                            .or_else(|| session.shown(key).cloned())
+                    };
+                    let error = |key: &str| self.errors.get(key).cloned();
+                    let row = crate::appearance::Row {
+                        id: format!("{id}/{n}"),
+                        types,
+                        session,
+                        exports: e,
+                        shown: &shown,
+                        error: &error,
+                    };
+                    match item {
+                        Item::Custom { name, i18n, .. } if name == "accentPicker" => {
+                            rows.extend(row.accent(item, i18n.as_deref().unwrap_or_default())?)
+                        }
+                        Item::Custom { name, i18n, .. } => rows.extend(row.font(
+                            item,
+                            name,
+                            i18n.as_deref().unwrap_or_default(),
+                        )?),
+                        Item::Decoration { name, .. } if name == "nightScheduleTimes" => {
+                            rows.extend(row.schedule(item)?)
+                        }
+                        Item::Decoration { name, .. } => {
+                            return Err(format!("appearance: no decoration {name}"));
+                        }
+                        _ => rows.extend(self.items(
+                            std::slice::from_ref(item),
+                            &format!("{id}/{n}"),
+                            host,
+                            session,
+                            e,
+                        )?),
+                    }
+                }
+                if rows.is_empty() {
+                    continue;
+                }
+                if let Some(label) = g.i18n.as_ref().filter(|label| !label.is_empty()) {
+                    content.push(
+                        nk::Label::new(
+                            format!("{id}/title"),
+                            e.text(label)?,
+                            types.style(Type::Body, Weight::Medium),
+                        )
+                        .into(),
+                    );
+                }
+                content.push(
+                    nk::Group::new(
+                        format!("{id}/group"),
+                        nk::Column::new(format!("{id}/rows"), rows),
+                    )
+                    .into(),
+                );
+            }
         } else if page.is_some_and(own) {
             content.extend(self.about.content(e, types)?);
         } else if let Some(p) = page {

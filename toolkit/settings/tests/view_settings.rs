@@ -360,3 +360,147 @@ fn the_region_page_writes_the_zone_of_the_city_chosen_and_its_format() {
     assert!(!text.contains("Pacific"), "an alias is not offered");
     m.region.language(&e, &types).unwrap();
 }
+
+/// #1103 8c: Appearance draws its rows from the kit (swatches, time fields, font buttons)
+/// without the wallpaper, which gets its own page, and writes only the keys it names.
+#[test]
+fn the_appearance_page_writes_its_accent_schedule_and_fonts_and_has_no_wallpaper() {
+    let root = std::env::var_os("NK_SETTINGS_DATA")
+        .map(PathBuf::from)
+        .unwrap_or_else(|| {
+            PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../build/settings-data")
+        });
+    let e = Exports::load(&root).expect("generate settings-data before running Settings tests");
+    assert!(
+        e.page("appearance").is_some(),
+        "the built-in pages have Appearance"
+    );
+    let (mut session, _) = Session::start();
+    session.handle(Raw::Snapshot(Ok((7,1,json!({"schemaVersion":1,"keys":{
+        "appearance.darkMode":{"type":"boolean","value":true,"available":true,"writable":true,"ui":{"control":"toggle","title":"Dark mode"}},
+        "appearance.accent":{"type":"enum","value":"blue","available":true,"writable":true,"values":["blue","teal","green"]},
+        "nightlight.enabled":{"type":"boolean","value":false,"available":true,"writable":true,"ui":{"control":"toggle","title":"Night light"}},
+        "nightlight.scheduleEnabled":{"type":"boolean","value":true,"available":true,"writable":true,"ui":{"control":"toggle","title":"Automatic"}},
+        "nightlight.scheduleFrom":{"type":"string","value":"20:00","available":true,"writable":true},
+        "nightlight.scheduleTo":{"type":"string","value":"06:30","available":true,"writable":true},
+        "appearance.interfaceFont":{"type":"string","value":"Inter 11","available":true,"writable":true},
+        "appearance.monoFont":{"type":"string","value":"JetBrains Mono 10","available":true,"writable":true},
+        "wallpaper.transition":{"type":"enum","value":"fade","available":true,"writable":true,"values":["fade","grow"],
+            "ui":{"control":"dropdown","title":"Transition","options":[{"value":"fade","label":"Fade"},{"value":"grow","label":"Grow"}]}}
+    }}).to_string()))));
+    let mut f = Fake {
+        session,
+        sent: vec![],
+    };
+    let mut m = Model::default();
+    m.reconcile(&e, &f.session);
+    let now = Instant::now();
+    let act = |m: &mut Model, f: &mut Fake, name: &str, value: Option<nk::Value>| {
+        m.activate(action(name, value), false, f, &e, now).unwrap();
+    };
+    act(&mut m, &mut f, "page:appearance", None);
+    assert_eq!(m.selected(), Some("appearance"));
+    act(
+        &mut m,
+        &mut f,
+        "appearance:accent",
+        Some(nk::Value::Index(2)),
+    );
+    act(
+        &mut m,
+        &mut f,
+        "appearance:time:nightlight.scheduleFrom",
+        Some(nk::Value::Text("21:15".into())),
+    );
+    act(
+        &mut m,
+        &mut f,
+        "appearance:font:appearance.interfaceFont",
+        None,
+    );
+    let (key, choice) = m
+        .take_font_request()
+        .expect("the font row asks for its dialog");
+    assert_eq!(
+        (key.as_str(), choice.family.as_str()),
+        ("appearance.interfaceFont", "Inter")
+    );
+    let bold = choice.face(nk::FontFace {
+        name: "Bold".into(),
+        weight: 700.,
+        ..Default::default()
+    });
+    m.font_chosen(&key, &bold, &mut f, &e).unwrap();
+    // The wallpaper's transition is no longer this page's; a time for another key neither.
+    act(
+        &mut m,
+        &mut f,
+        "set:wallpaper.transition",
+        Some(nk::Value::Index(1)),
+    );
+    act(
+        &mut m,
+        &mut f,
+        "appearance:time:wallpaper.transition",
+        Some(nk::Value::Text("21:15".into())),
+    );
+    assert_eq!(
+        f.sent,
+        vec![
+            ("appearance.accent".into(), Value::Text("green".into())),
+            (
+                "nightlight.scheduleFrom".into(),
+                Value::Text("21:15".into())
+            ),
+            (
+                "appearance.interfaceFont".into(),
+                Value::Text("Inter Bold 11".into())
+            ),
+        ]
+    );
+    // The page builds: the swatches, both times while the schedule is on, both fonts, and
+    // nothing of the wallpaper.
+    let appearance = nk_platform::portal::Appearance {
+        accent: [0., 136. / 255., 1.],
+        dark: true,
+        reduce_transparency: false,
+        window_background: "tinted".into(),
+        reduced_motion: false,
+        font: "Inter 11".into(),
+        text_scale: 1.,
+    };
+    let reference =
+        PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../ui/shell/assets/icons/nidara");
+    let host = nk::AppWindow::new(
+        nk::WindowLook::load(&e, &appearance).unwrap(),
+        nk::Labels {
+            show_sidebar: "s".into(),
+            hide_sidebar: "h".into(),
+            back: "b".into(),
+            forward: "f".into(),
+        },
+        "Settings",
+        Box::new(
+            nk_text::ParleyBackend::with_system_fonts(std::sync::Arc::new(
+                nk_text::FontSet::discover_required().unwrap(),
+            ))
+            .unwrap(),
+        ),
+        nk::Glyphs::new(nk_icons::Icons::new("", &[], &reference).unwrap()),
+        false,
+    );
+    let page = format!("{:?}", m.page(&host, &f.session, &e).unwrap().content);
+    for expected in [
+        "key/appearance.accent",
+        "key/nightlight.scheduleFrom",
+        "key/nightlight.scheduleTo",
+        "key/appearance.interfaceFont",
+        "key/appearance.monoFont",
+    ] {
+        assert!(page.contains(expected), "{expected}");
+    }
+    assert!(
+        !page.contains("wallpaper"),
+        "the wallpaper has its own page"
+    );
+}

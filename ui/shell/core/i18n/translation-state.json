@@ -750,6 +750,8 @@
     "settings.native.unavailable": "8ec51de3",
     "settings.native.font.search": "b6b87fcc",
     "settings.native.font.placeholder": "35b2777c",
+    "settings.native.font.clear": "67300d0f",
+    "settings.native.font.none": "21a3fece",
     "settings.native.font.families": "2160194e",
     "settings.native.font.styles": "cc22d545",
     "settings.native.font.unnamed": "c46d1f09",
@@ -986,7 +988,7 @@
   "locales": {
     "de": {
       "translated": 835,
-      "of": 981,
+      "of": 983,
       "untranslated": [
         "bar.edit.done",
         "bar.edit.hint",
@@ -1073,6 +1075,8 @@
         "settings.gaming.group.notifications",
         "settings.gaming.silence-notifications",
         "settings.gaming.silence-notifications.desc",
+        "settings.native.font.clear",
+        "settings.native.font.none",
         "settings.network.ethernet.details",
         "settings.network.ethernet.status.desc",
         "settings.network.ethernet.switch.desc",
@@ -1138,14 +1142,14 @@
       "stale": []
     },
     "es": {
-      "translated": 981,
-      "of": 981,
+      "translated": 983,
+      "of": 983,
       "untranslated": [],
       "stale": []
     },
     "fr": {
       "translated": 835,
-      "of": 981,
+      "of": 983,
       "untranslated": [
         "bar.edit.done",
         "bar.edit.hint",
@@ -1232,6 +1236,8 @@
         "settings.gaming.group.notifications",
         "settings.gaming.silence-notifications",
         "settings.gaming.silence-notifications.desc",
+        "settings.native.font.clear",
+        "settings.native.font.none",
         "settings.network.ethernet.details",
         "settings.network.ethernet.status.desc",
         "settings.network.ethernet.switch.desc",
@@ -1298,7 +1304,7 @@
     },
     "it": {
       "translated": 835,
-      "of": 981,
+      "of": 983,
       "untranslated": [
         "bar.edit.done",
         "bar.edit.hint",
@@ -1385,6 +1391,8 @@
         "settings.gaming.group.notifications",
         "settings.gaming.silence-notifications",
         "settings.gaming.silence-notifications.desc",
+        "settings.native.font.clear",
+        "settings.native.font.none",
         "settings.network.ethernet.details",
         "settings.network.ethernet.status.desc",
         "settings.network.ethernet.switch.desc",
@@ -1451,7 +1459,7 @@
     },
     "ja": {
       "translated": 835,
-      "of": 981,
+      "of": 983,
       "untranslated": [
         "bar.edit.done",
         "bar.edit.hint",
@@ -1538,6 +1546,8 @@
         "settings.gaming.group.notifications",
         "settings.gaming.silence-notifications",
         "settings.gaming.silence-notifications.desc",
+        "settings.native.font.clear",
+        "settings.native.font.none",
         "settings.network.ethernet.details",
         "settings.network.ethernet.status.desc",
         "settings.network.ethernet.switch.desc",
@@ -1604,7 +1614,7 @@
     },
     "nl": {
       "translated": 835,
-      "of": 981,
+      "of": 983,
       "untranslated": [
         "bar.edit.done",
         "bar.edit.hint",
@@ -1691,6 +1701,8 @@
         "settings.gaming.group.notifications",
         "settings.gaming.silence-notifications",
         "settings.gaming.silence-notifications.desc",
+        "settings.native.font.clear",
+        "settings.native.font.none",
         "settings.network.ethernet.details",
         "settings.network.ethernet.status.desc",
         "settings.network.ethernet.switch.desc",
@@ -1757,7 +1769,7 @@
     },
     "pl": {
       "translated": 835,
-      "of": 981,
+      "of": 983,
       "untranslated": [
         "bar.edit.done",
         "bar.edit.hint",
@@ -1844,6 +1856,8 @@
         "settings.gaming.group.notifications",
         "settings.gaming.silence-notifications",
         "settings.gaming.silence-notifications.desc",
+        "settings.native.font.clear",
+        "settings.native.font.none",
         "settings.network.ethernet.details",
         "settings.network.ethernet.status.desc",
         "settings.network.ethernet.switch.desc",
@@ -1910,7 +1924,7 @@
     },
     "pt-BR": {
       "translated": 835,
-      "of": 981,
+      "of": 983,
       "untranslated": [
         "bar.edit.done",
         "bar.edit.hint",
@@ -1997,6 +2011,8 @@
         "settings.gaming.group.notifications",
         "settings.gaming.silence-notifications",
         "settings.gaming.silence-notifications.desc",
+        "settings.native.font.clear",
+        "settings.native.font.none",
         "settings.network.ethernet.details",
         "settings.network.ethernet.status.desc",
         "settings.network.ethernet.switch.desc",
@@ -2063,7 +2079,7 @@
     },
     "pt-PT": {
       "translated": 835,
-      "of": 981,
+      "of": 983,
       "untranslated": [
         "bar.edit.done",
         "bar.edit.hint",
@@ -2150,6 +2166,8 @@
         "settings.gaming.group.notifications",
         "settings.gaming.silence-notifications",
         "settings.gaming.silence-notifications.desc",
+        "settings.native.font.clear",
+        "settings.native.font.none",
         "settings.network.ethernet.details",
         "settings.network.ethernet.status.desc",
         "settings.network.ethernet.switch.desc",
@@ -2216,7 +2234,7 @@
     },
     "ru": {
       "translated": 835,
-      "of": 981,
+      "of": 983,
       "untranslated": [
         "bar.edit.done",
         "bar.edit.hint",
@@ -2303,6 +2321,8 @@
         "settings.gaming.group.notifications",
         "settings.gaming.silence-notifications",
         "settings.gaming.silence-notifications.desc",
+        "settings.native.font.clear",
+        "settings.native.font.none",
         "settings.network.ethernet.details",
         "settings.network.ethernet.status.desc",
         "settings.network.ethernet.switch.desc",
@@ -2369,7 +2389,7 @@
     },
     "zh-CN": {
       "translated": 835,
-      "of": 981,
+      "of": 983,
       "untranslated": [
         "bar.edit.done",
         "bar.edit.hint",
@@ -2456,6 +2476,8 @@
         "settings.gaming.group.notifications",
         "settings.gaming.silence-notifications",
         "settings.gaming.silence-notifications.desc",
+        "settings.native.font.clear",
+        "settings.native.font.none",
         "settings.network.ethernet.details",
         "settings.network.ethernet.status.desc",
         "settings.network.ethernet.switch.desc",

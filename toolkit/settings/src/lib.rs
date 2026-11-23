@@ -19,6 +19,7 @@
 //! | `value` | a setting's value as `Config1` carries it |
 
 pub mod about;
+pub mod appearance;
 pub mod builders;
 pub mod client;
 pub mod dropdown;
