@@ -614,6 +614,13 @@ window title; the system menu's icon, changed through the portal's file chooser
 - The mark is a glyph Settings brings itself (`Glyphs::add`, drawn in the ink). A custom icon
   and a tray icon given as a file are pictures (`bar::Pictures`, through `nk_icons::read_app_icon`).
 - The Rust bar follows these homes in #1177.
+Displays (8f) is a page module under `display/view.rs`. It uses the
+Display1 client and geometry model shared with the projection selector.
+The kit's `nk::Arrangement` reports displacements in the diagram's logical
+coordinates. The Settings page owns the draft and applies snapping on release.
+Keep the Display1 client dedicated to the visit so leaving the page releases
+its preview lease. The countdown uses the compositor's monotonic deadline
+and Revert takes initial focus. See `toolkit/settings/src/display/README.md`.
 `power.profile` is PPD's ActiveProfile on the system bus, announced by PPD's own
 signals; Config1 tests set `DBUS_SYSTEM_BUS_ADDRESS` to their private bus.
 `region.timezone` is timedated's, set asynchronously behind polkit: `Apply` answers the old zone and the new one is
