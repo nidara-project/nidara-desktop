@@ -22,8 +22,10 @@ impl Settings {
         self.model.reconcile(&self.exports, self.client.session());
         let selected = self.model.selected().map(str::to_owned);
         if selected != self.shown {
-            if selected.as_deref() == Some("about") {
-                self.model.about.visit();
+            match selected.as_deref() {
+                Some("about") => self.model.about.visit(),
+                Some("region") => self.model.region.visit(),
+                _ => {}
             }
             self.shown = selected;
             self.dirty = true;
@@ -78,6 +80,7 @@ impl Application for Settings {
             );
         }
         self.dirty |= self.model.about.poll();
+        self.dirty |= self.model.region.poll();
         let actions = self.host.idle()?;
         self.actions(actions)?;
         self.dirty |= self

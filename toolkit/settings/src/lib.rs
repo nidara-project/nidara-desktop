@@ -31,6 +31,7 @@ pub mod header;
 pub mod image_load;
 pub mod manifest;
 pub mod page;
+pub mod region;
 pub mod render;
 pub mod routing;
 pub mod session;
