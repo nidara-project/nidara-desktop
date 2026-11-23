@@ -239,3 +239,124 @@ fn owner_loss_and_hidden_or_insensitive_rows_never_send_pending_values() {
     m.flush(&mut f, &e, now + Duration::from_secs(1)).unwrap();
     assert!(f.sent.is_empty());
 }
+/// #1103 8b: the Region page writes its two keys, and only from that page. A city chosen
+/// from the search is its IANA zone; the regional format is an ordinary dropdown.
+#[test]
+fn the_region_page_writes_the_zone_of_the_city_chosen_and_its_format() {
+    let root = std::env::var_os("NK_SETTINGS_DATA")
+        .map(PathBuf::from)
+        .unwrap_or_else(|| {
+            PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../build/settings-data")
+        });
+    let mut e = Exports::load(&root).expect("generate settings-data before running Settings tests");
+    let region = e
+        .page("region")
+        .expect("the manifest has a Region page")
+        .clone();
+    e.pages = manifest::parse(&json!([
+        {"id":"one","kind":"preference","label":"settings.native.application","groups":[{"items":["switch"]}]}
+    ]))
+    .unwrap();
+    e.pages.push(region);
+    let (mut session, _) = Session::start();
+    session.handle(Raw::Snapshot(Ok((7,1,json!({"schemaVersion":1,"keys":{
+        "switch":{"type":"boolean","value":false,"available":true,"writable":true,"ui":{"control":"toggle","title":"Toggle"}},
+        "region.timezone":{"type":"string","value":"America/Managua","available":true,"writable":true,
+            "catalogue":["America/Managua","Europe/Madrid","US/Pacific"],"ui":{"title":"Change timezone"}},
+        "region.regionalFormat":{"type":"enum","value":"","available":true,"writable":true,
+            "values":["","es_ES.UTF-8"],"ui":{"control":"dropdown","title":"Regional format",
+            "options":[{"value":"","label":"Same as language"},{"value":"es_ES.UTF-8","label":"es_ES.UTF-8"}]}}
+    }}).to_string()))));
+    let mut f = Fake {
+        session,
+        sent: vec![],
+    };
+    let mut m = Model::default();
+    m.reconcile(&e, &f.session);
+    let now = Instant::now();
+    let act = |m: &mut Model, f: &mut Fake, name: &str, value: Option<nk::Value>| {
+        m.activate(action(name, value), false, f, &e, now).unwrap();
+    };
+    // From another page, the search's actions write nothing.
+    act(
+        &mut m,
+        &mut f,
+        "region:tz-edit",
+        Some(nk::Value::Text("madr".into())),
+    );
+    act(
+        &mut m,
+        &mut f,
+        "region:tz-choose",
+        Some(nk::Value::Index(0)),
+    );
+    assert!(f.sent.is_empty());
+    act(&mut m, &mut f, "page:region", None);
+    assert_eq!(m.selected(), Some("region"));
+    act(
+        &mut m,
+        &mut f,
+        "region:tz-edit",
+        Some(nk::Value::Text("madr".into())),
+    );
+    act(
+        &mut m,
+        &mut f,
+        "region:tz-choose",
+        Some(nk::Value::Index(0)),
+    );
+    act(
+        &mut m,
+        &mut f,
+        "set:region.regionalFormat",
+        Some(nk::Value::Index(1)),
+    );
+    // A key the page does not name is not written from it.
+    act(&mut m, &mut f, "set:switch", None);
+    assert_eq!(
+        f.sent,
+        vec![
+            (
+                "region.timezone".into(),
+                Value::Text("Europe/Madrid".into())
+            ),
+            (
+                "region.regionalFormat".into(),
+                Value::Text("es_ES.UTF-8".into())
+            ),
+        ]
+    );
+    // The page builds with its strings: the zone in force as city and area, the matches
+    // of what is typed under the search, and the language row.
+    let types = nk::TypeScale::load(
+        &e,
+        &nk_platform::portal::Appearance {
+            accent: [0.2, 0.4, 0.9],
+            dark: true,
+            reduce_transparency: false,
+            window_background: "tinted".into(),
+            reduced_motion: false,
+            font: "Inter 11".into(),
+            text_scale: 1.,
+        },
+    )
+    .unwrap();
+    act(
+        &mut m,
+        &mut f,
+        "region:tz-edit",
+        Some(nk::Value::Text("ma".into())),
+    );
+    let nodes = m.region.timezone(&e, &types, &f.session).unwrap();
+    let text = format!("{nodes:?}");
+    assert!(
+        text.contains("Madrid — "),
+        "the zone just chosen, as a city under its area"
+    );
+    assert!(
+        text.contains("region/tz/matches"),
+        "the matches under the search"
+    );
+    assert!(!text.contains("Pacific"), "an alias is not offered");
+    m.region.language(&e, &types).unwrap();
+}

@@ -585,6 +585,11 @@ a builder on the old `Tree`. Machine facts have one reader, `toolkit/settings/sr
 facts come from a worker the window polls. A count in words is `Exports::count(key, n)`:
 `{key}.one|few|many|other` by the locale's CLDR category (`nk_platform::exports::plural`),
 falling back to `.other` and then English; add only the categories a language has.
+A page module writes only the Config1 keys it names (Region: `region::KEYS`, checked in
+`Model::editable`); its own actions are `region:…`, and an ordinary key on it is drawn by
+`Model::items` like any other row. Region (8b) picks the zone by city: a `SearchEntry` with
+its suggestions `ListBox` (cities under their area, tzdata aliases left out), and choosing one
+applies it. The language keeps Apply because it opens a password prompt.
 `power.profile` is PPD's ActiveProfile on the system bus, announced by PPD's own
 signals; Config1 tests set `DBUS_SYSTEM_BUS_ADDRESS` to their private bus.
 `region.timezone` is timedated's, set asynchronously behind polkit: `Apply` answers the old zone and the new one is

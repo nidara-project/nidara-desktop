@@ -16,7 +16,7 @@ use std::{
 
 /// A page with a module of its own here rather than rows from the manifest.
 fn own(page: &Page) -> bool {
-    page.builder.as_deref() == Some("about")
+    page.builder.as_deref() == Some("about") || page.id == "region"
 }
 /// Whether this window draws `page`: its own module, or every row of it ordinary.
 pub fn listed(page: &Page, session: &Session) -> bool {
@@ -59,6 +59,7 @@ pub struct Model {
     held: BTreeMap<String, Held>,
     status: Option<String>,
     pub about: crate::about::About,
+    pub region: crate::region::Region,
 }
 impl Model {
     pub fn selected(&self) -> Option<&str> {
@@ -131,7 +132,11 @@ impl Model {
             })
             .fold(host, u32::min)
             // A page's worker has yet to answer: look again soon.
-            .min(if self.about.waiting() { 200 } else { u32::MAX })
+            .min(if self.about.waiting() || self.region.waiting() {
+                200
+            } else {
+                u32::MAX
+            })
     }
     fn send(
         &mut self,
@@ -204,6 +209,15 @@ impl Model {
         if let Some(key) = a.action.strip_prefix("disclosure:") {
             if let Some(nk::Value::Bool(open)) = a.value {
                 self.open.insert(key.into(), open);
+            }
+            return Ok(false);
+        }
+        if let Some(action) = a.action.strip_prefix("region:") {
+            if let crate::region::Effect::Apply(key, value) =
+                self.region.act(action, a.value, editor.session())
+                && self.editable(key, editor.session(), e)
+            {
+                self.send(key, value, editor, e)?;
             }
             return Ok(false);
         }
@@ -300,10 +314,11 @@ impl Model {
                 .and_then(|s| s.key(key))
                 .is_some_and(|k| k.available && k.writable())
             && self.selected().and_then(|id| e.page(id)).is_some_and(|p| {
-                p.groups
-                    .iter()
-                    .enumerate()
-                    .any(|(i, g)| allowed(&g.items, key, s, &self.open, &format!("{}/{i}", p.id)))
+                // A page module writes the keys it names, and no other.
+                (p.id == "region" && crate::region::KEYS.contains(&key))
+                    || p.groups.iter().enumerate().any(|(i, g)| {
+                        allowed(&g.items, key, s, &self.open, &format!("{}/{i}", p.id))
+                    })
             })
     }
     pub fn page(
@@ -341,7 +356,37 @@ impl Model {
         if let Some(status) = &self.status {
             content.push(nk::Label::new("settings-status", status, body()).into());
         }
-        if page.is_some_and(own) {
+        if let Some(p) = page.filter(|p| p.id == "region") {
+            content.extend(self.region.timezone(e, types, session)?);
+            let format = Item::Key {
+                key: crate::region::FORMAT.into(),
+                visible_when: None,
+                sensitive_when: None,
+            };
+            let mut rows = vec![self.region.language(e, types)?];
+            rows.extend(self.items(
+                std::slice::from_ref(&format),
+                &format!("{}/format", p.id),
+                host,
+                session,
+                e,
+            )?);
+            content.push(
+                nk::Label::new(
+                    "region/locale/title",
+                    e.text("settings.region.locale.group")?,
+                    types.style(Type::Body, Weight::Medium),
+                )
+                .into(),
+            );
+            content.push(
+                nk::Group::new(
+                    "region/locale/group",
+                    nk::Column::new("region/locale/rows", rows),
+                )
+                .into(),
+            );
+        } else if page.is_some_and(own) {
             content.extend(self.about.content(e, types)?);
         } else if let Some(p) = page {
             for (i, g) in p.groups.iter().enumerate() {
