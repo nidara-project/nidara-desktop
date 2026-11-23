@@ -151,6 +151,11 @@ def config():
     name, path, interface = 'org.nidara.Config', '/org/nidara/Config', 'org.nidara.Config1'
     def cfg(method, args=None, bus=BUS):
         return call(name, path, interface, method, args, bus)
+    # The smoke patched Hyalo's input settings just before this; sessiond reads them on its
+    # own poll, and an announcement landing between the two Applies below would bump the
+    # revision the no-op check holds still. Start once Config1 has seen the patch.
+    until('Config1 sees the settings patch', lambda: json.loads(cfg('Snapshot')[2])['keys']
+          .get('input.keyboard.numlock', {}).get('value') is True)
     epoch, rev, raw = cfg('Snapshot')
     state = json.loads(raw)
     assert epoch > 0 and state['schemaVersion'] == 1
