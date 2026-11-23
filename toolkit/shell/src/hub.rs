@@ -212,6 +212,7 @@ pub enum HubEvent {
     },
     BarDown(OutputId),
     Region(crate::barmodel::Region),
+    BarPrefs(crate::prefs::Bar),
     /// What the bar's widgets show (status.rs).
     Widgets(crate::status::Update),
     /// The Control Center's grid as stored (cclayout.rs).
@@ -303,6 +304,8 @@ pub struct Hub {
     workspaces: Arc<Vec<crate::hyalo::Workspace>>,
     bars: HashMap<OutputId, BarHandle>,
     region: crate::barmodel::Region,
+    bar_prefs: Arc<crate::prefs::Bar>,
+    launcher_generation: u64,
     widgets: crate::status::Status,
     cc_layout: Arc<crate::cclayout::Stored>,
     tray: Arc<Vec<crate::tray::TrayItem>>,
@@ -384,6 +387,8 @@ impl Hub {
             workspaces: Arc::default(),
             bars: HashMap::new(),
             region: Default::default(),
+            bar_prefs: Arc::default(),
+            launcher_generation: 0,
             widgets: Default::default(),
             cc_layout: Default::default(),
             tray: Arc::default(),
@@ -848,6 +853,12 @@ impl Hub {
                 self.bars.remove(&id);
             }
             HubEvent::Region(r) => self.region = r,
+            HubEvent::BarPrefs(prefs) => {
+                if self.bar_prefs.launcher != prefs.launcher {
+                    self.launcher_generation += 1;
+                }
+                self.bar_prefs = Arc::new(prefs);
+            }
             HubEvent::Widgets(u) => self.widgets.apply(u),
             HubEvent::CcLayout(l) => self.cc_layout = Arc::new(l),
             HubEvent::Tray(items) => self.tray = items,
@@ -1344,6 +1355,8 @@ impl Hub {
                 hidden: self.locked || fullscreen,
                 can_settings: self.can_settings,
                 region: self.region.clone(),
+                prefs: self.bar_prefs.clone(),
+                launcher_generation: self.launcher_generation,
                 status: self.widgets.clone(),
                 cc_layout: self.cc_layout.clone(),
                 tray: self.tray.clone(),

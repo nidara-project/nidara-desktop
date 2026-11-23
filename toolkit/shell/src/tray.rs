@@ -87,6 +87,7 @@ impl Picture {
 
 #[derive(Clone, Debug, PartialEq)]
 pub struct TrayItem {
+    pub id: String,
     pub handle: String,
     pub generation: u64,
     pub title: String,
@@ -131,6 +132,7 @@ pub fn items_of(
                 .find(|t| !t.is_empty())
                 .unwrap_or_default();
             Some(TrayItem {
+                id: text(p, "Id"),
                 handle: text(p, "Handle"),
                 generation: number(p, "Generation")?,
                 title,

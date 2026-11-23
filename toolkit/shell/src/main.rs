@@ -280,6 +280,12 @@ fn main() {
     spawn("region", move || {
         prefs::watch_region(move |r| drop(t.send(hub::HubEvent::Region(r))))
     });
+    if bar_wanted() {
+        let t = hub_tx.clone();
+        spawn("bar-prefs", move || {
+            prefs::watch_bar(move |prefs| drop(t.send(hub::HubEvent::BarPrefs(prefs))))
+        });
+    }
     let settings = apps_conn.as_ref().is_some_and(settings_reachable);
     let bus = apps_conn.clone();
     let hub = hub::Hub::new(

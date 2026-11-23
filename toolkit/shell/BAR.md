@@ -18,8 +18,16 @@ material (the shell is always dark: white ink). Each is a true capsule, circular
 | Right | tray icons · focus · battery · Wi-Fi · volume · Control Center · clock | tray: below; focus: Do Not Disturb off; Control Center: its panel (`CC.md`); clock: Notification Center/calendar (`B3.2.md`) |
 
 Left out of B1 (the owner's list): the overflow `»`, editing and reordering, the island's
-other modes, the search icon (Prism is not in the Rust shell). The person's `bar-order`,
-`bar-hidden` and widget `placement` are not read: B1 shows the default set and order.
+other modes, the search icon (Prism is not in the Rust shell). The bar keeps the default order and widget placement.
+
+The GLib bar preferences watcher follows `org.nidara.bar` and `org.nidara.widgets`
+change signals from any writer (#1177). Turning off `show-app-title` removes its
+layout and reader item. `launcher-icon` can use an absolute image path, decoded
+by the shared picture workers at the bar's scale. The logo uses Nidara's mark
+while the picture is pending or unavailable, including for legacy preset names.
+`bar-hidden` filters the tray by keys of the form `tray:<Id>`, using the SNI Id.
+Layout retains the Tray1 snapshot indices so pointer and reader actions resolve
+against the same items.
 
 ## Where it lives
 

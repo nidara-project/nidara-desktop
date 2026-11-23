@@ -151,6 +151,86 @@ pub fn watch(emit: impl Fn(Prefs) + 'static) {
     });
 }
 
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct Bar {
+    pub show_title: bool,
+    pub launcher: Option<String>,
+    pub hidden_tray: std::collections::HashSet<String>,
+}
+
+impl Default for Bar {
+    fn default() -> Self {
+        Self {
+            show_title: true,
+            launcher: None,
+            hidden_tray: Default::default(),
+        }
+    }
+}
+
+impl Bar {
+    pub(crate) fn read<'a>(
+        show_title: bool,
+        launcher: &str,
+        hidden: impl IntoIterator<Item = &'a str>,
+    ) -> Self {
+        Self {
+            show_title,
+            launcher: std::path::Path::new(launcher)
+                .is_absolute()
+                .then(|| launcher.to_owned()),
+            hidden_tray: hidden
+                .into_iter()
+                .filter_map(|key| key.strip_prefix("tray:"))
+                .filter(|id| !id.is_empty())
+                .map(str::to_owned)
+                .collect(),
+        }
+    }
+}
+
+/// Follow the bar's keys regardless of who wrote them, on a GLib watcher thread.
+pub fn watch_bar(emit: impl Fn(Bar) + 'static) {
+    let ctx = glib::MainContext::new();
+    let _guard = ctx.acquire();
+    let _ = ctx.with_thread_default(|| {
+        let title = settings("org.nidara.bar", "show-app-title");
+        let launcher = settings("org.nidara.bar", "launcher-icon");
+        let widgets = settings(WIDGETS, "bar-hidden");
+        let get = {
+            let (title, launcher, widgets) = (title.clone(), launcher.clone(), widgets.clone());
+            move || {
+                Bar::read(
+                    title.as_ref().is_none_or(|s| s.boolean("show-app-title")),
+                    &launcher
+                        .as_ref()
+                        .map_or_else(glib::GString::default, |s| s.string("launcher-icon")),
+                    widgets
+                        .as_ref()
+                        .map_or_else(glib::StrV::default, |s| s.strv("bar-hidden"))
+                        .iter()
+                        .map(|key| key.as_str()),
+                )
+            }
+        };
+        let watched = [
+            (title, "show-app-title"),
+            (launcher, "launcher-icon"),
+            (widgets, "bar-hidden"),
+        ];
+        let emit = std::rc::Rc::new(emit);
+        for (s, key) in &watched {
+            if let Some(s) = s {
+                let (emit, get) = (emit.clone(), get.clone());
+                s.connect_changed(Some(key), move |_, _| emit(get()));
+            }
+        }
+        emit(get());
+        glib::MainLoop::new(Some(&ctx), false).run();
+        drop(watched);
+    });
+}
+
 pub const REGION: &str = "org.nidara.region";
 
 /// How the clock reads (`org.nidara.region`), on its own thread like `watch`.

@@ -108,6 +108,12 @@ pub fn group(x: f64, items: &[Content]) -> ([f64; 4], Vec<[f64; 4]>) {
     (glass, boxes)
 }
 
+pub fn left_group(title_width: Option<f64>) -> ([f64; 4], Vec<[f64; 4]>) {
+    let mut items = vec![Content::Icon];
+    items.extend(title_width.map(Content::Text));
+    group(MARGIN, &items)
+}
+
 /// The hover/open pill of an item's box: 4 in from the glass above and below, its ends
 /// half-circles.
 pub fn pill(b: [f64; 4]) -> [f64; 4] {

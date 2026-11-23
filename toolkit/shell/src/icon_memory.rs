@@ -813,6 +813,21 @@ mod tests {
             mpsc,
         },
     };
+    #[test]
+    fn a_missing_launcher_image_is_unavailable() {
+        let path = std::path::Path::new("/dev/null/nidara-launcher.png");
+        let key = Key::Image {
+            namespace: "bar-launcher".into(),
+            generation: 1,
+            path: path.to_string_lossy().into_owned(),
+            side: 18,
+        };
+        assert!(matches!(
+            load_named(path, 18, &key),
+            Err(FetchError::Unavailable)
+        ));
+    }
+
     struct Bus {
         child: Child,
         dir: PathBuf,
