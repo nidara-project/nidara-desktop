@@ -18,6 +18,7 @@
 //! | `styles` | `nk_platform::styles` plus this app's header and wallpaper looks |
 //! | `value` | a setting's value as `Config1` carries it |
 
+pub mod about;
 pub mod builders;
 pub mod client;
 pub mod dropdown;
@@ -34,6 +35,7 @@ pub mod render;
 pub mod routing;
 pub mod session;
 pub mod styles;
+pub mod system_info;
 pub mod value;
 pub mod window;
 

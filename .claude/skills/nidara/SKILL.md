@@ -575,6 +575,13 @@ reconnect: false while reducing, null to release the override when restoring; ne
 force true over the user's lower layers. Reuse effect lanes/reset and Hyalo's
 idempotent settings merge. The existing
 compositor monitor reads idle/input together and guards stale reads with one serial.
+Step 8 (the rest of Settings, plan in #1103) gives a page with code of its own a module of
+`settings-view`, admitted by its `builder` in `view_settings::own` (About first, 8a), never
+a builder on the old `Tree`. Machine facts have one reader, `toolkit/settings/src/system_info.rs`
+(the Rust twin of `SystemInfo.ts`: a surface asks, never reads; unknown is ""), and slow
+facts come from a worker the window polls. A count in words is `Exports::count(key, n)`:
+`{key}.one|few|many|other` by the locale's CLDR category (`nk_platform::exports::plural`),
+falling back to `.other` and then English; add only the categories a language has.
 `power.profile` is PPD's ActiveProfile on the system bus, announced by PPD's own
 signals; Config1 tests set `DBUS_SYSTEM_BUS_ADDRESS` to their private bus. Step 7c adds the six Desktop workspace-mode keys in Hyalo's `[workspaces]` layer; a
 write also clears runtime modes so Settings wins, as TS did.

@@ -14,10 +14,20 @@ struct Settings {
     pointer_down: bool,
     ready: bool,
     dirty: bool,
+    /// The page shown last: arriving on a page is what asks its slow facts again.
+    shown: Option<String>,
 }
 impl Settings {
     fn commit(&mut self, window: &mut Window) -> Result<()> {
         self.model.reconcile(&self.exports, self.client.session());
+        let selected = self.model.selected().map(str::to_owned);
+        if selected != self.shown {
+            if selected.as_deref() == Some("about") {
+                self.model.about.visit();
+            }
+            self.shown = selected;
+            self.dirty = true;
+        }
         let (m, e, s) = (&self.model, &self.exports, self.client.session());
         if self.dirty {
             self.host.show(m.page(&self.host, s, e)?);
@@ -67,6 +77,7 @@ impl Application for Settings {
                 appearance.reduced_motion,
             );
         }
+        self.dirty |= self.model.about.poll();
         let actions = self.host.idle()?;
         self.actions(actions)?;
         self.dirty |= self
@@ -164,6 +175,7 @@ fn run() -> Result<()> {
         pointer_down: false,
         ready: false,
         dirty: true,
+        shown: None,
     };
     settings.host.show(settings.model.page(
         &settings.host,
