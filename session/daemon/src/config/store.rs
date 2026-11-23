@@ -122,6 +122,24 @@ pub fn spawn(changes: Arc<Changes>) -> Handle {
                         announce(&changes, registry::PROFILE_KEY);
                     });
                 }
+                // The time zone: timedated's signal, and our own write once it is set.
+                {
+                    let changes = changes.clone();
+                    registry::watch_timezone(move || announce(&changes, registry::TIMEZONE_KEY));
+                }
+                // The regional format's file, whoever writes it (the TypeScript Settings too).
+                match gio::File::for_path(registry::format_file(&store))
+                    .monitor_file(gio::FileMonitorFlags::NONE, gio::Cancellable::NONE)
+                {
+                    Ok(monitor) => {
+                        let changes = changes.clone();
+                        monitor.connect_changed(move |_, _, _, _| {
+                            announce(&changes, registry::FORMAT_KEY)
+                        });
+                        MONITORS.with(|m| m.borrow_mut().push(monitor));
+                    }
+                    Err(e) => eprintln!("[config] cannot watch the regional format: {e}"),
+                }
                 // GNOME's wallpaper keys: an app that sets the wallpaper by writing them
                 // (#1044). The file changes, and its monitor below announces it.
                 for k in ["picture-uri", "picture-uri-dark"] {

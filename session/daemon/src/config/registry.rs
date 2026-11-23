@@ -19,6 +19,8 @@ mod desktop;
 mod ordinary;
 #[path = "profile.rs"]
 mod profile;
+#[path = "region.rs"]
+mod region;
 
 use gio::prelude::*;
 use serde_json::{Value as Json, json};
@@ -780,6 +782,7 @@ fn table() -> Vec<Key> {
     keys.extend(ordinary::keys());
     keys.extend(desktop::keys());
     keys.extend(profile::keys());
+    keys.extend(region::keys());
     keys
 }
 
@@ -797,6 +800,9 @@ pub fn available(st: &Store, key: &Key) -> bool {
     }
     if profile::is_key(key.name) {
         return profile::available(st);
+    }
+    if region::is_key(key.name) {
+        return region::available(key.name);
     }
     if let Some(field) = idle_field(key.name) {
         return st.idle.borrow()[field].is_u64();
@@ -1305,6 +1311,16 @@ pub fn input_changed(name: &str, before: &Json, after: &Json) -> bool {
 pub const PROFILE_KEY: &str = profile::KEY;
 pub fn watch_profile(changed: impl Fn() + Clone + 'static) {
     profile::watch(changed)
+}
+/// The region's keys: the zone, announced by timedated and by our own write when it lands;
+/// the regional format, by its file.
+pub const TIMEZONE_KEY: &str = region::TIMEZONE_KEY;
+pub const FORMAT_KEY: &str = region::FORMAT_KEY;
+pub fn watch_timezone(changed: impl Fn() + Clone + 'static) {
+    region::watch(changed)
+}
+pub fn format_file(st: &Store) -> PathBuf {
+    region::format_file(st)
 }
 pub fn refresh_profile(st: &Store) {
     *st.profile.borrow_mut() = profile::read();
