@@ -83,6 +83,13 @@ pub(crate) fn tokens() -> Tokens {
                 .unwrap()["default"],
         )
         .unwrap(),
+        icon_grid: crate::tokens::icon_grid_from(
+            &serde_json::from_str::<serde_json::Value>(include_str!(
+                "../../../tokens/icon-grid.json"
+            ))
+            .unwrap()["default"],
+        )
+        .unwrap(),
         notification: crate::tokens::notification_from(
             &serde_json::from_str::<serde_json::Value>(include_str!(
                 "../../../tokens/notification.json"

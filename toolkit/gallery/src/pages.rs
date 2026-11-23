@@ -58,7 +58,7 @@ fn status_text(s: &str) -> &'static str {
 }
 
 /// Each page: its id (what the check and `--page` name), its title and its glyph.
-pub const PAGES: [(&str, &str, &str); 27] = [
+pub const PAGES: [(&str, &str, &str); 28] = [
     ("status", "Status", "nd-emblem-default"),
     ("window", "Window", "nd-sidebar-show"),
     ("button", "Button", "nd-hand"),
@@ -78,6 +78,7 @@ pub const PAGES: [(&str, &str, &str); 27] = [
     ("grid", "Grid", "nd-control-center"),
     ("tile", "Tile", "nd-control-center"),
     ("notification", "Notification card", "nd-notifications"),
+    ("icongrid", "Icon item", "nd-view-grid"),
     ("reveal", "Reveal", "nd-pan-end"),
     ("disclosure", "Disclosure", "nd-pan-end"),
     ("entry", "Text field", "nd-input-keyboard"),
@@ -163,6 +164,7 @@ pub struct Measures<'a> {
     pub dropdown: &'a DropdownStyle,
     pub tile: &'a nk::TileStyle,
     pub notification: &'a nk::NotificationStyle,
+    pub icon_grid: &'a nk::IconGridStyle,
     pub colors: &'a [(String, nk_render::Color)],
     pub glyph: f64,
     pub row_height: f64,
@@ -367,6 +369,7 @@ fn page(id: &str, m: &Model, cat: &Catalogue, t: &TypeScale, k: &Measures) -> Ve
         "grid" => grid(t, k.tile),
         "tile" => tiles(m, t, k.tile),
         "notification" => notifications(m, t, k),
+        "icongrid" => icon_items(m, t, k.icon_grid),
         "reveal" => reveal(m, t),
         "disclosure" => disclosures(m, t),
         // One text field page (owner, #1156): the kit's field, then the CC's password field
@@ -1862,6 +1865,57 @@ fn grid(t: &TypeScale, s: &nk::TileStyle) -> Vec<Node> {
     ]
 }
 
+/// The kit's icon item (#1168): `nk::IconItem` on `nk::Grid`, Apps' tile, with its tokens
+/// (`toolkit/tokens/icon-grid.json`): the icon, the name under it (one line, ended in an
+/// ellipsis), one marked new. Here the icons are themed glyphs; Apps paints app icons in the
+/// same slot.
+fn icon_items(m: &Model, t: &TypeScale, s: &nk::IconGridStyle) -> Vec<Node> {
+    let base = t.style(Type::Body, Weight::Regular);
+    let items = [
+        ("Files", "nd-folder"),
+        ("Settings", "nd-preferences-system"),
+        ("Notifications", "nd-notifications"),
+        ("Keyboard", "nd-input-keyboard"),
+        ("Control Center", "nd-control-center"),
+        ("Apps", "nd-view-grid"),
+        ("A name far too long to fit", "nd-hand"),
+    ];
+    let cells = items
+        .iter()
+        .enumerate()
+        .map(|(n, (name, icon))| {
+            let item = nk::IconItem::new(format!("ig-{n}"), *name, "press", s, &base).icon(*icon);
+            nk::Cell {
+                at: (n % s.columns, n / s.columns),
+                span: (1, 1),
+                child: if n == 1 { item.new_mark("new") } else { item }.into(),
+            }
+        })
+        .collect();
+    let width = s.columns as f64 * s.cell + (s.columns as f64 - 1.) * s.gap;
+    vec![
+        section(
+            "ig-grid",
+            "A row of icon items, one marked new, one name too long",
+            t,
+            nk::Grid::new("ig/grid", s.columns, s.cell, s.gap, cells)
+                .width(width)
+                .into(),
+        ),
+        nk::Label::new(
+            "ig/note",
+            format!(
+                "nk::IconItem: an icon with its name under it, the whole of it one control in a square cell; a dot by the icon when new. nk::panel_layout places a panel of them under a floating search: at most {} × {}, the same panel on any larger output. Presses: {}.",
+                s.columns, s.rows, m.presses
+            ),
+            t.style(Type::Small, Weight::Regular),
+        )
+        .ink(Ink::Secondary)
+        .lines(4)
+        .into(),
+    ]
+}
+
 /// The kit's notification card (#1156 step 3, point 5): `nk::NotificationCard` folded, open
 /// with its actions, fronting a group and with an error, at the notification centre's width
 /// (the tile grid's) with its tokens (`toolkit/tokens/notification.json`). The app icons,
@@ -2747,6 +2801,13 @@ mod tests {
                         .unwrap()["default"],
                     )
                     .unwrap(),
+                    icon_grid: &nk::icon_grid_from(
+                        &serde_json::from_str::<serde_json::Value>(include_str!(
+                            "../../tokens/icon-grid.json"
+                        ))
+                        .unwrap()["default"],
+                    )
+                    .unwrap(),
                     notification: &nk::notification_from(
                         &serde_json::from_str::<serde_json::Value>(include_str!(
                             "../../tokens/notification.json"
@@ -2839,6 +2900,7 @@ mod catalogue_tests {
         public.extend(exported(lib, "file_views"));
         public.extend(exported(lib, "tiles"));
         public.extend(exported(lib, "notification_card"));
+        public.extend(exported(lib, "icon_grid"));
         public.extend(["AppWindow", "Alert", "Dialog", "FontDialog"].map(String::from));
         let cat = Catalogue::load().unwrap();
         let pages: BTreeSet<&str> = PAGES.iter().map(|(id, _, _)| *id).collect();

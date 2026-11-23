@@ -1,0 +1,15 @@
+{
+  "$comment": [
+    "The kit's icon grid (nk::IconItem on nk::Grid; #1168): an icon with its name under it, the whole of it one control, on a grid of square cells. Apps (the app grid) is its first surface; a file manager or a dock folder can use it. Values are the owner's choice of 2026-11-23 (variant B8 of the mockups); final values require the owner's live review.",
+    "item: the cell (square), the icon, from the cell's top to the icon, from the icon to the name, the name's size, weight and lines, the corner of its highlight, and the 'new' dot.",
+    "grid: the gap between two cells, and at most this many columns and rows in view; a smaller output shows fewer.",
+    "panel: a panel of icons with a floating search over it (Apps). inset: from the panel's edge to the search, top and sides; search: the search's height; below: from the search to the first row at rest; corner: the panel's corner. The grid sits inside the search's rounded ends (half its height in from each). blurCurve: the graded blur from the panel's top edge down to the search's bottom, strongest at the top.",
+    "Default applies to every dark/reduceTransparency variant; exported once as iconGrid in each components.json variant."
+  ],
+  "default": {
+    "item": {"cell": 104, "icon": 64, "top": 8, "nameGap": 8, "name": 12, "nameWeight": 500, "lines": 1, "corner": 16, "dot": 10},
+    "grid": {"gap": 14, "columns": 7, "rows": 5},
+    "panel": {"inset": {"top": 22, "side": 26}, "search": 40, "below": 14, "corner": 34, "blurCurve": [1, 0.6, 0]}
+  },
+  "variants": []
+}

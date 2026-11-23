@@ -256,10 +256,12 @@ pub enum What {
         progress: f64,
     },
     Drawing(Box<Part>),
-    /// A scroll region: how far it is scrolled, and its content's height.
+    /// A scroll region: how far it is scrolled, its content's height, and the band at its
+    /// top that something floats over.
     Scroll {
         offset: f64,
         content: f64,
+        floating: f64,
     },
 }
 
@@ -757,9 +759,10 @@ impl Layouter<'_> {
             Kind::Drawing(d) => What::Drawing(d.part.clone()),
             Kind::Placeholder(_) => What::Spacer,
             Kind::Overlay(_) | Kind::Grid(_) => What::Stack,
-            Kind::Scroll(_) => What::Scroll {
+            Kind::Scroll(s) => What::Scroll {
                 offset: 0.,
                 content: m.children[0].h,
+                floating: s.floating,
             },
         };
         let rect = self.snap(r);
@@ -883,9 +886,14 @@ impl Layouter<'_> {
                         .unwrap_or(0.)
                         .clamp(0., (child.h - rect[3]).max(0.)),
                 );
+                let floating = match &n.kind {
+                    Kind::Scroll(s) => s.floating,
+                    _ => 0.,
+                };
                 out[index].what = What::Scroll {
                     offset,
                     content: child.h,
+                    floating,
                 };
                 inner.clip = Some(match ctx.clip {
                     Some(c) => intersect(c, rect).unwrap_or([rect[0], rect[1], 0., 0.]),

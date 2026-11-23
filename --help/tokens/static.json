@@ -1,0 +1,136 @@
+{
+ "scss": {
+  "fs-mini": "11px",
+  "fs-caption": "12px",
+  "fs-small": "13px",
+  "fs-body": "14px",
+  "fs-subtitle": "15px",
+  "fs-title-3": "17px",
+  "fs-title-2": "22px",
+  "fs-title-1": "28px",
+  "fse-mini": "0.79em",
+  "fse-caption": "0.86em",
+  "fse-small": "0.93em",
+  "fse-body": "1em",
+  "fse-subtitle": "1.07em",
+  "fse-title-3": "1.21em",
+  "fse-title-2": "1.57em",
+  "fse-title-1": "2em",
+  "fs-display": "88px",
+  "fw-display": "200",
+  "fw-regular": "400",
+  "fw-medium": "500",
+  "fw-semibold": "600",
+  "fw-bold": "700",
+  "lh-tight": "1.2",
+  "lh-body": "1.3",
+  "space-1": "4px",
+  "space-2": "8px",
+  "space-3": "12px",
+  "space-4": "16px",
+  "space-5": "20px",
+  "space-6": "24px",
+  "space-8": "32px",
+  "space-10": "40px",
+  "ease": "cubic-bezier(0.4, 0, 0.2, 1)",
+  "ease-emphasized": "cubic-bezier(0.2, 0, 0, 1)",
+  "dur-fast": "100ms",
+  "dur-base": "180ms",
+  "dur-slow": "260ms",
+  "nidara-radius-xl": "var(--nidara-radius-xl)",
+  "nidara-radius-lg": "var(--nidara-radius-lg)",
+  "nidara-radius-md": "var(--nidara-radius-md)",
+  "nidara-radius-sm": "var(--nidara-radius-sm)",
+  "nidara-radius-xs": "var(--nidara-radius-xs)",
+  "nidara-radius-pill": "var(--nidara-radius-pill)"
+ },
+ "ts": {
+  "GLASS_SPECULAR": {
+   "r": 1,
+   "g": 1,
+   "b": 1
+  },
+  "GLASS_STATE_MIX": {
+   "open": {
+    "dark": 0.2,
+    "light": 0.14
+   },
+   "hover": {
+    "dark": 0.08,
+    "light": 0.06
+   }
+  },
+  "GLASS_TINT": {
+   "dark": {
+    "r": 0.08627450980392157,
+    "g": 0.08627450980392157,
+    "b": 0.13333333333333333,
+    "rgb": "22, 22, 34",
+    "hex": "#161622"
+   },
+   "light": {
+    "r": 0.9803921568627451,
+    "g": 0.9803921568627451,
+    "b": 0.9803921568627451,
+    "rgb": "250, 250, 250",
+    "hex": "#fafafa"
+   }
+  },
+  "INK": {
+   "solid": 0.9,
+   "track": 0.12,
+   "wash": 0.1
+  },
+  "LOCK_GLASS": {
+   "fill": {
+    "r": 0.08627450980392157,
+    "g": 0.08627450980392157,
+    "b": 0.13333333333333333,
+    "a": 0.24
+   },
+   "rimStrong": {
+    "r": 1,
+    "g": 1,
+    "b": 1,
+    "a": 0.22
+   },
+   "rimSubtle": {
+    "r": 1,
+    "g": 1,
+    "b": 1,
+    "a": 0.14
+   }
+  },
+  "ON_WHITE": {
+   "r": 1,
+   "g": 1,
+   "b": 1
+  },
+  "RADIUS": {
+   "xs": 6,
+   "sm": 10,
+   "md": 16,
+   "lg": 24,
+   "xl": 32
+  },
+  "ROW_HEIGHT": {
+   "single": 48,
+   "double": 72
+  },
+  "WINDOW_LAYOUT": {
+   "sidebar": 250,
+   "content": 800,
+   "wizardContent": 900,
+   "contentFloor": 560,
+   "glassRim": 1,
+   "minHeight": 480,
+   "heightFloor": 240,
+   "openGutter": 48
+  },
+  "WIZARD_LAYOUT": {
+   "listRows": 6,
+   "minListRows": 3,
+   "maxMonitorFraction": 0.9
+  }
+ }
+}

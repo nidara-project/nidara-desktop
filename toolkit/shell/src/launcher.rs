@@ -5,62 +5,48 @@
 //! opens from that entry (D-Bus activation, `activation.rs`), from the dock or from the
 //! launcher shortcut (Shell1 `ToggleSurface("app-grid")`). Opening it again closes it.
 //!
-//! What it is: the TypeScript grid's panel without its workspace strip — a search pill
-//! over a grid of `COLUMNS` × `ROWS` visible tiles that scrolls, centred on the output, on
-//! an overlay layer that takes the keyboard. With an empty search it lists every visible
-//! app A–Z, the newly observed ones marked "New"; typing asks Applications1's Search,
-//! whose tiers decide the order. A click or Enter launches (with a token from that input,
-//! so the app comes to the front) and closes it; Escape clears the search, then closes;
-//! a click outside the panel closes. A tile held and dragged becomes a drag of that app
+//! What it is (#1168): a glass panel of the kit's icon items (`nk::IconItem` on `nk::Grid`,
+//! measures in `toolkit/tokens/icon-grid.json`), at most 7 × 5 in view and the same panel on
+//! any larger output, centred on the output, on an overlay layer that takes the keyboard. A
+//! glass search (`nk::SearchEntry`) floats over the grid on a layer of its own: the rows
+//! scroll under it and leave through the panel's top edge, blurred more the higher they go
+//! (Hyalo's graded blur on a layer between them); they come in from the panel's bottom edge,
+//! and the kit's scroll bar starts below the search. With an empty search it lists every
+//! visible app A–Z, the newly observed ones marked; typing asks Applications1's Search, whose
+//! tiers decide the order. A click or Enter launches (with a token from that input, so the
+//! app comes to the front) and closes it; Escape clears the search, then closes; a click
+//! outside the panel closes. A tile held and dragged becomes a drag of that app
 //! (`nidara_shell_ipc::drag`): the panel steps aside so the dock can be reached, and it
 //! closes when the drag ends.
 //!
-//! The panel's glass is Hyalo's (the panel material of `nk-platform`'s exports, as the
-//! dock's menus); its content is ours, in the shell's dark skin.
+//! Layout, hover, press, focus, Tab, scrolling, the search's editing and input methods and
+//! the reader are the kit's (`nk::ViewState`); Apps says what the view is, paints the app
+//! icons in their slots, and acts on what is activated.
 use crate::apps::Icon;
 use crate::hub::{HubEvent, Request};
 use crate::menu::Label;
 use crate::model::App;
 use crate::popup::Look;
 use nidara_shell_ipc::drag;
-use nk_render::{Canvas, Color, ImageFit};
-use nk_text::{Rect, TextBackend, TextStyle};
+use nk::{
+    Activated, Align, Cell, Corner, Key, Node, Padding, PanelLayout, Space, ViewState, Widget,
+};
+use nk_render::{Canvas, ImageFit};
+use nk_text::{Rect, TextStyle};
 use nk_wayland::{
-    Application, DragIcon, Edges, Event, KeyboardMode, LayerLevel, LayerPlacement, LayerSpec,
-    Material, Options, Pane, TokenRequest, WakeSource, Waker, Window,
+    Application, DragIcon, Edges, Event, KeyboardMode, LayerEvent, LayerId, LayerLevel,
+    LayerPlacement, LayerSpec, Material, Options, TokenRequest, WakeSource, Waker, Window,
 };
 use std::collections::HashMap;
-use std::rc::Rc;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::mpsc::{Receiver, Sender, channel};
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
-use unicode_segmentation::UnicodeSegmentation;
 
 pub const NAMESPACE: &str = "nidara-apps";
 /// Apps' own desktop entry: what the dock pins and Applications1 launches.
 pub const DESKTOP_ID: &str = "org.nidara.Apps.desktop";
 
-/// The TypeScript grid's measures (AppGrid.tsx, `_app-grid.scss`).
-pub const COLUMNS: usize = 6;
-pub const ROWS: usize = 3;
-/// A tile: 110 of content in the scss's 16 px padding, and the TS row height.
-pub const TILE: (f64, f64) = (150., 163.);
-pub const GAP: f64 = 8.;
-pub const ICON: f64 = 72.;
-/// The icon plate the icon is centred in, and the gap to the label.
-const PLATE: f64 = 96.;
-const LABEL_GAP: f64 = 12.;
-const TILE_PAD_Y: f64 = 12.;
-/// From the glass to the content: 26 above, 30 at the sides, 26 below.
-const INSET: (f64, f64) = (26., 30.);
-const SEARCH_HEIGHT: f64 = 36.;
-const SEARCH_PAD_X: f64 = 16.;
-/// From the search pill to the first row.
-const SEARCH_GAP: f64 = 16.;
-/// The panel's corners, and the tiles'.
-const RADIUS: f64 = 34.;
-const TILE_RADIUS: f64 = 14.;
 /// How far a held tile must move to become a drag.
 const DRAG_SLOP: f64 = 6.;
 const SEARCH_LIMIT: u32 = 100;
@@ -68,20 +54,32 @@ const SEARCH_LIMIT: u32 = 100;
 /// once: a cold batch is ready in ~190 ms (release, #1047), and past this Apps shows what it
 /// has, the rest in the neutral art until each arrives. The dock keeps `STARTUP_WAIT`.
 const ICON_WAIT: Duration = Duration::from_millis(250);
+/// Region ids of Apps' controls.
+const REGIONS: u32 = 1;
 
 const LEFT_BUTTON: u32 = 0x110;
 const ESCAPE: u32 = 0xff1b;
-const RETURN: u32 = 0xff0d;
-const KP_ENTER: u32 = 0xff8d;
-const BACKSPACE: u32 = 0xff08;
 const LEFT: u32 = 0xff51;
 const UP: u32 = 0xff52;
 const RIGHT: u32 = 0xff53;
 const DOWN: u32 = 0xff54;
-const HOME: u32 = 0xff50;
-const END: u32 = 0xff57;
-const PAGE_UP: u32 = 0xff55;
-const PAGE_DOWN: u32 = 0xff56;
+
+/// The view's keys and actions.
+const PANEL: &str = "apps";
+const SEARCH_PANE: &str = "apps/search";
+const SEARCH: &str = "search";
+const LIST: &str = "list";
+const QUERY: &str = "query";
+const SUBMIT: &str = "submit";
+const LAUNCH: &str = "launch:";
+
+/// An app's tile: its place in the whole list, stable while the layer lives.
+fn item_key(index: usize) -> String {
+    format!("a:{index}")
+}
+fn item_index(key: &str) -> Option<usize> {
+    key.strip_prefix("a:")?.split('/').next()?.parse().ok()
+}
 
 /// One app as Apps lists it.
 #[derive(Clone, Debug, PartialEq)]
@@ -118,55 +116,30 @@ pub fn entries(apps: &[App]) -> Vec<Entry> {
     list
 }
 
-/// The panel and its parts, in the layer's logical coordinates.
-#[derive(Clone, Copy, Debug, PartialEq)]
-pub struct Geometry {
-    pub panel: [f64; 4],
-    pub search: [f64; 4],
-    /// The scrolling grid's viewport.
-    pub grid: [f64; 4],
-}
-
-/// The panel centred on an output of `size`; smaller outputs get fewer columns and rows,
-/// never a panel past the edges.
-pub fn geometry(size: (u32, u32)) -> (Geometry, usize, usize) {
-    let (w, h) = (size.0 as f64, size.1 as f64);
-    let fit = |room: f64, tile: f64| ((room + GAP) / (tile + GAP)).floor().max(1.) as usize;
-    let columns = COLUMNS.min(fit(w - 2. * INSET.1 - 32., TILE.0));
-    let chrome = INSET.0 * 2. + SEARCH_HEIGHT + SEARCH_GAP;
-    let rows = ROWS.min(fit(h - chrome - 32., TILE.1));
-    let grid_w = columns as f64 * TILE.0 + (columns as f64 - 1.) * GAP;
-    let grid_h = rows as f64 * TILE.1 + (rows as f64 - 1.) * GAP;
-    let pw = grid_w + 2. * INSET.1;
-    let ph = chrome + grid_h;
-    let (px, py) = (((w - pw) / 2.).round(), ((h - ph) / 2.).round());
-    let search = [px + INSET.1, py + INSET.0, grid_w, SEARCH_HEIGHT];
-    let grid = [
-        px + INSET.1,
-        py + INSET.0 + SEARCH_HEIGHT + SEARCH_GAP,
-        grid_w,
-        grid_h,
-    ];
-    (
-        Geometry {
-            panel: [px, py, pw, ph],
-            search,
-            grid,
-        },
-        columns,
-        rows,
-    )
-}
-
 fn inside(r: [f64; 4], (x, y): (f64, f64)) -> bool {
     x >= r[0] && x < r[0] + r[2] && y >= r[1] && y < r[1] + r[3]
 }
 
-/// What the workers hand the layer: icons, and search answers.
+/// What the workers hand the layer: search answers.
 #[derive(Default)]
 struct Inbox {
     /// (the query asked, its ids best first); Err: Search failed.
     results: Vec<(String, Result<Vec<String>, String>)>,
+}
+
+/// What the kit needs to lay Apps out and paint it, loaded once with the look.
+struct Kit {
+    tokens: nk::Tokens,
+    types: nk::TypeScale,
+    blur: nk_wayland::Blur,
+    icons: Option<nk_icons::Icons>,
+}
+
+/// The layers over the panel: the graded blur, then the search's glass over it.
+#[derive(Clone, Copy)]
+struct Layers {
+    blur: LayerId,
+    search: LayerId,
 }
 
 /// One Apps layer: opened by the hub, closed by itself or by the hub.
@@ -178,14 +151,19 @@ pub struct Launcher {
     /// Indices into `all`, in the order shown.
     shown: Vec<usize>,
     query: String,
-    preedit: String,
     /// The query whose answer is shown (None: the A–Z list).
     answered: Option<String>,
-    scroll: f64,
-    hover: Option<usize>,
-    /// The tile the keyboard is on (a position in `shown`).
-    focus: Option<usize>,
+    state: ViewState,
+    kit: Option<Kit>,
+    layout: Option<PanelLayout>,
+    layers: Option<Layers>,
+    /// The frame painted last, its search taken out onto its layer: the panel's glass.
+    last: nk::Frame,
+    /// A press on a tile: which (its place in `all`), where, its serial; a drag once it
+    /// moves far enough.
     pressed: Option<(usize, (f64, f64), u32)>,
+    /// The serial of the last key or button, for an activation token.
+    serial: Option<u32>,
     outside_press: bool,
     dragging: bool,
     pointer: (f64, f64),
@@ -195,13 +173,14 @@ pub struct Launcher {
     icon_subscription: Option<crate::icon_memory::Subscription>,
     icon_start: Instant,
     icons_presented: bool,
+    /// The panel showed its first frame: the layers over it follow on the next turn.
+    refresh_pending: bool,
     metrics_commit: u64,
     searches: Option<Sender<String>>,
     inbox: Arc<Mutex<Inbox>>,
     look: Option<Look>,
     tried_look: bool,
     bus: Option<zbus::blocking::Connection>,
-    labels: HashMap<String, Rc<nk_text::Layout>>,
     pending: HashMap<TokenRequest, (String, u64)>,
     close: Arc<AtomicBool>,
     closing: bool,
@@ -210,6 +189,7 @@ pub struct Launcher {
     a11y_requests: Option<Receiver<(u64, nk_a11y::Request)>>,
     revision: u64,
     shape: Vec<(nk_a11y::NodeId, nk_a11y::Role, Vec<nk_a11y::Action>)>,
+    ids: HashMap<nk_a11y::NodeId, Key>,
 }
 
 impl Launcher {
@@ -238,12 +218,14 @@ impl Launcher {
             all,
             shown,
             query: String::new(),
-            preedit: String::new(),
             answered: None,
-            scroll: 0.,
-            hover: None,
-            focus: None,
+            state: ViewState::new(REGIONS),
+            kit: None,
+            layout: None,
+            layers: None,
+            last: nk::Frame::default(),
             pressed: None,
+            serial: None,
             outside_press: false,
             dragging: false,
             pointer: (-1., -1.),
@@ -253,13 +235,13 @@ impl Launcher {
             icon_subscription: None,
             icon_start: Instant::now(),
             icons_presented: false,
+            refresh_pending: false,
             metrics_commit: 0,
             searches: None,
             inbox: Arc::new(Mutex::new(Inbox::default())),
             look: None,
             tried_look: false,
             bus,
-            labels: HashMap::new(),
             pending: HashMap::new(),
             close,
             closing: false,
@@ -268,6 +250,7 @@ impl Launcher {
             a11y_requests: None,
             revision: 0,
             shape: vec![],
+            ids: HashMap::new(),
         }
     }
 
@@ -292,85 +275,233 @@ impl Launcher {
         self.searches = Some(search_tx);
     }
 
-    fn geometry(&self) -> (Geometry, usize, usize) {
-        geometry(self.size)
-    }
-
-    /// Tile `n` of the shown list, scrolled, in layer coordinates.
-    fn tile(&self, n: usize) -> [f64; 4] {
-        let (g, columns, _) = self.geometry();
-        let (row, col) = (n / columns, n % columns);
-        [
-            g.grid[0] + col as f64 * (TILE.0 + GAP),
-            g.grid[1] + row as f64 * (TILE.1 + GAP) - self.scroll,
-            TILE.0,
-            TILE.1,
-        ]
-    }
-
-    fn content_height(&self) -> f64 {
-        let (_, columns, _) = self.geometry();
-        let rows = self.shown.len().div_ceil(columns);
-        (rows as f64 * (TILE.1 + GAP) - GAP).max(0.)
-    }
-
-    fn max_scroll(&self) -> f64 {
-        let (g, ..) = self.geometry();
-        (self.content_height() - g.grid[3]).max(0.)
-    }
-
-    fn tile_at(&self, at: (f64, f64)) -> Option<usize> {
-        let (g, ..) = self.geometry();
-        if !inside(g.grid, at) {
-            return None;
+    /// The look and the kit's tokens, type scale, blur and glyphs for the shell's skin
+    /// (always dark).
+    fn load_look(&mut self) {
+        if self.tried_look {
+            return;
         }
-        (0..self.shown.len()).find(|&n| inside(self.tile(n), at))
+        self.tried_look = true;
+        let Some(bus) = &self.bus else {
+            return;
+        };
+        let _span = crate::icon_metrics::span(
+            "apps-stage",
+            serde_json::json!({"instance":self.metrics_id,"stage":"look"}),
+        );
+        let look = match Look::load(bus) {
+            Ok(l) => l,
+            Err(e) => {
+                eprintln!("nidara-shell: Apps has no look: {e}");
+                return;
+            }
+        };
+        let skin = nk_platform::portal::Appearance {
+            dark: true,
+            ..look.appearance.clone()
+        };
+        let kit = (|| -> Result<Kit, String> {
+            Ok(Kit {
+                tokens: nk::Tokens::load(&look.exports, &skin)?,
+                types: nk::TypeScale::load(&look.exports, &skin)?,
+                blur: nk::FrameStyle::load(&look.exports, &skin)?.blur,
+                icons: nk_icons::Icons::new("", &[], &crate::paths::icon_reference())
+                    .map_err(|e| eprintln!("nidara-shell: Apps has no glyphs: {e}"))
+                    .ok(),
+            })
+        })();
+        match kit {
+            Ok(k) => {
+                self.state.set_reduced_motion(skin.reduced_motion);
+                self.kit = Some(k);
+            }
+            Err(e) => eprintln!("nidara-shell: Apps has no kit tokens: {e}"),
+        }
+        self.look = Some(look);
     }
 
-    /// Scroll so tile `n` is whole in the viewport.
-    fn reveal(&mut self, n: usize) {
-        let (g, ..) = self.geometry();
-        let [_, y, _, h] = self.tile(n);
-        let top = y + self.scroll - g.grid[1];
-        if top < self.scroll {
-            self.scroll = top;
-        } else if top + h > self.scroll + g.grid[3] {
-            self.scroll = top + h - g.grid[3];
+    fn style(&self) -> Option<&nk::IconGridStyle> {
+        Some(&self.kit.as_ref()?.tokens.icon_grid)
+    }
+
+    /// The view: the panel's glass, the grid scrolling to its edges, and the search
+    /// floating over its top.
+    fn view(&self, l: &PanelLayout, base: &TextStyle) -> Option<Node> {
+        let s = self.style()?;
+        let look = self.look.as_ref()?;
+        let text = |k: &'static str| look.text_of(&Label::Key(k));
+        let strut = |k: &str, px: f64| -> Node { nk::Slot::new(k, px).into() };
+        let (top, side, bottom) = l.pad;
+        let body: Node = if self.shown.is_empty() && self.answered.is_some() {
+            nk::Column::new(
+                "empty",
+                vec![
+                    nk::Label::new("empty/text", text("app-grid.no-results"), base.clone())
+                        .ink(nk::Ink::Secondary)
+                        .into(),
+                ],
+            )
+            .justify(nk::Justify::Center)
+            .align(Align::Center)
+            .width(l.grid[2])
+            .height(l.grid[3])
+            .into()
+        } else {
+            let cells = self
+                .shown
+                .iter()
+                .enumerate()
+                .map(|(n, &i)| {
+                    let e = &self.all[i];
+                    let mut item = nk::IconItem::new(
+                        item_key(i),
+                        e.name.clone(),
+                        format!("{LAUNCH}{i}"),
+                        s,
+                        base,
+                    );
+                    if e.is_new {
+                        item = item.new_mark("new");
+                    }
+                    Cell {
+                        at: (n % l.columns, n / l.columns),
+                        span: (1, 1),
+                        child: item.into(),
+                    }
+                })
+                .collect();
+            nk::Grid::new("grid", l.columns, s.cell, s.gap, cells)
+                .width(l.grid[2])
+                .into()
+        };
+        let content = nk::Column::new(
+            "content",
+            vec![
+                strut("content/top", top),
+                nk::Row::new(
+                    "content/row",
+                    vec![
+                        strut("content/left", side),
+                        body,
+                        strut("content/right", side),
+                    ],
+                )
+                .into(),
+                strut("content/bottom", bottom),
+            ],
+        );
+        let list = nk::Scroll::new(LIST, content).floating_top(top);
+        let entry: Node =
+            nk::SearchEntry::new(SEARCH, "Search", QUERY, self.query.clone(), "Clear")
+                .placeholder(text("app-grid.search.placeholder"))
+                .submit(SUBMIT)
+                .into();
+        let search = nk::Pane::new(
+            SEARCH_PANE,
+            Corner::Pill,
+            nk::Row::new("search/row", vec![entry.grow()])
+                .align(Align::Center)
+                .padding(Padding::symmetric(Space::S1, Space::S3)),
+        )
+        .width(l.search[2])
+        .height(s.search);
+        let over = nk::Column::new(
+            "apps/top",
+            vec![
+                strut("apps/top/inset", s.inset_top),
+                nk::Row::new(
+                    "apps/top/row",
+                    vec![strut("apps/top/left", s.inset_side), search.into()],
+                )
+                .into(),
+            ],
+        );
+        Some(
+            nk::Pane::new(
+                PANEL,
+                Corner::Fixed(s.panel_corner.round() as u32),
+                nk::Overlay::new("apps/over", list).layer(
+                    Align::Start,
+                    Align::Start,
+                    Padding::default(),
+                    over,
+                ),
+            )
+            .into(),
+        )
+    }
+
+    /// Builds the view from the model and lays it out in the panel.
+    fn relayout(&mut self) {
+        let Some(s) = self.style().cloned() else {
+            return;
+        };
+        if self.size.0 == 0 {
+            return;
         }
-        self.scroll = self.scroll.clamp(0., self.max_scroll());
+        let l = nk::panel_layout(&s, (f64::from(self.size.0), f64::from(self.size.1)));
+        self.layout = Some(l);
+        let Some(base) = self.look.as_ref().map(|look| look.styles.text.clone()) else {
+            return;
+        };
+        let Some(view) = self.view(&l, &base) else {
+            return;
+        };
+        let (Some(kit), Some(look)) = (self.kit.as_ref(), self.look.as_mut()) else {
+            return;
+        };
+        self.state.layout_in(
+            &view,
+            l.panel,
+            self.scale,
+            kit.tokens.with_types(&kit.types),
+            &mut look.text,
+            Instant::now(),
+        );
+    }
+
+    /// Back to the top of the list: a new list starts at its first row.
+    fn scroll_home(&mut self) {
+        self.state
+            .scroll_region(&LIST.into(), nk::ScrollBy::Pixels(-1e9));
     }
 
     /// The query changed: the A–Z list for an empty one, else ask Search (the shown list
     /// keeps the last answer until the new one comes).
     fn requery(&mut self) {
         let q = self.query.trim().to_string();
-        self.scroll = 0.;
         if q.is_empty() {
             self.answered = None;
             self.shown = (0..self.all.len()).collect();
-            self.focus = None;
         } else if let Some(s) = &self.searches {
             let _ = s.send(q);
+            return self.relayout();
         } else {
             // No service to rank with: a plain substring filter, A–Z.
-            let lower = q.to_lowercase();
-            self.shown = (0..self.all.len())
-                .filter(|&i| self.all[i].name.to_lowercase().contains(&lower))
-                .collect();
+            self.shown = self.filtered(&q);
             self.answered = Some(q);
-            self.focus = (!self.shown.is_empty()).then_some(0);
         }
+        self.relayout();
+        self.scroll_home();
     }
 
-    fn drain(&mut self) {
+    fn filtered(&self, q: &str) -> Vec<usize> {
+        let lower = q.to_lowercase();
+        (0..self.all.len())
+            .filter(|&i| self.all[i].name.to_lowercase().contains(&lower))
+            .collect()
+    }
+
+    fn drain(&mut self) -> bool {
         let inbox = std::mem::take(&mut *self.inbox.lock().unwrap());
         // Only the answer to the query typed now counts.
         let now = self.query.trim().to_string();
+        let mut changed = false;
         for (q, result) in inbox.results {
             if q != now {
                 continue;
             }
-            match result {
+            self.shown = match result {
                 Ok(ids) => {
                     let index: HashMap<&str, usize> = self
                         .all
@@ -378,48 +509,62 @@ impl Launcher {
                         .enumerate()
                         .map(|(i, e)| (e.id.as_str(), i))
                         .collect();
-                    self.shown = ids
-                        .iter()
+                    ids.iter()
                         .filter_map(|id| index.get(id.as_str()).copied())
-                        .collect();
+                        .collect()
                 }
                 Err(e) => {
                     eprintln!("nidara-shell: Apps search failed: {e}");
-                    let lower = q.to_lowercase();
-                    self.shown = (0..self.all.len())
-                        .filter(|&i| self.all[i].name.to_lowercase().contains(&lower))
-                        .collect();
+                    self.filtered(&q)
                 }
-            }
+            };
             self.answered = Some(q);
-            self.scroll = 0.;
-            self.focus = (!self.shown.is_empty()).then_some(0);
+            changed = true;
         }
+        if changed {
+            self.relayout();
+            self.scroll_home();
+        }
+        changed
+    }
+
+    /// The icon slots laid out: each with its app (its place in `all`).
+    fn slots(&self) -> Vec<(&nk::Placed, usize)> {
+        self.state
+            .placed()
+            .iter()
+            .filter(|p| p.key.0.ends_with("/icon"))
+            .filter_map(|p| Some((p, item_index(&p.key.0)?)))
+            .collect()
     }
 
     /// Ask for the icons of the tiles in view (and a row either side).
     fn want_icons(&mut self) {
-        let Some(memory) = &self.memory else {
+        let (Some(memory), Some(l), Some(s)) = (&self.memory, self.layout, self.style()) else {
             return;
         };
-        let (g, columns, rows) = self.geometry();
-        let first_row = (self.scroll / (TILE.1 + GAP)).floor().max(0.) as usize;
-        let from = first_row.saturating_sub(1) * columns;
-        let to = ((first_row + rows + 2) * columns).min(self.shown.len());
-        let _ = g;
-        for &i in self.shown.get(from..to).unwrap_or(&[]) {
-            let e = &self.all[i];
-            if let Some(key) = memory.current_app(&e.id, ICON as u32, self.scale) {
+        let reach = s.cell + s.gap;
+        let (top, bottom) = (l.panel[1] - reach, l.panel[1] + l.panel[3] + reach);
+        for (p, i) in self.slots() {
+            if p.rect[1] + p.rect[3] < top || p.rect[1] > bottom {
+                continue;
+            }
+            if let Some(key) = memory.current_app(&self.all[i].id, s.icon as u32, self.scale) {
                 memory.request(key);
             }
         }
     }
 
+    fn icon_side(&self) -> f64 {
+        self.style().map_or(64., |s| s.icon)
+    }
+
     fn asset(&self, e: &Entry) -> Option<Arc<crate::icon_memory::Asset>> {
         let memory = self.memory.as_ref()?;
-        let key = memory.current_app(&e.id, ICON as u32, self.scale)?;
+        let key = memory.current_app(&e.id, self.icon_side() as u32, self.scale)?;
         memory.get(&key)
     }
+
     fn waiting_for_icons(&self) -> bool {
         if !holds(self.icons_presented, self.icon_start.elapsed()) {
             return false;
@@ -427,19 +572,16 @@ impl Launcher {
         let Some(memory) = &self.memory else {
             return false;
         };
-        let (g, ..) = self.geometry();
-        let keys: Vec<_> = (0..self.shown.len())
-            .filter(|&n| {
-                let t = self.tile(n);
-                t[1] + t[3] >= g.grid[1] && t[1] <= g.grid[1] + g.grid[3]
-            })
-            .filter_map(|n| {
-                let e = &self.all[self.shown[n]];
-                memory.current_app(&e.id, ICON as u32, self.scale)
-            })
+        let side = self.icon_side() as u32;
+        let keys: Vec<_> = self
+            .slots()
+            .into_iter()
+            .filter(|(p, _)| p.visible().is_some())
+            .filter_map(|(_, i)| memory.current_app(&self.all[i].id, side, self.scale))
             .collect();
         !memory.readiness(&keys).complete()
     }
+
     fn finish(&mut self, w: &mut Window) {
         if !self.closing {
             self.closing = true;
@@ -448,9 +590,10 @@ impl Launcher {
         }
     }
 
-    /// Launch shown tile `n` with a token from `serial`'s input, then close.
-    fn launch(&mut self, n: usize, serial: Option<u32>, w: &mut Window) {
-        let Some(e) = self.shown.get(n).map(|&i| self.all[i].clone()) else {
+    /// Launch app `i` (its place in the whole list) with a token from `serial`'s input,
+    /// then close.
+    fn launch(&mut self, i: usize, serial: Option<u32>, w: &mut Window) {
+        let Some(e) = self.all.get(i).cloned() else {
             return;
         };
         // Apps itself: already open, nothing to start.
@@ -486,144 +629,254 @@ impl Launcher {
 
     /// A held tile moved far enough: it becomes a drag of that app, its icon under the
     /// pointer, and the panel steps aside.
-    fn start_drag(&mut self, n: usize, serial: u32, w: &mut Window) {
-        let Some(e) = self.shown.get(n).map(|&i| self.all[i].clone()) else {
+    fn start_drag(&mut self, i: usize, serial: u32, w: &mut Window) {
+        let Some(e) = self.all.get(i).cloned() else {
             return;
         };
         let data = drag::encode(&drag::App {
             id: e.id.clone(),
             generation: e.generation,
         });
-        let icon = self.asset(&e).map(|asset| drag_icon(&asset.raw));
+        let side = self.icon_side() as u32;
+        let icon = self.asset(&e).map(|asset| drag_icon(&asset.raw, side));
         match w.start_drag(serial, vec![(drag::APP_MIME.to_string(), data)], icon) {
             Ok(()) => {
                 self.dragging = true;
                 self.pressed = None;
+                self.state.pointer_leave();
                 // Nothing of the panel takes input while the drag lasts.
                 let _ = w.set_input_region(Some(&[]));
-                w.redraw();
+                self.refresh(w);
             }
             Err(e) => eprintln!("nidara-shell: Apps could not start a drag: {e:?}"),
         }
     }
 
-    fn key(&mut self, key: nk_wayland::Key, w: &mut Window) {
-        let (_, columns, rows) = self.geometry();
-        let count = self.shown.len();
-        let mv = |s: &mut Self, to: usize| {
-            if count > 0 {
-                let to = to.min(count - 1);
-                s.focus = Some(to);
-                s.reveal(to);
+    /// What an activation of the view asks for.
+    fn route(&mut self, a: Activated, w: &mut Window) {
+        match a.action.as_str() {
+            QUERY => {
+                if let Some(nk::Value::Text(t)) = a.value {
+                    self.query = t;
+                    self.requery();
+                }
             }
-        };
-        match key.sym {
-            ESCAPE if !self.query.is_empty() => {
-                self.query.clear();
-                self.requery();
-            }
-            ESCAPE => self.finish(w),
-            RETURN | KP_ENTER => {
-                if let Some(n) = self
-                    .focus
-                    .or((count > 0 && !self.query.is_empty()).then_some(0))
+            SUBMIT => {
+                if !self.query.trim().is_empty()
+                    && let Some(&i) = self.shown.first()
                 {
-                    self.launch(n, key.serial, w);
+                    self.launch(i, self.serial, w);
                 }
             }
-            BACKSPACE if key.ctrl => {
-                self.query.clear();
-                self.requery();
-            }
-            BACKSPACE => {
-                if let Some((at, _)) = self.query.grapheme_indices(true).next_back() {
-                    self.query.truncate(at);
-                    self.requery();
+            action => {
+                if let Some(i) = action.strip_prefix(LAUNCH).and_then(|i| i.parse().ok()) {
+                    self.launch(i, self.serial, w);
                 }
             }
-            LEFT => mv(self, self.focus.map_or(0, |f| f.saturating_sub(1))),
-            RIGHT => mv(self, self.focus.map_or(0, |f| f + 1)),
-            UP => mv(self, self.focus.map_or(0, |f| f.saturating_sub(columns))),
-            DOWN => mv(self, self.focus.map_or(0, |f| f + columns)),
-            HOME => mv(self, 0),
-            END => mv(self, count.saturating_sub(1)),
-            PAGE_UP => mv(
-                self,
-                self.focus.map_or(0, |f| f.saturating_sub(columns * rows)),
-            ),
-            PAGE_DOWN => mv(self, self.focus.map_or(0, |f| f + columns * rows)),
-            _ if !key.ctrl && !key.alt && !key.text.is_empty() => {
-                let text: String = key.text.chars().filter(|c| !c.is_control()).collect();
-                if !text.is_empty() {
-                    self.query.push_str(&text);
-                    self.requery();
+        }
+    }
+
+    /// The shown position of the focused tile, if a tile has the focus.
+    fn focused_tile(&self) -> Option<usize> {
+        let i = item_index(&self.state.focus()?.0)?;
+        self.shown.iter().position(|&s| s == i)
+    }
+
+    /// Moves the keyboard to shown tile `n` (clamped), and brings it into view.
+    fn focus_tile(&mut self, n: usize) {
+        if let Some(&i) = self.shown.get(n.min(self.shown.len().saturating_sub(1))) {
+            self.state.request(&item_key(i).into(), false);
+        }
+    }
+
+    fn key(&mut self, key: nk_wayland::Key, w: &mut Window) {
+        if key.serial.is_some() {
+            self.serial = key.serial;
+        }
+        let columns = self.layout.map_or(1, |l| l.columns);
+        let on_search = self.state.focus().is_some_and(|k| k.0 == SEARCH);
+        let tile = self.focused_tile();
+        match (key.sym, tile) {
+            // The grid's arrows: across and down its rows; Down leaves the search for the
+            // first tile and Up from the first row comes back to it.
+            (DOWN, None) if on_search && !self.shown.is_empty() => self.focus_tile(0),
+            (LEFT, Some(n)) => self.focus_tile(n.saturating_sub(1)),
+            (RIGHT, Some(n)) => self.focus_tile(n + 1),
+            (UP, Some(n)) if n < columns => {
+                self.state.request(&SEARCH.into(), false);
+            }
+            (UP, Some(n)) => self.focus_tile(n - columns),
+            (DOWN, Some(n)) => self.focus_tile(n + columns),
+            (ESCAPE, _) if self.query.is_empty() => {
+                self.finish(w);
+                return;
+            }
+            // Escape on a tile: back to the search, where Escape then clears it.
+            (ESCAPE, Some(_)) => {
+                self.state.request(&SEARCH.into(), false);
+            }
+            _ => {
+                // Typing on a tile goes to the search.
+                if !on_search && !key.ctrl && !key.alt && !key.text.is_empty() {
+                    self.state.request(&SEARCH.into(), false);
                 }
+                let (_, activated) = self.state.key_event(&key);
+                if let Some(a) = activated {
+                    self.route(a, w);
+                }
+            }
+        }
+        if !self.closing {
+            w.set_text_input(self.state.text_input());
+            self.refresh(w);
+        }
+    }
+
+    /// A pointer event on the search's layer, in the panel's coordinates.
+    fn search_event(&mut self, event: LayerEvent, w: &mut Window) {
+        let Some(r) = self.state.lifted_rect() else {
+            return;
+        };
+        match event {
+            LayerEvent::Motion(x, y) => {
+                self.pointer = (x + r[0], y + r[1]);
+                self.state.pointer_motion(x + r[0], y + r[1]);
+            }
+            LayerEvent::Leave => {
+                self.state.pointer_leave();
+            }
+            LayerEvent::Button {
+                button: LEFT_BUTTON,
+                pressed,
+                serial,
+                ..
+            } => {
+                self.serial = Some(serial);
+                if let Some(a) = self.state.button(pressed, Instant::now()) {
+                    self.route(a, w);
+                }
+                if self.closing {
+                    return;
+                }
+                w.set_text_input(self.state.text_input());
+            }
+            // The rows scroll under the search, so the wheel over it scrolls them.
+            LayerEvent::Scroll(amount) => {
+                self.state.scroll(amount.into());
+                self.want_icons();
             }
             _ => return,
         }
-        self.sync_text_input(w);
+        self.refresh(w);
+    }
+
+    /// The frame for this turn, its search taken out onto its layer and the blur placed
+    /// under it; then a paint.
+    fn refresh(&mut self, w: &mut Window) {
+        if self.closing {
+            return;
+        }
+        if let Some(kit) = &self.kit {
+            self.last = self.state.frame(&kit.tokens, Instant::now());
+        }
+        if let Err(e) = self.sync_layers(w) {
+            eprintln!("nidara-shell: Apps cannot place its search: {e}");
+        }
         w.redraw();
     }
 
-    fn sync_text_input(&self, w: &mut Window) {
-        let (g, ..) = self.geometry();
-        let cursor = self.query.len();
-        w.set_text_input(nk_wayland::TextInput {
-            focused: true,
-            password: false,
-            text: self.query.clone(),
-            cursor,
-            anchor: cursor,
-            rect: [
-                (g.search[0] + SEARCH_PAD_X + 26.) as i32,
-                g.search[1] as i32,
-                1,
-                g.search[3] as i32,
-            ],
-        });
+    fn sync_layers(&mut self, w: &mut Window) -> nk_wayland::Result<()> {
+        let (Some(layers), Some(l), Some(kit)) = (self.layers, self.layout, self.kit.as_mut())
+        else {
+            return Ok(());
+        };
+        let s = &kit.tokens.icon_grid;
+        let hidden = self.dragging || !self.icons_presented;
+        // The blur: across the panel inside its corners (the grid never reaches them), from
+        // its top edge to the search's bottom, strongest at the top.
+        let blur = [
+            l.panel[0] + s.panel_corner,
+            l.panel[1],
+            (l.panel[2] - 2. * s.panel_corner).max(1.),
+            l.search[1] + l.search[3] - l.panel[1],
+        ];
+        let size = if hidden {
+            (1, 1)
+        } else {
+            (blur[2].ceil() as u32, blur[3].ceil() as u32)
+        };
+        w.set_position(layers.blur, blur[0], blur[1])?;
+        w.set_layer_size(layers.blur, size)?;
+        w.set_layer_blur(
+            layers.blur,
+            kit.blur,
+            &nk::graded_panes(
+                &s.blur_curve,
+                f64::from(size.0),
+                f64::from(size.1),
+                self.scale,
+            ),
+        )?;
+        w.paint_layer(layers.blur, |frame| {
+            Ok(Canvas::new(frame.pixel_width, frame.pixel_height, frame.scale).finish())
+        })?;
+        let lifted = self.state.lift_out(&mut self.last);
+        let (Some(r), Some(f), false) = (self.state.lifted_rect(), lifted, hidden) else {
+            w.set_layer_material(layers.search, None)?;
+            w.set_layer_input_region(layers.search, Some(&[]))?;
+            w.set_layer_size(layers.search, (1, 1))?;
+            w.paint_layer(layers.search, |frame| {
+                Ok(Canvas::new(frame.pixel_width, frame.pixel_height, frame.scale).finish())
+            })?;
+            return Ok(());
+        };
+        w.set_position(layers.search, r[0], r[1])?;
+        w.set_layer_size(layers.search, (r[2].max(1.) as u32, r[3].max(1.) as u32))?;
+        w.set_layer_input_region(layers.search, None)?;
+        w.set_layer_material(layers.search, glass(self.look.as_ref(), &f).as_ref())?;
+        let (state, look, icons) = (
+            &self.state,
+            kit.tokens.with_types(&kit.types),
+            &mut kit.icons,
+        );
+        w.paint_layer(layers.search, |frame| {
+            let mut c = Canvas::at(
+                frame.pixel_width,
+                frame.pixel_height,
+                frame.scale,
+                (r[0], r[1]),
+            );
+            state.paint_lifted(&mut c, look, &mut |n, size| glyph(icons, n, size))?;
+            Ok(c.finish())
+        })?;
+        Ok(())
     }
 
-    /// The label of `e`, at most two lines in a tile, an ellipsis where it is cut.
-    fn label(&mut self, e: &Entry, style: &TextStyle, width: f32) -> Option<Rc<nk_text::Layout>> {
-        if let Some(l) = self.labels.get(&e.id) {
-            return Some(l.clone());
+    /// Advances the kit's motion (scrolling, the bar's fade): another frame while it moves.
+    fn tick(&mut self, w: &mut Window) {
+        if !self.state.animating() {
+            return;
         }
-        let look = self.look.as_mut()?;
-        let mut text = e.name.clone();
-        let mut layout = look.text.layout(&text, style, width).ok()?;
-        while layout.lines().len() > 2 {
-            let end = layout.lines()[1].range.end.min(text.len());
-            let mut cut: String = text[..end].trim_end().to_string();
-            // One grapheme fewer each time until it fits with its ellipsis.
-            if let Some((at, _)) = cut.grapheme_indices(true).next_back() {
-                cut.truncate(at);
-            }
-            if cut.is_empty() {
-                break;
-            }
-            text = format!("{}…", cut.trim_end());
-            layout = look.text.layout(&text, style, width).ok()?;
+        let (Some(kit), Some(look)) = (self.kit.as_ref(), self.look.as_mut()) else {
+            return;
+        };
+        let t = self.state.tick(
+            kit.tokens.with_types(&kit.types),
+            &mut look.text,
+            Instant::now(),
+        );
+        for a in t.activated {
+            self.route(a, w);
         }
-        let layout = Rc::new(layout);
-        self.labels.insert(e.id.clone(), layout.clone());
-        Some(layout)
+        self.want_icons();
+        self.refresh(w);
     }
-}
 
-impl Launcher {
     fn publish_semantics(&mut self) {
-        let (g, ..) = self.geometry();
-        let tiles: Vec<[f64; 4]> = (0..self.shown.len()).map(|n| self.tile(n)).collect();
-        let tree = tree(&Semantics {
-            all: &self.all,
-            shown: &self.shown,
-            tiles: &tiles,
-            grid: g.grid,
-            search: g.search,
-            size: self.size,
-            query: &self.query,
-            focus: self.focus,
-        });
+        let mut root = nk_a11y::Node::new(ROOT, nk_a11y::Role::Window, "Apps");
+        root.states.active = true;
+        let tree = self.state.semantics(root, ROOT + 1);
+        self.ids = self.state.semantic_keys();
         let shape: Vec<_> = tree
             .nodes
             .values()
@@ -674,101 +927,74 @@ impl Launcher {
             if revision != self.revision {
                 continue;
             }
-            match request {
-                nk_a11y::Request::SetText(SEARCH, text) => {
-                    self.query = text;
-                    self.requery();
-                    self.sync_text_input(w);
-                    w.redraw();
+            let activated = match request {
+                nk_a11y::Request::SetText(id, text) => self.ids.get(&id).cloned().and_then(|k| {
+                    self.state
+                        .respond(&k, nk::components::Request::SetText(text))
+                }),
+                nk_a11y::Request::Activate(id) => {
+                    let k = self.ids.get(&id).cloned();
+                    k.and_then(|k| self.state.request(&k, true))
                 }
-                nk_a11y::Request::Activate(id) | nk_a11y::Request::Focus(id) => {
-                    let Some(n) = self.shown.iter().position(|&i| tile_id(i) == id) else {
-                        continue;
-                    };
-                    if matches!(request, nk_a11y::Request::Activate(_)) {
-                        // No input event behind it, so no activation token.
-                        self.launch(n, None, w);
-                        return;
-                    }
-                    self.focus = Some(n);
-                    self.reveal(n);
-                    w.redraw();
+                nk_a11y::Request::Focus(id) => {
+                    let k = self.ids.get(&id).cloned();
+                    k.and_then(|k| self.state.request(&k, false))
                 }
-                _ => {}
+                _ => None,
+            };
+            if let Some(a) = activated {
+                // No input event behind it, so no activation token.
+                self.serial = None;
+                self.route(a, w);
+                if self.closing {
+                    return;
+                }
             }
+            w.set_text_input(self.state.text_input());
+            self.refresh(w);
         }
     }
 }
 
 const ROOT: nk_a11y::NodeId = 1;
-const SEARCH: nk_a11y::NodeId = 2;
-const LIST: nk_a11y::NodeId = 3;
 
-/// An app's node: its place in the whole list, stable while the layer lives.
-fn tile_id(index: usize) -> nk_a11y::NodeId {
-    16 + index as nk_a11y::NodeId
-}
-
-struct Semantics<'a> {
-    all: &'a [Entry],
-    shown: &'a [usize],
-    tiles: &'a [[f64; 4]],
-    grid: [f64; 4],
-    search: [f64; 4],
-    size: (u32, u32),
-    query: &'a str,
-    focus: Option<usize>,
-}
-
-/// What a screen reader is told: a window named Apps holding the search field and the
-/// list of the apps shown, in order, the keyboard's tile focused; the field holds the
-/// focus otherwise, as typing goes there.
-fn tree(s: &Semantics) -> nk_a11y::Tree {
-    use nk_a11y::{Action, Bounds, Node, Role};
-    let bounds = |r: [f64; 4]| Bounds {
-        x: r[0],
-        y: r[1],
-        width: r[2],
-        height: r[3],
-    };
-    let mut nodes = std::collections::BTreeMap::new();
-    let mut root = Node::new(ROOT, Role::Window, "Apps");
-    root.states.active = true;
-    root.bounds = bounds([0., 0., s.size.0 as f64, s.size.1 as f64]);
-    root.children = vec![SEARCH, LIST];
-    let mut search = Node::new(SEARCH, Role::TextInput, "Search");
-    search.states.focused = s.focus.is_none();
-    search.actions = vec![Action::Focus, Action::SetText];
-    search.bounds = bounds(s.search);
-    search.text = Some(nk_a11y::TextInfo {
-        text: s.query.to_string(),
-        caret: s.query.len(),
-        anchor: s.query.len(),
-        words: vec![],
-        lines: std::iter::once(0..s.query.len()).collect(),
-        geometry: None,
-    });
-    let mut list = Node::new(LIST, Role::List, "Applications");
-    list.bounds = bounds(s.grid);
-    for (n, &i) in s.shown.iter().enumerate() {
-        let e = &s.all[i];
-        let id = tile_id(i);
-        let mut node = Node::new(id, Role::Button, e.name.as_str());
-        if e.is_new {
-            node.description = "new".into();
-        }
-        node.states.focused = s.focus == Some(n);
-        let t = s.tiles[n];
-        node.states.offscreen = t[1] + t[3] <= s.grid[1] || t[1] >= s.grid[1] + s.grid[3];
-        node.actions = vec![Action::Focus, Action::Activate];
-        node.bounds = bounds(t);
-        list.children.push(id);
-        nodes.insert(id, node);
+/// A themed glyph for the kit (the search's), by name and logical size.
+fn glyph(
+    icons: &mut Option<nk_icons::Icons>,
+    name: &str,
+    size: f64,
+) -> Option<Arc<nk_icons::Icon>> {
+    if name.is_empty() {
+        return None;
     }
-    nodes.insert(ROOT, root);
-    nodes.insert(SEARCH, search);
-    nodes.insert(LIST, list);
-    nk_a11y::Tree { root: ROOT, nodes }
+    icons.as_mut()?.get(name, size.round() as u32).ok()
+}
+
+/// The panel glass for a frame's panes, each pane's tone and shadow for its size.
+fn glass(look: Option<&Look>, frame: &nk::Frame) -> Option<Material> {
+    let panel = look?.panel.as_ref()?;
+    let base = panel.at(0.).ok()?;
+    let groups = frame
+        .groups(base.tone, base.shadow)
+        .into_iter()
+        .map(|mut g| {
+            let side = g
+                .shapes
+                .iter()
+                .map(|s| s.width.min(s.height))
+                .fold(f64::INFINITY, f64::min);
+            if let Ok(m) = panel.at(side) {
+                g.tone = m.tone;
+                g.shadow = m.shadow;
+            }
+            g
+        })
+        .collect();
+    Some(Material {
+        groups,
+        states: frame.states.clone(),
+        ..base
+    })
 }
 
 /// Whether the first frame may still wait for icons, `elapsed` after Apps was asked for.
@@ -797,15 +1023,14 @@ fn search_worker(
 }
 
 /// The dragged app's picture: its icon, premultiplied in the compositor's byte order, at
-/// `ICON` logical with the pointer at its centre.
-fn drag_icon(icon: &Icon) -> DragIcon {
+/// `side` logical with the pointer at its centre.
+fn drag_icon(icon: &Icon, side: u32) -> DragIcon {
     let mut pixels = Vec::with_capacity(icon.rgba.len());
     for p in icon.rgba.as_chunks::<4>().0 {
         let a = u16::from(p[3]);
         let pm = |c: u8| ((u16::from(c) * a + 127) / 255) as u8;
         pixels.extend_from_slice(&[pm(p[2]), pm(p[1]), pm(p[0]), p[3]]);
     }
-    let side = ICON as u32;
     DragIcon {
         pixel_width: icon.width as u16,
         pixel_height: icon.height as u16,
@@ -824,12 +1049,19 @@ impl Application for Launcher {
                 .as_millis()
                 .clamp(1, 1000) as u32;
         }
+        if self.state.animating() {
+            return 16;
+        }
         1000
     }
     fn idle(&mut self, w: &mut Window) -> nk_wayland::Result<()> {
         if !self.icons_presented && !self.waiting_for_icons() {
             w.redraw();
         }
+        if std::mem::take(&mut self.refresh_pending) {
+            self.refresh(w);
+        }
+        self.tick(w);
         Ok(())
     }
     fn event(&mut self, event: Event, w: &mut Window) -> nk_wayland::Result<()> {
@@ -839,40 +1071,49 @@ impl Application for Launcher {
                 "frame-done",
                 serde_json::json!({"surface":"apps","instance":self.metrics_id,"commit":commit}),
             );
+            self.tick(w);
+        }
+        if std::mem::take(&mut self.refresh_pending) {
+            self.refresh(w);
         }
         if self.close.load(Ordering::SeqCst) && !self.closing {
             self.finish(w);
             return Ok(());
         }
         // The pointer alone changes nothing a reader is told.
-        let quiet = matches!(event, Event::Motion(..) | Event::PointerLeave);
+        let quiet = matches!(
+            event,
+            Event::Motion(..) | Event::PointerLeave | Event::FrameDone
+        );
         match event {
             Event::Configure => {
                 let _span = crate::icon_metrics::span(
                     "apps-stage",
                     serde_json::json!({"instance":self.metrics_id,"stage":"configure"}),
                 );
-                let size = w.size();
-                if size != self.size {
-                    self.size = size;
-                    self.labels.clear();
-                }
+                self.size = w.size();
                 self.scale = w.scale();
-                if !self.tried_look {
-                    self.tried_look = true;
-                    if let Some(bus) = &self.bus {
-                        let _span = crate::icon_metrics::span(
-                            "apps-stage",
-                            serde_json::json!({"instance":self.metrics_id,"stage":"look"}),
-                        );
-                        self.look = Look::load(bus)
-                            .map_err(|e| eprintln!("nidara-shell: Apps has no look: {e}"))
-                            .ok();
-                    }
+                self.load_look();
+                if self.layers.is_none() && w.supports_layers() {
+                    // The blur first, so the search's glass lies over it. It takes no pointer.
+                    let blur = w.create_layer((1, 1))?;
+                    w.set_layer_input_region(blur, Some(&[]))?;
+                    let search = w.create_layer((1, 1))?;
+                    w.set_layer_input_region(search, Some(&[]))?;
+                    self.layers = Some(Layers { blur, search });
+                    // Only with a layer to draw it on: without (D5) the panel paints it.
+                    self.state.lift(Some(SEARCH_PANE.into()));
                 }
-                self.sync_text_input(w);
+                let first = self.layout.is_none();
+                self.relayout();
+                if first && self.layout.is_some() {
+                    // Typing goes to the search from the start; no ring until the keys move.
+                    self.state.request(&SEARCH.into(), false);
+                    self.state.hide_ring();
+                }
+                w.set_text_input(self.state.text_input());
                 self.want_icons();
-                w.redraw();
+                self.refresh(w);
             }
             Event::Wake => {
                 let _span = crate::icon_metrics::span(
@@ -885,27 +1126,30 @@ impl Application for Launcher {
                 }
                 self.drain();
                 self.want_icons();
-                w.redraw();
+                self.refresh(w);
             }
             Event::Closed => self.finish(w),
+            Event::Layer { id, event } if self.layers.is_some_and(|l| l.search == id) => {
+                if !self.dragging {
+                    self.search_event(event, w);
+                }
+            }
             Event::Motion(x, y) => {
                 self.pointer = (x, y);
-                if let Some((n, at, serial)) = self.pressed
+                if let Some((i, at, serial)) = self.pressed
                     && !self.dragging
                     && ((x - at.0).powi(2) + (y - at.1).powi(2)).sqrt() > DRAG_SLOP
                 {
-                    self.start_drag(n, serial, w);
+                    self.start_drag(i, serial, w);
                     return Ok(());
                 }
-                let hover = self.tile_at((x, y));
-                if hover != self.hover {
-                    self.hover = hover;
-                    w.redraw();
+                if !self.dragging && self.state.pointer_motion(x, y) {
+                    self.refresh(w);
                 }
             }
             Event::PointerLeave => {
-                if self.hover.take().is_some() {
-                    w.redraw();
+                if self.state.pointer_leave() {
+                    self.refresh(w);
                 }
             }
             Event::Button {
@@ -914,11 +1158,21 @@ impl Application for Launcher {
                 serial,
                 ..
             } if !self.dragging => {
-                let (g, ..) = self.geometry();
-                self.outside_press = !inside(g.panel, self.pointer);
+                self.serial = Some(serial);
+                let panel = self.layout.map_or([0.; 4], |l| l.panel);
+                self.outside_press = !inside(panel, self.pointer);
                 self.pressed = self
-                    .tile_at(self.pointer)
-                    .map(|n| (n, self.pointer, serial));
+                    .state
+                    .hover()
+                    .and_then(|k| item_index(&k.0))
+                    .map(|i| (i, self.pointer, serial));
+                if let Some(a) = self.state.button(true, Instant::now()) {
+                    self.route(a, w);
+                }
+                if !self.closing {
+                    w.set_text_input(self.state.text_input());
+                    self.refresh(w);
+                }
             }
             Event::Button {
                 button: LEFT_BUTTON,
@@ -926,31 +1180,36 @@ impl Application for Launcher {
                 serial,
                 ..
             } if !self.dragging => {
-                let (g, ..) = self.geometry();
-                if self.outside_press && !inside(g.panel, self.pointer) {
+                self.serial = Some(serial);
+                self.pressed = None;
+                let panel = self.layout.map_or([0.; 4], |l| l.panel);
+                if self.outside_press && !inside(panel, self.pointer) {
                     self.finish(w);
-                } else if let Some((n, ..)) = self.pressed.take()
-                    && self.tile_at(self.pointer) == Some(n)
-                {
-                    self.launch(n, Some(serial), w);
+                    return Ok(());
                 }
                 self.outside_press = false;
+                if let Some(a) = self.state.button(false, Instant::now()) {
+                    self.route(a, w);
+                }
+                if !self.closing {
+                    w.set_text_input(self.state.text_input());
+                    self.refresh(w);
+                }
             }
-            Event::Scroll(nk_wayland::ScrollAmount { pixels: delta, .. }) if !self.dragging => {
-                self.scroll = (self.scroll + delta).clamp(0., self.max_scroll());
-                self.hover = self.tile_at(self.pointer);
+            Event::Scroll(amount) if !self.dragging => {
+                self.state.scroll(amount.into());
                 self.want_icons();
-                w.redraw();
+                self.refresh(w);
             }
             Event::Key(key) if !self.dragging => self.key(key, w),
             Event::Ime(batch) if !self.dragging => {
-                self.preedit = batch.preedit.map(|(t, ..)| t).unwrap_or_default();
-                if let Some(commit) = batch.commit {
-                    self.query.push_str(&commit);
-                    self.requery();
+                if let Some(a) = self.state.ime(&batch) {
+                    self.route(a, w);
                 }
-                self.sync_text_input(w);
-                w.redraw();
+                if !self.closing {
+                    w.set_text_input(self.state.text_input());
+                    self.refresh(w);
+                }
             }
             Event::DragEnded { dropped } => {
                 eprintln!("nidara-shell: Apps drag ended (dropped: {dropped})");
@@ -984,177 +1243,68 @@ impl Application for Launcher {
             "apps-stage",
             serde_json::json!({"instance":self.metrics_id,"stage":"paint","held":self.waiting_for_icons()}),
         );
-        let mut c = {
-            let _span = crate::icon_metrics::span(
-                "apps-stage",
-                serde_json::json!({"instance":self.metrics_id,"stage":"canvas"}),
-            );
-            Canvas::new(f.pixel_width, f.pixel_height, f.scale)
-        };
-        if self.dragging || self.closing || self.look.is_none() || self.waiting_for_icons() {
-            let _span = crate::icon_metrics::span(
-                "apps-stage",
-                serde_json::json!({"instance":self.metrics_id,"stage":"finish-held"}),
-            );
+        let mut c = Canvas::new(f.pixel_width, f.pixel_height, f.scale);
+        if self.dragging
+            || self.closing
+            || self.look.is_none()
+            || self.kit.is_none()
+            || self.waiting_for_icons()
+        {
             return Ok(c.finish());
         }
-        let content = crate::icon_metrics::span(
-            "apps-stage",
-            serde_json::json!({"instance":self.metrics_id,"stage":"content"}),
-        );
+        let first = !self.icons_presented;
         self.icons_presented = true;
-        let (g, ..) = self.geometry();
+        let accent = self.look.as_ref().map(|l| l.style.row.accent);
+        let Some(kit) = self.kit.as_mut() else {
+            return Ok(c.finish());
+        };
+        let look = kit.tokens.with_types(&kit.types);
+        // Without the compositor's glass (another compositor), the kit paints the panel's
+        // washes and an opaque base from the same frame (D5).
+        let fallback = (!f.material).then_some(&self.last);
+        let icons = &mut kit.icons;
+        self.state
+            .paint(&mut c, look, &mut |n, size| glyph(icons, n, size), fallback)?;
+        // The app icons and the "new" dots, in their slots, faded and cut as their tiles.
         let rect = |r: [f64; 4]| Rect {
             x: r[0] as f32,
             y: r[1] as f32,
             width: r[2] as f32,
             height: r[3] as f32,
         };
-        let (menu, base_text) = {
-            let look = self.look.as_ref().unwrap();
-            (look.style.row.clone(), look.styles.text.clone())
-        };
-        if !f.material {
-            // No compositor glass (another compositor): the panel's own opaque base (D5).
-            c.rounded_rect(rect(g.panel), RADIUS, menu.background);
-        }
-        // The search pill: a raised fill inside a hairline border.
-        let pill = rect(g.search);
-        c.rounded_rect(pill, g.search[3] / 2., menu.border_color);
-        let inner = Rect {
-            x: pill.x + 1.,
-            y: pill.y + 1.,
-            width: pill.width - 2.,
-            height: pill.height - 2.,
-        };
-        c.rounded_rect(inner, g.search[3] / 2. - 1., ink(0.08));
-        let mut style = base_text.clone();
-        style.size *= menu.text_scale;
-        style.weight = menu.weight;
-        let shown_query = format!("{}{}", self.query, self.preedit);
-        let (text, color) = if shown_query.is_empty() {
-            (
-                self.look
-                    .as_ref()
-                    .unwrap()
-                    .text_of(&Label::Key("app-grid.search.placeholder")),
-                menu.text.multiply_alpha(0.5),
-            )
-        } else {
-            (shown_query, menu.text)
-        };
-        let tx = (g.search[0] + SEARCH_PAD_X) as f32;
-        let width = (g.search[2] - 2. * SEARCH_PAD_X) as f32;
-        if let Some(look) = self.look.as_mut()
-            && let Ok(layout) = look.text.layout(&text, &style, 4096.)
-        {
-            let h = layout.measured_size().height;
-            let ty = (g.search[1] + (g.search[3] - f64::from(h)) / 2.) as f32;
-            c.clip(Rect {
-                x: tx,
-                y: pill.y,
-                width,
-                height: pill.height,
-            });
-            c.layout(&layout, (tx, ty), color)?;
-            if !self.query.is_empty() || !self.preedit.is_empty() {
-                // The caret, after the text.
-                let cx = tx + layout.measured_size().width + 1.;
-                c.rect(
-                    Rect {
-                        x: cx,
-                        y: ty + 2.,
-                        width: 1.5,
-                        height: h - 4.,
-                    },
-                    menu.text,
-                );
-            }
-            c.pop_clip();
-        }
-
-        // The grid.
-        let mut label_style = base_text;
-        label_style.size *= menu.text_scale * 0.92;
-        label_style.weight = 500.;
-        label_style.alignment = nk_text::Alignment::Center;
-        c.clip(rect(g.grid));
-        if self.shown.is_empty()
-            && self.answered.is_some()
-            && let Some(look) = self.look.as_mut()
-            && let Ok(layout) = look.text.layout(
-                &look.text_of(&Label::Key("app-grid.no-results")),
-                &style,
-                4096.,
-            )
-        {
-            let s = layout.measured_size();
-            let x = (g.grid[0] + (g.grid[2] - f64::from(s.width)) / 2.) as f32;
-            let y = (g.grid[1] + (g.grid[3] - f64::from(s.height)) / 2.) as f32;
-            c.layout(&layout, (x, y), menu.text.multiply_alpha(0.6))?;
-        }
-        for n in 0..self.shown.len() {
-            let t = self.tile(n);
-            if t[1] + t[3] < g.grid[1] || t[1] > g.grid[1] + g.grid[3] {
+        for p in self.state.placed() {
+            let Some(visible) = p.visible() else {
+                continue;
+            };
+            let Some(i) = item_index(&p.key.0) else {
+                continue;
+            };
+            let slot = p.key.0.rsplit('/').next().unwrap_or("");
+            if !matches!(slot, "icon" | "new") || p.alpha <= 0. {
                 continue;
             }
-            let e = self.all[self.shown[n]].clone();
-            let lit = self.hover == Some(n) || self.focus == Some(n);
-            if lit {
-                // The kit's tile states: a quiet wash on hover, the ring for the keyboard.
-                c.rounded_rect(rect(t), TILE_RADIUS, ink(0.08));
+            let fading = p.alpha < 1.;
+            if fading {
+                c.push_opacity(p.alpha);
             }
-            if self.focus == Some(n) {
-                let ring = rect(t);
-                c.rounded_rect(ring, TILE_RADIUS, menu.accent.multiply_alpha(0.35));
-                c.rounded_rect(
-                    Rect {
-                        x: ring.x + 2.,
-                        y: ring.y + 2.,
-                        width: ring.width - 4.,
-                        height: ring.height - 4.,
-                    },
-                    TILE_RADIUS - 2.,
-                    ink(0.10),
-                );
+            c.clip(rect(visible));
+            if slot == "icon" {
+                let asset = self
+                    .asset(&self.all[i])
+                    .unwrap_or_else(crate::icon_memory::generic);
+                c.image(&asset.raster, rect(p.rect), ImageFit::Contain);
+            } else if let Some(accent) = accent {
+                c.rounded_rect(rect(p.rect), p.rect[2] / 2., accent);
             }
-            let plate_x = t[0] + (t[2] - PLATE) / 2.;
-            let plate_y = t[1] + TILE_PAD_Y;
-            let icon = Rect {
-                x: (plate_x + (PLATE - ICON) / 2.) as f32,
-                y: (plate_y + (PLATE - ICON) / 2.) as f32,
-                width: ICON as f32,
-                height: ICON as f32,
-            };
-            let asset = self.asset(&e).unwrap_or_else(crate::icon_memory::generic);
-            c.image(&asset.raster, icon, ImageFit::Contain);
-            if e.is_new {
-                // "New": a small accent dot by the icon's corner (the badge is the dot;
-                // its word is for the screen reader).
-                let d = 10.;
-                c.rounded_rect(
-                    Rect {
-                        x: icon.x + icon.width - d as f32 / 2.,
-                        y: icon.y - d as f32 / 2. + 4.,
-                        width: d as f32,
-                        height: d as f32,
-                    },
-                    d / 2.,
-                    menu.accent,
-                );
-            }
-            let lw = (t[2] - 16.) as f32;
-            if let Some(layout) = self.label(&e, &label_style, lw) {
-                let ly = (plate_y + PLATE + LABEL_GAP - 8.) as f32;
-                c.layout(&layout, ((t[0] + 8.) as f32, ly), menu.text)?;
+            c.pop_clip();
+            if fading {
+                c.pop_opacity();
             }
         }
-        c.pop_clip();
-        drop(content);
-        let _span = crate::icon_metrics::span(
-            "apps-stage",
-            serde_json::json!({"instance":self.metrics_id,"stage":"finish-visible"}),
-        );
+        if first {
+            // The search's layer waited for the panel's first frame, so both show together.
+            self.refresh_pending = true;
+        }
         Ok(c.finish())
     }
 
@@ -1163,63 +1313,30 @@ impl Application for Launcher {
         if !crate::icon_metrics::enabled() || self.look.is_none() || self.closing {
             return;
         }
-        let (g, ..) = self.geometry();
         let mut ready = 0;
         let mut wanted = 0;
         let mut rectangles = Vec::new();
-        for n in 0..self.shown.len() {
-            let t = self.tile(n);
-            if t[1] + t[3] < g.grid[1] || t[1] > g.grid[1] + g.grid[3] {
+        for (p, i) in self.slots() {
+            if p.visible().is_none() {
                 continue;
             }
-            rectangles.push([
-                t[0] + (t[2] - ICON) / 2.,
-                t[1] + TILE_PAD_Y + (PLATE - ICON) / 2.,
-                ICON,
-                ICON,
-            ]);
+            rectangles.push(p.rect);
             wanted += 1;
-            ready += usize::from(self.asset(&self.all[self.shown[n]]).is_some());
+            ready += usize::from(self.asset(&self.all[i]).is_some());
         }
         crate::icon_metrics::emit(
             "frame",
             serde_json::json!({"surface":"apps","visible":self.icons_presented,"instance":self.metrics_id,"commit":commit,"ready":ready,"wanted":wanted,"rectangles":rectangles,"size":self.size}),
         );
     }
+
     fn material(&self) -> Option<Material> {
         // Match the buffer we painted, even if a worker completes meanwhile.
-        if !self.icons_presented {
+        if !self.icons_presented || self.dragging || self.closing || self.size.0 == 0 {
             return None;
         }
-        if self.dragging || self.closing || self.size.0 == 0 {
-            return None;
-        }
-        let (g, ..) = self.geometry();
-        let pane = Pane {
-            x: g.panel[0],
-            y: g.panel[1],
-            width: g.panel[2],
-            height: g.panel[3],
-            radius: RADIUS,
-            exponent: 2.,
-            pointer: None,
-        };
-        self.look
-            .as_ref()?
-            .panel
-            .as_ref()?
-            .at(pane.width.min(pane.height))
-            .ok()
-            .map(|mut m| {
-                m.shapes = vec![pane];
-                m
-            })
+        glass(self.look.as_ref(), &self.last)
     }
-}
-
-/// The dark skin's ink at `alpha`: white.
-fn ink(alpha: f32) -> Color {
-    Color::new([1., 1., 1., alpha])
 }
 
 /// One Apps layer's whole life on its own thread: on the output the compositor chooses
@@ -1298,53 +1415,23 @@ mod tests {
     }
 
     #[test]
-    fn the_panel_is_centred_and_fits_small_outputs() {
-        let (g, columns, rows) = geometry((2560, 1440));
-        assert_eq!((columns, rows), (COLUMNS, ROWS));
-        assert_eq!(g.panel[0] * 2. + g.panel[2], 2560.);
-        let (g, columns, rows) = geometry((800, 600));
-        assert!(columns < COLUMNS && rows < ROWS);
-        assert!(g.panel[0] >= 0. && g.panel[1] >= 0.);
-        assert!(g.panel[0] + g.panel[2] <= 800. && g.panel[1] + g.panel[3] <= 600.);
-    }
-
-    #[test]
-    fn a_reader_sees_the_search_and_the_shown_apps_in_order() {
-        let all = entries(&[
-            app("a.desktop", "Alpha", true),
-            app("b.desktop", "Beta", true),
-        ]);
-        let t = tree(&Semantics {
-            all: &all,
-            shown: &[1, 0],
-            tiles: &[[0., 0., 10., 10.], [0., 100., 10., 10.]],
-            grid: [0., 0., 100., 50.],
-            search: [0., -40., 100., 36.],
-            size: (100, 100),
-            query: "a",
-            focus: Some(0),
-        });
-        let list = &t.nodes[&LIST];
-        let names: Vec<&str> = list
-            .children
-            .iter()
-            .map(|c| t.nodes[c].name.as_str())
-            .collect();
-        assert_eq!(names, ["Beta", "Alpha"]);
-        assert!(t.nodes[&list.children[0]].states.focused);
-        assert!(!t.nodes[&SEARCH].states.focused);
-        assert!(t.nodes[&list.children[1]].states.offscreen);
-        assert_eq!(t.nodes[&SEARCH].text.as_ref().unwrap().text, "a");
+    fn a_tile_key_names_its_app_and_its_parts() {
+        assert_eq!(item_index(&item_key(12)), Some(12));
+        assert_eq!(item_index("a:12/icon"), Some(12));
+        assert_eq!(item_index(SEARCH), None);
     }
 
     #[test]
     fn a_dragged_icon_is_premultiplied_bgra() {
-        let i = drag_icon(&Icon {
-            width: 1,
-            height: 1,
-            rgba: vec![255, 0, 0, 128],
-        });
+        let i = drag_icon(
+            &Icon {
+                width: 1,
+                height: 1,
+                rgba: vec![255, 0, 0, 128],
+            },
+            64,
+        );
         assert_eq!(i.pixels, [0, 0, 128, 128]);
-        assert_eq!(i.hotspot, (36, 36));
+        assert_eq!(i.hotspot, (32, 32));
     }
 }

@@ -46,6 +46,7 @@ impl Tokens {
             button: button_from(&set.components["button"], &colors)?,
             tile: crate::tokens::tile_from(&set.components["tile"])?,
             notification: crate::tokens::notification_from(&set.components["notification"])?,
+            icon_grid: crate::tokens::icon_grid_from(&set.components["iconGrid"])?,
 
             row_height: e.statics["ts"]["ROW_HEIGHT"]["single"]
                 .as_f64()

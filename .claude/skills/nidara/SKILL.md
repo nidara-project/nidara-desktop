@@ -432,6 +432,14 @@ opens), the body, a thumbnail or a picture across the open card, `nk::Notificati
 its close on hover; the whole card one control, a swipe its close. Measures in
 `toolkit/tokens/notification.json` (`Tokens::notification`); icons and pictures are slots its
 surface paints (`{id}/app`, `{id}/thumb`, `{id}/hero`).
+An icon with its name under it on a square cell is `nk::IconItem` on `nk::Grid` (#1168; Apps',
+any icon view's): one control, a themed icon or a slot its surface paints (`{key}/icon`), a dot
+`{key}/new` when new. `nk::panel_layout` places a panel of them under a floating search: at most
+`grid.columns` × `grid.rows`, fewer on a smaller output, the same panel on any larger one; the
+grid sits inside the search's rounded ends. Measures in `toolkit/tokens/icon-grid.json`
+(`Tokens::icon_grid`). Apps lifts the search pane onto a layer of its own (`ViewState::lift`)
+with a graded blur layer under it, so rows scroll under the glass and leave through the panel's
+top blurred; `nk::Scroll::floating_top` starts the scroll bar and keyboard reveals below it.
 A slider row is a list row ending in `nk::SliderEnd`
 (§13.7): measures from `range.slider`, its value in room for its widest text (`nk::Label::room`).
 A window's sidebar is ONE kit component, `nk::SidebarList` (§13.8), holding `nk::SidebarEntry`

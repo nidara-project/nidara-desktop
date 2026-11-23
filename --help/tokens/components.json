@@ -1,0 +1,1752 @@
+{
+ "inputs": {
+  "dark": "appearance.darkMode",
+  "reduceTransparency": "accessibility.reduceTransparency"
+ },
+ "variants": [
+  {
+   "dark": true,
+   "reduceTransparency": false,
+   "focus": {
+    "width": 2,
+    "gap": 2,
+    "color": "--nidara-accent",
+    "source": "nidara-focus-ring: solid accent, 2px width, 2px outline-offset; shared by nk-view (#1103 step 5b)."
+   },
+   "list": {
+    "highlight": {
+     "inset": 4,
+     "hoverOpacity": 0.08,
+     "source": "Provisional inset from space-1; neutral hover 8% from D8. Final geometry live with owner."
+    },
+    "separator": {
+     "physicalPixels": 1,
+     "color": "--nidara-border",
+     "source": "Provisional hairline from existing kit border; final appearance live with owner."
+    }
+   },
+   "choices": {
+    "segmented": {
+     "paddingX": 14,
+     "paddingY": 5,
+     "border": 1,
+     "minContentHeight": 20,
+     "radius": "sm",
+     "borderColor": "--nidara-border",
+     "fontSize": "fse-small",
+     "fontWeight": "fw-medium",
+     "selectedColor": "--nidara-accent",
+     "selectedText": "--nidara-accent-fg",
+     "background": "--nidara-surface",
+     "hover": "--nidara-surface-hover",
+     "pressed": "--nidara-surface-active",
+     "text": "--nidara-text",
+     "selectedHoverWhite": 0.15,
+     "selectedPressedBlack": 0.3,
+     "disabledOpacity": 0.45,
+     "source": "button.settings-preset-btn: padding 5px 14px, 1px border var(--nidara-border), font-size $fse-small, radius $nidara-radius-sm (components common.radius); selected = .nidara-btn--primary, the accent with accent-fg text. Rest/hover/pressed: --nidara-surface / -hover / -active with --nidara-text, weight $fw-medium; the chosen one's hover mixes 15% white into the accent and its press 30% black; disabled 0.45 opacity. minContentHeight is the button's (button.json): the segment's text line."
+    },
+    "swatch": {
+     "diameter": 30,
+     "border": 3,
+     "ring": 2,
+     "gap": 8,
+     "selectedColor": "--nidara-text",
+     "hoverColor": "--nidara-text-dim",
+     "source": "button.accent-circle-btn: min 30px, 3px border, selected = border and a 2px outer ring of --nidara-text, hover border --nidara-text-dim. Gap: space-2 between swatches (provisional). Focus: the kit focus accent outside the selected band; disabled opacity 0.45, as the native choice family.",
+     "disabledOpacity": 0.45
+    }
+   },
+   "range": {
+    "slider": {
+     "width": 140,
+     "track": 6,
+     "thumbRadius": 9,
+     "valueGap": 12,
+     "fillOpacity": 0.9,
+     "pageSteps": 10,
+     "iconSize": 16,
+     "iconOpacity": 0.5,
+     "iconGap": 12,
+     "source": "NidaraSliderRow: width_request 140, the value label 12 px beside it; slider.ts: TRACK_H 6, THUMB_R 9 (drawn at r-1), accent fill at 0.9. Page Up/Down move 10 steps (#882's acceptance). Flanking icons (opts.icons): pixel_size 16 (iconSizes' default), opacity 0.5, in the row's 12 px spacing."
+    },
+    "spin": {
+     "height": 32,
+     "textWidth": 28,
+     "buttonWidth": 18,
+     "border": 1,
+     "borderColor": "--nidara-border",
+     "gap": 4,
+     "source": "spinbutton.time-spin: min-height 32, text min-width 28, buttons min-width 18, 1px border var(--nidara-border), radius sm; the two fields 4 px apart with a colon between (appearance.ts timePicker)."
+    }
+   },
+   "switch": {
+    "width": 44,
+    "height": 24,
+    "border": 1,
+    "borderColor": "--nidara-border",
+    "checkedBorderColor": "rgba(0, 0, 0, 0.1)",
+    "trackColor": "--nidara-surface",
+    "checkedColor": "--nidara-accent",
+    "thumbColor": "--nidara-thumb",
+    "thumbMargin": 3,
+    "disabledOpacity": 0.45,
+    "source": "min-width 44, min-height 24, border 1px var(--nidara-border) (checked: rgba(0,0,0,0.1)), background var(--nidara-surface) (checked: var(--nidara-accent)); slider margin 3, 18×18, var(--nidara-thumb), pill; :disabled opacity 0.45."
+   },
+   "check": {
+    "size": 18,
+    "border": 1.5,
+    "radius": "xs",
+    "background": "--nidara-surface",
+    "borderColor": "--nidara-border",
+    "hover": "--nidara-surface-hover",
+    "hoverBorder": "--nidara-surface-strong",
+    "pressed": "--nidara-surface-active",
+    "checked": "--nidara-accent",
+    "tick": "--nidara-accent-fg",
+    "tickWidth": 2,
+    "dotBand": 4,
+    "dotBandColor": "--nidara-bg",
+    "disabledOpacity": 0.45
+   },
+   "rows": {
+    "subtitle": {
+     "fontSize": "fse-small",
+     "color": "--nidara-text-dim",
+     "source": ".nidara-row-subtitle: font-size $fse-small, color var(--nidara-text-dim)."
+    },
+    "footer": {
+     "fontSize": "fse-caption",
+     "color": "--nidara-text-dim",
+     "gap": 8,
+     "source": ".nidara-list-footer: font-size $fse-caption, color var(--nidara-text-dim), margin-top 8px (mirroring the header's margin-bottom)."
+    },
+    "disclosure": {
+     "iconSize": 16,
+     "open": "nd-pan-down",
+     "closed": "nd-pan-end",
+     "source": "PreferencePage.ts: Gtk.Image pixel_size 16, uiIcon nd-pan-down when revealed, nd-pan-end when not; revealed at first (reveal_child: true).",
+     "chevron": {
+      "viewBox": 24,
+      "strokeWidth": 2,
+      "closedPoints": [
+       [
+        9,
+        18
+       ],
+       [
+        15,
+        12
+       ],
+       [
+        9,
+        6
+       ]
+      ],
+      "source": "nd-pan-end-symbolic.svg: m9 18 6-6-6-6, round caps/join, stroke 2 in a 24x24 viewBox. Rotating 90 degrees gives nd-pan-down."
+     }
+    }
+   },
+   "dropdown": {
+    "trigger": {
+     "paddingX": 14,
+     "paddingY": 4,
+     "border": 2,
+     "minContentHeight": 20,
+     "radius": "sm",
+     "fontSize": "fse-small",
+     "fontWeight": "fw-medium",
+     "labelMargin": "space-2",
+     "arrowSize": 16,
+     "arrowGap": 6,
+     "arrow": "nd-pan-down",
+     "background": "--nidara-surface-back",
+     "hover": "--nidara-surface-hover",
+     "pressed": "--nidara-surface-active",
+     "text": "--nidara-text",
+     "arrowColor": "--nidara-text-dim",
+     "disabledOpacity": 0.45
+    },
+    "menu": {
+     "border": 1,
+     "radius": "md",
+     "inset": 6,
+     "paddingX": 9,
+     "paddingY": 6,
+     "rowRadius": "sm",
+     "fontSize": "fse-small",
+     "fontWeight": "fw-regular",
+     "checkSize": 14,
+     "checkGap": 8,
+     "checkStroke": 2.2,
+     "background": "--nidara-popover-bg",
+     "borderColor": "--nidara-popover-border",
+     "text": "--nidara-text",
+     "accent": "--nidara-accent",
+     "accentText": "--nidara-accent-fg",
+     "pressedBlack": 0.15
+    }
+   },
+   "button": {
+    "paddingX": 14,
+    "paddingY": 5,
+    "border": 1,
+    "minContentHeight": 20,
+    "radius": "sm",
+    "fontSize": "fse-small",
+    "fontWeight": "fw-medium",
+    "background": "--nidara-surface",
+    "borderColor": "--nidara-border",
+    "hover": "--nidara-surface-hover",
+    "pressed": "--nidara-surface-active",
+    "text": "--nidara-text",
+    "disabledOpacity": 0.45,
+    "primary": {
+     "color": "--nidara-accent",
+     "text": "--nidara-accent-fg",
+     "borderAlpha": 0,
+     "hoverWhite": 0.15,
+     "pressedBlack": 0.3
+    },
+    "destructive": {
+     "color": "--nidara-danger",
+     "text": "--nidara-danger",
+     "restAlpha": 0.1,
+     "borderAlpha": 0.25,
+     "hoverAlpha": 0.2,
+     "pressedAlpha": 0.3
+    }
+   },
+   "scrollbar": {
+    "lane": 12,
+    "thumbRest": 4,
+    "thumbHover": 8,
+    "thumbMin": 28,
+    "edgeClear": 4,
+    "cornerClear": 4,
+    "hideMs": 1100,
+    "fadeMs": 250,
+    "widthTauMs": 45,
+    "trackOpacity": 0.18,
+    "color": "--nidara-surface-raised",
+    "active": "--nidara-text-dim"
+   },
+   "capsule": {
+    "height": 24,
+    "button": 24,
+    "edge": 0,
+    "gap": 12,
+    "windowInset": 12,
+    "glyph": {
+     "size": 14,
+     "stroke": 1.6,
+     "minimizeHalf": 3.5,
+     "maximizeHalf": 3.7,
+     "maximizeRadius": 1.6,
+     "closeHalf": 3
+    }
+   },
+   "tile": {
+    "grid": {
+     "cell": 76,
+     "gap": 20
+    },
+    "cornerSquare": 38,
+    "pad": 10,
+    "tallPad": 2,
+    "badge": {
+     "size": 44,
+     "gap": 8,
+     "inset": 4
+    },
+    "icon": 28,
+    "text": {
+     "title": 14,
+     "titleWeight": 700,
+     "subtitle": 14,
+     "small": 12
+    },
+    "picture": {
+     "wide": 44,
+     "square": 62,
+     "lead": 14,
+     "gap": 12,
+     "between": 4,
+     "glyph": 18,
+     "roomWide": 32,
+     "roomSquare": 24,
+     "side": 16
+    },
+    "tall": {
+     "top": 12,
+     "value": 24,
+     "bottom": 24
+    },
+    "slider": {
+     "lead": 14,
+     "icon": 16,
+     "gap": 12,
+     "value": 36
+    },
+    "track": 0.18
+   },
+   "iconGrid": {
+    "item": {
+     "cell": 104,
+     "icon": 64,
+     "top": 8,
+     "nameGap": 8,
+     "name": 12,
+     "nameWeight": 500,
+     "lines": 1,
+     "corner": 16,
+     "dot": 10
+    },
+    "grid": {
+     "gap": 14,
+     "columns": 7,
+     "rows": 5
+    },
+    "panel": {
+     "inset": {
+      "top": 22,
+      "side": 26
+     },
+     "search": 40,
+     "below": 14,
+     "corner": 34,
+     "blurCurve": [
+      1,
+      0.6,
+      0
+     ]
+    }
+   },
+   "notification": {
+    "corner": "lg",
+    "heroCorner": "md",
+    "art": 44,
+    "lineHeight": 1.35,
+    "text": {
+     "title": 13,
+     "titleWeight": 700,
+     "age": 11,
+     "count": 11,
+     "countWeight": 600,
+     "body": 12,
+     "action": 12,
+     "error": 12
+    },
+    "lines": {
+     "folded": 2,
+     "open": 4,
+     "error": 2
+    },
+    "glyph": 13,
+    "hero": {
+     "source": 240,
+     "min": 72,
+     "max": 200
+    }
+   },
+   "header": {
+    "band": 48,
+    "inset": 8,
+    "button": 32,
+    "icon": 16,
+    "sidebarRadius": 16,
+    "contentTopGap": 16,
+    "navigation": {
+     "button": 24,
+     "edge": 4,
+     "gap": 4,
+     "height": 32,
+     "icon": 16,
+     "pad": 7
+    },
+    "titleGap": 14,
+    "titleSize": 15,
+    "titleWeight": 600,
+    "search": {
+     "width": 200,
+     "padding": 14,
+     "size": 13,
+     "gap": 12
+    },
+    "titlebar": {
+     "extraHeight": 20,
+     "curve": [
+      1,
+      1,
+      0.5,
+      0
+     ],
+     "backgroundOpacity": 0.85,
+     "doubleClickMs": 400
+    }
+   },
+   "search": {
+    "paddingX": 12,
+    "border": 1,
+    "minHeight": 32,
+    "radius": "--nidara-radius-pill",
+    "iconSize": 15,
+    "iconGap": 8,
+    "icon": "nd-system-search",
+    "background": "--nidara-surface-back",
+    "borderColor": "--nidara-border",
+    "text": "--nidara-text",
+    "dim": "--nidara-text-dim",
+    "selection": "--nidara-accent-30",
+    "selectionText": "--nidara-text",
+    "clearIcon": "nd-window-close"
+   },
+   "wallpaper": {
+    "previewWidth": 320,
+    "previewHeight": 180,
+    "previewDecodeWidth": 640,
+    "previewDecodeHeight": 360,
+    "thumbnailWidth": 80,
+    "thumbnailHeight": 45,
+    "thumbnailDecodeWidth": 160,
+    "thumbnailDecodeHeight": 90,
+    "previewRadius": "md",
+    "thumbnailRadius": "sm",
+    "thumbnailInnerInset": 2,
+    "previewBorder": 2,
+    "thumbnailBorder": 2,
+    "pictureBorder": 1,
+    "padding": 2,
+    "gap": 8,
+    "background": "--nidara-surface",
+    "pictureBorderColor": "--nidara-border",
+    "hoverBorder": "--nidara-surface-strong",
+    "selectedBorder": "--nidara-accent",
+    "idleBorder": "rgba(0, 0, 0, 0)",
+    "borderTransitionMs": 150
+   },
+   "common": {
+    "padding": 12,
+    "gap": 4,
+    "radius": 10,
+    "groupRadius": 16
+   },
+   "widths": {
+    "form": {
+     "preferred": 800,
+     "floor": 560
+    },
+    "reading": null,
+    "none": null
+   }
+  },
+  {
+   "dark": true,
+   "reduceTransparency": true,
+   "focus": {
+    "width": 2,
+    "gap": 2,
+    "color": "--nidara-accent",
+    "source": "nidara-focus-ring: solid accent, 2px width, 2px outline-offset; shared by nk-view (#1103 step 5b)."
+   },
+   "list": {
+    "highlight": {
+     "inset": 4,
+     "hoverOpacity": 0.08,
+     "source": "Provisional inset from space-1; neutral hover 8% from D8. Final geometry live with owner."
+    },
+    "separator": {
+     "physicalPixels": 1,
+     "color": "--nidara-border",
+     "source": "Provisional hairline from existing kit border; final appearance live with owner."
+    }
+   },
+   "choices": {
+    "segmented": {
+     "paddingX": 14,
+     "paddingY": 5,
+     "border": 1,
+     "minContentHeight": 20,
+     "radius": "sm",
+     "borderColor": "--nidara-border",
+     "fontSize": "fse-small",
+     "fontWeight": "fw-medium",
+     "selectedColor": "--nidara-accent",
+     "selectedText": "--nidara-accent-fg",
+     "background": "--nidara-surface",
+     "hover": "--nidara-surface-hover",
+     "pressed": "--nidara-surface-active",
+     "text": "--nidara-text",
+     "selectedHoverWhite": 0.15,
+     "selectedPressedBlack": 0.3,
+     "disabledOpacity": 0.45,
+     "source": "button.settings-preset-btn: padding 5px 14px, 1px border var(--nidara-border), font-size $fse-small, radius $nidara-radius-sm (components common.radius); selected = .nidara-btn--primary, the accent with accent-fg text. Rest/hover/pressed: --nidara-surface / -hover / -active with --nidara-text, weight $fw-medium; the chosen one's hover mixes 15% white into the accent and its press 30% black; disabled 0.45 opacity. minContentHeight is the button's (button.json): the segment's text line."
+    },
+    "swatch": {
+     "diameter": 30,
+     "border": 3,
+     "ring": 2,
+     "gap": 8,
+     "selectedColor": "--nidara-text",
+     "hoverColor": "--nidara-text-dim",
+     "source": "button.accent-circle-btn: min 30px, 3px border, selected = border and a 2px outer ring of --nidara-text, hover border --nidara-text-dim. Gap: space-2 between swatches (provisional). Focus: the kit focus accent outside the selected band; disabled opacity 0.45, as the native choice family.",
+     "disabledOpacity": 0.45
+    }
+   },
+   "range": {
+    "slider": {
+     "width": 140,
+     "track": 6,
+     "thumbRadius": 9,
+     "valueGap": 12,
+     "fillOpacity": 0.9,
+     "pageSteps": 10,
+     "iconSize": 16,
+     "iconOpacity": 0.5,
+     "iconGap": 12,
+     "source": "NidaraSliderRow: width_request 140, the value label 12 px beside it; slider.ts: TRACK_H 6, THUMB_R 9 (drawn at r-1), accent fill at 0.9. Page Up/Down move 10 steps (#882's acceptance). Flanking icons (opts.icons): pixel_size 16 (iconSizes' default), opacity 0.5, in the row's 12 px spacing."
+    },
+    "spin": {
+     "height": 32,
+     "textWidth": 28,
+     "buttonWidth": 18,
+     "border": 1,
+     "borderColor": "--nidara-border",
+     "gap": 4,
+     "source": "spinbutton.time-spin: min-height 32, text min-width 28, buttons min-width 18, 1px border var(--nidara-border), radius sm; the two fields 4 px apart with a colon between (appearance.ts timePicker)."
+    }
+   },
+   "switch": {
+    "width": 44,
+    "height": 24,
+    "border": 1,
+    "borderColor": "--nidara-border",
+    "checkedBorderColor": "rgba(0, 0, 0, 0.1)",
+    "trackColor": "--nidara-surface",
+    "checkedColor": "--nidara-accent",
+    "thumbColor": "--nidara-thumb",
+    "thumbMargin": 3,
+    "disabledOpacity": 0.45,
+    "source": "min-width 44, min-height 24, border 1px var(--nidara-border) (checked: rgba(0,0,0,0.1)), background var(--nidara-surface) (checked: var(--nidara-accent)); slider margin 3, 18×18, var(--nidara-thumb), pill; :disabled opacity 0.45."
+   },
+   "check": {
+    "size": 18,
+    "border": 1.5,
+    "radius": "xs",
+    "background": "--nidara-surface",
+    "borderColor": "--nidara-border",
+    "hover": "--nidara-surface-hover",
+    "hoverBorder": "--nidara-surface-strong",
+    "pressed": "--nidara-surface-active",
+    "checked": "--nidara-accent",
+    "tick": "--nidara-accent-fg",
+    "tickWidth": 2,
+    "dotBand": 4,
+    "dotBandColor": "--nidara-bg",
+    "disabledOpacity": 0.45
+   },
+   "rows": {
+    "subtitle": {
+     "fontSize": "fse-small",
+     "color": "--nidara-text-dim",
+     "source": ".nidara-row-subtitle: font-size $fse-small, color var(--nidara-text-dim)."
+    },
+    "footer": {
+     "fontSize": "fse-caption",
+     "color": "--nidara-text-dim",
+     "gap": 8,
+     "source": ".nidara-list-footer: font-size $fse-caption, color var(--nidara-text-dim), margin-top 8px (mirroring the header's margin-bottom)."
+    },
+    "disclosure": {
+     "iconSize": 16,
+     "open": "nd-pan-down",
+     "closed": "nd-pan-end",
+     "source": "PreferencePage.ts: Gtk.Image pixel_size 16, uiIcon nd-pan-down when revealed, nd-pan-end when not; revealed at first (reveal_child: true).",
+     "chevron": {
+      "viewBox": 24,
+      "strokeWidth": 2,
+      "closedPoints": [
+       [
+        9,
+        18
+       ],
+       [
+        15,
+        12
+       ],
+       [
+        9,
+        6
+       ]
+      ],
+      "source": "nd-pan-end-symbolic.svg: m9 18 6-6-6-6, round caps/join, stroke 2 in a 24x24 viewBox. Rotating 90 degrees gives nd-pan-down."
+     }
+    }
+   },
+   "dropdown": {
+    "trigger": {
+     "paddingX": 14,
+     "paddingY": 4,
+     "border": 2,
+     "minContentHeight": 20,
+     "radius": "sm",
+     "fontSize": "fse-small",
+     "fontWeight": "fw-medium",
+     "labelMargin": "space-2",
+     "arrowSize": 16,
+     "arrowGap": 6,
+     "arrow": "nd-pan-down",
+     "background": "--nidara-surface-back",
+     "hover": "--nidara-surface-hover",
+     "pressed": "--nidara-surface-active",
+     "text": "--nidara-text",
+     "arrowColor": "--nidara-text-dim",
+     "disabledOpacity": 0.45
+    },
+    "menu": {
+     "border": 1,
+     "radius": "md",
+     "inset": 6,
+     "paddingX": 9,
+     "paddingY": 6,
+     "rowRadius": "sm",
+     "fontSize": "fse-small",
+     "fontWeight": "fw-regular",
+     "checkSize": 14,
+     "checkGap": 8,
+     "checkStroke": 2.2,
+     "background": "--nidara-popover-bg",
+     "borderColor": "--nidara-popover-border",
+     "text": "--nidara-text",
+     "accent": "--nidara-accent",
+     "accentText": "--nidara-accent-fg",
+     "pressedBlack": 0.15
+    }
+   },
+   "button": {
+    "paddingX": 14,
+    "paddingY": 5,
+    "border": 1,
+    "minContentHeight": 20,
+    "radius": "sm",
+    "fontSize": "fse-small",
+    "fontWeight": "fw-medium",
+    "background": "--nidara-surface",
+    "borderColor": "--nidara-border",
+    "hover": "--nidara-surface-hover",
+    "pressed": "--nidara-surface-active",
+    "text": "--nidara-text",
+    "disabledOpacity": 0.45,
+    "primary": {
+     "color": "--nidara-accent",
+     "text": "--nidara-accent-fg",
+     "borderAlpha": 0,
+     "hoverWhite": 0.15,
+     "pressedBlack": 0.3
+    },
+    "destructive": {
+     "color": "--nidara-danger",
+     "text": "--nidara-danger",
+     "restAlpha": 0.1,
+     "borderAlpha": 0.25,
+     "hoverAlpha": 0.2,
+     "pressedAlpha": 0.3
+    }
+   },
+   "scrollbar": {
+    "lane": 12,
+    "thumbRest": 4,
+    "thumbHover": 8,
+    "thumbMin": 28,
+    "edgeClear": 4,
+    "cornerClear": 4,
+    "hideMs": 1100,
+    "fadeMs": 250,
+    "widthTauMs": 45,
+    "trackOpacity": 0.18,
+    "color": "--nidara-surface-raised",
+    "active": "--nidara-text-dim"
+   },
+   "capsule": {
+    "height": 24,
+    "button": 24,
+    "edge": 0,
+    "gap": 12,
+    "windowInset": 12,
+    "glyph": {
+     "size": 14,
+     "stroke": 1.6,
+     "minimizeHalf": 3.5,
+     "maximizeHalf": 3.7,
+     "maximizeRadius": 1.6,
+     "closeHalf": 3
+    }
+   },
+   "tile": {
+    "grid": {
+     "cell": 76,
+     "gap": 20
+    },
+    "cornerSquare": 38,
+    "pad": 10,
+    "tallPad": 2,
+    "badge": {
+     "size": 44,
+     "gap": 8,
+     "inset": 4
+    },
+    "icon": 28,
+    "text": {
+     "title": 14,
+     "titleWeight": 700,
+     "subtitle": 14,
+     "small": 12
+    },
+    "picture": {
+     "wide": 44,
+     "square": 62,
+     "lead": 14,
+     "gap": 12,
+     "between": 4,
+     "glyph": 18,
+     "roomWide": 32,
+     "roomSquare": 24,
+     "side": 16
+    },
+    "tall": {
+     "top": 12,
+     "value": 24,
+     "bottom": 24
+    },
+    "slider": {
+     "lead": 14,
+     "icon": 16,
+     "gap": 12,
+     "value": 36
+    },
+    "track": 0.18
+   },
+   "iconGrid": {
+    "item": {
+     "cell": 104,
+     "icon": 64,
+     "top": 8,
+     "nameGap": 8,
+     "name": 12,
+     "nameWeight": 500,
+     "lines": 1,
+     "corner": 16,
+     "dot": 10
+    },
+    "grid": {
+     "gap": 14,
+     "columns": 7,
+     "rows": 5
+    },
+    "panel": {
+     "inset": {
+      "top": 22,
+      "side": 26
+     },
+     "search": 40,
+     "below": 14,
+     "corner": 34,
+     "blurCurve": [
+      1,
+      0.6,
+      0
+     ]
+    }
+   },
+   "notification": {
+    "corner": "lg",
+    "heroCorner": "md",
+    "art": 44,
+    "lineHeight": 1.35,
+    "text": {
+     "title": 13,
+     "titleWeight": 700,
+     "age": 11,
+     "count": 11,
+     "countWeight": 600,
+     "body": 12,
+     "action": 12,
+     "error": 12
+    },
+    "lines": {
+     "folded": 2,
+     "open": 4,
+     "error": 2
+    },
+    "glyph": 13,
+    "hero": {
+     "source": 240,
+     "min": 72,
+     "max": 200
+    }
+   },
+   "header": {
+    "band": 48,
+    "inset": 8,
+    "button": 32,
+    "icon": 16,
+    "sidebarRadius": 16,
+    "contentTopGap": 16,
+    "navigation": {
+     "button": 24,
+     "edge": 4,
+     "gap": 4,
+     "height": 32,
+     "icon": 16,
+     "pad": 7
+    },
+    "titleGap": 14,
+    "titleSize": 15,
+    "titleWeight": 600,
+    "search": {
+     "width": 200,
+     "padding": 14,
+     "size": 13,
+     "gap": 12
+    },
+    "titlebar": {
+     "extraHeight": 20,
+     "curve": [
+      1,
+      1,
+      0.5,
+      0
+     ],
+     "backgroundOpacity": 0.85,
+     "doubleClickMs": 400
+    }
+   },
+   "search": {
+    "paddingX": 12,
+    "border": 1,
+    "minHeight": 32,
+    "radius": "--nidara-radius-pill",
+    "iconSize": 15,
+    "iconGap": 8,
+    "icon": "nd-system-search",
+    "background": "--nidara-surface-back",
+    "borderColor": "--nidara-border",
+    "text": "--nidara-text",
+    "dim": "--nidara-text-dim",
+    "selection": "--nidara-accent-30",
+    "selectionText": "--nidara-text",
+    "clearIcon": "nd-window-close"
+   },
+   "wallpaper": {
+    "previewWidth": 320,
+    "previewHeight": 180,
+    "previewDecodeWidth": 640,
+    "previewDecodeHeight": 360,
+    "thumbnailWidth": 80,
+    "thumbnailHeight": 45,
+    "thumbnailDecodeWidth": 160,
+    "thumbnailDecodeHeight": 90,
+    "previewRadius": "md",
+    "thumbnailRadius": "sm",
+    "thumbnailInnerInset": 2,
+    "previewBorder": 2,
+    "thumbnailBorder": 2,
+    "pictureBorder": 1,
+    "padding": 2,
+    "gap": 8,
+    "background": "--nidara-surface",
+    "pictureBorderColor": "--nidara-border",
+    "hoverBorder": "--nidara-surface-strong",
+    "selectedBorder": "--nidara-accent",
+    "idleBorder": "rgba(0, 0, 0, 0)",
+    "borderTransitionMs": 150
+   },
+   "common": {
+    "padding": 12,
+    "gap": 4,
+    "radius": 10,
+    "groupRadius": 16
+   },
+   "widths": {
+    "form": {
+     "preferred": 800,
+     "floor": 560
+    },
+    "reading": null,
+    "none": null
+   }
+  },
+  {
+   "dark": false,
+   "reduceTransparency": false,
+   "focus": {
+    "width": 2,
+    "gap": 2,
+    "color": "--nidara-accent",
+    "source": "nidara-focus-ring: solid accent, 2px width, 2px outline-offset; shared by nk-view (#1103 step 5b)."
+   },
+   "list": {
+    "highlight": {
+     "inset": 4,
+     "hoverOpacity": 0.08,
+     "source": "Provisional inset from space-1; neutral hover 8% from D8. Final geometry live with owner."
+    },
+    "separator": {
+     "physicalPixels": 1,
+     "color": "--nidara-border",
+     "source": "Provisional hairline from existing kit border; final appearance live with owner."
+    }
+   },
+   "choices": {
+    "segmented": {
+     "paddingX": 14,
+     "paddingY": 5,
+     "border": 1,
+     "minContentHeight": 20,
+     "radius": "sm",
+     "borderColor": "--nidara-border",
+     "fontSize": "fse-small",
+     "fontWeight": "fw-medium",
+     "selectedColor": "--nidara-accent",
+     "selectedText": "--nidara-accent-fg",
+     "background": "--nidara-surface",
+     "hover": "--nidara-surface-hover",
+     "pressed": "--nidara-surface-active",
+     "text": "--nidara-text",
+     "selectedHoverWhite": 0.15,
+     "selectedPressedBlack": 0.3,
+     "disabledOpacity": 0.45,
+     "source": "button.settings-preset-btn: padding 5px 14px, 1px border var(--nidara-border), font-size $fse-small, radius $nidara-radius-sm (components common.radius); selected = .nidara-btn--primary, the accent with accent-fg text. Rest/hover/pressed: --nidara-surface / -hover / -active with --nidara-text, weight $fw-medium; the chosen one's hover mixes 15% white into the accent and its press 30% black; disabled 0.45 opacity. minContentHeight is the button's (button.json): the segment's text line."
+    },
+    "swatch": {
+     "diameter": 30,
+     "border": 3,
+     "ring": 2,
+     "gap": 8,
+     "selectedColor": "--nidara-text",
+     "hoverColor": "--nidara-text-dim",
+     "source": "button.accent-circle-btn: min 30px, 3px border, selected = border and a 2px outer ring of --nidara-text, hover border --nidara-text-dim. Gap: space-2 between swatches (provisional). Focus: the kit focus accent outside the selected band; disabled opacity 0.45, as the native choice family.",
+     "disabledOpacity": 0.45
+    }
+   },
+   "range": {
+    "slider": {
+     "width": 140,
+     "track": 6,
+     "thumbRadius": 9,
+     "valueGap": 12,
+     "fillOpacity": 0.9,
+     "pageSteps": 10,
+     "iconSize": 16,
+     "iconOpacity": 0.5,
+     "iconGap": 12,
+     "source": "NidaraSliderRow: width_request 140, the value label 12 px beside it; slider.ts: TRACK_H 6, THUMB_R 9 (drawn at r-1), accent fill at 0.9. Page Up/Down move 10 steps (#882's acceptance). Flanking icons (opts.icons): pixel_size 16 (iconSizes' default), opacity 0.5, in the row's 12 px spacing."
+    },
+    "spin": {
+     "height": 32,
+     "textWidth": 28,
+     "buttonWidth": 18,
+     "border": 1,
+     "borderColor": "--nidara-border",
+     "gap": 4,
+     "source": "spinbutton.time-spin: min-height 32, text min-width 28, buttons min-width 18, 1px border var(--nidara-border), radius sm; the two fields 4 px apart with a colon between (appearance.ts timePicker)."
+    }
+   },
+   "switch": {
+    "width": 44,
+    "height": 24,
+    "border": 1,
+    "borderColor": "--nidara-border",
+    "checkedBorderColor": "rgba(0, 0, 0, 0.1)",
+    "trackColor": "--nidara-surface",
+    "checkedColor": "--nidara-accent",
+    "thumbColor": "--nidara-thumb",
+    "thumbMargin": 3,
+    "disabledOpacity": 0.45,
+    "source": "min-width 44, min-height 24, border 1px var(--nidara-border) (checked: rgba(0,0,0,0.1)), background var(--nidara-surface) (checked: var(--nidara-accent)); slider margin 3, 18×18, var(--nidara-thumb), pill; :disabled opacity 0.45."
+   },
+   "check": {
+    "size": 18,
+    "border": 1.5,
+    "radius": "xs",
+    "background": "--nidara-surface",
+    "borderColor": "--nidara-border",
+    "hover": "--nidara-surface-hover",
+    "hoverBorder": "--nidara-surface-strong",
+    "pressed": "--nidara-surface-active",
+    "checked": "--nidara-accent",
+    "tick": "--nidara-accent-fg",
+    "tickWidth": 2,
+    "dotBand": 4,
+    "dotBandColor": "--nidara-bg",
+    "disabledOpacity": 0.45
+   },
+   "rows": {
+    "subtitle": {
+     "fontSize": "fse-small",
+     "color": "--nidara-text-dim",
+     "source": ".nidara-row-subtitle: font-size $fse-small, color var(--nidara-text-dim)."
+    },
+    "footer": {
+     "fontSize": "fse-caption",
+     "color": "--nidara-text-dim",
+     "gap": 8,
+     "source": ".nidara-list-footer: font-size $fse-caption, color var(--nidara-text-dim), margin-top 8px (mirroring the header's margin-bottom)."
+    },
+    "disclosure": {
+     "iconSize": 16,
+     "open": "nd-pan-down",
+     "closed": "nd-pan-end",
+     "source": "PreferencePage.ts: Gtk.Image pixel_size 16, uiIcon nd-pan-down when revealed, nd-pan-end when not; revealed at first (reveal_child: true).",
+     "chevron": {
+      "viewBox": 24,
+      "strokeWidth": 2,
+      "closedPoints": [
+       [
+        9,
+        18
+       ],
+       [
+        15,
+        12
+       ],
+       [
+        9,
+        6
+       ]
+      ],
+      "source": "nd-pan-end-symbolic.svg: m9 18 6-6-6-6, round caps/join, stroke 2 in a 24x24 viewBox. Rotating 90 degrees gives nd-pan-down."
+     }
+    }
+   },
+   "dropdown": {
+    "trigger": {
+     "paddingX": 14,
+     "paddingY": 4,
+     "border": 2,
+     "minContentHeight": 20,
+     "radius": "sm",
+     "fontSize": "fse-small",
+     "fontWeight": "fw-medium",
+     "labelMargin": "space-2",
+     "arrowSize": 16,
+     "arrowGap": 6,
+     "arrow": "nd-pan-down",
+     "background": "--nidara-surface-back",
+     "hover": "--nidara-surface-hover",
+     "pressed": "--nidara-surface-active",
+     "text": "--nidara-text",
+     "arrowColor": "--nidara-text-dim",
+     "disabledOpacity": 0.45
+    },
+    "menu": {
+     "border": 1,
+     "radius": "md",
+     "inset": 6,
+     "paddingX": 9,
+     "paddingY": 6,
+     "rowRadius": "sm",
+     "fontSize": "fse-small",
+     "fontWeight": "fw-regular",
+     "checkSize": 14,
+     "checkGap": 8,
+     "checkStroke": 2.2,
+     "background": "--nidara-popover-bg",
+     "borderColor": "--nidara-popover-border",
+     "text": "--nidara-text",
+     "accent": "--nidara-accent",
+     "accentText": "--nidara-accent-fg",
+     "pressedBlack": 0.15
+    }
+   },
+   "button": {
+    "paddingX": 14,
+    "paddingY": 5,
+    "border": 1,
+    "minContentHeight": 20,
+    "radius": "sm",
+    "fontSize": "fse-small",
+    "fontWeight": "fw-medium",
+    "background": "--nidara-surface",
+    "borderColor": "--nidara-border",
+    "hover": "--nidara-surface-hover",
+    "pressed": "--nidara-surface-active",
+    "text": "--nidara-text",
+    "disabledOpacity": 0.45,
+    "primary": {
+     "color": "--nidara-accent",
+     "text": "--nidara-accent-fg",
+     "borderAlpha": 0,
+     "hoverWhite": 0.15,
+     "pressedBlack": 0.3
+    },
+    "destructive": {
+     "color": "--nidara-danger",
+     "text": "--nidara-danger",
+     "restAlpha": 0.1,
+     "borderAlpha": 0.25,
+     "hoverAlpha": 0.2,
+     "pressedAlpha": 0.3
+    }
+   },
+   "scrollbar": {
+    "lane": 12,
+    "thumbRest": 4,
+    "thumbHover": 8,
+    "thumbMin": 28,
+    "edgeClear": 4,
+    "cornerClear": 4,
+    "hideMs": 1100,
+    "fadeMs": 250,
+    "widthTauMs": 45,
+    "trackOpacity": 0.18,
+    "color": "--nidara-surface-raised",
+    "active": "--nidara-text-dim"
+   },
+   "capsule": {
+    "height": 24,
+    "button": 24,
+    "edge": 0,
+    "gap": 12,
+    "windowInset": 12,
+    "glyph": {
+     "size": 14,
+     "stroke": 1.6,
+     "minimizeHalf": 3.5,
+     "maximizeHalf": 3.7,
+     "maximizeRadius": 1.6,
+     "closeHalf": 3
+    }
+   },
+   "tile": {
+    "grid": {
+     "cell": 76,
+     "gap": 20
+    },
+    "cornerSquare": 38,
+    "pad": 10,
+    "tallPad": 2,
+    "badge": {
+     "size": 44,
+     "gap": 8,
+     "inset": 4
+    },
+    "icon": 28,
+    "text": {
+     "title": 14,
+     "titleWeight": 700,
+     "subtitle": 14,
+     "small": 12
+    },
+    "picture": {
+     "wide": 44,
+     "square": 62,
+     "lead": 14,
+     "gap": 12,
+     "between": 4,
+     "glyph": 18,
+     "roomWide": 32,
+     "roomSquare": 24,
+     "side": 16
+    },
+    "tall": {
+     "top": 12,
+     "value": 24,
+     "bottom": 24
+    },
+    "slider": {
+     "lead": 14,
+     "icon": 16,
+     "gap": 12,
+     "value": 36
+    },
+    "track": 0.18
+   },
+   "iconGrid": {
+    "item": {
+     "cell": 104,
+     "icon": 64,
+     "top": 8,
+     "nameGap": 8,
+     "name": 12,
+     "nameWeight": 500,
+     "lines": 1,
+     "corner": 16,
+     "dot": 10
+    },
+    "grid": {
+     "gap": 14,
+     "columns": 7,
+     "rows": 5
+    },
+    "panel": {
+     "inset": {
+      "top": 22,
+      "side": 26
+     },
+     "search": 40,
+     "below": 14,
+     "corner": 34,
+     "blurCurve": [
+      1,
+      0.6,
+      0
+     ]
+    }
+   },
+   "notification": {
+    "corner": "lg",
+    "heroCorner": "md",
+    "art": 44,
+    "lineHeight": 1.35,
+    "text": {
+     "title": 13,
+     "titleWeight": 700,
+     "age": 11,
+     "count": 11,
+     "countWeight": 600,
+     "body": 12,
+     "action": 12,
+     "error": 12
+    },
+    "lines": {
+     "folded": 2,
+     "open": 4,
+     "error": 2
+    },
+    "glyph": 13,
+    "hero": {
+     "source": 240,
+     "min": 72,
+     "max": 200
+    }
+   },
+   "header": {
+    "band": 48,
+    "inset": 8,
+    "button": 32,
+    "icon": 16,
+    "sidebarRadius": 16,
+    "contentTopGap": 16,
+    "navigation": {
+     "button": 24,
+     "edge": 4,
+     "gap": 4,
+     "height": 32,
+     "icon": 16,
+     "pad": 7
+    },
+    "titleGap": 14,
+    "titleSize": 15,
+    "titleWeight": 600,
+    "search": {
+     "width": 200,
+     "padding": 14,
+     "size": 13,
+     "gap": 12
+    },
+    "titlebar": {
+     "extraHeight": 20,
+     "curve": [
+      1,
+      1,
+      0.5,
+      0
+     ],
+     "backgroundOpacity": 0.85,
+     "doubleClickMs": 400
+    }
+   },
+   "search": {
+    "paddingX": 12,
+    "border": 1,
+    "minHeight": 32,
+    "radius": "--nidara-radius-pill",
+    "iconSize": 15,
+    "iconGap": 8,
+    "icon": "nd-system-search",
+    "background": "--nidara-surface-back",
+    "borderColor": "--nidara-border",
+    "text": "--nidara-text",
+    "dim": "--nidara-text-dim",
+    "selection": "--nidara-accent-30",
+    "selectionText": "--nidara-text",
+    "clearIcon": "nd-window-close"
+   },
+   "wallpaper": {
+    "previewWidth": 320,
+    "previewHeight": 180,
+    "previewDecodeWidth": 640,
+    "previewDecodeHeight": 360,
+    "thumbnailWidth": 80,
+    "thumbnailHeight": 45,
+    "thumbnailDecodeWidth": 160,
+    "thumbnailDecodeHeight": 90,
+    "previewRadius": "md",
+    "thumbnailRadius": "sm",
+    "thumbnailInnerInset": 2,
+    "previewBorder": 2,
+    "thumbnailBorder": 2,
+    "pictureBorder": 1,
+    "padding": 2,
+    "gap": 8,
+    "background": "--nidara-surface",
+    "pictureBorderColor": "--nidara-border",
+    "hoverBorder": "--nidara-surface-strong",
+    "selectedBorder": "--nidara-accent",
+    "idleBorder": "rgba(0, 0, 0, 0)",
+    "borderTransitionMs": 150
+   },
+   "common": {
+    "padding": 12,
+    "gap": 4,
+    "radius": 10,
+    "groupRadius": 16
+   },
+   "widths": {
+    "form": {
+     "preferred": 800,
+     "floor": 560
+    },
+    "reading": null,
+    "none": null
+   }
+  },
+  {
+   "dark": false,
+   "reduceTransparency": true,
+   "focus": {
+    "width": 2,
+    "gap": 2,
+    "color": "--nidara-accent",
+    "source": "nidara-focus-ring: solid accent, 2px width, 2px outline-offset; shared by nk-view (#1103 step 5b)."
+   },
+   "list": {
+    "highlight": {
+     "inset": 4,
+     "hoverOpacity": 0.08,
+     "source": "Provisional inset from space-1; neutral hover 8% from D8. Final geometry live with owner."
+    },
+    "separator": {
+     "physicalPixels": 1,
+     "color": "--nidara-border",
+     "source": "Provisional hairline from existing kit border; final appearance live with owner."
+    }
+   },
+   "choices": {
+    "segmented": {
+     "paddingX": 14,
+     "paddingY": 5,
+     "border": 1,
+     "minContentHeight": 20,
+     "radius": "sm",
+     "borderColor": "--nidara-border",
+     "fontSize": "fse-small",
+     "fontWeight": "fw-medium",
+     "selectedColor": "--nidara-accent",
+     "selectedText": "--nidara-accent-fg",
+     "background": "--nidara-surface",
+     "hover": "--nidara-surface-hover",
+     "pressed": "--nidara-surface-active",
+     "text": "--nidara-text",
+     "selectedHoverWhite": 0.15,
+     "selectedPressedBlack": 0.3,
+     "disabledOpacity": 0.45,
+     "source": "button.settings-preset-btn: padding 5px 14px, 1px border var(--nidara-border), font-size $fse-small, radius $nidara-radius-sm (components common.radius); selected = .nidara-btn--primary, the accent with accent-fg text. Rest/hover/pressed: --nidara-surface / -hover / -active with --nidara-text, weight $fw-medium; the chosen one's hover mixes 15% white into the accent and its press 30% black; disabled 0.45 opacity. minContentHeight is the button's (button.json): the segment's text line."
+    },
+    "swatch": {
+     "diameter": 30,
+     "border": 3,
+     "ring": 2,
+     "gap": 8,
+     "selectedColor": "--nidara-text",
+     "hoverColor": "--nidara-text-dim",
+     "source": "button.accent-circle-btn: min 30px, 3px border, selected = border and a 2px outer ring of --nidara-text, hover border --nidara-text-dim. Gap: space-2 between swatches (provisional). Focus: the kit focus accent outside the selected band; disabled opacity 0.45, as the native choice family.",
+     "disabledOpacity": 0.45
+    }
+   },
+   "range": {
+    "slider": {
+     "width": 140,
+     "track": 6,
+     "thumbRadius": 9,
+     "valueGap": 12,
+     "fillOpacity": 0.9,
+     "pageSteps": 10,
+     "iconSize": 16,
+     "iconOpacity": 0.5,
+     "iconGap": 12,
+     "source": "NidaraSliderRow: width_request 140, the value label 12 px beside it; slider.ts: TRACK_H 6, THUMB_R 9 (drawn at r-1), accent fill at 0.9. Page Up/Down move 10 steps (#882's acceptance). Flanking icons (opts.icons): pixel_size 16 (iconSizes' default), opacity 0.5, in the row's 12 px spacing."
+    },
+    "spin": {
+     "height": 32,
+     "textWidth": 28,
+     "buttonWidth": 18,
+     "border": 1,
+     "borderColor": "--nidara-border",
+     "gap": 4,
+     "source": "spinbutton.time-spin: min-height 32, text min-width 28, buttons min-width 18, 1px border var(--nidara-border), radius sm; the two fields 4 px apart with a colon between (appearance.ts timePicker)."
+    }
+   },
+   "switch": {
+    "width": 44,
+    "height": 24,
+    "border": 1,
+    "borderColor": "--nidara-border",
+    "checkedBorderColor": "rgba(0, 0, 0, 0.1)",
+    "trackColor": "--nidara-surface",
+    "checkedColor": "--nidara-accent",
+    "thumbColor": "--nidara-thumb",
+    "thumbMargin": 3,
+    "disabledOpacity": 0.45,
+    "source": "min-width 44, min-height 24, border 1px var(--nidara-border) (checked: rgba(0,0,0,0.1)), background var(--nidara-surface) (checked: var(--nidara-accent)); slider margin 3, 18×18, var(--nidara-thumb), pill; :disabled opacity 0.45."
+   },
+   "check": {
+    "size": 18,
+    "border": 1.5,
+    "radius": "xs",
+    "background": "--nidara-surface",
+    "borderColor": "--nidara-border",
+    "hover": "--nidara-surface-hover",
+    "hoverBorder": "--nidara-surface-strong",
+    "pressed": "--nidara-surface-active",
+    "checked": "--nidara-accent",
+    "tick": "--nidara-accent-fg",
+    "tickWidth": 2,
+    "dotBand": 4,
+    "dotBandColor": "--nidara-bg",
+    "disabledOpacity": 0.45
+   },
+   "rows": {
+    "subtitle": {
+     "fontSize": "fse-small",
+     "color": "--nidara-text-dim",
+     "source": ".nidara-row-subtitle: font-size $fse-small, color var(--nidara-text-dim)."
+    },
+    "footer": {
+     "fontSize": "fse-caption",
+     "color": "--nidara-text-dim",
+     "gap": 8,
+     "source": ".nidara-list-footer: font-size $fse-caption, color var(--nidara-text-dim), margin-top 8px (mirroring the header's margin-bottom)."
+    },
+    "disclosure": {
+     "iconSize": 16,
+     "open": "nd-pan-down",
+     "closed": "nd-pan-end",
+     "source": "PreferencePage.ts: Gtk.Image pixel_size 16, uiIcon nd-pan-down when revealed, nd-pan-end when not; revealed at first (reveal_child: true).",
+     "chevron": {
+      "viewBox": 24,
+      "strokeWidth": 2,
+      "closedPoints": [
+       [
+        9,
+        18
+       ],
+       [
+        15,
+        12
+       ],
+       [
+        9,
+        6
+       ]
+      ],
+      "source": "nd-pan-end-symbolic.svg: m9 18 6-6-6-6, round caps/join, stroke 2 in a 24x24 viewBox. Rotating 90 degrees gives nd-pan-down."
+     }
+    }
+   },
+   "dropdown": {
+    "trigger": {
+     "paddingX": 14,
+     "paddingY": 4,
+     "border": 2,
+     "minContentHeight": 20,
+     "radius": "sm",
+     "fontSize": "fse-small",
+     "fontWeight": "fw-medium",
+     "labelMargin": "space-2",
+     "arrowSize": 16,
+     "arrowGap": 6,
+     "arrow": "nd-pan-down",
+     "background": "--nidara-surface-back",
+     "hover": "--nidara-surface-hover",
+     "pressed": "--nidara-surface-active",
+     "text": "--nidara-text",
+     "arrowColor": "--nidara-text-dim",
+     "disabledOpacity": 0.45
+    },
+    "menu": {
+     "border": 1,
+     "radius": "md",
+     "inset": 6,
+     "paddingX": 9,
+     "paddingY": 6,
+     "rowRadius": "sm",
+     "fontSize": "fse-small",
+     "fontWeight": "fw-regular",
+     "checkSize": 14,
+     "checkGap": 8,
+     "checkStroke": 2.2,
+     "background": "--nidara-popover-bg",
+     "borderColor": "--nidara-popover-border",
+     "text": "--nidara-text",
+     "accent": "--nidara-accent",
+     "accentText": "--nidara-accent-fg",
+     "pressedBlack": 0.15
+    }
+   },
+   "button": {
+    "paddingX": 14,
+    "paddingY": 5,
+    "border": 1,
+    "minContentHeight": 20,
+    "radius": "sm",
+    "fontSize": "fse-small",
+    "fontWeight": "fw-medium",
+    "background": "--nidara-surface",
+    "borderColor": "--nidara-border",
+    "hover": "--nidara-surface-hover",
+    "pressed": "--nidara-surface-active",
+    "text": "--nidara-text",
+    "disabledOpacity": 0.45,
+    "primary": {
+     "color": "--nidara-accent",
+     "text": "--nidara-accent-fg",
+     "borderAlpha": 0,
+     "hoverWhite": 0.15,
+     "pressedBlack": 0.3
+    },
+    "destructive": {
+     "color": "--nidara-danger",
+     "text": "--nidara-danger",
+     "restAlpha": 0.1,
+     "borderAlpha": 0.25,
+     "hoverAlpha": 0.2,
+     "pressedAlpha": 0.3
+    }
+   },
+   "scrollbar": {
+    "lane": 12,
+    "thumbRest": 4,
+    "thumbHover": 8,
+    "thumbMin": 28,
+    "edgeClear": 4,
+    "cornerClear": 4,
+    "hideMs": 1100,
+    "fadeMs": 250,
+    "widthTauMs": 45,
+    "trackOpacity": 0.18,
+    "color": "--nidara-surface-raised",
+    "active": "--nidara-text-dim"
+   },
+   "capsule": {
+    "height": 24,
+    "button": 24,
+    "edge": 0,
+    "gap": 12,
+    "windowInset": 12,
+    "glyph": {
+     "size": 14,
+     "stroke": 1.6,
+     "minimizeHalf": 3.5,
+     "maximizeHalf": 3.7,
+     "maximizeRadius": 1.6,
+     "closeHalf": 3
+    }
+   },
+   "tile": {
+    "grid": {
+     "cell": 76,
+     "gap": 20
+    },
+    "cornerSquare": 38,
+    "pad": 10,
+    "tallPad": 2,
+    "badge": {
+     "size": 44,
+     "gap": 8,
+     "inset": 4
+    },
+    "icon": 28,
+    "text": {
+     "title": 14,
+     "titleWeight": 700,
+     "subtitle": 14,
+     "small": 12
+    },
+    "picture": {
+     "wide": 44,
+     "square": 62,
+     "lead": 14,
+     "gap": 12,
+     "between": 4,
+     "glyph": 18,
+     "roomWide": 32,
+     "roomSquare": 24,
+     "side": 16
+    },
+    "tall": {
+     "top": 12,
+     "value": 24,
+     "bottom": 24
+    },
+    "slider": {
+     "lead": 14,
+     "icon": 16,
+     "gap": 12,
+     "value": 36
+    },
+    "track": 0.18
+   },
+   "iconGrid": {
+    "item": {
+     "cell": 104,
+     "icon": 64,
+     "top": 8,
+     "nameGap": 8,
+     "name": 12,
+     "nameWeight": 500,
+     "lines": 1,
+     "corner": 16,
+     "dot": 10
+    },
+    "grid": {
+     "gap": 14,
+     "columns": 7,
+     "rows": 5
+    },
+    "panel": {
+     "inset": {
+      "top": 22,
+      "side": 26
+     },
+     "search": 40,
+     "below": 14,
+     "corner": 34,
+     "blurCurve": [
+      1,
+      0.6,
+      0
+     ]
+    }
+   },
+   "notification": {
+    "corner": "lg",
+    "heroCorner": "md",
+    "art": 44,
+    "lineHeight": 1.35,
+    "text": {
+     "title": 13,
+     "titleWeight": 700,
+     "age": 11,
+     "count": 11,
+     "countWeight": 600,
+     "body": 12,
+     "action": 12,
+     "error": 12
+    },
+    "lines": {
+     "folded": 2,
+     "open": 4,
+     "error": 2
+    },
+    "glyph": 13,
+    "hero": {
+     "source": 240,
+     "min": 72,
+     "max": 200
+    }
+   },
+   "header": {
+    "band": 48,
+    "inset": 8,
+    "button": 32,
+    "icon": 16,
+    "sidebarRadius": 16,
+    "contentTopGap": 16,
+    "navigation": {
+     "button": 24,
+     "edge": 4,
+     "gap": 4,
+     "height": 32,
+     "icon": 16,
+     "pad": 7
+    },
+    "titleGap": 14,
+    "titleSize": 15,
+    "titleWeight": 600,
+    "search": {
+     "width": 200,
+     "padding": 14,
+     "size": 13,
+     "gap": 12
+    },
+    "titlebar": {
+     "extraHeight": 20,
+     "curve": [
+      1,
+      1,
+      0.5,
+      0
+     ],
+     "backgroundOpacity": 0.85,
+     "doubleClickMs": 400
+    }
+   },
+   "search": {
+    "paddingX": 12,
+    "border": 1,
+    "minHeight": 32,
+    "radius": "--nidara-radius-pill",
+    "iconSize": 15,
+    "iconGap": 8,
+    "icon": "nd-system-search",
+    "background": "--nidara-surface-back",
+    "borderColor": "--nidara-border",
+    "text": "--nidara-text",
+    "dim": "--nidara-text-dim",
+    "selection": "--nidara-accent-30",
+    "selectionText": "--nidara-text",
+    "clearIcon": "nd-window-close"
+   },
+   "wallpaper": {
+    "previewWidth": 320,
+    "previewHeight": 180,
+    "previewDecodeWidth": 640,
+    "previewDecodeHeight": 360,
+    "thumbnailWidth": 80,
+    "thumbnailHeight": 45,
+    "thumbnailDecodeWidth": 160,
+    "thumbnailDecodeHeight": 90,
+    "previewRadius": "md",
+    "thumbnailRadius": "sm",
+    "thumbnailInnerInset": 2,
+    "previewBorder": 2,
+    "thumbnailBorder": 2,
+    "pictureBorder": 1,
+    "padding": 2,
+    "gap": 8,
+    "background": "--nidara-surface",
+    "pictureBorderColor": "--nidara-border",
+    "hoverBorder": "--nidara-surface-strong",
+    "selectedBorder": "--nidara-accent",
+    "idleBorder": "rgba(0, 0, 0, 0)",
+    "borderTransitionMs": 150
+   },
+   "common": {
+    "padding": 12,
+    "gap": 4,
+    "radius": 10,
+    "groupRadius": 16
+   },
+   "widths": {
+    "form": {
+     "preferred": 800,
+     "floor": 560
+    },
+    "reading": null,
+    "none": null
+   }
+  }
+ ]
+}
