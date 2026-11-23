@@ -397,6 +397,17 @@ whose place it already knows: the CC's remove badge at a tile's corner, a size m
 the tile that opened it, kept inside the viewport (§12.7). The point is the surface's, as a
 grid's cells are; size, order and everything else are as for any layer.
 
+### Arrangement
+
+`nk::Arrangement` projects named rectangles into a diagram. The caller owns
+their bounds in a common logical coordinate system. An
+`ArrangementProjection` fits them with an inset and can be held while a drag
+is in progress so the scale stays fixed. Each rectangle is a named selection
+control for the pointer, keyboard and reader. Movable rectangles capture the
+pointer after a press and report `Value::Displacement` in input coordinates
+through release. The caller applies any domain constraints or snapping.
+The gallery's Arrangement page shows the component.
+
 ## 10. Not in this contract
 
 The tooltip (piece 9) and the calendar (piece 10). The NC keeps today's calendar. The tile grid

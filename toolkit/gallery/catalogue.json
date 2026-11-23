@@ -116,6 +116,7 @@
         {"name": "Constraint layout", "nk": [], "gtk": "Gtk.ConstraintLayout", "appkit": "Auto Layout", "status": "missing", "users": ""},
         {"name": "Fixed placement", "nk": ["nk::Overlay"], "gtk": "Gtk.Fixed", "appkit": "frame", "status": "view", "users": "CC edit mode", "page": "overlay"},
         {"name": "Revealer", "nk": ["nk::Revealer"], "gtk": "Gtk.Revealer", "appkit": "view animation", "status": "view", "users": "NC", "page": "reveal"},
+        {"name": "Arrangement", "nk": ["nk::Arrangement"], "gtk": "Gtk.Fixed with drag gestures", "appkit": "NSView with drag gestures", "status": "view", "users": "Settings Displays (#1103 8f)", "page": "arrangement"},
         {"name": "Drawing area", "nk": ["nk::Slot"], "gtk": "Gtk.DrawingArea", "appkit": "NSView draw(_:)", "status": "hand", "users": "NC artwork, CC gauges: a surface paints the slot itself; an app window cannot yet (#1103)"}
       ]
     }

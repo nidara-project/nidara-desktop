@@ -6363,3 +6363,58 @@ fn a_time_field_steps_and_types_its_hours_and_minutes() {
         "one Tab stop"
     );
 }
+
+#[test]
+fn arrangement_reports_logical_drag_and_can_cancel_it() {
+    let items = vec![crate::ArrangementItem {
+        key: "monitor".into(),
+        label: "Output 1".into(),
+        name: "Output 1: eDP-1".into(),
+        action: "select-output".into(),
+        bounds: [-100., 20., 400., 200.],
+        selected: true,
+        movable: true,
+    }];
+    let size = (220., 120.);
+    let projection = crate::ArrangementProjection::fit(&items, size, 10.);
+    let node =
+        crate::Arrangement::view("arrangement", size, projection, items, TextStyle::default());
+    let mut state = ViewState::new(1);
+    let now = Instant::now();
+    state.layout(
+        &node,
+        size,
+        1.25,
+        tokens().with_types(&types()),
+        &mut backend(),
+        now,
+    );
+    assert_eq!(
+        state.rect(&"monitor".into()),
+        Some([10.4, 10.4, 200., 100.])
+    );
+    state.pointer_motion(40., 50.);
+    assert_eq!(
+        state.button(true, now).unwrap().value,
+        Some(Value::Displacement(0., 0.))
+    );
+    state.pointer_motion(55., 45.);
+    assert_eq!(
+        state.take_drag_change().unwrap().value,
+        Some(Value::Displacement(30., -10.))
+    );
+    assert!(state.take_drag_change().is_none());
+    assert_eq!(
+        state.button(false, now).unwrap().value,
+        Some(Value::Displacement(30., -10.))
+    );
+    state.button(true, now).unwrap();
+    state.pointer_motion(60., 50.);
+    state.cancel_reported_drag();
+    assert!(state.captured().is_none());
+    assert!(state.button(false, now).is_none());
+    assert_eq!(
+        state.request(&"monitor".into(), true).unwrap().action,
+        "select-output"
+    );
+}

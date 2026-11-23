@@ -1025,6 +1025,31 @@ impl ViewState {
             crate::layout::intersect(p.component().silhouette(&self.context(i)), visible)
         })
     }
+    fn reported_drag(&self) -> Option<Key> {
+        let (key, _) = self.capture.as_ref()?;
+        let part = self.placed[self.index(key)?].part()?;
+        part.component().reports_drag().then(|| key.clone())
+    }
+
+    pub(crate) fn take_drag_change(&mut self) -> Option<Activated> {
+        let key = self.reported_drag()?;
+        let action = self.control(self.index(&key)?).action.clone();
+        let value = self.components.take_changed(&key)?;
+        Some(Activated {
+            key,
+            action,
+            value: Some(value),
+        })
+    }
+
+    pub(crate) fn cancel_reported_drag(&mut self) {
+        if let Some(key) = self.reported_drag() {
+            self.components.cancel(&key);
+            self.press = None;
+            self.capture = None;
+        }
+    }
+
     pub fn slid(&mut self) -> Option<Activated> {
         for i in self.controls().collect::<Vec<_>>() {
             let key = self.placed[i].key.clone();

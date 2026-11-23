@@ -7,6 +7,9 @@ use std::{
     any::{Any, TypeId},
     collections::{HashMap, HashSet},
 };
+mod arrangement;
+use arrangement::ArrangementRect;
+pub use arrangement::{Arrangement, ArrangementItem, ArrangementProjection};
 mod long_list;
 pub use long_list::{ListSource, LongList, MultipleSelection, RowInfo};
 mod editable;
@@ -267,6 +270,10 @@ pub trait Component: Any {
     fn value(&self, _state: Option<&dyn Any>) -> Option<Value> {
         None
     }
+    /// Publish a captured pointer change from AppWindow while the drag is in progress.
+    fn reports_drag(&self) -> bool {
+        false
+    }
     fn take_changed(&self, _state: Option<&mut dyn Any>) -> Option<Value> {
         None
     }
@@ -293,6 +300,7 @@ pub trait Component: Any {
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub enum Part {
     LongList(LongList),
+    ArrangementRect(ArrangementRect),
     Button(Button),
     Segment(Segment),
     Swatch(Swatch),
@@ -328,6 +336,7 @@ impl Part {
     pub fn component(&self) -> &dyn Component {
         match self {
             Self::LongList(c) => c,
+            Self::ArrangementRect(c) => c,
             Self::Button(c) => c,
             Self::Segment(c) => c,
             Self::Swatch(c) => c,

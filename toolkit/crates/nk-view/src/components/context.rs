@@ -6,6 +6,7 @@ use crate::{Placed, Role, TextCache};
 pub enum Value {
     Bool(bool),
     Number(f64),
+    Displacement(f64, f64),
     Index(usize),
     Selection {
         cursor: usize,

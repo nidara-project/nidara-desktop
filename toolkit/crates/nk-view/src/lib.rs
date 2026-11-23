@@ -6,6 +6,7 @@
 //! state regions), the semantics, and the content paint. The surface keeps only its model
 //! and what an `Activated` means.
 pub mod components;
+pub use components::{Arrangement, ArrangementItem, ArrangementProjection};
 pub use components::{ListSource, RowInfo};
 pub mod appear;
 pub mod diagnostics;

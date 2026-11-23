@@ -386,6 +386,13 @@ impl AppWindow {
     pub fn cancel_menu(&mut self) {
         self.menu_request = Some(MenuRequest::Close);
     }
+    /// Focus the first enabled control in a newly presented section.
+    pub fn focus_first_under(&mut self, key: impl Into<Key>) {
+        if self.state.focus_first_under(&key.into()) {
+            self.changed = true;
+            self.paint_dirty = true;
+        }
+    }
     /// Scrolls the content to its top, as a new page opens.
     pub fn to_top(&mut self) {
         self.state
@@ -705,6 +712,9 @@ impl AppWindow {
     pub fn event(&mut self, event: Event, window: &mut Window) -> Result<(bool, Vec<Activated>)> {
         if let Event::Focus(active) = &event {
             self.active = *active;
+            if !active {
+                self.state.cancel_reported_drag();
+            }
             self.changed = true;
         }
         let now = Instant::now();
@@ -798,9 +808,13 @@ impl AppWindow {
             }
             Event::Motion(x, y) => {
                 self.paint_dirty |= self.state.pointer_motion(x, y);
+                if let Some(action) = self.state.take_drag_change() {
+                    self.route(action, &mut out);
+                }
                 true
             }
             Event::PointerLeave => {
+                self.state.cancel_reported_drag();
                 self.paint_dirty |= self.state.pointer_leave();
                 true
             }

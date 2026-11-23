@@ -58,7 +58,7 @@ fn status_text(s: &str) -> &'static str {
 }
 
 /// Each page: its id (what the check and `--page` name), its title and its glyph.
-pub const PAGES: [(&str, &str, &str); 29] = [
+pub const PAGES: [(&str, &str, &str); 30] = [
     ("status", "Status", "nd-emblem-default"),
     ("window", "Window", "nd-sidebar-show"),
     ("button", "Button", "nd-hand"),
@@ -84,6 +84,11 @@ pub const PAGES: [(&str, &str, &str); 29] = [
     ("entry", "Text field", "nd-input-keyboard"),
     ("search", "Search", "nd-system-search"),
     ("time", "Time field", "nd-preferences-system-time"),
+    (
+        "arrangement",
+        "Arrangement",
+        "nd-preferences-system-display",
+    ),
     ("list", "Long list", "nd-clipboard-list"),
     ("focus", "Focus", "nd-input-keyboard"),
     ("dialog", "Dialog and alert", "nd-dialog-information"),
@@ -120,6 +125,9 @@ pub struct Model {
     pub city: String,
     /// The time field's sample, "HH:MM".
     pub time: String,
+    pub arrangement_selected: usize,
+    pub arrangement_offsets: [(f64, f64); 2],
+    pub arrangement_preview: (f64, f64),
     pub city_chosen: Option<usize>,
     pub submitted: u32,
     pub selected_row: usize,
@@ -155,6 +163,9 @@ impl Default for Model {
             search: String::new(),
             city: String::new(),
             time: "22:30".into(),
+            arrangement_selected: 0,
+            arrangement_offsets: [(0., 0.); 2],
+            arrangement_preview: (0., 0.),
             city_chosen: None,
             submitted: 0,
             selected_row: 0,
@@ -390,6 +401,7 @@ fn page(id: &str, m: &Model, cat: &Catalogue, t: &TypeScale, k: &Measures) -> Ve
         }
         "search" => search_field(m, t),
         "time" => time_field(m, t),
+        "arrangement" => arrangement(m, t),
         "list" => long_list(m, t, k),
         "focus" => focus_page(t, k),
         "dialog" => dialogs(m, t),
@@ -3059,4 +3071,38 @@ mod catalogue_tests {
             "public components on no gallery page (add them to catalogue.json with a page): {missing:?}"
         );
     }
+}
+
+fn arrangement(model: &Model, types: &TypeScale) -> Vec<Node> {
+    let size = (360., 180.);
+    let mut items: Vec<_> = [[0., 0., 1920., 1080.], [1920., 0., 1280., 1024.]]
+        .into_iter()
+        .enumerate()
+        .map(|(index, mut bounds)| {
+            let (x, y) = model.arrangement_offsets[index];
+            bounds[0] += x;
+            bounds[1] += y;
+            let name = format!("Display {}", index + 1);
+            nk::ArrangementItem {
+                key: format!("arrangement/sample/{index}").into(),
+                label: name.clone(),
+                name,
+                action: format!("arrange:{index}"),
+                bounds,
+                selected: model.arrangement_selected == index,
+                movable: true,
+            }
+        })
+        .collect();
+    let projection = nk::ArrangementProjection::fit(&items, size, 12.);
+    let moved = &mut items[model.arrangement_selected];
+    moved.bounds[0] += model.arrangement_preview.0;
+    moved.bounds[1] += model.arrangement_preview.1;
+    vec![nk::Arrangement::view(
+        "arrangement/sample",
+        size,
+        projection,
+        items,
+        types.style(Type::Body, Weight::Regular),
+    )]
 }

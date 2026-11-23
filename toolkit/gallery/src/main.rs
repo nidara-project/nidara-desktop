@@ -143,6 +143,23 @@ impl Gallery {
             self.model.window_side = id.into();
             return self.rebuild();
         }
+        if let Some(index) = action
+            .strip_prefix("arrange:")
+            .and_then(|index| index.parse::<usize>().ok())
+        {
+            self.model.arrangement_selected = index;
+            if let Some(nk::Value::Displacement(x, y)) = a.value {
+                if self.window.captured() == Some(&a.key) {
+                    self.model.arrangement_preview = (x, y);
+                } else {
+                    let position = &mut self.model.arrangement_offsets[index];
+                    position.0 += x;
+                    position.1 += y;
+                    self.model.arrangement_preview = (0., 0.);
+                }
+            }
+            return self.rebuild();
+        }
         if action.starts_with("files-") {
             self.model.files.activate(a);
             self.rebuild();
@@ -284,6 +301,12 @@ impl Application for Gallery {
         self.commit(window)
     }
     fn event(&mut self, event: Event, window: &mut Window) -> Result<()> {
+        if matches!(event, Event::PointerLeave | Event::Focus(false))
+            && self.model.arrangement_preview != (0., 0.)
+        {
+            self.model.arrangement_preview = (0., 0.);
+            self.rebuild();
+        }
         if pages::PAGES[self.model.page].0 == "entry" {
             if matches!(&event, Event::PasteReply { .. }) {
                 self.paste_replies += 1;
