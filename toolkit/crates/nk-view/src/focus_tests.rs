@@ -119,6 +119,7 @@ fn cases() -> Vec<(&'static str, Node, &'static str)> {
                 clear_label: "Clear".into(),
                 disabled: false,
                 shown: None,
+                suggestions: None,
             }
             .node("c")
             .sample_state(0, Shown::Focus),
@@ -140,6 +141,7 @@ fn cases() -> Vec<(&'static str, Node, &'static str)> {
                 clear_label: "Clear".into(),
                 disabled: false,
                 shown: None,
+                suggestions: None,
             }
             .node("c")
             .sample_state(1, Shown::Focus),
@@ -503,6 +505,7 @@ fn clear_uses_the_existing_navigation_icon_pattern_and_ring_fits_inside_search()
         clear_label: "Clear".into(),
         disabled: false,
         shown: None,
+        suggestions: None,
     }
     .node("c")
     .width(240.);

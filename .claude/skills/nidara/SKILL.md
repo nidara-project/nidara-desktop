@@ -453,7 +453,10 @@ control whose part drops it) prints `nk-CRITICAL: …` once. It panics under the
 control "does nothing when clicked", run the app with that variable before writing a test.
 `nk::ListBox` is the short single-selection list inside a `Group`: Up/Down move focus,
 Enter/Space choose a row and report its index, and the caller supplies the selected index.
-Settings' Power profiles use this control and the exported selected-row tint.
+Settings' Power profiles use this control and the exported selected-row tint. Its options
+may carry a subtitle (city over region). A search with suggestions is a `SearchEntry` that
+names its list (`.suggestions(key)`) and a `ListBox` under it in the flow, never the dropdown
+popup, which takes the keyboard: Down goes from the field to the first row, Up from that row back.
 `nk::files` (#1148) is the file model shared by the chooser and file manager. File browsing
 is read-only. Thumbnail generation is confined to the freedesktop cache.
 Poll `Listing` for sorted batches and keep selection by path when the snapshot changes.

@@ -352,8 +352,11 @@ Nidara existence claims come from repository sources rather than analogy with ei
 Single-line editable input and search now have nk-view gallery pages (`entry`, `search`)
 as well as the existing nk-widgets implementation. They expose Text/EditableText and native
 selection/caret geometry. Secret fields retain their existing owner-managed policy; multiline
-and numeric fields are outside this migration. Search result relations and recent-query menus
-remain catalogue targets, not claims of this implementation.
+and numeric fields are outside this migration. A search can name the `nk::ListBox` of its
+suggestions (`SearchEntry::suggestions`), shown in the flow under it: Down moves from the field to
+the first suggestion and Up from it back, and a suggestion may carry a subtitle (`ListBoxOption::
+subtitle`). A popup was rejected for this: it takes the keyboard from the field. Recent-query
+menus remain a catalogue target.
 
 The large-list gallery page now uses nk-view LongList: uniform known-height rows,
 single selection, visible-range construction and placeholders, total/position semantics,

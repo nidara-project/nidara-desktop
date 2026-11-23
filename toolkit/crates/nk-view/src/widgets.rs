@@ -660,6 +660,7 @@ impl SearchEntry {
                 clear_label: clear_label.into(),
                 disabled: false,
                 shown: None,
+                suggestions: None,
             },
             width: None,
         }
@@ -678,6 +679,12 @@ impl SearchEntry {
     }
     pub fn enabled(mut self, on: bool) -> Self {
         self.search.disabled = !on;
+        self
+    }
+    /// The [ListBox] under it that offers what the text matches: Down moves from the field to
+    /// its first row and Up from that row back to the field.
+    pub fn suggestions(mut self, list: impl Into<Key>) -> Self {
+        self.search.suggestions = Some(list.into());
         self
     }
     /// Gallery fixture: its part `index` (0 the entry, 1 the clear button) shown in `shown`.
@@ -974,14 +981,21 @@ impl From<ListRow> for Node {
 #[must_use]
 pub struct ListBoxOption {
     title: String,
+    subtitle: Option<String>,
     icon: Option<String>,
 }
 impl ListBoxOption {
     pub fn new(title: impl Into<String>) -> Self {
         Self {
             title: title.into(),
+            subtitle: None,
             icon: None,
         }
+    }
+    /// A second line under the title, in the list's subtitle style.
+    pub fn subtitle(mut self, text: impl Into<String>) -> Self {
+        self.subtitle = Some(text.into());
+        self
     }
     pub fn icon(mut self, name: impl Into<String>) -> Self {
         self.icon = Some(name.into());
@@ -998,6 +1012,7 @@ pub struct ListBox {
     action: String,
     options: Vec<ListBoxOption>,
     style: TextStyle,
+    subtitle_style: Option<TextStyle>,
     selected: Option<usize>,
     enabled: bool,
 }
@@ -1015,9 +1030,15 @@ impl ListBox {
             action: action.into(),
             options,
             style,
+            subtitle_style: None,
             selected: None,
             enabled: true,
         }
+    }
+    /// The style of the options' subtitles (the title's when not given).
+    pub fn subtitle_style(mut self, style: TextStyle) -> Self {
+        self.subtitle_style = Some(style);
+        self
     }
     pub fn selected(mut self, index: Option<usize>) -> Self {
         self.selected = index;
@@ -1042,6 +1063,10 @@ impl From<ListBox> for Node {
                     .role(Role::Option)
                     .enabled(list.enabled)
                     .marked(selected);
+                if let Some(text) = option.subtitle {
+                    let style = list.subtitle_style.clone();
+                    row = row.subtitle(text, style.unwrap_or_else(|| list.style.clone()));
+                }
                 let ink = if list.enabled {
                     Ink::Primary
                 } else {
