@@ -94,6 +94,8 @@ pub struct Glyphs {
 }
 struct GlyphCache {
     icons: nk_icons::Icons,
+    /// Symbolic glyphs an app brings itself, by name, before the theme's (`add`).
+    own: HashMap<String, Arc<nk_icons::Icon>>,
     cache: HashMap<(String, u32), Option<Arc<nk_icons::Icon>>>,
     pictures: HashMap<String, Arc<nk_render::Raster>>,
     app_theme: String,
@@ -104,12 +106,25 @@ impl Glyphs {
         Self {
             inner: std::rc::Rc::new(std::cell::RefCell::new(GlyphCache {
                 icons,
+                own: HashMap::new(),
                 cache: HashMap::new(),
                 pictures: HashMap::new(),
                 app_theme: "hicolor".into(),
                 app_cache: HashMap::new(),
             })),
         }
+    }
+    /// A symbolic glyph of the app's own (a product mark), drawn in the ink like any other.
+    /// `name` must not be an `nd-` name: those are the theme's.
+    pub fn add(&mut self, name: &str, svg: &[u8]) -> Result<(), String> {
+        if name.starts_with("nd-") {
+            return Err(format!("{name}: nd- names are the icon theme's"));
+        }
+        let icon = nk_icons::Icon::parse(svg)?;
+        let mut inner = self.inner.borrow_mut();
+        inner.cache.retain(|(n, _), _| n != name);
+        inner.own.insert(name.to_owned(), Arc::new(icon));
+        Ok(())
     }
     pub(crate) fn set_pictures(&mut self, pictures: HashMap<String, Arc<nk_render::Raster>>) {
         self.inner.borrow_mut().pictures = pictures;
@@ -156,6 +171,9 @@ impl Glyphs {
         }
         let px = size.round() as u32;
         let mut inner = self.inner.borrow_mut();
+        if let Some(own) = inner.own.get(name) {
+            return Some(own.clone());
+        }
         let GlyphCache { icons, cache, .. } = &mut *inner;
         cache
             .entry((name.to_string(), px))

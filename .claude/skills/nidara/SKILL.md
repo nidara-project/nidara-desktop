@@ -601,6 +601,19 @@ schedule two `nk::TimeField`s, each font an `nk::FontButton` whose press asks th
 (`Model::take_font_request`) to run `nk::FontDialog` modally, the answer written in points as
 a Pango description (`font_value`). The wallpaper group is neither drawn nor writable there: it
 moves to its own page (#1146, owner 23-11).
+Top bar (8e) is `bar.rs`. It holds only what belongs to the bar itself, right to left: the
+clock, whose Configure opens the **Clock subpage** `bar/clock`; the Control Center, fixed; the
+window title; the system menu's icon, changed through the portal's file chooser
+(`take_icon_request`). Below them are the apps' tray icons, each with a switch.
+- Where each control appears is the Controls page's (#1144), not this page's. There is no
+  search row while the shell has no global search (#1109).
+- A subpage is a history entry that is not a manifest page (`parent_of`): the sidebar keeps
+  its parent selected, and only the subpage writes its keys (`CLOCK_KEYS`).
+- The preview is the bar's own text: `nk_platform::clock`, shared with `barmodel.rs`.
+- `bar.trayHidden` is Config1's first **list** key (`Value::List`).
+- The mark is a glyph Settings brings itself (`Glyphs::add`, drawn in the ink). A custom icon
+  and a tray icon given as a file are pictures (`bar::Pictures`, through `nk_icons::read_app_icon`).
+- The Rust bar follows these homes in #1177.
 `power.profile` is PPD's ActiveProfile on the system bus, announced by PPD's own
 signals; Config1 tests set `DBUS_SYSTEM_BUS_ADDRESS` to their private bus.
 `region.timezone` is timedated's, set asynchronously behind polkit: `Apply` answers the old zone and the new one is

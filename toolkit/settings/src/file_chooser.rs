@@ -35,8 +35,18 @@ pub struct Open {
     pub parent: String,
     pub title: String,
     pub images_label: String,
+    /// The image types offered under `images_label`.
+    pub mimes: &'static [&'static str],
     pub current_folder: Option<PathBuf>,
 }
+/// The wallpaper's types.
+pub const WALLPAPER_IMAGES: &[&str] = &[
+    "image/jpeg",
+    "image/png",
+    "image/gif",
+    "image/webp",
+    "image/avif",
+];
 #[derive(Debug, PartialEq, Eq)]
 pub enum StartError {
     Busy,
@@ -62,6 +72,7 @@ impl Chooser {
             || operation.request == 0
             || open.title.is_empty()
             || open.images_label.is_empty()
+            || open.mimes.is_empty()
             || (!open.parent.is_empty()
                 && (!open.parent.starts_with("wayland:") || open.parent.len() == 8))
         {
@@ -230,13 +241,7 @@ async fn run(
     let predicted = format!("{REQUESTS}/{sender}/{token}");
     let filters = vec![(
         open.images_label,
-        vec![
-            (1u32, "image/jpeg"),
-            (1, "image/png"),
-            (1, "image/gif"),
-            (1, "image/webp"),
-            (1, "image/avif"),
-        ],
+        open.mimes.iter().map(|m| (1u32, *m)).collect::<Vec<_>>(),
     )];
     let mut options = HashMap::from([
         ("handle_token", Value::from(token.as_str())),

@@ -250,6 +250,7 @@ impl Builder for Picker {
                         .text("settings.appearance.dialog.wallpaper")?
                         .into(),
                     images_label: cx.exports.text("settings.appearance.filter.images")?.into(),
+                    mimes: crate::file_chooser::WALLPAPER_IMAGES,
                     current_folder: std::env::var_os("HOME")
                         .map(PathBuf::from)
                         .filter(|p| p.is_absolute()),

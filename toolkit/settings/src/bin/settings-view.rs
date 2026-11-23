@@ -16,6 +16,10 @@ struct Settings {
     dirty: bool,
     /// The page shown last: arriving on a page is what asks its slow facts again.
     shown: Option<String>,
+    bus: zbus::blocking::Connection,
+    /// The system menu's icon being chosen in the portal's file chooser.
+    chooser: nk_settings::file_chooser::Chooser,
+    choosing: u64,
 }
 impl Settings {
     fn commit(&mut self, window: &mut Window) -> Result<()> {
@@ -29,6 +33,15 @@ impl Settings {
             }
             self.shown = selected;
             self.dirty = true;
+        }
+        if self.dirty {
+            let s = self.client.session();
+            if let Some(theme) = s.shown("appearance.iconTheme").and_then(|v| v.as_text()) {
+                self.host.set_app_icon_theme(theme);
+            }
+            if self.model.selected() == Some(nk_settings::bar::PAGE) {
+                self.host.set_pictures(self.model.bar_pictures.current(s));
+            }
         }
         let (m, e, s) = (&self.model, &self.exports, self.client.session());
         if self.dirty {
@@ -55,6 +68,50 @@ impl Settings {
             if let Some((key, initial)) = self.model.take_font_request() {
                 self.choose_font(window, &launcher, &key, initial)?;
             }
+            if self.model.take_icon_request() {
+                self.choose_icon()?;
+            }
+        }
+        Ok(())
+    }
+    /// The system menu's icon, from the portal's file chooser; the model writes the answer.
+    fn choose_icon(&mut self) -> Result<()> {
+        use nk_settings::file_chooser::{Open, Operation, StartError};
+        let e = &self.exports;
+        self.choosing += 1;
+        let open = Open {
+            parent: String::new(),
+            title: e.text("settings.bar.change-icon")?.to_owned(),
+            images_label: e.text("settings.bar.icon-custom")?.to_owned(),
+            mimes: nk_settings::bar::ICON_IMAGES,
+            current_folder: None,
+        };
+        match self.chooser.start(
+            &self.bus,
+            Operation {
+                mount: 1,
+                request: self.choosing,
+            },
+            open,
+        ) {
+            // One chooser at a time: a second press while it is open does nothing.
+            Ok(()) | Err(StartError::Busy) => Ok(()),
+            Err(StartError::Failed(e)) => Err(e),
+        }
+    }
+    fn chosen_icon(&mut self) -> Result<()> {
+        let current = nk_settings::file_chooser::Operation {
+            mount: 1,
+            request: self.choosing,
+        };
+        match self.chooser.poll(current) {
+            Some(Ok(Some(path))) => {
+                self.model
+                    .icon_chosen(&path, &mut self.client, &self.exports)?;
+                self.dirty = true;
+            }
+            Some(Ok(None)) | None => {}
+            Some(Err(e)) => eprintln!("nidara-settings-view: the icon chooser failed: {e}"),
         }
         Ok(())
     }
@@ -124,8 +181,14 @@ impl Application for Settings {
         true
     }
     fn poll_interval_ms(&self) -> u32 {
-        self.model
-            .poll_interval_ms(Instant::now(), self.host.poll_interval_ms())
+        let ms = self
+            .model
+            .poll_interval_ms(Instant::now(), self.host.poll_interval_ms());
+        if self.chooser.pending() {
+            ms.min(200)
+        } else {
+            ms
+        }
     }
     fn idle(&mut self, window: &mut Window) -> Result<()> {
         let notices = self.client.poll();
@@ -145,6 +208,8 @@ impl Application for Settings {
         }
         self.dirty |= self.model.about.poll();
         self.dirty |= self.model.region.poll();
+        self.dirty |= self.model.tick(self.client.session());
+        self.chosen_icon()?;
         let actions = self.host.idle()?;
         self.actions(actions, window)?;
         self.dirty |= self
@@ -203,7 +268,7 @@ fn run() -> Result<()> {
     .map_err(|e| e.to_string())?;
     let portal = Portal::watch(&bus)?;
     let appearance = portal.read()?;
-    let client = Client::start(bus)?;
+    let client = Client::start(bus.clone())?;
     let look = WindowLook::load(&exports, &appearance)?;
     let reference = std::env::var_os("NK_ICON_REFERENCE")
         .map(PathBuf::from)
@@ -229,7 +294,18 @@ fn run() -> Result<()> {
         Box::new(ParleyBackend::with_system_fonts(Arc::new(
             FontSet::discover_required()?,
         ))?),
-        Glyphs::new(nk_icons::Icons::new("", &[], &reference)?),
+        {
+            let mut glyphs = Glyphs::new(nk_icons::Icons::new("", &[], &reference)?);
+            let mark = nk_settings::bar::mark_path();
+            match std::fs::read(&mark) {
+                Ok(svg) => glyphs.add(nk_settings::bar::MARK, &svg)?,
+                Err(e) => eprintln!(
+                    "nidara-settings-view: no Nidara mark at {}: {e}",
+                    mark.display()
+                ),
+            }
+            glyphs
+        },
         appearance.reduced_motion,
     );
     let size = nk_settings::exports::open_size(&exports)?;
@@ -243,6 +319,9 @@ fn run() -> Result<()> {
         ready: false,
         dirty: true,
         shown: None,
+        bus,
+        chooser: Default::default(),
+        choosing: 0,
     };
     settings.host.show(settings.model.page(
         &settings.host,

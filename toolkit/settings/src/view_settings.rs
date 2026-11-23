@@ -16,7 +16,19 @@ use std::{
 
 /// A page with a module of its own here rather than rows from the manifest.
 fn own(page: &Page) -> bool {
-    page.builder.as_deref() == Some("about") || page.id == "region" || page.id == "appearance"
+    page.builder.as_deref() == Some("about")
+        || page.id == "region"
+        || page.id == "appearance"
+        || page.id == crate::bar::PAGE
+}
+/// A subpage of a page (Top bar → Clock): shown like a page, under its parent's entry.
+fn parent_of(id: &str) -> Option<&'static str> {
+    (id == crate::bar::CLOCK_PAGE).then_some(crate::bar::PAGE)
+}
+/// Whether the history may hold `id`: a page this window draws, or a subpage of one.
+fn shown_here(id: &str, e: &Exports, session: &Session) -> bool {
+    let id = parent_of(id).unwrap_or(id);
+    e.page(id).is_some_and(|p| listed(p, session))
 }
 /// Whether this window draws `page`: its own module, or every row of it ordinary.
 pub fn listed(page: &Page, session: &Session) -> bool {
@@ -62,6 +74,12 @@ pub struct Model {
     pub region: crate::region::Region,
     /// A font row pressed: its key and current choice, for the window to open the dialog.
     font_request: Option<(String, nk::FontChoice)>,
+    /// Top bar's pictures, decoded once per file.
+    pub bar_pictures: crate::bar::Pictures,
+    /// "Change icon" pressed: the window opens the file chooser.
+    icon_request: bool,
+    /// The Clock subpage's preview as last drawn.
+    clock_text: String,
 }
 impl Model {
     /// The font row pressed since last asked: its key and its current choice.
@@ -88,11 +106,40 @@ impl Model {
         }
         Ok(())
     }
+    /// "Change icon" pressed since last asked.
+    pub fn take_icon_request(&mut self) -> bool {
+        std::mem::take(&mut self.icon_request)
+    }
+    /// The file chosen for the system menu's icon.
+    pub fn icon_chosen(
+        &mut self,
+        path: &std::path::Path,
+        editor: &mut dyn Editor,
+        e: &Exports,
+    ) -> Result<(), String> {
+        let key = "bar.launcherIcon";
+        if !self.editable(key, editor.session(), e) {
+            return Ok(());
+        }
+        let path = path.to_string_lossy().into_owned();
+        self.bar_pictures.forget(&path);
+        self.send(key, Value::Text(path), editor, e)
+    }
+    /// On the Clock subpage, whether its preview reads differently now.
+    pub fn tick(&mut self, session: &Session) -> bool {
+        if self.selected() != Some(crate::bar::CLOCK_PAGE) {
+            return false;
+        }
+        let text = crate::bar::preview(&crate::bar::region(session), crate::bar::now());
+        let changed = text != self.clock_text;
+        self.clock_text = text;
+        changed
+    }
     pub fn selected(&self) -> Option<&str> {
         self.history.get(self.at).map(String::as_str)
     }
     pub fn reconcile(&mut self, exports: &Exports, session: &Session) {
-        let eligible = |id: &str| exports.page(id).is_some_and(|p| listed(p, session));
+        let eligible = |id: &str| shown_here(id, exports, session);
         if self.selected().is_some_and(eligible) {
             self.at = self
                 .history
@@ -163,6 +210,15 @@ impl Model {
             } else {
                 u32::MAX
             })
+            // The Clock subpage's preview ticks with the clock.
+            .min(if self.selected() == Some(crate::bar::CLOCK_PAGE) {
+                let ms = std::time::SystemTime::now()
+                    .duration_since(std::time::UNIX_EPOCH)
+                    .map_or(0, |d| d.subsec_millis());
+                1000 - ms
+            } else {
+                u32::MAX
+            })
     }
     fn send(
         &mut self,
@@ -208,9 +264,7 @@ impl Model {
         now: Instant,
     ) -> Result<bool, String> {
         if let Some(page) = a.action.strip_prefix("page:") {
-            if e.page(page).is_some_and(|p| listed(p, editor.session()))
-                && self.selected() != Some(page)
-            {
+            if shown_here(page, e, editor.session()) && self.selected() != Some(page) {
                 self.history.truncate(self.at + 1);
                 self.history.push(page.into());
                 self.at = self.history.len() - 1;
@@ -271,6 +325,22 @@ impl Model {
                 && self.editable(&key, editor.session(), e)
             {
                 self.send(&key, value, editor, e)?;
+            }
+            return Ok(false);
+        }
+        if let Some(action) = a.action.strip_prefix("bar:") {
+            match crate::bar::act(action, a.value, editor.session()) {
+                crate::bar::Effect::Apply(key, value)
+                    if self.editable(key, editor.session(), e) =>
+                {
+                    self.send(key, value, editor, e)?
+                }
+                crate::bar::Effect::ChooseIcon
+                    if self.editable("bar.launcherIcon", editor.session(), e) =>
+                {
+                    self.icon_request = true
+                }
+                _ => {}
             }
             return Ok(false);
         }
@@ -375,17 +445,20 @@ impl Model {
             && s.store()
                 .and_then(|s| s.key(key))
                 .is_some_and(|k| k.available && k.writable())
-            && self.selected().and_then(|id| e.page(id)).is_some_and(|p| {
-                // A page module writes the keys it names, and no other.
-                (p.id == "region" && crate::region::KEYS.contains(&key))
-                    || (p.id == "appearance" && crate::appearance::KEYS.contains(&key))
-                    || p.groups.iter().enumerate().any(|(i, g)| {
-                        // Appearance leaves its wallpaper out (#1146): not drawn, not written.
-                        !(p.id == "appearance"
-                            && g.i18n.as_deref() == Some(crate::appearance::WALLPAPER_GROUP))
-                            && allowed(&g.items, key, s, &self.open, &format!("{}/{i}", p.id))
-                    })
-            })
+            && (self.selected() == Some(crate::bar::CLOCK_PAGE)
+                && crate::bar::CLOCK_KEYS.contains(&key)
+                || self.selected().and_then(|id| e.page(id)).is_some_and(|p| {
+                    // A page module writes the keys it names, and no other.
+                    (p.id == "region" && crate::region::KEYS.contains(&key))
+                        || (p.id == crate::bar::PAGE && crate::bar::KEYS.contains(&key))
+                        || (p.id == "appearance" && crate::appearance::KEYS.contains(&key))
+                        || p.groups.iter().enumerate().any(|(i, g)| {
+                            // Appearance leaves its wallpaper out (#1146): not drawn, not written.
+                            !(p.id == "appearance"
+                                && g.i18n.as_deref() == Some(crate::appearance::WALLPAPER_GROUP))
+                                && allowed(&g.items, key, s, &self.open, &format!("{}/{i}", p.id))
+                        })
+                }))
     }
     pub fn page(
         &self,
@@ -413,16 +486,97 @@ impl Model {
                         body(),
                         host.look().frame.icon,
                     )
-                    .selected(self.selected() == Some(p.id.as_str())),
+                    .selected(
+                        self.selected().map(|id| parent_of(id).unwrap_or(id))
+                            == Some(p.id.as_str()),
+                    ),
                 )
             })
             .collect::<Result<Vec<_>, String>>()?;
         let page = self.selected().and_then(|id| e.page(id));
+        let sub = self.selected().filter(|id| parent_of(id).is_some());
         let mut content: Vec<Node> = Vec::new();
         if let Some(status) = &self.status {
             content.push(nk::Label::new("settings-status", status, body()).into());
         }
-        if let Some(p) = page.filter(|p| p.id == "region") {
+        let group = |content: &mut Vec<Node>, id: &str, title: &str, rows: Vec<Node>| {
+            content.push(
+                nk::Label::new(
+                    format!("{id}/title"),
+                    title,
+                    types.style(Type::Body, Weight::Medium),
+                )
+                .into(),
+            );
+            content.push(
+                nk::Group::new(
+                    format!("{id}/group"),
+                    nk::Column::new(format!("{id}/rows"), rows),
+                )
+                .into(),
+            );
+        };
+        if sub == Some(crate::bar::CLOCK_PAGE) {
+            let r = crate::bar::region(session);
+            content.push(crate::bar::preview_rows(
+                &crate::bar::preview(&r, crate::bar::now()),
+                types,
+                e,
+            )?);
+            let key = |k: &str| Item::Key {
+                key: k.into(),
+                visible_when: None,
+                sensitive_when: None,
+            };
+            for (id, title, keys) in [
+                (
+                    "bar/clock/date",
+                    "settings.region.date.group",
+                    &["region.dateFormat"][..],
+                ),
+                (
+                    "bar/clock/time",
+                    "settings.region.time.group",
+                    &["region.timeFormat", "region.showSeconds"][..],
+                ),
+            ] {
+                let items: Vec<Item> = keys.iter().map(|k| key(k)).collect();
+                let rows = self.items(&items, id, host, session, e)?;
+                if !rows.is_empty() {
+                    group(&mut content, id, e.text(title)?, rows);
+                }
+            }
+        } else if page.is_some_and(|p| p.id == crate::bar::PAGE) {
+            let shown = |key: &str| {
+                self.held
+                    .get(key)
+                    .map(|h| h.value.clone())
+                    .or_else(|| session.shown(key).cloned())
+            };
+            let error = |key: &str| self.errors.get(key).cloned();
+            let rows = crate::bar::Rows {
+                types,
+                session,
+                exports: e,
+                shown: &shown,
+                error: &error,
+            };
+            group(
+                &mut content,
+                "bar/items",
+                e.text("settings.bar.group.items")?,
+                rows.items()?,
+            );
+            let apps = rows.apps()?;
+            if !apps.is_empty() {
+                group(
+                    &mut content,
+                    "bar/apps",
+                    e.text("settings.bar.group.apps")?,
+                    apps,
+                );
+            }
+        } else if let Some(p) = page.filter(|p| p.id == "region") {
             content.extend(self.region.timezone(e, types, session)?);
             let format = Item::Key {
                 key: crate::region::FORMAT.into(),
@@ -582,11 +736,13 @@ impl Model {
                 .gap(Space::S3)
                 .padding(Padding::all(Space::S3))
                 .into(),
-            title: page
-                .map(|p| e.text(&p.label))
-                .transpose()?
-                .unwrap_or(e.text("settings.native.application")?)
-                .to_owned(),
+            title: if sub == Some(crate::bar::CLOCK_PAGE) {
+                Some(e.text("settings.bar.item.clock")?)
+            } else {
+                page.map(|p| e.text(&p.label)).transpose()?
+            }
+            .unwrap_or(e.text("settings.native.application")?)
+            .to_owned(),
             can_back: self.at > 0,
             can_forward: self.at + 1 < self.history.len(),
         })
