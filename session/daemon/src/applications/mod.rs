@@ -7,6 +7,7 @@ mod icon_cache;
 mod icon_view;
 mod icons;
 mod identity;
+pub(crate) use identity::unit_ids;
 mod launch;
 mod layout;
 mod observation;

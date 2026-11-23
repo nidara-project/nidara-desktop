@@ -63,6 +63,9 @@ fn variant(v: &Value) -> OwnedValue {
         Value::Text(s) => {
             OwnedValue::try_from(Variant::from(s.as_str())).expect("a string is a value")
         }
+        Value::List(l) => {
+            OwnedValue::try_from(Variant::from(l.clone())).expect("a list is a value")
+        }
     }
 }
 /// The text the registry parses (`setConfigValue(key, String(value))`).
@@ -79,6 +82,16 @@ fn raw(v: &Variant<'_>) -> String {
         Variant::U8(n) => n.to_string(),
         Variant::Str(s) => s.to_string(),
         Variant::Value(inner) => raw(inner),
+        // A list key's members: the JSON array the registry parses.
+        Variant::Array(a) => serde_json::to_string(
+            &a.iter()
+                .map(|v| match v {
+                    Variant::Str(s) => s.to_string(),
+                    other => other.to_string(),
+                })
+                .collect::<Vec<_>>(),
+        )
+        .expect("strings serialise"),
         other => other.to_string(),
     }
 }
@@ -280,9 +293,22 @@ impl Config1 {
 
 /// Serve `Config1` on `conn`; false if somebody else already owns the name (the TypeScript
 /// shell, in its session), which is not an error of the daemon's.
+static STORE: std::sync::OnceLock<Handle> = std::sync::OnceLock::new();
+
+/// An app showed a tray icon: remembered for Settings → Top bar (`bar.trayHidden`).
+/// `apps` are the app ids its process's unit may name. Nothing before Config1 is served.
+pub async fn remember_tray(id: String, title: String, icon: String, apps: Vec<String>) {
+    if let Some(store) = STORE.get() {
+        store
+            .call(move |st| registry::remember_tray(st, &id, &title, &icon, &apps))
+            .await;
+    }
+}
+
 pub async fn serve(conn: &Connection) -> zbus::Result<bool> {
     let changes = Arc::new(Changes::default());
     let store = store::spawn(changes.clone());
+    let _ = STORE.set(store.clone());
     let epoch = std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)
         .map_or(0, |d| d.as_micros() as u64);
