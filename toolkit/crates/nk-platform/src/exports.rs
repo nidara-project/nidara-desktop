@@ -91,6 +91,22 @@ impl Exports {
             .ok_or_else(|| format!("no string for {key}"))
     }
 
+    /// A count in words: `{key}.{category}` for `n` in the session's language (its plural
+    /// category: `one`, `few`, `many`, `other`), else that language's `{key}.other`, else
+    /// English's; `%d` becomes `n`. A language adds only the categories it has.
+    pub fn count(&self, key: &str, n: u64) -> Result<String, String> {
+        fn pick<'a>(strings: &'a Json, key: &str, category: &str) -> Option<&'a str> {
+            strings
+                .get(format!("{key}.{category}").as_str())
+                .or_else(|| strings.get(format!("{key}.other").as_str()))
+                .and_then(Json::as_str)
+        }
+        pick(&self.strings, key, plural(&self.locale, n))
+            .or_else(|| pick(&self.english, key, plural("en", n)))
+            .map(|s| s.replace("%d", &n.to_string()))
+            .ok_or_else(|| format!("no string for {key}.other"))
+    }
+
     /// The set the portal's values pick. None of the sets: an error shown (D4), never the
     /// nearest one.
     pub fn tokens(&self, a: &Appearance) -> Result<Tokens<'_>, String> {
@@ -158,6 +174,47 @@ pub fn locale(lang: Option<&str>) -> &'static str {
         .map_or("en", |(_, locale)| locale)
 }
 
+/// The plural category of a whole number `n` in `locale` (CLDR's cardinal rules, for the
+/// languages the shell ships).
+pub fn plural(locale: &str, n: u64) -> &'static str {
+    let (ten, hundred) = (n % 10, n % 100);
+    match locale {
+        "ja" | "zh-CN" => "other",
+        "fr" | "pt-BR" => {
+            if n <= 1 {
+                "one"
+            } else {
+                "other"
+            }
+        }
+        "pl" => {
+            if n == 1 {
+                "one"
+            } else if (2..=4).contains(&ten) && !(12..=14).contains(&hundred) {
+                "few"
+            } else {
+                "many"
+            }
+        }
+        "ru" => {
+            if ten == 1 && hundred != 11 {
+                "one"
+            } else if (2..=4).contains(&ten) && !(12..=14).contains(&hundred) {
+                "few"
+            } else {
+                "many"
+            }
+        }
+        _ => {
+            if n == 1 {
+                "one"
+            } else {
+                "other"
+            }
+        }
+    }
+}
+
 fn rgb255(c: [f64; 3]) -> [u8; 3] {
     c.map(|v| (v * 255.0).round().clamp(0.0, 255.0) as u8)
 }
@@ -171,6 +228,19 @@ fn hex_rgb(hex: &str) -> Option<[u8; 3]> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn a_count_takes_its_languages_plural_form() {
+        assert_eq!(plural("en", 1), "one");
+        assert_eq!(plural("en", 0), "other");
+        assert_eq!(plural("fr", 0), "one");
+        assert_eq!(plural("pl", 3), "few");
+        assert_eq!(plural("pl", 13), "many");
+        assert_eq!(plural("pl", 22), "few");
+        assert_eq!(plural("ru", 21), "one");
+        assert_eq!(plural("ru", 11), "many");
+        assert_eq!(plural("ja", 1), "other");
+    }
 
     #[test]
     fn the_locale_is_the_shells() {

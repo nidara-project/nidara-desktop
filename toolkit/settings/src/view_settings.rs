@@ -14,6 +14,14 @@ use std::{
     time::{Duration, Instant},
 };
 
+/// A page with a module of its own here rather than rows from the manifest.
+fn own(page: &Page) -> bool {
+    page.builder.as_deref() == Some("about")
+}
+/// Whether this window draws `page`: its own module, or every row of it ordinary.
+pub fn listed(page: &Page, session: &Session) -> bool {
+    own(page) || ordinary(page, session)
+}
 /// All-or-nothing, recursively: a mixed page cannot silently lose a custom item.
 pub fn ordinary(page: &Page, session: &Session) -> bool {
     fn supported(candidate: &Item, s: &Session) -> bool {
@@ -50,13 +58,14 @@ pub struct Model {
     errors: BTreeMap<String, String>,
     held: BTreeMap<String, Held>,
     status: Option<String>,
+    pub about: crate::about::About,
 }
 impl Model {
     pub fn selected(&self) -> Option<&str> {
         self.history.get(self.at).map(String::as_str)
     }
     pub fn reconcile(&mut self, exports: &Exports, session: &Session) {
-        let eligible = |id: &str| exports.page(id).is_some_and(|p| ordinary(p, session));
+        let eligible = |id: &str| exports.page(id).is_some_and(|p| listed(p, session));
         if self.selected().is_some_and(eligible) {
             self.at = self
                 .history
@@ -69,7 +78,7 @@ impl Model {
             self.history = exports
                 .pages
                 .iter()
-                .find(|p| ordinary(p, session))
+                .find(|p| listed(p, session))
                 .map(|p| vec![p.id.clone()])
                 .unwrap_or_default();
             self.at = 0;
@@ -121,6 +130,8 @@ impl Model {
                     .min(u128::from(u32::MAX)) as u32
             })
             .fold(host, u32::min)
+            // A page's worker has yet to answer: look again soon.
+            .min(if self.about.waiting() { 200 } else { u32::MAX })
     }
     fn send(
         &mut self,
@@ -166,7 +177,7 @@ impl Model {
         now: Instant,
     ) -> Result<bool, String> {
         if let Some(page) = a.action.strip_prefix("page:") {
-            if e.page(page).is_some_and(|p| ordinary(p, editor.session()))
+            if e.page(page).is_some_and(|p| listed(p, editor.session()))
                 && self.selected() != Some(page)
             {
                 self.history.truncate(self.at + 1);
@@ -307,7 +318,7 @@ impl Model {
         let sidebar = e
             .pages
             .iter()
-            .filter(|p| ordinary(p, session))
+            .filter(|p| listed(p, session))
             .map(|p| {
                 Ok::<_, String>(
                     nk::SidebarEntry::new(
@@ -330,7 +341,9 @@ impl Model {
         if let Some(status) = &self.status {
             content.push(nk::Label::new("settings-status", status, body()).into());
         }
-        if let Some(p) = page {
+        if page.is_some_and(own) {
+            content.extend(self.about.content(e, types)?);
+        } else if let Some(p) = page {
             for (i, g) in p.groups.iter().enumerate() {
                 let id = format!("{}/{i}", p.id);
                 if let Some(label) = g.i18n.as_ref().filter(|label| !label.is_empty()) {
