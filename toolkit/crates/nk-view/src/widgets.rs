@@ -633,6 +633,33 @@ impl Entry {
     }
     control_setters!();
 }
+widget!(
+    /// A time of day, hours and minutes (`NSDatePicker` in its hour-and-minute mode): one
+    /// field, one Tab stop. Left and Right pick the part, Up and Down step it, digits type it.
+    /// `changed` is reported on every change with "HH:MM" (24 h) as its value.
+    TimeField
+);
+impl TimeField {
+    /// `time` is "HH:MM"; anything else shows 00:00.
+    pub fn new(
+        key: impl Into<Key>,
+        name: impl Into<String>,
+        changed: impl Into<String>,
+        time: &str,
+        style: TextStyle,
+    ) -> Self {
+        let (hour, minute) = crate::components::parse_time(time).unwrap_or((0, 0));
+        Self(
+            crate::components::TimeField {
+                hour,
+                minute,
+                style,
+            }
+            .node(key, name, changed),
+        )
+    }
+    control_setters!();
+}
 /// A search field: the entry, the search glyph and its clear button (`Gtk.SearchEntry`).
 #[must_use]
 pub struct SearchEntry {

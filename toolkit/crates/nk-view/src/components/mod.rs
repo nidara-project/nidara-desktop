@@ -22,6 +22,8 @@ mod slider;
 pub use slider::SliderControl;
 mod field;
 pub use field::DisplayField;
+mod time_field;
+pub use time_field::{TimeField, parse_time};
 mod dropdown;
 pub use dropdown::Dropdown;
 mod menu_row;
@@ -306,6 +308,7 @@ pub enum Part {
     MenuRow(MenuRow),
     Disclosure(Disclosure),
     Editable(EditableField),
+    Time(TimeField),
     Search(Search),
     SearchClear(Clear),
 }
@@ -340,6 +343,7 @@ impl Part {
             Self::MenuRow(c) => c,
             Self::Disclosure(c) => c,
             Self::Editable(c) => c,
+            Self::Time(c) => c,
             Self::Search(c) => c,
             Self::SearchClear(c) => c,
         }

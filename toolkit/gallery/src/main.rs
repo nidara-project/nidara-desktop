@@ -171,6 +171,11 @@ impl Gallery {
                     self.model.search = text;
                 }
             }
+            "time-set" => {
+                if let Some(nk::Value::Text(text)) = a.value {
+                    self.model.time = text;
+                }
+            }
             "city-edit" => {
                 if let Some(nk::Value::Text(text)) = a.value {
                     self.model.city = text;
