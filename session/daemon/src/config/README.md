@@ -127,3 +127,26 @@ leaks in.
   sets the seven format `LC_*` variables (never `LANG`) for the next login. "" removes the
   file and follows the language. Values come from `locale -a` spelled `.UTF-8`, plus a saved
   one the system stopped listing. A file monitor announces any writer's change.
+
+## Top bar (#1103 8e)
+
+`bar.rs` serves the keys of Settings → Top bar, in the homes the TS shell used:
+
+- `bar.appTitle` and `bar.launcherIcon` are `org.nidara.bar`'s `show-app-title` and
+  `launcher-icon`. The icon is `"nidara"` (the mark) or an absolute path to an SVG, PNG,
+  JPEG or WebP image. A stored file that is gone, or an old preset, reads as `"nidara"`.
+- `bar.trayHidden` is the first **list** key (`type: "list"`, `Value::List`, `as` on the
+  wire). Its `Apply` takes a JSON array of strings, and its value is the members of
+  `values` it names, each once and in the order of `values`. The members are tray icon
+  Ids, stored as `tray:<Id>` in `org.nidara.widgets` `bar-hidden`. A write replaces only
+  the offered Ids and keeps every other member: `shell:search`, and an app that is not
+  installed now. `values` are the icons in `tray-known` whose app is still installed
+  (or that no app was matched to). `ui.items` gives each one's title, icon and app.
+- sessiond's tray service writes `tray-known` (`config::remember_tray`) when an item
+  registers. The app is the first candidate from the process's unit that has a desktop
+  file. It writes only when something changed.
+- The clock's `region.timeFormat`, `region.dateFormat` and `region.showSeconds` are
+  `org.nidara.region`'s. Settings shows them on the Clock subpage of Top bar.
+
+Where each control appears (Wi-Fi, volume and the rest) is not here: #1144. The Rust bar
+follows these homes in #1177.

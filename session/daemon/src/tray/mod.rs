@@ -49,6 +49,22 @@ impl From<zbus::fdo::Error> for Error {
 fn val<T: Into<Value<'static>>>(v: T) -> OwnedValue {
     v.into().try_into().expect("D-Bus value")
 }
+/// What Settings remembers of an icon: its Id, a name a person reads, its themed icon.
+fn remembered(p: &Props) -> (String, String, String) {
+    let title = [text(p, "Title"), text(p, "Id")]
+        .into_iter()
+        .find(|t| !t.is_empty())
+        .unwrap_or_default();
+    (text(p, "Id"), title, text(p, "IconName"))
+}
+/// The app ids the process's unit may name, most specific first.
+fn app_candidates(pid: u32) -> Vec<String> {
+    let Ok(cgroup) = std::fs::read_to_string(format!("/proc/{pid}/cgroup")) else {
+        return vec![];
+    };
+    let (services, scopes, snaps) = crate::applications::unit_ids(&cgroup);
+    services.into_iter().chain(scopes).chain(snaps).collect()
+}
 fn text(p: &Props, k: &str) -> String {
     p.get(k)
         .and_then(|v| {
@@ -351,12 +367,15 @@ impl Tray {
                         i.apply(icons.into_iter().map(|(k, v)| (k, val(v))).collect(), other);
                         i.ready = true;
                         self.jobs.notify_one();
-                        Some(i.registration.clone())
+                        Some((i.registration.clone(), remembered(&i.props)))
                     } else {
                         None
                     }
                 };
-                if let Some(r) = registered {
+                if let Some((r, (id, title, icon))) = registered {
+                    // Settings → Top bar lists the app while it is closed (#1103 8e).
+                    let apps = app_candidates(pid);
+                    tokio::spawn(crate::config::remember_tray(id, title, icon, apps));
                     self.watcher_signal("StatusNotifierItemRegistered", Some(&r))
                         .await;
                     self.changed().await;

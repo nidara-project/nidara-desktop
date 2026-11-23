@@ -13,6 +13,8 @@
 //!
 //! Lives on the GLib thread (`store.rs`): a `gio::Settings` is not `Send`.
 
+#[path = "bar.rs"]
+mod bar;
 #[path = "desktop.rs"]
 mod desktop;
 #[path = "ordinary.rs"]
@@ -33,6 +35,8 @@ pub enum Value {
     Bool(bool),
     Number(f64),
     Text(String),
+    /// A set of the key's `values`, in their order.
+    List(Vec<String>),
 }
 impl Value {
     pub fn json(&self) -> Json {
@@ -40,6 +44,7 @@ impl Value {
             Value::Bool(b) => json!(b),
             Value::Number(n) => json!(n),
             Value::Text(s) => json!(s),
+            Value::List(l) => json!(l),
         }
     }
 }
@@ -47,9 +52,14 @@ impl Value {
 #[derive(Clone, Copy, PartialEq)]
 pub enum Kind {
     Boolean,
-    Number { min: f64, max: f64 },
+    Number {
+        min: f64,
+        max: f64,
+    },
     Enum,
     Text,
+    /// Some of `values`, any number of them: written as a JSON array of strings.
+    List,
 }
 impl Kind {
     fn name(self) -> &'static str {
@@ -58,6 +68,7 @@ impl Kind {
             Kind::Number { .. } => "number",
             Kind::Enum => "enum",
             Kind::Text => "string",
+            Kind::List => "list",
         }
     }
 }
@@ -102,6 +113,8 @@ const POWER: &str = "org.nidara.power";
 const AI: &str = "org.nidara.ai";
 const DOCK: &str = "org.nidara.dock";
 const NOTIFICATIONS: &str = "org.nidara.notifications";
+const BAR: &str = "org.nidara.bar";
+const WIDGETS: &str = "org.nidara.widgets";
 
 /// The GSettings of this session, by schema; a schema not installed is simply absent.
 pub struct Store {
@@ -131,6 +144,9 @@ impl Store {
             POWER,
             DOCK,
             NOTIFICATIONS,
+            BAR,
+            WIDGETS,
+            bar::REGION,
         ] {
             if let Some(schema) = source.as_ref().and_then(|s| s.lookup(id, true)) {
                 settings.insert(id, gio::Settings::new(id));
@@ -783,8 +799,11 @@ fn table() -> Vec<Key> {
     keys.extend(desktop::keys());
     keys.extend(profile::keys());
     keys.extend(region::keys());
+    keys.extend(bar::keys());
     keys
 }
+
+pub use bar::remember_tray;
 
 // ── The registry's rules ─────────────────────────────────────────────────────────────────
 
@@ -863,6 +882,21 @@ pub fn parse(st: &Store, key: &Key, raw: &str) -> Result<Value, String> {
             Some(f) => f(raw),
             None => Ok(Value::Text(raw.into())),
         },
+        Kind::List => {
+            let list: Vec<String> = serde_json::from_str(raw)
+                .map_err(|_| format!("expected a JSON array of strings, got: {raw}"))?;
+            let values = key.values.map(|f| f(st)).unwrap_or_default();
+            if let Some(bad) = list.iter().find(|v| !values.contains(v)) {
+                return Err(format!(
+                    "invalid member: {bad} — valid: {}",
+                    values.join(", ")
+                ));
+            }
+            // Canonical: each member once, in the order of `values`.
+            Ok(Value::List(
+                values.into_iter().filter(|v| list.contains(v)).collect(),
+            ))
+        }
     }
 }
 
@@ -1786,6 +1820,33 @@ mod tests {
         );
         assert_eq!(font_parts("Inter"), None);
         assert_eq!(font_parts("Inter 0"), None);
+    }
+
+    #[test]
+    fn a_list_takes_members_of_its_values_once_in_their_order() {
+        let key = Key {
+            name: "test.list",
+            desc: "",
+            kind: Kind::List,
+            writable: true,
+            needs: &[],
+            values: Some(|_| owned(&["a", "b", "c"])),
+            catalogue: None,
+            validate: None,
+            get: |_| Value::List(vec![]),
+            set: None,
+            ui: None,
+            watch: &[],
+            file: false,
+        };
+        let st = Store::new();
+        assert_eq!(
+            parse(&st, &key, r#"["c","a","c"]"#),
+            Ok(Value::List(vec!["a".into(), "c".into()]))
+        );
+        assert_eq!(parse(&st, &key, "[]"), Ok(Value::List(vec![])));
+        assert!(parse(&st, &key, r#"["d"]"#).is_err());
+        assert!(parse(&st, &key, "a,b").is_err());
     }
 
     #[test]
