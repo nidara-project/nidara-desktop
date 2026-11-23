@@ -61,8 +61,9 @@ impl Arrangement {
         let base = Node::spacer(format!("{}/base", key.0))
             .width(size.0)
             .height(size.1);
-        let mut overlay = Overlay::new(key, base);
-        for item in items {
+        let count = items.len();
+        let mut overlay = Overlay::new(key.clone(), base);
+        for (index, item) in items.into_iter().enumerate() {
             // Keep the painted controls inside the arrangement even while the pointer
             // moves beyond its edges. The app still receives the full displacement.
             let [x, y, width, height] = item.bounds;
@@ -76,8 +77,11 @@ impl Arrangement {
                 .width(width)
                 .height(height);
             if let crate::Kind::Control(control) = &mut node.kind {
-                control.role = Role::Toggle;
+                control.role = Role::Radio;
                 control.part = Some(Box::new(Part::ArrangementRect(ArrangementRect {
+                    group: key.clone(),
+                    index,
+                    count,
                     selected: item.selected,
                     movable: item.movable,
                     scale: projection.scale,
@@ -97,6 +101,9 @@ impl Arrangement {
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub struct ArrangementRect {
+    group: Key,
+    index: usize,
+    count: usize,
     selected: bool,
     movable: bool,
     scale: f64,
@@ -131,15 +138,13 @@ impl Component for ArrangementRect {
         if phase != PaintPhase::Under {
             return;
         }
-        let colors = &cx.look.tokens.look;
         let radius = self
             .corner()
             .of(cx.rect[2], cx.rect[3], &cx.look.tokens.radii);
-        let fill = cx.ink(if self.selected {
-            colors.accent
-        } else {
-            colors.surface
-        });
+        let fill = cx.ink(segment::choice_fill(
+            &cx.look.tokens.segmented,
+            cx.interaction,
+        ));
         cx.canvas.clip(rect(&cx.visible));
         cx.canvas.rounded_rect(rect(&cx.rect), radius, fill);
         cx.canvas.pop_clip();
@@ -148,10 +153,15 @@ impl Component for ArrangementRect {
     fn ink(
         &self,
         look: ComponentLook<'_>,
-        _interaction: Interaction,
+        interaction: Interaction,
         _glyph: bool,
     ) -> Option<Color> {
-        self.selected.then_some(look.tokens.look.accent_fg)
+        let style = &look.tokens.segmented;
+        Some(if interaction.marked {
+            style.selected_text
+        } else {
+            style.text
+        })
     }
 
     fn corner(&self) -> Corner {
@@ -160,6 +170,22 @@ impl Component for ArrangementRect {
 
     fn selected(&self) -> bool {
         self.selected
+    }
+
+    fn group(&self, _cx: &Read<'_>) -> Membership {
+        Membership::Named {
+            key: self.group.clone(),
+            selected: self.selected,
+        }
+    }
+
+    fn semantics(&self, _cx: &Read<'_>, node: &mut nk_a11y::Node, _: &mut Vec<SemanticChild>) {
+        node.states.checked = self.selected;
+        node.states.selected = self.selected;
+        node.attributes
+            .insert("posinset".into(), (self.index + 1).to_string());
+        node.attributes
+            .insert("setsize".into(), self.count.to_string());
     }
 
     fn state(&self) -> Option<Box<dyn Any>> {

@@ -106,18 +106,7 @@ impl Component for Segment {
         // Its ring is drawn after every segment (below), so a neighbour never covers it.
         let s = &tokens.segmented;
 
-        let pressed = interaction.enabled && (interaction.pressed);
-        let hovered = interaction.enabled && (interaction.hover);
-        let white = nk_render::Color::new([1., 1., 1., 1.]);
-        let black = nk_render::Color::new([0., 0., 0., 1.]);
-        let fill = match (interaction.marked, pressed, hovered) {
-            (true, true, _) => mix(s.selected, black, s.selected_pressed_black as f32),
-            (true, false, true) => mix(s.selected, white, s.selected_hover_white as f32),
-            (true, ..) => s.selected,
-            (false, true, _) => s.pressed,
-            (false, false, true) => s.hover,
-            (false, ..) => s.background,
-        };
+        let fill = choice_fill(s, interaction);
         let a = if interaction.enabled {
             1.
         } else {
@@ -145,5 +134,27 @@ impl Component for Segment {
         }
         canvas.pop_clip();
         canvas.pop_clip();
+    }
+}
+
+/// Fill shared by the kit's single-choice controls.
+pub(super) fn choice_fill(style: &crate::SegmentStyle, interaction: Interaction) -> Color {
+    let pressed = interaction.enabled && interaction.pressed;
+    let hovered = interaction.enabled && interaction.hover;
+    match (interaction.marked, pressed, hovered) {
+        (true, true, _) => mix(
+            style.selected,
+            Color::new([0., 0., 0., 1.]),
+            style.selected_pressed_black as f32,
+        ),
+        (true, false, true) => mix(
+            style.selected,
+            Color::new([1., 1., 1., 1.]),
+            style.selected_hover_white as f32,
+        ),
+        (true, ..) => style.selected,
+        (false, true, _) => style.pressed,
+        (false, false, true) => style.hover,
+        (false, ..) => style.background,
     }
 }

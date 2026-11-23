@@ -6418,3 +6418,59 @@ fn arrangement_reports_logical_drag_and_can_cancel_it() {
         "select-output"
     );
 }
+
+#[test]
+fn arrangement_has_pointer_states_and_a_keyboard_choice_group() {
+    let size = (220., 120.);
+    let items = (0..2)
+        .map(|i| crate::ArrangementItem {
+            key: format!("monitor-{i}").into(),
+            label: format!("Display {}", i + 1),
+            name: format!("Display {}", i + 1),
+            action: format!("select:{i}"),
+            bounds: [f64::from(i) * 100., 0., 100., 100.],
+            selected: i == 1,
+            movable: true,
+        })
+        .collect::<Vec<_>>();
+    let projection = crate::ArrangementProjection::fit(&items, size, 10.);
+    let node = crate::Arrangement::view("arrangement", size, projection, items, style(14.));
+    let mut view = laid(&node, size, 1.);
+    let tree = view.semantics(nk_a11y::Node::new(1, nk_a11y::Role::Window, "Displays"), 2);
+    for (i, name) in ["Display 1", "Display 2"].into_iter().enumerate() {
+        let item = tree.nodes.values().find(|n| n.name == name).unwrap();
+        assert_eq!(item.role, nk_a11y::Role::RadioButton);
+        assert_eq!(item.states.selected, i == 1);
+        assert_eq!(item.states.checked, i == 1);
+        assert_eq!(item.attributes["posinset"], (i + 1).to_string());
+        assert_eq!(item.attributes["setsize"], "2");
+    }
+    view.key(KeyInput::Tab);
+    assert_eq!(view.focus(), Some(&"monitor-1".into()));
+    assert_eq!(view.key(KeyInput::Left).unwrap().action, "select:0");
+
+    let tokens = tokens();
+    let types = types();
+    let paint = |view: &ViewState, point| {
+        let mut canvas = nk_render::Canvas::new(220, 120, 1.);
+        view.paint(
+            &mut canvas,
+            tokens.with_types(&types),
+            &mut |_, _| None,
+            None,
+        )
+        .unwrap();
+        bgra(&canvas.finish(), 220, point)
+    };
+    for point in [(30., 35.), (130., 35.)] {
+        view.pointer_leave();
+        let rest = paint(&view, point);
+        view.pointer_motion(point.0, point.1);
+        let hover = paint(&view, point);
+        view.button(true, Instant::now()).unwrap();
+        let press = paint(&view, point);
+        assert_ne!(rest, hover);
+        assert_ne!(hover, press);
+        view.button(false, Instant::now()).unwrap();
+    }
+}
