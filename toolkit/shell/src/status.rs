@@ -22,7 +22,6 @@ pub(crate) const SESSION: &str = "org.nidara.Session";
 const NETWORK: &str = "org.nidara.Network";
 const NETWORK_PATH: &str = "/org/nidara/Network";
 const NETWORK_IFACE: &str = "org.nidara.Network1";
-const AUDIO_PATH: &str = "/org/nidara/Audio";
 const POWER_PATH: &str = "/org/nidara/Power";
 const BRIGHTNESS_PATH: &str = "/org/nidara/DisplayBrightness";
 const BRIGHTNESS_IFACE: &str = "org.nidara.DisplayBrightness1";
@@ -144,7 +143,7 @@ pub enum Update {
     Audio(
         Option<Volume>,
         String,
-        std::sync::Arc<Vec<crate::ccdata::Choice>>,
+        std::sync::Arc<Vec<nk_platform::audio::Node>>,
     ),
     Players(
         Option<std::sync::Arc<Media>>,
@@ -363,7 +362,25 @@ type Reader = fn(&Connection) -> Result<Update, String>;
 
 /// The three watchers, each on its own thread for as long as the shell lives.
 pub fn watch(conn: &Connection, emit: Sender<Update>) {
-    let watchers: [(&str, Reader, Update, _); 6] = [
+    let audio = emit.clone();
+    let _ = std::thread::Builder::new()
+        .name("status-audio".into())
+        .spawn(move || {
+            let result = Connection::session()
+                .map_err(|e| e.to_string())
+                .and_then(|conn| {
+                    nk_platform::audio::watch(&conn, |graph| {
+                        audio
+                            .send(graph.map_or(Update::Volume(None), audio_update))
+                            .is_ok()
+                    })
+                });
+            if let Err(error) = result {
+                eprintln!("nidara-shell: cannot watch audio: {error}");
+                let _ = audio.send(Update::Volume(None));
+            }
+        });
+    let watchers: [(&str, Reader, Update, _); 5] = [
         (
             "network",
             read_wifi,
@@ -371,35 +388,6 @@ pub fn watch(conn: &Connection, emit: Sender<Update>) {
             vec![
                 signal(NETWORK, NETWORK_IFACE, "Updated", NETWORK_PATH, false),
                 owner(NETWORK),
-            ],
-        ),
-        (
-            "audio",
-            read_volume,
-            Update::Volume(None),
-            vec![
-                signal(
-                    SESSION,
-                    "org.freedesktop.DBus.Properties",
-                    "PropertiesChanged",
-                    AUDIO_PATH,
-                    true,
-                ),
-                signal(
-                    SESSION,
-                    "org.freedesktop.DBus.ObjectManager",
-                    "InterfacesAdded",
-                    AUDIO_PATH,
-                    false,
-                ),
-                signal(
-                    SESSION,
-                    "org.freedesktop.DBus.ObjectManager",
-                    "InterfacesRemoved",
-                    AUDIO_PATH,
-                    false,
-                ),
-                owner(SESSION),
             ],
         ),
         (
@@ -643,35 +631,25 @@ fn read_wifi(conn: &Connection) -> Result<Update, String> {
     Ok(Update::Network(std::sync::Arc::new(snapshot)))
 }
 
+#[cfg(test)]
 fn read_volume(conn: &Connection) -> Result<Update, String> {
-    let owner = service_owner(conn, SESSION)?;
-    let root = proxy(conn, &owner, AUDIO_PATH, "org.nidara.Audio1")?;
-    let out: OwnedObjectPath = root
-        .get_property("DefaultOutput")
-        .map_err(|e| e.to_string())?;
-    let mut nodes = crate::ccdata::objects(conn, &owner, AUDIO_PATH, "org.nidara.AudioNode1")?;
-    let limit: f64 = root
-        .get_property("VolumeLimit")
-        .map_err(|e| e.to_string())?;
-    for node in &mut nodes {
-        node.volume_limit = if limit.is_finite() {
-            limit.clamp(0., 1.5)
-        } else {
-            1.
-        };
-    }
-    let nodes = std::sync::Arc::new(nodes);
-    if out.as_str() == "/" {
-        return Ok(Update::Audio(None, out.to_string(), nodes));
-    }
-    let node = proxy(conn, &owner, out.as_str(), "org.nidara.AudioNode1")?;
-    let level: f64 = node.get_property("Volume").map_err(|e| e.to_string())?;
-    let muted: bool = node.get_property("Muted").map_err(|e| e.to_string())?;
-    Ok(Update::Audio(
-        Some(Volume { level, muted }),
-        out.to_string(),
-        nodes,
-    ))
+    nk_platform::audio::snapshot(conn).map(audio_update)
+}
+
+fn audio_update(graph: nk_platform::audio::Snapshot) -> Update {
+    let volume = graph
+        .nodes
+        .iter()
+        .find(|node| node.path == graph.default_output)
+        .map(|node| Volume {
+            level: node.volume,
+            muted: node.muted,
+        });
+    Update::Audio(
+        volume,
+        graph.default_output,
+        std::sync::Arc::new(graph.nodes),
+    )
 }
 
 fn read_battery(conn: &Connection) -> Result<Update, String> {

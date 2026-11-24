@@ -334,6 +334,7 @@
     "settings.audio.group.output": "3c2c09c1",
     "settings.audio.group.input": "b3c4d64d",
     "settings.audio.error.no-service": "65d4fd7d",
+    "settings.audio.error.change": "875358ab",
     "settings.audio.error.no-hardware": "ec7f1b60",
     "settings.audio.title": "b4e3efeb",
     "settings.audio.device": "a5a74a6d",
@@ -988,7 +989,7 @@
   "locales": {
     "de": {
       "translated": 835,
-      "of": 983,
+      "of": 984,
       "untranslated": [
         "bar.edit.done",
         "bar.edit.hint",
@@ -1027,6 +1028,7 @@
         "settings.appearance.window-controls.desc",
         "settings.appearance.window-controls.left",
         "settings.appearance.window-controls.right",
+        "settings.audio.error.change",
         "settings.bar.change-icon",
         "settings.bar.group.apps",
         "settings.bar.group.items",
@@ -1142,14 +1144,14 @@
       "stale": []
     },
     "es": {
-      "translated": 983,
-      "of": 983,
+      "translated": 984,
+      "of": 984,
       "untranslated": [],
       "stale": []
     },
     "fr": {
       "translated": 835,
-      "of": 983,
+      "of": 984,
       "untranslated": [
         "bar.edit.done",
         "bar.edit.hint",
@@ -1188,6 +1190,7 @@
         "settings.appearance.window-controls.desc",
         "settings.appearance.window-controls.left",
         "settings.appearance.window-controls.right",
+        "settings.audio.error.change",
         "settings.bar.change-icon",
         "settings.bar.group.apps",
         "settings.bar.group.items",
@@ -1304,7 +1307,7 @@
     },
     "it": {
       "translated": 835,
-      "of": 983,
+      "of": 984,
       "untranslated": [
         "bar.edit.done",
         "bar.edit.hint",
@@ -1343,6 +1346,7 @@
         "settings.appearance.window-controls.desc",
         "settings.appearance.window-controls.left",
         "settings.appearance.window-controls.right",
+        "settings.audio.error.change",
         "settings.bar.change-icon",
         "settings.bar.group.apps",
         "settings.bar.group.items",
@@ -1459,7 +1463,7 @@
     },
     "ja": {
       "translated": 835,
-      "of": 983,
+      "of": 984,
       "untranslated": [
         "bar.edit.done",
         "bar.edit.hint",
@@ -1498,6 +1502,7 @@
         "settings.appearance.window-controls.desc",
         "settings.appearance.window-controls.left",
         "settings.appearance.window-controls.right",
+        "settings.audio.error.change",
         "settings.bar.change-icon",
         "settings.bar.group.apps",
         "settings.bar.group.items",
@@ -1614,7 +1619,7 @@
     },
     "nl": {
       "translated": 835,
-      "of": 983,
+      "of": 984,
       "untranslated": [
         "bar.edit.done",
         "bar.edit.hint",
@@ -1653,6 +1658,7 @@
         "settings.appearance.window-controls.desc",
         "settings.appearance.window-controls.left",
         "settings.appearance.window-controls.right",
+        "settings.audio.error.change",
         "settings.bar.change-icon",
         "settings.bar.group.apps",
         "settings.bar.group.items",
@@ -1769,7 +1775,7 @@
     },
     "pl": {
       "translated": 835,
-      "of": 983,
+      "of": 984,
       "untranslated": [
         "bar.edit.done",
         "bar.edit.hint",
@@ -1808,6 +1814,7 @@
         "settings.appearance.window-controls.desc",
         "settings.appearance.window-controls.left",
         "settings.appearance.window-controls.right",
+        "settings.audio.error.change",
         "settings.bar.change-icon",
         "settings.bar.group.apps",
         "settings.bar.group.items",
@@ -1924,7 +1931,7 @@
     },
     "pt-BR": {
       "translated": 835,
-      "of": 983,
+      "of": 984,
       "untranslated": [
         "bar.edit.done",
         "bar.edit.hint",
@@ -1963,6 +1970,7 @@
         "settings.appearance.window-controls.desc",
         "settings.appearance.window-controls.left",
         "settings.appearance.window-controls.right",
+        "settings.audio.error.change",
         "settings.bar.change-icon",
         "settings.bar.group.apps",
         "settings.bar.group.items",
@@ -2079,7 +2087,7 @@
     },
     "pt-PT": {
       "translated": 835,
-      "of": 983,
+      "of": 984,
       "untranslated": [
         "bar.edit.done",
         "bar.edit.hint",
@@ -2118,6 +2126,7 @@
         "settings.appearance.window-controls.desc",
         "settings.appearance.window-controls.left",
         "settings.appearance.window-controls.right",
+        "settings.audio.error.change",
         "settings.bar.change-icon",
         "settings.bar.group.apps",
         "settings.bar.group.items",
@@ -2234,7 +2243,7 @@
     },
     "ru": {
       "translated": 835,
-      "of": 983,
+      "of": 984,
       "untranslated": [
         "bar.edit.done",
         "bar.edit.hint",
@@ -2273,6 +2282,7 @@
         "settings.appearance.window-controls.desc",
         "settings.appearance.window-controls.left",
         "settings.appearance.window-controls.right",
+        "settings.audio.error.change",
         "settings.bar.change-icon",
         "settings.bar.group.apps",
         "settings.bar.group.items",
@@ -2389,7 +2399,7 @@
     },
     "zh-CN": {
       "translated": 835,
-      "of": 983,
+      "of": 984,
       "untranslated": [
         "bar.edit.done",
         "bar.edit.hint",
@@ -2428,6 +2438,7 @@
         "settings.appearance.window-controls.desc",
         "settings.appearance.window-controls.left",
         "settings.appearance.window-controls.right",
+        "settings.audio.error.change",
         "settings.bar.change-icon",
         "settings.bar.group.apps",
         "settings.bar.group.items",

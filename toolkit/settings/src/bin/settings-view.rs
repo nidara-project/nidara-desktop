@@ -30,7 +30,11 @@ impl Settings {
                 // Closing this dedicated Display1 connection also releases any preview.
                 self.model.display = Default::default();
             }
+            if self.shown.as_deref() == Some(nk_settings::audio::PAGE) {
+                self.model.audio = Default::default();
+            }
             match selected.as_deref() {
+                Some(nk_settings::audio::PAGE) => self.model.audio.visit(),
                 Some("display") => self.model.display.visit(),
                 Some("about") => self.model.about.visit(),
                 Some("region") => self.model.region.visit(),
@@ -69,7 +73,10 @@ impl Settings {
         for a in actions {
             let launcher = a.key.clone();
             let dragging = self.pointer_down && self.host.captured() == Some(&a.key);
-            if self.model.display_action(&a, dragging, &self.host) {
+            if self.model.display_action(&a, dragging, &self.host)
+                || self.model.selected() == Some(nk_settings::audio::PAGE)
+                    && self.model.audio.activate(&a, dragging)
+            {
                 continue;
             }
             if self
@@ -197,7 +204,12 @@ impl Application for Settings {
         let ms = self
             .model
             .poll_interval_ms(Instant::now(), self.host.poll_interval_ms());
-        if self.chooser.pending() || self.shown.as_deref() == Some("display") {
+        if self.chooser.pending()
+            || matches!(
+                self.shown.as_deref(),
+                Some("display" | nk_settings::audio::PAGE)
+            )
+        {
             ms.min(200)
         } else {
             ms
@@ -221,6 +233,7 @@ impl Application for Settings {
         }
         self.dirty |= self.model.about.poll();
         self.dirty |= self.model.region.poll();
+        self.dirty |= self.model.audio.poll();
         if self.model.display.poll() {
             self.host.cancel_menu();
             self.dirty = true;

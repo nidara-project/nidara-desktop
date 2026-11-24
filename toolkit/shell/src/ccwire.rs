@@ -257,6 +257,72 @@ fn audio_choices_use_real_wire_types_and_cannot_retarget_a_replacement_service()
     assert!(replacement.lock().unwrap().calls.is_empty());
 }
 
+#[test]
+fn the_shared_audio_reader_applies_sparse_changes_and_rehydrates_a_new_owner() {
+    let bus = Bus::new();
+    let graph = Arc::new(Mutex::new(Graph::default()));
+    let service = server(&bus, &graph);
+    let client = bus.client();
+    let (tx, rx) = channel();
+    let listener = client.clone();
+    let worker = std::thread::spawn(move || {
+        let _ = nk_platform::audio::watch(&listener, |update| tx.send(update).is_ok());
+    });
+    let receive = || rx.recv_timeout(Duration::from_secs(2)).unwrap();
+    let initial = receive().unwrap();
+    assert_eq!(initial.default_output, ONE);
+
+    // Leave GetManagedObjects untouched. The update must come from the sparse signal.
+    service
+        .emit_signal(
+            None::<&str>,
+            ONE,
+            "org.freedesktop.DBus.Properties",
+            "PropertiesChanged",
+            &(
+                "org.nidara.AudioNode1",
+                HashMap::from([("Volume", OwnedValue::from(0.7))]),
+                Vec::<String>::new(),
+            ),
+        )
+        .unwrap();
+    let updated = receive().unwrap();
+    assert_eq!(
+        updated
+            .nodes
+            .iter()
+            .find(|node| node.path == ONE)
+            .unwrap()
+            .volume,
+        0.7
+    );
+    assert_eq!(
+        updated
+            .nodes
+            .iter()
+            .find(|node| node.path == TWO)
+            .unwrap()
+            .volume,
+        0.8
+    );
+    service.close().unwrap();
+    assert!(receive().is_none());
+    let _next = server(&bus, &Arc::new(Mutex::new(Graph::default())));
+    let restored = receive().unwrap();
+    assert_ne!(restored.owner, initial.owner);
+    assert_eq!(
+        restored
+            .nodes
+            .iter()
+            .find(|node| node.path == ONE)
+            .unwrap()
+            .volume,
+        0.4
+    );
+    client.close().unwrap();
+    worker.join().unwrap();
+}
+
 #[derive(Clone)]
 struct PowerFixture(Arc<Mutex<(bool, u32, bool, i64)>>);
 struct PowerRoot;
