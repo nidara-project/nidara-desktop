@@ -633,6 +633,12 @@ Balance is offered only on capable outputs. Profiles belong to devices, ports
 to endpoints, and app routing uses the playback stream's requested target.
 Keep dropdown choices bound to their ordered object paths so a graph update
 cannot retarget a stale selection.
+Network (8g) uses `nk_platform::network` for Network1 snapshots, AP
+selection and saved profile matching shared by Settings and the shell.
+Subscribe before hydrating and apply only newer revisions from the current
+owner and epoch. Settings uses `GetIp` and `ApplyIp` with an explicit draft
+and pins each action to the current service owner and request ID. The shell
+owns the Network1 secret renderer.
 `power.profile` is PPD's ActiveProfile on the system bus, announced by PPD's own
 signals; Config1 tests set `DBUS_SYSTEM_BUS_ADDRESS` to their private bus.
 `region.timezone` is timedated's, set asynchronously behind polkit: `Apply` answers the old zone and the new one is

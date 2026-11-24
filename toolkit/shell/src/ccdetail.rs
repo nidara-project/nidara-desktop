@@ -1158,45 +1158,17 @@ fn rows(page: &str, s: &Status, mode: &'static str, audio: bool) -> Vec<Row> {
                     .switch(n["wirelessEnabled"] == true),
                 );
                 let profiles: Vec<_> = array(n, "profiles").collect();
-                let mut networks: std::collections::BTreeMap<String, (&Value, &Value)> =
-                    Default::default();
                 for d in array(n, "devices").filter(|d| d["kind"] == 2) {
-                    let device = text(d, "path");
                     out.push(Row::key(
                         "settings.network.ap.scan",
-                        Action::Scan(device.clone()),
+                        Action::Scan(text(d, "path")),
                     ));
-                    for ap in array(d, "accessPoints").filter(|a| !text(a, "label").is_empty()) {
-                        let Some(ssid) = ap["ssid"].as_array() else {
-                            continue;
-                        };
-                        if ssid.is_empty()
-                            || ssid.iter().any(|v| v.as_u64().is_none_or(|n| n > 255))
-                        {
-                            continue;
-                        }
-                        let key = ap["ssid"].to_string();
-                        if networks.get(&key).is_none_or(|(old_device, old)| {
-                            d["activeAp"] == ap["path"]
-                                || (old_device["activeAp"] != old["path"]
-                                    && old["strength"].as_u64() < ap["strength"].as_u64())
-                        }) {
-                            networks.insert(key, (d, ap));
-                        }
-                    }
                 }
-                let mut networks: Vec<_> = networks.into_values().collect();
-                networks.sort_by_key(|(d, ap)| {
-                    (
-                        d["activeAp"] != ap["path"],
-                        std::cmp::Reverse(ap["strength"].as_u64().unwrap_or(0)),
-                        text(ap, "label"),
-                    )
-                });
+                let networks = nk_platform::network::access_points(n);
                 for (d, ap) in networks.into_iter().take(128) {
                     let current = d["activeAp"] == ap["path"];
                     let connected = current && d["state"] == 100;
-                    let saved = profiles.iter().find(|p| p["ssid"] == ap["ssid"]);
+                    let saved = nk_platform::network::saved_ap(n, d, ap);
                     let action = if !n["wirelessEnabled"].as_bool().unwrap_or(false) {
                         None
                     } else if current {

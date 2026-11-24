@@ -33,7 +33,11 @@ impl Settings {
             if self.shown.as_deref() == Some(nk_settings::audio::PAGE) {
                 self.model.audio = Default::default();
             }
+            if self.shown.as_deref() == Some(nk_settings::network::PAGE) {
+                self.model.network = Default::default();
+            }
             match selected.as_deref() {
+                Some(nk_settings::network::PAGE) => self.model.network.visit(),
                 Some(nk_settings::audio::PAGE) => self.model.audio.visit(),
                 Some("display") => self.model.display.visit(),
                 Some("about") => self.model.about.visit(),
@@ -76,6 +80,8 @@ impl Settings {
             if self.model.display_action(&a, dragging, &self.host)
                 || self.model.selected() == Some(nk_settings::audio::PAGE)
                     && self.model.audio.activate(&a, dragging)
+                || self.model.selected() == Some(nk_settings::network::PAGE)
+                    && self.model.network.activate(&a)
             {
                 continue;
             }
@@ -207,7 +213,7 @@ impl Application for Settings {
         if self.chooser.pending()
             || matches!(
                 self.shown.as_deref(),
-                Some("display" | nk_settings::audio::PAGE)
+                Some("display" | nk_settings::audio::PAGE | nk_settings::network::PAGE)
             )
         {
             ms.min(200)
@@ -234,6 +240,7 @@ impl Application for Settings {
         self.dirty |= self.model.about.poll();
         self.dirty |= self.model.region.poll();
         self.dirty |= self.model.audio.poll();
+        self.dirty |= self.model.network.poll();
         if self.model.display.poll() {
             self.host.cancel_menu();
             self.dirty = true;
@@ -266,7 +273,7 @@ impl Application for Settings {
             self.host.cancel_menu();
             self.commit(window)?;
         }
-        if self.model.audio.poll() {
+        if self.model.audio.poll() | self.model.network.poll() {
             self.dirty = true;
             self.commit(window)?;
         }
