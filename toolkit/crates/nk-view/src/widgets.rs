@@ -7,6 +7,7 @@
 //!
 //! Each type offers only the setters that mean something for it. The setters every piece has
 //! (its size and how it shares a stack's room) are `Widget`'s, in `nk::prelude`.
+pub use crate::components::Arrangement;
 use crate::components::{
     ButtonAppearance, Disclosure, EditableField, ListSource, LongList, Search,
 };

@@ -6,7 +6,7 @@
 //! state regions), the semantics, and the content paint. The surface keeps only its model
 //! and what an `Activated` means.
 pub mod components;
-pub use components::{Arrangement, ArrangementItem, ArrangementProjection};
+pub use components::{ArrangementItem, ArrangementProjection};
 pub use components::{ListSource, RowInfo};
 pub mod appear;
 pub mod diagnostics;
@@ -53,10 +53,11 @@ pub mod node {
 }
 mod widgets;
 pub use widgets::{
-    Button, CheckButton, Column, DropDown, Entry, Expander, Field, FieldState, FontButton, Grid,
-    Group, Image, Label, ListBox, ListBoxOption, ListRow, ListView, MenuItem, Overlay, Pane,
-    Placeholder, Revealer, Row, Scroll, SearchEntry, Segmented, SidebarEntry, SidebarList, Slider,
-    SliderEnd, SliderRange, Slot, Spacer, Swatches, Switch, TimeField, Widget, prelude,
+    Arrangement, Button, CheckButton, Column, DropDown, Entry, Expander, Field, FieldState,
+    FontButton, Grid, Group, Image, Label, ListBox, ListBoxOption, ListRow, ListView, MenuItem,
+    Overlay, Pane, Placeholder, Revealer, Row, Scroll, SearchEntry, Segmented, SidebarEntry,
+    SidebarList, Slider, SliderEnd, SliderRange, Slot, Spacer, Swatches, Switch, TimeField, Widget,
+    prelude,
 };
 pub use window::{
     Alert, AppWindow, CONTENT, Dialog, DialogAnswer, DialogButton, DialogContent, DialogUpdate,
