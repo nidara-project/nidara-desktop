@@ -130,33 +130,14 @@ impl Audio {
         let Some(graph) = self.graph.as_ref().filter(|graph| graph.available) else {
             return true;
         };
-        let Some((operation, target)) = action.split_once(':') else {
+        let Some((path, command)) = write_for(graph, action, activated, dragging) else {
             return true;
-        };
-        let Some(node) = graph
-            .nodes
-            .iter()
-            .find(|node| target == identity(graph, node))
-        else {
-            return true;
-        };
-        let command = match (operation, &activated.value) {
-            ("volume", Some(Value::Number(value))) if !dragging && node.supports("volume") => {
-                Command::Volume((value / 100.).clamp(0., node.volume_limit))
-            }
-            ("mute", Some(Value::Bool(value))) if node.supports("mute") => Command::Muted(*value),
-            ("default", _)
-                if graph.can_set_default && matches!(node.kind.as_str(), "input" | "output") =>
-            {
-                Command::Default
-            }
-            _ => return true,
         };
         if client
             .commands
             .try_send(Write {
                 owner: graph.owner.clone(),
-                path: node.path.clone(),
+                path,
                 command,
             })
             .is_err()
@@ -234,12 +215,240 @@ impl Audio {
                 );
             }
         }
+        let profiles = graph
+            .devices
+            .iter()
+            .filter_map(|(path, device)| {
+                let choices = choices(graph, "profile", path)?;
+                Some(choice_row(
+                    graph,
+                    &choices,
+                    &device.name,
+                    &device.name,
+                    types,
+                    exports,
+                ))
+            })
+            .collect::<Result<Vec<_>, String>>()?;
+        if !profiles.is_empty() {
+            rows.push(
+                nk::Label::new(
+                    "audio/profiles/title",
+                    exports.text("settings.audio.profiles")?,
+                    types.style(Type::Body, Weight::Medium),
+                )
+                .into(),
+            );
+            rows.push(
+                nk::Group::new(
+                    "audio/profiles",
+                    nk::Column::new("audio/profiles/rows", profiles),
+                )
+                .into(),
+            );
+        }
         Ok(rows)
     }
 }
 
-fn identity(graph: &Snapshot, node: &audio::Node) -> String {
-    format!("{}:{}:{}", graph.owner, graph.generation, node.path)
+fn identity(graph: &Snapshot, path: &str) -> String {
+    format!("{}:{}:{path}", graph.owner, graph.generation)
+}
+
+fn write_for(
+    graph: &Snapshot,
+    action: &str,
+    activated: &Activated,
+    dragging: bool,
+) -> Option<(String, Command)> {
+    let (operation, target) = action.split_once(':')?;
+    let prefix = format!("{}:{}:", graph.owner, graph.generation);
+    let path = target.strip_prefix(&prefix)?;
+    if let ("profile" | "route" | "destination", Some(Value::Index(index))) =
+        (operation, &activated.value)
+    {
+        let candidates = choices(graph, operation, path)?;
+        if activated.key.0 != candidates.key(graph) || *index == candidates.chosen {
+            return None;
+        }
+        let selected = candidates.options.get(*index)?.path?;
+        return Some(match operation {
+            "profile" => (selected.into(), Command::Profile),
+            "route" => (path.into(), Command::Route(selected.into())),
+            _ if selected == "/" => (path.into(), Command::FollowDefault),
+            _ => (path.into(), Command::MovePlayback(selected.into())),
+        });
+    }
+    let node = graph.nodes.iter().find(|node| node.path == path)?;
+    let command = match (operation, &activated.value) {
+        ("volume", Some(Value::Number(value)))
+            if !dragging && value.is_finite() && node.supports("volume") =>
+        {
+            Command::Volume((value / 100.).clamp(0., node.volume_limit))
+        }
+        ("balance", Some(Value::Number(value)))
+            if !dragging
+                && value.is_finite()
+                && node.kind == "output"
+                && node.supports("balance")
+                && node.balance.is_some() =>
+        {
+            Command::Balance((value / 100.).clamp(-1., 1.))
+        }
+        ("mute", Some(Value::Bool(value))) if node.supports("mute") => Command::Muted(*value),
+        ("default", _)
+            if graph.can_set_default && matches!(node.kind.as_str(), "input" | "output") =>
+        {
+            Command::Default
+        }
+        _ => return None,
+    };
+    Some((path.into(), command))
+}
+
+struct Choice<'a> {
+    path: Option<&'a str>,
+    /// Hardware and application names come from Audio1, built-in labels from Exports.
+    label: &'a str,
+}
+
+struct Choices<'a> {
+    operation: &'a str,
+    source: &'a str,
+    label: &'static str,
+    options: Vec<Choice<'a>>,
+    chosen: usize,
+}
+
+impl Choices<'_> {
+    fn key(&self, graph: &Snapshot) -> String {
+        let options = self
+            .options
+            .iter()
+            .map(|option| option.path.unwrap_or(""))
+            .collect::<Vec<_>>()
+            .join(",");
+        format!(
+            "audio/{}/{}/{options}",
+            identity(graph, self.source),
+            self.operation
+        )
+    }
+}
+
+fn choices<'a>(graph: &'a Snapshot, operation: &'a str, source: &'a str) -> Option<Choices<'a>> {
+    let hardware_options = |paths: &'a [String],
+                            records: &'a std::collections::BTreeMap<String, audio::Choice>,
+                            current: &str| {
+        paths
+            .iter()
+            .filter_map(|path| {
+                let record = records.get(path)?;
+                (record.available || path == current).then_some(Choice {
+                    path: Some(path.as_str()),
+                    label: &record.name,
+                })
+            })
+            .collect::<Vec<_>>()
+    };
+    let (label, current, mut options) = if operation == "profile" {
+        let device = graph.devices.get(source)?;
+        (
+            "settings.audio.profile",
+            device.active_profile.as_str(),
+            hardware_options(&device.profiles, &graph.profiles, &device.active_profile),
+        )
+    } else {
+        let node = graph.nodes.iter().find(|node| node.path == source)?;
+        match operation {
+            "route" if node.supports("routes") => (
+                "settings.audio.port",
+                node.active_route.as_str(),
+                hardware_options(&node.routes, &graph.routes, &node.active_route),
+            ),
+            "destination" if node.kind == "playback" && node.supports("move") => {
+                let mut options = vec![Choice {
+                    path: Some("/"),
+                    label: "settings.audio.follow-default",
+                }];
+                options.extend(graph.nodes.iter().filter(|node| node.kind == "output").map(
+                    |node| Choice {
+                        path: Some(node.path.as_str()),
+                        label: &node.name,
+                    },
+                ));
+                (
+                    "settings.audio.destination",
+                    node.requested_target.as_str(),
+                    options,
+                )
+            }
+            _ => return None,
+        }
+    };
+    if options.is_empty() {
+        return None;
+    }
+    let chosen = options
+        .iter()
+        .position(|option| option.path == Some(current))
+        .unwrap_or_else(|| {
+            options.insert(
+                0,
+                Choice {
+                    path: None,
+                    label: "settings.audio.choice-unavailable",
+                },
+            );
+            0
+        });
+    Some(Choices {
+        operation,
+        source,
+        label,
+        options,
+        chosen,
+    })
+}
+
+fn choice_row(
+    graph: &Snapshot,
+    choices: &Choices<'_>,
+    title: &str,
+    context: &str,
+    types: &TypeScale,
+    exports: &Exports,
+) -> Result<Node, String> {
+    let label = exports.text(choices.label)?;
+    let style = types.style(Type::Body, Weight::Regular);
+    let key = choices.key(graph);
+    let labels = choices
+        .options
+        .iter()
+        .map(|option| {
+            if matches!(option.path, None | Some("/")) {
+                exports.text(option.label).map(str::to_owned)
+            } else {
+                Ok(option.label.into())
+            }
+        })
+        .collect::<Result<Vec<_>, String>>()?;
+    Ok(nk::ListRow::new(format!("{key}/row"), title, style)
+        .trailing(
+            nk::DropDown::new(
+                key,
+                format!("{label} · {context}"),
+                format!(
+                    "{PREFIX}{}:{}",
+                    choices.operation,
+                    identity(graph, choices.source)
+                ),
+                labels,
+                choices.chosen,
+            )
+            .enabled(choices.options.len() > 1),
+        )
+        .into())
 }
 
 fn node_rows(
@@ -250,7 +459,7 @@ fn node_rows(
     types: &TypeScale,
     exports: &Exports,
 ) -> Result<Node, String> {
-    let id = identity(graph, node);
+    let id = identity(graph, &node.path);
     let key = format!("audio/{id}");
     let body = || types.style(Type::Body, Weight::Regular);
     let image = if node.kind == "playback" && !node.icon.is_empty() {
@@ -319,5 +528,152 @@ fn node_rows(
                 .into(),
         );
     }
+    if let Some(balance) = node
+        .balance
+        .filter(|_| node.kind == "output" && node.supports("balance"))
+    {
+        let label = exports.text("settings.audio.balance")?;
+        let range = SliderRange::new(-100., 100., 1., balance * 100.);
+        let direction = exports.text("settings.audio.balance-direction")?;
+        rows.push(
+            nk::ListRow::new(format!("{key}/balance-row"), label, body())
+                .subtitle(direction, types.style(Type::Small, Weight::Regular))
+                .trailing(SliderEnd::new(
+                    format!("{key}/balance"),
+                    format!("{label} · {} · {direction}", node.name),
+                    format!("{PREFIX}balance:{id}"),
+                    range,
+                    body(),
+                ))
+                .into(),
+        );
+    }
+    for operation in ["route", "destination"] {
+        if let Some(choices) = choices(graph, operation, &node.path) {
+            rows.push(choice_row(
+                graph,
+                &choices,
+                exports.text(choices.label)?,
+                &node.name,
+                types,
+                exports,
+            )?);
+        }
+    }
     Ok(nk::Column::new(key, rows).into())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn node(path: &str, name: &str, kind: &str, capabilities: &[&str]) -> audio::Node {
+        audio::Node {
+            path: path.into(),
+            owner: ":1.5".into(),
+            name: name.into(),
+            kind: kind.into(),
+            icon: String::new(),
+            volume_limit: 1.,
+            volume: 0.5,
+            muted: false,
+            balance: None,
+            routes: vec![],
+            active_route: "/".into(),
+            requested_target: "/".into(),
+            capabilities: capabilities.iter().map(|cap| (*cap).into()).collect(),
+        }
+    }
+
+    fn choice(graph: &Snapshot, operation: &str, path: &str, index: usize) -> Activated {
+        let menu = choices(graph, operation, path).unwrap();
+        Activated {
+            key: menu.key(graph).into(),
+            action: format!("{operation}:{}", identity(graph, path)),
+            value: Some(Value::Index(index)),
+        }
+    }
+
+    #[test]
+    fn audio_choices_send_object_paths_and_a_stale_choice_cannot_move_a_stream() {
+        let mut graph = Snapshot {
+            owner: ":1.5".into(),
+            generation: 7,
+            available: true,
+            nodes: vec![
+                node("/one", "Speakers", "output", &["routes", "balance"]),
+                node("/two", "Headphones", "output", &[]),
+                node("/stream", "Player", "playback", &["move"]),
+            ],
+            ..Snapshot::default()
+        };
+        graph.nodes[0].routes = vec!["/unavailable".into(), "/port".into()];
+        graph.nodes[0].balance = Some(0.);
+        graph.routes.extend([
+            (
+                "/unavailable".into(),
+                audio::Choice {
+                    name: "Disconnected".into(),
+                    available: false,
+                },
+            ),
+            (
+                "/port".into(),
+                audio::Choice {
+                    name: "Connected".into(),
+                    available: true,
+                },
+            ),
+        ]);
+        graph.profiles.insert(
+            "/profile".into(),
+            audio::Choice {
+                name: "Stereo".into(),
+                available: true,
+            },
+        );
+        graph.devices.insert(
+            "/device".into(),
+            audio::Device {
+                name: "Integrated audio".into(),
+                profiles: vec!["/profile".into()],
+                active_profile: "/".into(),
+            },
+        );
+
+        let select_profile = choice(&graph, "profile", "/device", 1);
+        assert_eq!(
+            write_for(&graph, &select_profile.action, &select_profile, false),
+            Some(("/profile".into(), Command::Profile))
+        );
+        let select_port = choice(&graph, "route", "/one", 1);
+        assert_eq!(
+            write_for(&graph, &select_port.action, &select_port, false),
+            Some(("/one".into(), Command::Route("/port".into())))
+        );
+        let balance = Activated {
+            key: "balance".into(),
+            action: format!("balance:{}", identity(&graph, "/one")),
+            value: Some(Value::Number(-40.)),
+        };
+        assert_eq!(
+            write_for(&graph, &balance.action, &balance, false),
+            Some(("/one".into(), Command::Balance(-0.4)))
+        );
+
+        let move_stream = choice(&graph, "destination", "/stream", 1);
+        assert_eq!(
+            write_for(&graph, &move_stream.action, &move_stream, false),
+            Some(("/stream".into(), Command::MovePlayback("/one".into())))
+        );
+        graph.nodes.swap(0, 1);
+        assert!(write_for(&graph, &move_stream.action, &move_stream, false).is_none());
+
+        graph.nodes[2].requested_target = "/one".into();
+        let follow = choice(&graph, "destination", "/stream", 0);
+        assert_eq!(
+            write_for(&graph, &follow.action, &follow, false),
+            Some(("/stream".into(), Command::FollowDefault))
+        );
+    }
 }

@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: LGPL-3.0-or-later
 //! The Audio1 graph shared by the shell and Settings.
 
-use std::collections::HashMap;
+use std::collections::{BTreeMap, HashMap};
 use zbus::{
     MatchRule, Message,
     blocking::{Connection, MessageIterator},
@@ -13,6 +13,9 @@ pub const SERVICE: &str = "org.nidara.Session";
 pub const PATH: &str = "/org/nidara/Audio";
 pub const IFACE: &str = "org.nidara.Audio1";
 const NODE: &str = "org.nidara.AudioNode1";
+const DEVICE: &str = "org.nidara.AudioDevice1";
+const PROFILE: &str = "org.nidara.AudioProfile1";
+const ROUTE: &str = "org.nidara.AudioRoute1";
 const PROPERTIES: &str = "org.freedesktop.DBus.Properties";
 const MANAGER: &str = "org.freedesktop.DBus.ObjectManager";
 
@@ -28,6 +31,9 @@ pub struct Snapshot {
     pub default_input: String,
     pub can_set_default: bool,
     pub nodes: Vec<Node>,
+    pub devices: BTreeMap<String, Device>,
+    pub profiles: BTreeMap<String, Choice>,
+    pub routes: BTreeMap<String, Choice>,
 }
 
 #[derive(Clone, Debug, PartialEq)]
@@ -40,7 +46,24 @@ pub struct Node {
     pub volume_limit: f64,
     pub volume: f64,
     pub muted: bool,
+    pub balance: Option<f64>,
+    pub routes: Vec<String>,
+    pub active_route: String,
+    pub requested_target: String,
     pub capabilities: Vec<String>,
+}
+
+#[derive(Clone, Debug, PartialEq)]
+pub struct Device {
+    pub name: String,
+    pub profiles: Vec<String>,
+    pub active_profile: String,
+}
+
+#[derive(Clone, Debug, PartialEq)]
+pub struct Choice {
+    pub name: String,
+    pub available: bool,
 }
 
 impl Node {
@@ -115,6 +138,24 @@ fn object_path(properties: &Properties, key: &str) -> String {
         .get(key)
         .and_then(|v| <&zbus::zvariant::ObjectPath<'_>>::try_from(v).ok())
         .map_or_else(|| "/".into(), ToString::to_string)
+}
+
+fn object_paths(properties: &Properties, key: &str) -> Vec<String> {
+    properties
+        .get(key)
+        .and_then(|v| v.try_clone().ok())
+        .and_then(|v| Vec::<OwnedObjectPath>::try_from(v).ok())
+        .into_iter()
+        .flatten()
+        .map(|path| path.to_string())
+        .collect()
+}
+
+fn description(properties: &Properties) -> Option<&str> {
+    ["Description", "Name"]
+        .into_iter()
+        .map(|key| text(properties, key))
+        .find(|name| !name.is_empty())
 }
 
 /// The two hydrated maps have separate sequence markers. A sparse signal
@@ -256,11 +297,55 @@ impl Graph {
                         .get("Muted")
                         .and_then(|value| bool::try_from(value).ok())
                         .unwrap_or(false),
+                    balance: properties
+                        .get("Balance")
+                        .and_then(|value| f64::try_from(value).ok())
+                        .filter(|value| (-1. ..=1.).contains(value)),
+                    routes: object_paths(properties, "Routes"),
+                    active_route: object_path(properties, "ActiveRoute"),
+                    requested_target: object_path(properties, "RequestedTarget"),
                     capabilities: strings(properties, "Capabilities"),
                 })
             })
             .collect();
         nodes.sort_by(|a, b| a.name.cmp(&b.name).then(a.path.cmp(&b.path)));
+        let devices = self
+            .objects
+            .iter()
+            .filter_map(|(path, interfaces)| {
+                let properties = interfaces.get(DEVICE)?;
+                strings(properties, "Capabilities")
+                    .iter()
+                    .any(|cap| cap == "profiles")
+                    .then(|| {
+                        (
+                            path.to_string(),
+                            Device {
+                                name: description(properties)
+                                    .map_or_else(|| path.to_string(), str::to_owned),
+                                profiles: object_paths(properties, "Profiles"),
+                                active_profile: object_path(properties, "ActiveProfile"),
+                            },
+                        )
+                    })
+            })
+            .collect();
+        let choices = |interface| {
+            self.objects
+                .iter()
+                .filter_map(|(path, interfaces)| {
+                    let properties = interfaces.get(interface)?;
+                    Some((
+                        path.to_string(),
+                        Choice {
+                            name: description(properties)
+                                .map_or_else(|| path.to_string(), str::to_owned),
+                            available: text(properties, "Availability") != "no",
+                        },
+                    ))
+                })
+                .collect()
+        };
         Snapshot {
             generation: root
                 .get("Generation")
@@ -276,6 +361,9 @@ impl Graph {
                 .iter()
                 .any(|cap| cap == "defaults"),
             nodes,
+            devices,
+            profiles: choices(PROFILE),
+            routes: choices(ROUTE),
             owner: identity.clone(),
         }
     }
@@ -338,11 +426,16 @@ pub fn watch(
     Ok(())
 }
 
-#[derive(Clone, Copy, Debug)]
+#[derive(Debug, PartialEq)]
 pub enum Command {
     Volume(f64),
     Muted(bool),
     Default,
+    Balance(f64),
+    Profile,
+    Route(String),
+    MovePlayback(String),
+    FollowDefault,
 }
 
 impl Command {
@@ -350,8 +443,8 @@ impl Command {
         if owner(conn)? != identity {
             return Err("Audio1 service changed".into());
         }
-        let path = zbus::zvariant::ObjectPath::try_from(path).map_err(|error| error.to_string())?;
-        let result = match self {
+        let path = wire_path(path)?;
+        let result = match &self {
             Self::Volume(value) => conn.call_method(
                 Some(identity),
                 PATH,
@@ -366,10 +459,41 @@ impl Command {
                 "SetMuted",
                 &(path, value),
             ),
+            Self::Balance(value) => conn.call_method(
+                Some(identity),
+                PATH,
+                Some(IFACE),
+                "SetBalance",
+                &(path, value),
+            ),
             Self::Default => {
                 conn.call_method(Some(identity), PATH, Some(IFACE), "SetDefault", &(path,))
+            }
+            Self::Profile => {
+                conn.call_method(Some(identity), PATH, Some(IFACE), "SetProfile", &(path,))
+            }
+            Self::Route(route) => conn.call_method(
+                Some(identity),
+                PATH,
+                Some(IFACE),
+                "SetRoute",
+                &(path, wire_path(route)?),
+            ),
+            Self::MovePlayback(output) => conn.call_method(
+                Some(identity),
+                PATH,
+                Some(IFACE),
+                "MovePlayback",
+                &(path, wire_path(output)?),
+            ),
+            Self::FollowDefault => {
+                conn.call_method(Some(identity), PATH, Some(IFACE), "FollowDefault", &(path,))
             }
         };
         result.map(|_| ()).map_err(|error| error.to_string())
     }
+}
+
+fn wire_path(path: &str) -> Result<zbus::zvariant::ObjectPath<'_>, String> {
+    zbus::zvariant::ObjectPath::try_from(path).map_err(|error| error.to_string())
 }

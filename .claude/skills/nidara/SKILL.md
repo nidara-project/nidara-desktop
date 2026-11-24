@@ -627,6 +627,10 @@ managed objects. Apply sparse changes in bus order and discard the graph on
 an owner change. Sound's dedicated connection lasts for the page visit. Its
 controls carry the owner, graph generation and object path, and volume writes
 respect the service's limit even when an external volume reads above it.
+Balance is offered only on capable outputs. Profiles belong to devices, ports
+to endpoints, and app routing uses the playback stream's requested target.
+Keep dropdown choices bound to their ordered object paths so a graph update
+cannot retarget a stale selection.
 `power.profile` is PPD's ActiveProfile on the system bus, announced by PPD's own
 signals; Config1 tests set `DBUS_SYSTEM_BUS_ADDRESS` to their private bus.
 `region.timezone` is timedated's, set asynchronously behind polkit: `Apply` answers the old zone and the new one is

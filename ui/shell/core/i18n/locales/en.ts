@@ -369,6 +369,14 @@ export default {
     "settings.audio.default": "Default",
     "settings.audio.btn.set-default": "Set default",
     "settings.audio.group.apps": "App volume",
+    "settings.audio.balance": "Balance",
+    "settings.audio.balance-direction": "−100 left, +100 right",
+    "settings.audio.profile": "Profile",
+    "settings.audio.profiles": "Device profiles",
+    "settings.audio.port": "Port",
+    "settings.audio.destination": "Output",
+    "settings.audio.follow-default": "Follow the default output",
+    "settings.audio.choice-unavailable": "Current selection unavailable",
     "settings.audio.no-apps": "No apps playing audio",
 
     // Autostart

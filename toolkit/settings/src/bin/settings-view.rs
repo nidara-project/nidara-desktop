@@ -266,6 +266,10 @@ impl Application for Settings {
             self.host.cancel_menu();
             self.commit(window)?;
         }
+        if self.model.audio.poll() {
+            self.dirty = true;
+            self.commit(window)?;
+        }
         let (_, actions) = self.host.event(event, window)?;
         self.actions(actions, window)?;
         self.commit(window)
