@@ -627,6 +627,8 @@ managed objects. Apply sparse changes in bus order and discard the graph on
 an owner change. Sound's dedicated connection lasts for the page visit. Its
 controls carry the owner, graph generation and object path, and volume writes
 respect the service's limit even when an external volume reads above it.
+Sound opts in to live slider reports. Its writer keeps the newest pending
+drag value per owner, path and control, and preserves release writes.
 Balance is offered only on capable outputs. Profiles belong to devices, ports
 to endpoints, and app routing uses the playback stream's requested target.
 Keep dropdown choices bound to their ordered object paths so a graph update

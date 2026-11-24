@@ -481,6 +481,9 @@ pub struct Slider {
     /// its value, what it holds drawn dark where the fill has reached it. Else the row slider.
     #[serde(default)]
     pub fill: bool,
+    /// Publish intermediate changes in AppWindow while the pointer is held.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub live: bool,
 }
 impl Slider {
     pub fn new(min: f64, max: f64, step: f64, value: f64) -> Self {
@@ -492,11 +495,17 @@ impl Slider {
             decimals: 0,
             unit: String::new(),
             fill: false,
+            live: false,
         }
     }
     /// The tile slider: it fills its control from the bottom.
     pub fn fill(mut self) -> Self {
         self.fill = true;
+        self
+    }
+    /// Send intermediate drag values as well as the final value on release.
+    pub fn live(mut self) -> Self {
+        self.live = true;
         self
     }
     pub fn unit(mut self, unit: impl Into<String>) -> Self {

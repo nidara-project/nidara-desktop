@@ -713,7 +713,7 @@ impl AppWindow {
         if let Event::Focus(active) = &event {
             self.active = *active;
             if !active {
-                self.state.cancel_reported_drag();
+                self.state.cancel_drag_on_exit();
             }
             self.changed = true;
         }
@@ -814,7 +814,7 @@ impl AppWindow {
                 true
             }
             Event::PointerLeave => {
-                self.state.cancel_reported_drag();
+                self.state.cancel_drag_on_exit();
                 self.paint_dirty |= self.state.pointer_leave();
                 true
             }

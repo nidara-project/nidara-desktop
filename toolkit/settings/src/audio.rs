@@ -5,10 +5,11 @@ use crate::exports::Exports;
 use nk::{Activated, Node, SliderEnd, SliderRange, Space, Type, TypeScale, Value, Weight};
 use nk_platform::audio::{self, Command, Snapshot};
 use std::{
+    collections::VecDeque,
     sync::{
-        Arc,
+        Arc, Mutex,
         atomic::{AtomicBool, Ordering},
-        mpsc::{self, Receiver, SyncSender},
+        mpsc::{self, Receiver, SyncSender, TrySendError},
     },
     time::Duration,
 };
@@ -28,7 +29,8 @@ pub struct Audio {
 struct Client {
     connection: Connection,
     stopped: Arc<AtomicBool>,
-    commands: SyncSender<Write>,
+    commands: Arc<Mutex<VecDeque<Write>>>,
+    wake_writer: SyncSender<()>,
     updates: Receiver<Option<Snapshot>>,
     errors: Receiver<bool>,
 }
@@ -37,6 +39,19 @@ struct Write {
     owner: String,
     path: String,
     command: Command,
+    intermediate: bool,
+}
+
+impl Write {
+    fn same_slider(&self, other: &Self) -> bool {
+        self.owner == other.owner
+            && self.path == other.path
+            && matches!(
+                (&self.command, &other.command),
+                (Command::Volume(_), Command::Volume(_))
+                    | (Command::Balance(_), Command::Balance(_))
+            )
+    }
 }
 
 impl Client {
@@ -57,21 +72,24 @@ impl Client {
             }
         });
 
-        let (commands, command_rx) = mpsc::sync_channel::<Write>(16);
+        let commands = Arc::new(Mutex::new(VecDeque::<Write>::new()));
+        let pending = commands.clone();
+        let (wake_writer, ready) = mpsc::sync_channel(1);
         let (errors_tx, errors) = mpsc::channel();
         let writing_stopped = stopped.clone();
         let write = connection.clone();
         std::thread::spawn(move || {
-            while let Ok(intent) = command_rx.recv() {
-                if writing_stopped.load(Ordering::Acquire) {
-                    break;
-                }
-                let result = intent.command.send(&write, &intent.owner, &intent.path);
-                if let Err(error) = &result {
-                    eprintln!("nidara-settings-view: audio change failed: {error}");
-                }
-                if errors_tx.send(result.is_err()).is_err() {
-                    break;
+            while ready.recv().is_ok() {
+                while !writing_stopped.load(Ordering::Acquire) {
+                    let intent = pending.lock().unwrap().pop_front();
+                    let Some(intent) = intent else { break };
+                    let result = intent.command.send(&write, &intent.owner, &intent.path);
+                    if let Err(error) = &result {
+                        eprintln!("nidara-settings-view: audio change failed: {error}");
+                    }
+                    if errors_tx.send(result.is_err()).is_err() {
+                        return;
+                    }
                 }
             }
         });
@@ -79,9 +97,24 @@ impl Client {
             connection,
             stopped,
             commands,
+            wake_writer,
             updates,
             errors,
         })
+    }
+
+    fn enqueue(&self, intent: Write) -> bool {
+        let mut pending = self.commands.lock().unwrap();
+        // A queued motion can be replaced. Release and keyboard events must survive
+        // even when the service is still confirming a write from an earlier gesture.
+        if matches!(intent.command, Command::Volume(_) | Command::Balance(_)) {
+            pending.retain(|queued| !queued.intermediate || !queued.same_slider(&intent));
+        }
+        pending.push_back(intent);
+        !matches!(
+            self.wake_writer.try_send(()),
+            Err(TrySendError::Disconnected(()))
+        )
     }
 }
 
@@ -130,18 +163,15 @@ impl Audio {
         let Some(graph) = self.graph.as_ref().filter(|graph| graph.available) else {
             return true;
         };
-        let Some((path, command)) = write_for(graph, action, activated, dragging) else {
+        let Some((path, command)) = write_for(graph, action, activated) else {
             return true;
         };
-        if client
-            .commands
-            .try_send(Write {
-                owner: graph.owner.clone(),
-                path,
-                command,
-            })
-            .is_err()
-        {
+        if !client.enqueue(Write {
+            owner: graph.owner.clone(),
+            path,
+            intermediate: dragging && matches!(command, Command::Volume(_) | Command::Balance(_)),
+            command,
+        }) {
             self.write_error = true;
         }
         true
@@ -255,12 +285,7 @@ fn identity(graph: &Snapshot, path: &str) -> String {
     format!("{}:{}:{path}", graph.owner, graph.generation)
 }
 
-fn write_for(
-    graph: &Snapshot,
-    action: &str,
-    activated: &Activated,
-    dragging: bool,
-) -> Option<(String, Command)> {
+fn write_for(graph: &Snapshot, action: &str, activated: &Activated) -> Option<(String, Command)> {
     let (operation, target) = action.split_once(':')?;
     let prefix = format!("{}:{}:", graph.owner, graph.generation);
     let path = target.strip_prefix(&prefix)?;
@@ -281,14 +306,11 @@ fn write_for(
     }
     let node = graph.nodes.iter().find(|node| node.path == path)?;
     let command = match (operation, &activated.value) {
-        ("volume", Some(Value::Number(value)))
-            if !dragging && value.is_finite() && node.supports("volume") =>
-        {
+        ("volume", Some(Value::Number(value))) if value.is_finite() && node.supports("volume") => {
             Command::Volume((value / 100.).clamp(0., node.volume_limit))
         }
         ("balance", Some(Value::Number(value)))
-            if !dragging
-                && value.is_finite()
+            if value.is_finite()
                 && node.kind == "output"
                 && node.supports("balance")
                 && node.balance.is_some() =>
@@ -511,8 +533,7 @@ fn node_rows(
             1.,
             node.volume * 100.,
         );
-        let mut range = range;
-        range.unit = "%".into();
+        let range = range.unit("%").live();
         rows.push(
             nk::ListRow::new(format!("{key}/volume-row"), volume, body())
                 .trailing(
@@ -533,7 +554,7 @@ fn node_rows(
         .filter(|_| node.kind == "output" && node.supports("balance"))
     {
         let label = exports.text("settings.audio.balance")?;
-        let range = SliderRange::new(-100., 100., 1., balance * 100.);
+        let range = SliderRange::new(-100., 100., 1., balance * 100.).live();
         let direction = exports.text("settings.audio.balance-direction")?;
         rows.push(
             nk::ListRow::new(format!("{key}/balance-row"), label, body())
@@ -643,12 +664,12 @@ mod tests {
 
         let select_profile = choice(&graph, "profile", "/device", 1);
         assert_eq!(
-            write_for(&graph, &select_profile.action, &select_profile, false),
+            write_for(&graph, &select_profile.action, &select_profile),
             Some(("/profile".into(), Command::Profile))
         );
         let select_port = choice(&graph, "route", "/one", 1);
         assert_eq!(
-            write_for(&graph, &select_port.action, &select_port, false),
+            write_for(&graph, &select_port.action, &select_port),
             Some(("/one".into(), Command::Route("/port".into())))
         );
         let balance = Activated {
@@ -657,22 +678,22 @@ mod tests {
             value: Some(Value::Number(-40.)),
         };
         assert_eq!(
-            write_for(&graph, &balance.action, &balance, false),
+            write_for(&graph, &balance.action, &balance),
             Some(("/one".into(), Command::Balance(-0.4)))
         );
 
         let move_stream = choice(&graph, "destination", "/stream", 1);
         assert_eq!(
-            write_for(&graph, &move_stream.action, &move_stream, false),
+            write_for(&graph, &move_stream.action, &move_stream),
             Some(("/stream".into(), Command::MovePlayback("/one".into())))
         );
         graph.nodes.swap(0, 1);
-        assert!(write_for(&graph, &move_stream.action, &move_stream, false).is_none());
+        assert!(write_for(&graph, &move_stream.action, &move_stream).is_none());
 
         graph.nodes[2].requested_target = "/one".into();
         let follow = choice(&graph, "destination", "/stream", 0);
         assert_eq!(
-            write_for(&graph, &follow.action, &follow, false),
+            write_for(&graph, &follow.action, &follow),
             Some(("/stream".into(), Command::FollowDefault))
         );
     }

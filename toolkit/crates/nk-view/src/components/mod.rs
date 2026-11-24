@@ -274,6 +274,10 @@ pub trait Component: Any {
     fn reports_drag(&self) -> bool {
         false
     }
+    /// End capture when the pointer leaves or the window loses focus.
+    fn cancels_drag_on_exit(&self) -> bool {
+        false
+    }
     fn take_changed(&self, _state: Option<&mut dyn Any>) -> Option<Value> {
         None
     }

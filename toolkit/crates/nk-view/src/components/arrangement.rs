@@ -236,6 +236,10 @@ impl Component for ArrangementRect {
         true
     }
 
+    fn cancels_drag_on_exit(&self) -> bool {
+        true
+    }
+
     fn take_changed(&self, state: Option<&mut dyn Any>) -> Option<Value> {
         state?.downcast_mut::<Drag>()?.change.take()
     }

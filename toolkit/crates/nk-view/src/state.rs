@@ -1042,6 +1042,18 @@ impl ViewState {
         })
     }
 
+    pub(crate) fn cancel_drag_on_exit(&mut self) {
+        if self
+            .capture
+            .as_ref()
+            .and_then(|(key, _)| self.index(key))
+            .and_then(|index| self.placed[index].part())
+            .is_some_and(|part| part.component().cancels_drag_on_exit())
+        {
+            self.cancel_reported_drag();
+        }
+    }
+
     pub(crate) fn cancel_reported_drag(&mut self) {
         if let Some(key) = self.reported_drag() {
             self.components.cancel(&key);
