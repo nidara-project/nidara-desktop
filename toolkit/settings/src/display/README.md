@@ -6,6 +6,13 @@ DisplayBrightness1. These are hardware services, not Config1 keys. Appearance
 still comes only from the Settings portal and the existing complete exports.
 There is no TS bridge or takeover of the legacy Settings entry point.
 
+In `nidara-settings-view`, `view::Display` builds the page from kit
+components. The arrangement uses `nk::Arrangement`, with the same logical
+output coordinates used by the coordinate fields and before/after buttons.
+X and Y accept signed integers. Scale lists quarter-step values and keeps the
+current scale if it falls between steps. The page holds a dedicated Display1
+connection while selected and focuses Revert when its preview arrives.
+
 `page::Page` owns retained rows in the existing nk-widgets Tree. Its output LIST
 publishes selection and the compositor's snapshot numbers/names; the diagram uses
 the same logical coordinates. Select an output, drag it beside another, or use the

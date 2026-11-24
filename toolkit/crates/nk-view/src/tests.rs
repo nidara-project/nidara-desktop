@@ -6363,3 +6363,114 @@ fn a_time_field_steps_and_types_its_hours_and_minutes() {
         "one Tab stop"
     );
 }
+
+#[test]
+fn arrangement_reports_logical_drag_and_can_cancel_it() {
+    let items = vec![crate::ArrangementItem {
+        key: "monitor".into(),
+        label: "Output 1".into(),
+        name: "Output 1: eDP-1".into(),
+        action: "select-output".into(),
+        bounds: [-100., 20., 400., 200.],
+        selected: true,
+        movable: true,
+    }];
+    let size = (220., 120.);
+    let projection = crate::ArrangementProjection::fit(&items, size, 10.);
+    let node =
+        crate::Arrangement::view("arrangement", size, projection, items, TextStyle::default());
+    let mut state = ViewState::new(1);
+    let now = Instant::now();
+    state.layout(
+        &node,
+        size,
+        1.25,
+        tokens().with_types(&types()),
+        &mut backend(),
+        now,
+    );
+    assert_eq!(
+        state.rect(&"monitor".into()),
+        Some([10.4, 10.4, 200., 100.])
+    );
+    state.pointer_motion(40., 50.);
+    assert_eq!(
+        state.button(true, now).unwrap().value,
+        Some(Value::Displacement(0., 0.))
+    );
+    state.pointer_motion(55., 45.);
+    assert_eq!(
+        state.take_drag_change().unwrap().value,
+        Some(Value::Displacement(30., -10.))
+    );
+    assert!(state.take_drag_change().is_none());
+    assert_eq!(
+        state.button(false, now).unwrap().value,
+        Some(Value::Displacement(30., -10.))
+    );
+    state.button(true, now).unwrap();
+    state.pointer_motion(60., 50.);
+    state.cancel_reported_drag();
+    assert!(state.captured().is_none());
+    assert!(state.button(false, now).is_none());
+    assert_eq!(
+        state.request(&"monitor".into(), true).unwrap().action,
+        "select-output"
+    );
+}
+
+#[test]
+fn arrangement_has_pointer_states_and_a_keyboard_choice_group() {
+    let size = (220., 120.);
+    let items = (0..2)
+        .map(|i| crate::ArrangementItem {
+            key: format!("monitor-{i}").into(),
+            label: format!("Display {}", i + 1),
+            name: format!("Display {}", i + 1),
+            action: format!("select:{i}"),
+            bounds: [f64::from(i) * 100., 0., 100., 100.],
+            selected: i == 1,
+            movable: true,
+        })
+        .collect::<Vec<_>>();
+    let projection = crate::ArrangementProjection::fit(&items, size, 10.);
+    let node = crate::Arrangement::view("arrangement", size, projection, items, style(14.));
+    let mut view = laid(&node, size, 1.);
+    let tree = view.semantics(nk_a11y::Node::new(1, nk_a11y::Role::Window, "Displays"), 2);
+    for (i, name) in ["Display 1", "Display 2"].into_iter().enumerate() {
+        let item = tree.nodes.values().find(|n| n.name == name).unwrap();
+        assert_eq!(item.role, nk_a11y::Role::RadioButton);
+        assert_eq!(item.states.selected, i == 1);
+        assert_eq!(item.states.checked, i == 1);
+        assert_eq!(item.attributes["posinset"], (i + 1).to_string());
+        assert_eq!(item.attributes["setsize"], "2");
+    }
+    view.key(KeyInput::Tab);
+    assert_eq!(view.focus(), Some(&"monitor-1".into()));
+    assert_eq!(view.key(KeyInput::Left).unwrap().action, "select:0");
+
+    let tokens = tokens();
+    let types = types();
+    let paint = |view: &ViewState, point| {
+        let mut canvas = nk_render::Canvas::new(220, 120, 1.);
+        view.paint(
+            &mut canvas,
+            tokens.with_types(&types),
+            &mut |_, _| None,
+            None,
+        )
+        .unwrap();
+        bgra(&canvas.finish(), 220, point)
+    };
+    for point in [(30., 35.), (130., 35.)] {
+        view.pointer_leave();
+        let rest = paint(&view, point);
+        view.pointer_motion(point.0, point.1);
+        let hover = paint(&view, point);
+        view.button(true, Instant::now()).unwrap();
+        let press = paint(&view, point);
+        assert_ne!(rest, hover);
+        assert_ne!(hover, press);
+        view.button(false, Instant::now()).unwrap();
+    }
+}

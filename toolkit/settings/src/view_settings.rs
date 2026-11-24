@@ -20,6 +20,7 @@ fn own(page: &Page) -> bool {
         || page.id == "region"
         || page.id == "appearance"
         || page.id == crate::bar::PAGE
+        || page.id == crate::display::view::ID
 }
 /// A subpage of a page (Top bar → Clock): shown like a page, under its parent's entry.
 fn parent_of(id: &str) -> Option<&'static str> {
@@ -72,6 +73,7 @@ pub struct Model {
     status: Option<String>,
     pub about: crate::about::About,
     pub region: crate::region::Region,
+    pub display: crate::display::view::Display,
     /// A font row pressed: its key and current choice, for the window to open the dialog.
     font_request: Option<(String, nk::FontChoice)>,
     /// Top bar's pictures, decoded once per file.
@@ -135,6 +137,20 @@ impl Model {
         self.clock_text = text;
         changed
     }
+    pub fn display_action(&mut self, action: &Activated, held: bool, host: &AppWindow) -> bool {
+        if self.selected() != Some(crate::display::view::ID) {
+            return false;
+        }
+        let (size, inset) = crate::display::view::diagram_metrics(host);
+        self.display.activate(action, held, size, inset)
+    }
+
+    pub fn take_display_focus(&mut self) -> Option<&'static str> {
+        self.display
+            .take_revert_focus()
+            .then_some(crate::display::view::REVERT_GROUP)
+    }
+
     pub fn selected(&self) -> Option<&str> {
         self.history.get(self.at).map(String::as_str)
     }
@@ -516,7 +532,9 @@ impl Model {
                 .into(),
             );
         };
-        if sub == Some(crate::bar::CLOCK_PAGE) {
+        if page.is_some_and(|p| p.id == crate::display::view::ID) {
+            content.extend(self.display.rows(host, e)?);
+        } else if sub == Some(crate::bar::CLOCK_PAGE) {
             let r = crate::bar::region(session);
             content.push(crate::bar::preview_rows(
                 &crate::bar::preview(&r, crate::bar::now()),

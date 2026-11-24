@@ -72,18 +72,6 @@ fn info(tree: &mut Tree, parent: NodeId, text: &str) -> Result<NodeId> {
     let row = tree.append(parent, Kind::Row, "")?;
     tree.append(row, Kind::Label, text)
 }
-fn mirrored(layout: &Layout, id: &str) -> bool {
-    layout
-        .mirror_groups
-        .iter()
-        .any(|g| g.iter().any(|v| v == id))
-}
-fn follower(layout: &Layout, id: &str) -> bool {
-    layout
-        .mirror_groups
-        .iter()
-        .any(|g| g.iter().skip(1).any(|v| v == id))
-}
 fn range(min: f32, max: f32, step: f32, decimals: usize) -> ValueRange {
     ValueRange {
         min,
@@ -1291,57 +1279,6 @@ impl Page {
         Ok(false)
     }
 }
-/// Attach at the nearest edge, retaining the perpendicular offset while ensuring
-/// positive shared-edge contact. Complex graphs still go through server Validate.
-fn snap(layout: &mut Layout, outputs: &[Output], id: &str) {
-    let Some(selected) = layout.outputs.iter().find(|s| s.id == id).cloned() else {
-        return;
-    };
-    let Some((w, h)) = outputs
-        .iter()
-        .find(|o| o.id == id)
-        .and_then(|o| dimensions(&selected, o))
-    else {
-        return;
-    };
-    let mut options = vec![];
-    for other in layout.outputs.iter().filter(|s| s.id != id && s.enabled) {
-        if let Some((ow, oh)) = outputs
-            .iter()
-            .find(|o| o.id == other.id)
-            .and_then(|o| dimensions(other, o))
-        {
-            options.extend([
-                (
-                    other.x + ow,
-                    selected.y.clamp(other.y - h + 1, other.y + oh - 1),
-                ),
-                (
-                    other.x - w,
-                    selected.y.clamp(other.y - h + 1, other.y + oh - 1),
-                ),
-                (
-                    selected.x.clamp(other.x - w + 1, other.x + ow - 1),
-                    other.y + oh,
-                ),
-                (
-                    selected.x.clamp(other.x - w + 1, other.x + ow - 1),
-                    other.y - h,
-                ),
-            ]);
-        }
-    }
-    if let Some((x, y)) = options.into_iter().min_by_key(|(x, y)| {
-        let dx = *x as i64 - selected.x as i64;
-        let dy = *y as i64 - selected.y as i64;
-        dx * dx + dy * dy
-    }) && let Some(setting) = layout.outputs.iter_mut().find(|s| s.id == id)
-    {
-        setting.x = x;
-        setting.y = y;
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;

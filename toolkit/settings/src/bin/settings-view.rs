@@ -26,7 +26,12 @@ impl Settings {
         self.model.reconcile(&self.exports, self.client.session());
         let selected = self.model.selected().map(str::to_owned);
         if selected != self.shown {
+            if self.shown.as_deref() == Some("display") {
+                // Closing this dedicated Display1 connection also releases any preview.
+                self.model.display = Default::default();
+            }
             match selected.as_deref() {
+                Some("display") => self.model.display.visit(),
                 Some("about") => self.model.about.visit(),
                 Some("region") => self.model.region.visit(),
                 _ => {}
@@ -43,10 +48,15 @@ impl Settings {
                 self.host.set_pictures(self.model.bar_pictures.current(s));
             }
         }
+        let revert_focus = self.model.take_display_focus();
         let (m, e, s) = (&self.model, &self.exports, self.client.session());
         if self.dirty {
             self.host.show(m.page(&self.host, s, e)?);
             self.dirty = false;
+        }
+        if let Some(group) = revert_focus {
+            self.host.to_top();
+            self.host.focus_first_under(group);
         }
         // Build errors are checked above; the same immutable input is used for host retries.
         self.host.commit(window, |host| {
@@ -59,6 +69,9 @@ impl Settings {
         for a in actions {
             let launcher = a.key.clone();
             let dragging = self.pointer_down && self.host.captured() == Some(&a.key);
+            if self.model.display_action(&a, dragging, &self.host) {
+                continue;
+            }
             if self
                 .model
                 .activate(a, dragging, &mut self.client, &self.exports, Instant::now())?
@@ -184,7 +197,7 @@ impl Application for Settings {
         let ms = self
             .model
             .poll_interval_ms(Instant::now(), self.host.poll_interval_ms());
-        if self.chooser.pending() {
+        if self.chooser.pending() || self.shown.as_deref() == Some("display") {
             ms.min(200)
         } else {
             ms
@@ -208,6 +221,10 @@ impl Application for Settings {
         }
         self.dirty |= self.model.about.poll();
         self.dirty |= self.model.region.poll();
+        if self.model.display.poll() {
+            self.host.cancel_menu();
+            self.dirty = true;
+        }
         self.dirty |= self.model.tick(self.client.session());
         self.chosen_icon()?;
         let actions = self.host.idle()?;
@@ -218,6 +235,9 @@ impl Application for Settings {
         self.commit(window)
     }
     fn event(&mut self, event: Event, window: &mut Window) -> Result<()> {
+        if matches!(event, Event::PointerLeave | Event::Focus(false)) {
+            self.dirty |= self.model.display.cancel_drag();
+        }
         if let Event::Button {
             button: 0x110,
             pressed,

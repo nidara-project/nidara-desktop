@@ -4,6 +4,7 @@ pub mod client;
 pub mod model;
 
 pub mod page;
+pub mod view;
 
 pub mod selector;
 
