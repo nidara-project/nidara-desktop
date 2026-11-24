@@ -68,10 +68,36 @@ pub struct BarFrame {
     pub hidden: bool,
     pub can_settings: bool,
     pub region: m::Region,
+    pub prefs: Arc<crate::prefs::Bar>,
+    pub launcher_generation: u64,
     pub status: crate::status::Status,
     /// The Control Center's grid as stored.
     pub cc_layout: Arc<crate::cclayout::Stored>,
     pub tray: Arc<Vec<crate::tray::TrayItem>>,
+}
+
+impl BarFrame {
+    fn tray_visible(&self, index: usize) -> bool {
+        self.tray
+            .get(index)
+            .is_some_and(|item| !self.prefs.hidden_tray.contains(&item.id))
+    }
+
+    fn launcher_key(&self, scale: f64) -> Option<crate::icon_memory::Key> {
+        Some(crate::icon_memory::Key::Image {
+            namespace: "bar-launcher".into(),
+            generation: self.launcher_generation,
+            path: self.prefs.launcher.clone()?,
+            side: (m::ICON * scale).ceil().clamp(1., 1024.) as u32,
+        })
+    }
+
+    fn launcher_asset(&self, scale: f64) -> Option<Arc<crate::icon_memory::Asset>> {
+        let key = self.launcher_key(scale)?;
+        let memory = crate::icon_memory::global()?;
+        memory.request(key.clone());
+        memory.get(&key)
+    }
 }
 
 /// What a bar item is, and so what a click on it does.
@@ -384,9 +410,8 @@ impl Bar {
             .clone()
             .unwrap_or_else(|| m::desktop_title(&self.frame.workspaces, &self.name, &word));
         let room = m::title_room(width, island_w, &[Content::Icon]);
-        let title = self.fit(&title, room);
-        let title_w = self.measure(&title);
-        let (left, left_items) = m::group(m::MARGIN, &[Content::Icon, Content::Text(title_w)]);
+        let title = self.frame.prefs.show_title.then(|| self.fit(&title, room));
+        let (left, left_items) = m::left_group(title.as_ref().map(|title| self.measure(title)));
         let island = [
             ((width - island_w) / 2.).round(),
             m::TOP,
@@ -395,7 +420,10 @@ impl Bar {
         ];
         let clock = self.clock.clone();
         let clock_w = self.measure(&clock);
-        let tray = self.frame.tray.len();
+        let visible_tray: Vec<_> = (0..self.frame.tray.len())
+            .filter(|&index| self.frame.tray_visible(index))
+            .collect();
+        let tray = visible_tray.len();
         let shown = widgets(&self.frame.status);
         let mut right_content = vec![Content::Icon; tray + shown.len()];
         right_content.extend([Content::Icon, Content::Text(clock_w)]);
@@ -404,25 +432,28 @@ impl Bar {
         let n = tray + shown.len();
         self.layout = Layout {
             glass: vec![left, island, right],
-            items: [
-                (Item::Logo, left_items[0]),
-                (Item::Title, left_items[1]),
-                (Item::Island, island),
-            ]
-            .into_iter()
-            .chain((0..tray).map(|i| (Item::Tray(i), right_items[i])))
-            .chain(
-                shown
-                    .iter()
-                    .zip(&right_items[tray..])
-                    .map(|(w, b)| (Item::Widget(*w), *b)),
-            )
-            .chain([
-                (Item::ControlCenter, right_items[n]),
-                (Item::Clock, right_items[n + 1]),
-            ])
-            .collect(),
-            title,
+            items: [Item::Logo, Item::Title]
+                .into_iter()
+                .zip(left_items)
+                .chain([(Item::Island, island)])
+                .chain(
+                    visible_tray
+                        .into_iter()
+                        .map(Item::Tray)
+                        .zip(right_items.iter().copied()),
+                )
+                .chain(
+                    shown
+                        .iter()
+                        .zip(&right_items[tray..])
+                        .map(|(w, b)| (Item::Widget(*w), *b)),
+                )
+                .chain([
+                    (Item::ControlCenter, right_items[n]),
+                    (Item::Clock, right_items[n + 1]),
+                ])
+                .collect(),
+            title: title.unwrap_or_default(),
             clock,
             dots,
         };
@@ -853,6 +884,11 @@ impl Bar {
     fn tray_replies(&mut self, w: &mut Window) {
         let replies: Vec<TrayReply> = self.tray_replies.1.try_iter().collect();
         for reply in replies {
+            if !self.frame.tray_visible(reply.item) {
+                let token = reply.token;
+                self.tray_job(move |c| crate::tray::close_menu(c, &token).map(|_| None));
+                continue;
+            }
             // A session the bar no longer shows (another menu since): end it.
             if self
                 .tray_menu
@@ -2114,6 +2150,14 @@ impl Application for Bar {
                         self.nc_open = false;
                         self.nc_closed(w);
                     }
+                    if self
+                        .tray_menu
+                        .as_ref()
+                        .is_some_and(|(_, index)| !f.tray_visible(*index))
+                    {
+                        self.close_popup(w);
+                        self.end_tray_menu();
+                    }
                     self.frame = f;
                     if self.frame.output_size.1 > 0 {
                         self.output_height = self.frame.output_size.1;
@@ -2640,7 +2684,9 @@ impl Application for Bar {
                 };
                 match item {
                     Item::Logo => {
-                        if let Some(logo) = &self.logo {
+                        if let Some(asset) = self.frame.launcher_asset(f.scale) {
+                            c.image(&asset.raster, icon_box(b), ImageFit::Contain);
+                        } else if let Some(logo) = &self.logo {
                             c.icon(logo, icon_box(b), ink(1.));
                         }
                     }
@@ -2909,5 +2955,62 @@ pub fn run(bar: Bar, output: LayerOutput, wake: WakeSource) -> nk_wayland::Resul
 impl Drop for Bar {
     fn drop(&mut self) {
         crate::ccaux::mapped(&self.name, false);
+    }
+}
+
+#[cfg(test)]
+mod preference_tests {
+    use super::*;
+
+    #[test]
+    fn title_switch_removes_its_slot_and_glass_width() {
+        let off = crate::prefs::Bar::read(false, "nidara", []);
+        let (glass, items) = m::left_group(off.show_title.then_some(80.));
+        assert_eq!((glass, items), m::group(m::MARGIN, &[Content::Icon]));
+        let (with_title, items) = m::left_group(Some(80.));
+        assert_eq!(items.len(), 2);
+        assert!(with_title[2] > glass[2]);
+    }
+
+    #[test]
+    fn hidden_tray_uses_sni_id_and_ignores_unrelated_keys() {
+        let tray = ["one", "two", "shell:search"]
+            .map(|id| crate::tray::TrayItem {
+                id: id.into(),
+                handle: format!("handle-{id}"),
+                generation: 1,
+                title: "Same title".into(),
+                pid: None,
+                item_is_menu: false,
+                menu: false,
+                icon: None,
+            })
+            .to_vec();
+        let frame = BarFrame {
+            prefs: Arc::new(crate::prefs::Bar::read(
+                true,
+                "nidara",
+                ["tray:two", "tray:handle-one", "shell:search"],
+            )),
+            tray: Arc::new(tray),
+            ..BarFrame::default()
+        };
+        assert!(frame.tray_visible(0));
+        assert!(!frame.tray_visible(1));
+        assert!(frame.tray_visible(2));
+    }
+
+    #[test]
+    fn launcher_requests_only_absolute_paths_at_the_output_scale() {
+        let mut frame = BarFrame::default();
+        for preset in ["nidara", "arch", "relative.png"] {
+            frame.prefs = Arc::new(crate::prefs::Bar::read(true, preset, []));
+            assert!(frame.launcher_key(1.25).is_none());
+        }
+        frame.prefs = Arc::new(crate::prefs::Bar::read(true, "/tmp/custom.png", []));
+        assert!(matches!(
+            frame.launcher_key(1.25),
+            Some(crate::icon_memory::Key::Image { path, side: 23, .. }) if path == "/tmp/custom.png"
+        ));
     }
 }
