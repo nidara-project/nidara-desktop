@@ -114,6 +114,9 @@ impl Component for SliderControl {
             s.slid = None;
         }
     }
+    fn reports_drag(&self) -> bool {
+        self.range.live
+    }
     fn take_changed(&self, state: Option<&mut dyn Any>) -> Option<Value> {
         state?.downcast_mut::<State>()?.slid.take()
     }

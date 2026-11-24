@@ -13,9 +13,6 @@ pub struct Choice {
     pub name: String,
     pub kind: String,
     pub bus: String,
-    pub volume: f64,
-    pub volume_limit: f64,
-    pub muted: bool,
     pub capabilities: Vec<String>,
     pub track_revision: u64,
     pub length: i64,
@@ -30,7 +27,7 @@ pub struct Details {
     pub network: Option<Arc<serde_json::Value>>,
     pub brightness_owner: String,
     pub bluetooth: Option<Arc<serde_json::Value>>,
-    pub audio: Arc<Vec<Choice>>,
+    pub audio: Arc<Vec<nk_platform::audio::Node>>,
     pub default_output: String,
     pub players: Arc<Vec<Choice>>,
     pub selected: String,
@@ -92,12 +89,6 @@ pub fn objects(
             name,
             kind: text("Kind"),
             bus: text("BusName"),
-            volume_limit: 1.,
-            volume: p
-                .get("Volume")
-                .and_then(|v| f64::try_from(v).ok())
-                .filter(|v| v.is_finite() && *v >= 0.)
-                .unwrap_or(0.),
             track_revision: p
                 .get("TrackRevision")
                 .and_then(|v| u64::try_from(v).ok())
@@ -117,10 +108,6 @@ pub fn objects(
                 && p.get("PositionAvailable")
                     .and_then(|v| bool::try_from(v).ok())
                     .unwrap_or(false),
-            muted: p
-                .get("Muted")
-                .and_then(|v| bool::try_from(v).ok())
-                .unwrap_or(false),
             capabilities,
         });
     }

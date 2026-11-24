@@ -9,8 +9,10 @@
 //! | `styles` | the exported tokens as `nk-widgets`' styles, once for every reader |
 //! | `material` | the exported glass: a panel's and a control's material |
 //! | `font_description` | a Pango font description, as the portal gives it |
+//! | `audio` | the shared Audio1 graph and commands |
 //! | `clock` | the bar's clock as text, for the bar and Settings' preview |
 
+pub mod audio;
 pub mod clock;
 pub mod exports;
 pub mod font_description;

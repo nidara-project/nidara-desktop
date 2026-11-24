@@ -526,6 +526,8 @@ as the scroll bar did (§8), so there is one slider and its rules are written on
   of a drag (the surface coalesces, as `ccdetail` does by `coalescing_key`), and once more on
   release. While the pointer holds it, a rebuild with an older value from the model does not move
   the thumb: the held value wins until release (`held` today).
+  In AppWindow, use `SliderRange::live()` to receive intermediate drag values.
+  The release still reports the final value.
 - **Look.** Two, from tokens, never numbers in the surface: the **row slider** of a list
   (`components.json` `range.slider`: track 6, thumb 9, fill at 0.9, its value said beside it), and
   the **tile slider** of the CC (§12.4), which fills its tile as today. Hover, press and focus are
