@@ -189,7 +189,10 @@ registration or a pending request.
 Run `NK_SESSION_PROMPTS_ONLY=1 toolkit/shell/check-cc-headless.sh` for the
 private-bus prompt check, including Wi-Fi owner replacement and Bluetooth progress.
 With an authenticated shell and matching Hyalo, `NK_SESSION_PROMPT_TRUSTED=1`
-also asserts the compositor's initial attention state.
+also asserts that a spontaneous dialog asks for attention above the active
+fullscreen window, that focusing it preserves fullscreen, and that lock withdraws it. Set
+`NK_SESSION_PROMPT_SETTINGS_BIN` to the native Settings binary to also test
+a user-initiated connection taking focus through its activation grant.
 
 ### Screenshot and recording
 

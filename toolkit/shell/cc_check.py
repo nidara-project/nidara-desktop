@@ -23,7 +23,7 @@ methods={'Snapshot':('',args('t','t','s',direction='out')),'SetWifiEnabled':(arg
 xml='<node><interface name="org.nidara.Network1">'+''.join('<method name="'+k+'">'+a+b+'</method>' for k,(a,b) in methods.items())+('<signal name="Updated">'+args('t','t','s',direction='out')+'</signal><signal name="SecretsRequested">'+args('t','s',direction='out')+'</signal><signal name="SecretsClosed">'+args('t','s',direction='out')+'</signal></interface></node>')
 state={'revision':1,'strength':90,'enabled':True,'active':'/ap/1','ui':None,'pending':None,'id':0}
 def doc():
-    return json.dumps({'schemaVersion':1,'wirelessEnabled':state['enabled'],'wirelessHardwareEnabled':True,'profiles':[],
+    return json.dumps({'schemaVersion':1,'available':True,'wirelessEnabled':state['enabled'],'wirelessHardwareEnabled':True,'profiles':[],
         'devices':[{'path':'/device/wifi','kind':2,'state':100 if state['active']!='/' else 30,'activeAp':state['active'],
           'accessPoints':[{'path':'/ap/1','ssid':[72,111,109,101],'label':'Home','strength':state['strength']},
                           {'path':'/ap/secure','ssid':[83,101,99,117,114,101],'label':'Secure test','strength':60,'flags':1,'wpaFlags':256,'rsnFlags':256}]}]})
@@ -130,6 +130,25 @@ def respond_wifi(ctx, pipe):
     until('question withdrawn',lambda:ctx['dock_node'](title) is None)
 
 
+FULLSCREEN_CLIENT = """
+import gi
+gi.require_version('Gtk', '4.0')
+from gi.repository import GLib, Gtk
+app = Gtk.Application(application_id='org.nidara.FixtureFullscreen')
+def show(app):
+    window = Gtk.ApplicationWindow(application=app, title='Fullscreen fixture')
+    window.set_default_size(640, 480)
+    window.set_child(Gtk.Label(label='Fullscreen fixture'))
+    window.present()
+    def enter_fullscreen():
+        window.fullscreen()
+        return False
+    GLib.timeout_add(300, enter_fullscreen)
+app.connect('activate', show)
+app.run([])
+"""
+
+
 def run_prompts(ctx):
     from gi.repository import Atspi
     until, run_dir, log = ctx['until'], ctx['RUN'], ctx['LOG']
@@ -142,6 +161,16 @@ def run_prompts(ctx):
     def actions():
         return network_actions(log)
     until('Wi-Fi renderer registered', lambda: any(m == 'RegisterSecretsUi' for m, _ in actions()))
+    trusted = os.environ.get('NK_SESSION_PROMPT_TRUSTED') == '1'
+    def foreground():
+        return next((window for window in ctx['ipc']('windows').get('ok', {}).get('windows', [])
+                     if window['title'] == 'Fullscreen fixture'), None)
+
+    if trusted:
+        fullscreen_client = ctx['start']('fullscreen-fixture', ['python3', '-I', '-c', FULLSCREEN_CLIENT],
+                     GDK_BACKEND='wayland', GSK_RENDERER='cairo', GDK_DISABLE='gl,vulkan')
+        until('focused fullscreen fixture', lambda:
+              (window := foreground()) and window['fullscreen'] == 'fullscreen' and window['focused'])
     with open(os.environ['HYALO_CONTROL'], 'w', buffering=1) as pipe:
         # Network1's issuer is independent of the control-center panel.
         before = sum(1 for method, _ in actions() if method == 'SubmitSecrets')
@@ -154,13 +183,18 @@ def run_prompts(ctx):
         wifi = until('external Wi-Fi dialog window', lambda: prompt_window(ctx, 'Wi-Fi authentication'))
         assert all(layer['namespace'] != 'nidara-session-prompt'
                    for layer in ctx['ipc']('layers').get('ok', {}).get('layers', []))
-        if os.environ.get('NK_SESSION_PROMPT_TRUSTED') == '1':
-            assert wifi['floating'] and wifi['demands_attention'] and not wifi['focused'], wifi
+        if trusted:
+            assert wifi['floating'] and wifi['visible'] and wifi['demands_attention'] and not wifi['focused'], wifi
+            active = foreground()
+            assert active['focused'] and active['fullscreen'] == 'fullscreen'
+            assert abs(2 * (wifi['x'] - active['x']) + wifi['width'] - active['width']) <= 2, wifi
         trigger = bt_actions.with_name('bluetooth-prompt')
         trigger.write_text('file')
         until('queued Bluetooth request signalled', lambda: not trigger.exists())
         assert ctx['dock_node']('Bluetooth') is None
         respond_wifi(ctx, pipe)
+        if trusted:
+            assert foreground()['fullscreen'] == 'fullscreen', 'focusing the prompt ended fullscreen'
         until('external connection answered', lambda: caller.poll() == 0)
         assert sum(1 for method, _ in actions() if method == 'SubmitSecrets') == before + 1
         assert sum(1 for method, _ in actions() if method == 'RegisterSecretsUi') == 1
@@ -208,8 +242,54 @@ def run_prompts(ctx):
         pipe.write('key 1\n')
         until('Cancel reached the replacement', lambda: ['CancelSecrets', [1]] in actions())
         until('replacement dialog withdrawn', lambda: ctx['dock_node'](title) is None)
+        settings_binary = os.environ.get('NK_SESSION_PROMPT_SETTINGS_BIN')
+        if trusted and settings_binary:
+            fullscreen_client.terminate()
+            fullscreen_client.wait(timeout=5)
+            until('fullscreen fixture closed', lambda: foreground() is None)
+            ctx['start']('native-settings', [settings_binary])
+
+            def control(name):
+                return next((node for node in prompt_nodes(ctx, 'Settings')
+                             if node.get_name() == name and node.get_action_iface()), None)
+
+            until('Network page in Settings', lambda: control('Network'))
+            time.sleep(.3)
+
+            def open_network():
+                if control('Connect'):
+                    return control('Connect')
+                page = control('Network')
+                if page:
+                    page.get_action_iface().do_action(0)
+                return None
+
+            connect_button = until('Connect button in Network', open_network)
+            settings_window = next(window for window in ctx['ipc']('windows')['ok']['windows']
+                                   if window['app_id'] == 'nidara-settings-view')
+            region = connect_button.get_component_iface().get_extents(Atspi.CoordType.WINDOW)
+            x = settings_window['x'] + region.x + region.width // 2
+            y = settings_window['y'] + region.y + region.height // 2
+            pipe.write(f'move {x} {y}\n')
+            time.sleep(.15)
+            pipe.write(f'click {x} {y}\n')
+            until('Settings sent the initiating token', lambda:
+                  any(method == 'ConnectDefaultWithActivation' for method, _ in actions()))
+            until('user-initiated Wi-Fi window takes focus without a second click',
+                  lambda: (window := prompt_window(ctx, title)) and window['focused'])
+            respond_wifi(ctx, pipe)
+        if trusted:
+            ctx['start']('wifi-before-lock', connect)
+            until('pending dialog before locking', lambda: prompt_window(ctx, title))
+            pipe.write('lock\n')
+            until('Hyalo session locked', lambda: ctx['ipc']('lock').get('ok', {}).get('locked'))
+            until('pending dialog withdrawn behind the lock', lambda: prompt_window(ctx, title) is None)
     assert 'privatepassword' not in (log/'shell.log').read_text()
-    print('PASS session prompts: Wi-Fi outside CC, masked password, queued Bluetooth consent, passkey updates and owner replacement', flush=True)
+    print('PASS session prompts: Wi-Fi, masked password, Bluetooth consent and service replacement', flush=True)
+    if trusted:
+        print('PASS system dialog: fullscreen stacking, attention without focus, and lock withdrawal', flush=True)
+    if trusted and settings_binary:
+        print('PASS Settings click: the prompt takes focus with its Wayland activation grant', flush=True)
 
 
 def run(ctx):
