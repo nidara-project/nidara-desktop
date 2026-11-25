@@ -1,9 +1,14 @@
 // SPDX-License-Identifier: LGPL-3.0-or-later
 //! AppWindow client for Network1. The shell owns the agent's secret renderer.
 mod ip;
+mod join;
 
-use crate::exports::Exports;
+use crate::{
+    exports::Exports,
+    file_chooser::{Chooser, Open, Operation, StartError},
+};
 use ip::{Editor, Form, Target};
+use join::{Join, Profile};
 use nk::{Activated, Node, Space, Type, TypeScale, Value, Weight};
 use nk_platform::network::{self, IFACE, PATH, Snapshot, items, text as item_text};
 use serde_json::Value as Json;
@@ -31,6 +36,9 @@ pub struct Network {
     sequence: u64,
     error: Option<&'static str>,
     ip: Option<Editor>,
+    join: Option<Join>,
+    chooser: Chooser,
+    certificate_pick: Option<Operation>,
 }
 
 struct Client {
@@ -97,6 +105,7 @@ enum Call {
     Wifi(bool),
     Scan(String),
     Connect(String, String, String),
+    ConnectProfile(String, String, Profile),
     Disconnect(String),
     Forget(String),
     Wired(String, bool),
@@ -126,6 +135,13 @@ impl Call {
                 iface,
                 "ConnectDefault",
                 &(path(device)?, path(ap)?, uuid),
+            ),
+            Self::ConnectProfile(device, ap, profile) => conn.call_method(
+                dest,
+                PATH,
+                iface,
+                "ConnectProfile",
+                &(path(device)?, path(ap)?, profile),
             ),
             Self::Disconnect(device) => {
                 conn.call_method(dest, PATH, iface, "Disconnect", &(path(device)?,))
@@ -220,7 +236,9 @@ impl Network {
             return false;
         };
         let mut changed = false;
-        if let Some(snapshot) = client.snapshots.try_iter().last() {
+        let snapshot = client.snapshots.try_iter().last();
+        let replies: Vec<_> = client.replies.try_iter().collect();
+        if let Some(snapshot) = snapshot {
             self.loaded = true;
             if self
                 .snapshot
@@ -233,6 +251,7 @@ impl Network {
             {
                 self.pending.clear();
                 self.ip = None;
+                self.close_join();
                 self.error = None;
             }
             self.snapshot = snapshot;
@@ -244,9 +263,19 @@ impl Network {
             {
                 self.ip = None;
             }
+            if self
+                .join
+                .as_ref()
+                .zip(self.snapshot.as_ref())
+                .is_some_and(|(join, snapshot)| {
+                    snapshot.data["wirelessEnabled"] != true
+                        || by_path(&snapshot.data, "devices", &join.device).is_none()
+                })
+            {
+                self.close_join();
+            }
             changed = true;
         }
-        let replies: Vec<_> = client.replies.try_iter().collect();
         for reply in replies {
             if self
                 .snapshot
@@ -259,7 +288,14 @@ impl Network {
                 continue;
             }
             self.pending.remove(reply.lane);
-            if reply.lane == "ip" {
+            if reply.lane == "join" {
+                if reply.result.is_ok() {
+                    self.close_join();
+                } else if let Some(join) = &mut self.join {
+                    join.busy = false;
+                    self.error = Some("settings.network.native.error");
+                }
+            } else if reply.lane == "ip" {
                 if let Some(ip) = &mut self.ip {
                     ip.busy = false;
                     match reply.result {
@@ -296,6 +332,19 @@ impl Network {
             }
             changed = true;
         }
+        if let Some(operation) = self.certificate_pick
+            && let Some(result) = self.chooser.poll(operation)
+        {
+            self.certificate_pick = None;
+            if let Some(join) = self.join.as_mut().filter(|join| join.id == operation.mount) {
+                match result {
+                    Ok(Some(path)) => join.certificate = Some(path),
+                    Ok(None) => {}
+                    Err(_) => self.error = Some("settings.network.native.error"),
+                }
+                changed = true;
+            }
+        }
         changed
     }
 
@@ -323,7 +372,42 @@ impl Network {
         }
     }
 
-    pub fn activate(&mut self, activated: &Activated) -> bool {
+    fn close_join(&mut self) {
+        self.join = None;
+        self.certificate_pick = None;
+        self.chooser.cancel();
+    }
+
+    fn choose_certificate(&mut self, e: &Exports) {
+        let Some((join, client)) = self.join.as_ref().zip(self.client.as_ref()) else {
+            return;
+        };
+        if join.busy || self.chooser.pending() {
+            return;
+        }
+        let Ok(title) = e.text("settings.network.join.ca") else {
+            return;
+        };
+        self.sequence += 1;
+        let operation = Operation {
+            mount: join.id,
+            request: self.sequence,
+        };
+        let open = Open {
+            parent: String::new(),
+            title: title.into(),
+            images_label: title.into(),
+            mimes: join::CERTIFICATES,
+            current_folder: None,
+        };
+        match self.chooser.start(&client.conn, operation, open) {
+            Ok(()) => self.certificate_pick = Some(operation),
+            Err(StartError::Busy) => {}
+            Err(StartError::Failed(_)) => self.error = Some("settings.network.native.error"),
+        }
+    }
+
+    pub fn activate(&mut self, activated: &Activated, e: &Exports) -> bool {
         let Some(action) = activated.action.strip_prefix(PREFIX) else {
             return false;
         };
@@ -354,6 +438,28 @@ impl Network {
         let data = &snapshot.data;
         let device = by_path(data, "devices", target);
         let selected_profile = profile(data, target);
+        if let Some(join) = &mut self.join {
+            match verb {
+                "join-back" if !join.busy => {
+                    self.close_join();
+                    self.error = None;
+                }
+                "join-certificate" => self.choose_certificate(e),
+                "join-edit" => join.input(target, activated.value.as_ref()),
+                "join-apply" if !join.busy && !self.chooser.pending() => {
+                    if let Some(profile) = join.profile() {
+                        let operation =
+                            Call::ConnectProfile(join.device.clone(), join.ap.clone(), profile);
+                        let busy = self.request("join", operation);
+                        if let Some(join) = &mut self.join {
+                            join.busy = busy;
+                        }
+                    }
+                }
+                _ => {}
+            }
+            return true;
+        }
         if let Some(ip) = &mut self.ip {
             match verb {
                 "ip-back" if !ip.busy => self.ip = None,
@@ -395,11 +501,23 @@ impl Network {
             ("wired", Some(Value::Bool(on))) => device
                 .filter(|d| d["kind"] == 1)
                 .map(|_| ("wired", Call::Wired(target.into(), *on))),
+            ("join-open", _)
+                if data["wirelessEnabled"] == true
+                    && !self.pending.contains_key("connect")
+                    && device.is_some_and(|d| d["kind"] == 2) =>
+            {
+                self.sequence += 1;
+                self.join = Some(Join::new(self.sequence, target, None));
+                self.error = None;
+                None
+            }
             ("connect", _) => device.filter(|d| d["kind"] == 2).and_then(|device| {
                 let ap = by_path(device, "accessPoints", extra)?;
                 let saved = network::saved_ap(data, device, ap);
                 if ap["needsEnterprise"] == true && saved.is_none() {
-                    self.error = Some("settings.network.native.needs-profile");
+                    self.sequence += 1;
+                    self.join = Some(Join::new(self.sequence, target, Some(ap)));
+                    self.error = None;
                     return None;
                 }
                 Some((
@@ -474,6 +592,9 @@ impl Network {
         };
         let data = &snapshot.data;
         let cx = ChoiceContext(snapshot);
+        if let Some(join) = &self.join {
+            return join.rows(&cx, types, e, self.error);
+        }
         if let Some(editor) = &self.ip {
             return editor.rows(&cx, types, e, ip_live(data, &editor.target));
         }
@@ -620,14 +741,24 @@ impl Network {
                     &format!("network/wifi/{path}"),
                     item_text(device, "interface"),
                     network::wifi_name(data).as_str(),
-                    vec![button(
-                        &format!("network/wifi/{path}/scan"),
-                        "settings.network.ap.scan",
-                        cx.action("scan", path, ""),
-                        !self.pending.contains_key("scan"),
-                        types,
-                        e,
-                    )?],
+                    vec![
+                        button(
+                            &format!("network/wifi/{path}/scan"),
+                            "settings.network.ap.scan",
+                            cx.action("scan", path, ""),
+                            !self.pending.contains_key("scan"),
+                            types,
+                            e,
+                        )?,
+                        button(
+                            &format!("network/wifi/{path}/other"),
+                            "settings.network.ap.other",
+                            cx.action("join-open", path, ""),
+                            !self.pending.contains_key("connect"),
+                            types,
+                            e,
+                        )?,
+                    ],
                     types,
                 ));
             }

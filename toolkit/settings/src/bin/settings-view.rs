@@ -81,7 +81,7 @@ impl Settings {
                 || self.model.selected() == Some(nk_settings::audio::PAGE)
                     && self.model.audio.activate(&a, dragging)
                 || self.model.selected() == Some(nk_settings::network::PAGE)
-                    && self.model.network.activate(&a)
+                    && self.model.network.activate(&a, &self.exports)
             {
                 continue;
             }

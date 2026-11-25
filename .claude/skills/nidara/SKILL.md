@@ -638,7 +638,10 @@ selection and saved profile matching shared by Settings and the shell.
 Subscribe before hydrating and apply only newer revisions from the current
 owner and epoch. Settings uses `GetIp` and `ApplyIp` with an explicit draft
 and pins each action to the current service owner and request ID. The shell
-owns the Network1 secret renderer.
+owns the Network1 secret renderer. The explicit Wi-Fi profile editor sends
+`ConnectProfile` when the user submits a hidden or WPA-Enterprise profile.
+Use the kit's `PasswordEntry` and a portal-selected CA for PEAP and TTLS.
+Its secret is never part of the view declaration, reader text or IME context.
 `power.profile` is PPD's ActiveProfile on the system bus, announced by PPD's own
 signals; Config1 tests set `DBUS_SYSTEM_BUS_ADDRESS` to their private bus.
 `region.timezone` is timedated's, set asynchronously behind polkit: `Apply` answers the old zone and the new one is
