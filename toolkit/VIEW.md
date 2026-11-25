@@ -667,7 +667,7 @@ here first, then used. `nk-widgets` keeps serving Settings until each of its com
 moved here, and is then retired. Nothing in §1–§12 changes for the surfaces already built on
 this contract.
 
-A shell layer that presents a session prompt can call
+A shell toplevel that presents a session prompt can call
 `AppWindow::set_standalone_dialog` before mapping. The page owns the full surface
 and its response buttons, while the host provides the modal reader role and the
 same retained input, IME and clipboard routing as an application page.

@@ -142,6 +142,8 @@ pub struct Managed {
     /// An activation it asked for was refused while it was shown (activation.rs): it demands
     /// attention until it gets the focus (ipc/observe.rs, #959 H1).
     pub attention: bool,
+    /// A session dialog from the authenticated Rust shell.
+    pub system_dialog: bool,
     /// Its X11 urgency hint (WM_HINTS), set while it did not have the focus.
     pub x11_urgent: bool,
 }
@@ -734,6 +736,7 @@ impl Hyalo {
             poked_geometry: None,
             minimized: None,
             attention: false,
+            system_dialog: false,
             x11_urgent: false,
         });
     }
@@ -761,18 +764,34 @@ impl Hyalo {
         t.send_configure();
     }
 
+    fn is_system_dialog(&self, window: &Window) -> bool {
+        use nidara_access::{Consent, Operation, Peer};
+        use smithay::reexports::wayland_server::Resource;
+        if app_id(window) != "nidara-session-prompt" || window.x11_surface().is_some() {
+            return false;
+        }
+        let credentials = surface_of(window)
+            .and_then(|surface| self.display_handle.get_client(surface.id()).ok())
+            .and_then(|client| client.get_credentials(&self.display_handle).ok());
+        credentials
+            .and_then(|creds| Peer::from_credentials(creds.pid.try_into().ok()?, creds.uid).ok())
+            .is_some_and(|peer| peer.authorize(Operation::SessionPrompt, Consent::default()).is_ok())
+    }
+
     /// What the rules will want of a window about to be shown — its workspace, whether it has
     /// Hyalo's title bar — so its first frame is already right: its workspace, and the box it
     /// will have if it is to be tiled.
     pub fn initial_placement(&mut self, id: WindowId, window: &Window) -> (i32, Option<Rect>) {
         let mut ws = self.wm.get(id).map_or(0, |m| m.workspace);
+        let system_dialog = self.is_system_dialog(window);
+        self.wm.get_mut(id).unwrap().system_dialog = system_dialog;
         let fx = self.new_rule_effects(id, false);
         if let Some(w) = &fx.workspace {
             let output = self.wm.workspaces.get(&ws).map(|w| w.output.clone()).unwrap_or_default();
             ws = self.rule_workspace(w, &output);
             self.wm.get_mut(id).unwrap().workspace = ws;
         }
-        let tiled = fx.float.map_or(self.workspace_mode(ws) == WorkspaceMode::Tiling && !wants_floating(window), |f| !f);
+        let tiled = !system_dialog && fx.float.map_or(self.workspace_mode(ws) == WorkspaceMode::Tiling && !wants_floating(window), |f| !f);
         // Whether it will have Hyalo's title bar, before it has drawn anything: it asked for
         // server-side decorations — corrected at map, when its surface can be measured.
         let bar = fx.title_bar.unwrap_or(true) && wants_title_bar(window, true);
@@ -801,7 +820,7 @@ impl Hyalo {
     /// The window's first buffer: it is placed — tiled or floating — and takes the focus.
     pub fn window_mapped(&mut self, window: &Window) {
         let Some(m) = self.wm.by_window(window) else { return };
-        let (id, mut ws) = (m.id, m.workspace);
+        let (id, mut ws, system_dialog) = (m.id, m.workspace, m.system_dialog);
         let fx = self.new_rule_effects(id, true);
         self.apply_look(id, &fx);
         // Its first buffer: now its surface says whether it took the server-side decorations.
@@ -814,7 +833,7 @@ impl Hyalo {
             self.wm.get_mut(id).unwrap().workspace = ws;
         }
         let Some(output) = self.wm.workspaces.get(&ws).and_then(|w| self.output_named(&w.output)) else { return };
-        let tiled = fx.float.map_or(self.workspace_mode(ws) == WorkspaceMode::Tiling && !wants_floating(window), |f| !f);
+        let tiled = !system_dialog && fx.float.map_or(self.workspace_mode(ws) == WorkspaceMode::Tiling && !wants_floating(window), |f| !f);
         let size = window.geometry().size;
         let og = self.space.output_geometry(&output).unwrap_or_default();
         // A dialog opens over its parent; anything else in the middle of the usable area.
@@ -833,7 +852,7 @@ impl Hyalo {
             .collect();
         // Placed by its whole box, its title bar included.
         let framed = Size::from((size.w, size.h + bar));
-        let float = if fx.center {
+        let float = if system_dialog || fx.center {
             // A rule's `center`: the middle of the usable area, nothing else considered.
             clamp_floating(centered(framed, area), area)
         } else {
@@ -867,7 +886,11 @@ impl Hyalo {
         self.wm.dirty_windows = true;
         self.wm.dirty_workspaces = true;
         // Sent elsewhere `silent`ly: it opens there without taking the user — or the focus.
-        if !(fx.workspace.is_some() && fx.silent) {
+        if system_dialog {
+            // Only a compositor-validated activation token or an explicit focus action
+            // may give a system dialog the keyboard.
+            self.set_attention(id, Some(true), None);
+        } else if !(fx.workspace.is_some() && fx.silent) {
             self.focus_window(Some(id));
         }
         self.window_shown_with_token(id, window);
@@ -1068,7 +1091,7 @@ impl Hyalo {
         let outputs: Vec<String> = self.space.outputs().map(|o| o.name()).collect();
         for o in &outputs {
             let layer_ids = |ws: i32, order: &mut Vec<WindowId>| {
-                let on: Vec<&Managed> = self.wm.on_workspace(ws).collect();
+                let on: Vec<&Managed> = self.wm.on_workspace(ws).filter(|m| !m.system_dialog).collect();
                 // A fullscreen window hides the rest of its workspace.
                 if let Some(fs) = on.iter().rev().find(|m| m.fullscreen == Fullscreen::Fullscreen) {
                     order.push(fs.id);
@@ -1084,6 +1107,10 @@ impl Hyalo {
             if let Some(ws) = self.wm.special_shown.get(o).copied() {
                 layer_ids(ws, &mut order);
             }
+            let workspaces = [self.wm.active.get(o).copied(), self.wm.special_shown.get(o).copied()];
+            order.extend(workspaces.into_iter().flatten().flat_map(|ws| {
+                self.wm.on_workspace(ws).filter(|m| m.system_dialog).map(|m| m.id)
+            }));
         }
         let hidden: Vec<Window> = self
             .space
@@ -1154,7 +1181,7 @@ impl Hyalo {
         let asked = id;
         let id = self.modal_target(id);
         let Some(m) = self.wm.get(id) else { return };
-        let ws = m.workspace;
+        let (ws, preserve_fullscreen) = (m.workspace, m.system_dialog);
         if !self.wm.is_visible(ws) {
             if self.wm.is_special(ws) {
                 let output = self.wm.workspaces.get(&ws).map(|w| w.output.clone()).unwrap_or_default();
@@ -1169,7 +1196,7 @@ impl Hyalo {
         let others: Vec<WindowId> = self
             .wm
             .on_workspace(ws)
-            .filter(|o| o.id != id && o.fullscreen == Fullscreen::Fullscreen)
+            .filter(|o| !preserve_fullscreen && o.id != id && o.fullscreen == Fullscreen::Fullscreen)
             .map(|o| o.id)
             .collect();
         for o in others {

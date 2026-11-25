@@ -81,15 +81,34 @@ impl Dialogs {
             let mut locked = true;
             while let Ok(event) = rx.recv() {
                 match event {
-                    Event::Lock(value) => locked = value,
-                    Event::Prompt(ticket, meta) => {
+                    Event::Lock(value) => {
+                        locked = value;
+                        if locked {
+                            for request in &mut requests {
+                                if let Some(meta) = request.meta.as_object_mut() {
+                                    meta.remove("activationToken");
+                                }
+                            }
+                        }
+                    }
+                    Event::Prompt(ticket, mut meta) => {
                         requests.retain(|r| r.ticket.service != ticket.service);
+                        if locked && let Some(obj) = meta.as_object_mut() {
+                            obj.remove("activationToken");
+                        }
                         if surface::supports(&ticket, &meta) {
                             requests.push_back(Request { ticket, meta });
                         }
                     }
-                    Event::Update(ticket, meta) => {
+                    Event::Update(ticket, mut meta) => {
                         if let Some(request) = requests.iter_mut().find(|r| r.ticket == ticket) {
+                            let activation = request.meta.get("activationToken").cloned();
+                            if let Some(document) = meta.as_object_mut() {
+                                document.remove("activationToken");
+                                if let Some(token) = activation {
+                                    document.insert("activationToken".into(), token);
+                                }
+                            }
                             request.meta = meta.clone();
                             if let Some(view) = running.as_ref().filter(|v| v.ticket == ticket) {
                                 view.send(surface::Change::Metadata(meta));

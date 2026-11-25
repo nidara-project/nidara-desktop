@@ -4,7 +4,7 @@ use nk::{AppWindow, Glyphs, Labels, WindowLook};
 use nk_settings::{client::Client, exports::Exports, portal::Portal, view_settings::Model};
 use nk_text::{FontSet, ParleyBackend};
 use nk_wayland::{Application, Event, Frame, Material, Options, Result, Window, WindowBackground};
-use std::{path::PathBuf, sync::Arc, time::Instant};
+use std::{collections::HashMap, path::PathBuf, sync::Arc, time::Instant};
 struct Settings {
     exports: Exports,
     portal: Portal,
@@ -12,6 +12,7 @@ struct Settings {
     model: Model,
     host: AppWindow,
     pointer_down: bool,
+    network_tokens: HashMap<nk_wayland::TokenRequest, nk::Activated>,
     ready: bool,
     dirty: bool,
     /// The page shown last: arriving on a page is what asks its slow facts again.
@@ -34,6 +35,9 @@ impl Settings {
                 self.model.audio = Default::default();
             }
             if self.shown.as_deref() == Some(nk_settings::network::PAGE) {
+                for (request, _) in self.network_tokens.drain() {
+                    window.cancel_activation_token(request);
+                }
                 self.model.network = Default::default();
             }
             match selected.as_deref() {
@@ -72,7 +76,12 @@ impl Settings {
         })?;
         Ok(())
     }
-    fn actions(&mut self, actions: Vec<nk::Activated>, window: &mut Window) -> Result<()> {
+    fn actions(
+        &mut self,
+        actions: Vec<nk::Activated>,
+        window: &mut Window,
+        serial: Option<u32>,
+    ) -> Result<()> {
         self.dirty |= !actions.is_empty();
         for a in actions {
             let launcher = a.key.clone();
@@ -80,10 +89,21 @@ impl Settings {
             if self.model.display_action(&a, dragging, &self.host)
                 || self.model.selected() == Some(nk_settings::audio::PAGE)
                     && self.model.audio.activate(&a, dragging)
-                || self.model.selected() == Some(nk_settings::network::PAGE)
-                    && self.model.network.activate(&a, &self.exports)
             {
                 continue;
+            }
+            if self.model.selected() == Some(nk_settings::network::PAGE) {
+                if nk_settings::network::Network::may_prompt(&a)
+                    && let Some(serial) = serial
+                    && let Ok(request) = window
+                        .request_activation_token(serial, Some(nk_platform::SESSION_PROMPT_APP_ID))
+                {
+                    self.network_tokens.insert(request, a);
+                    continue;
+                }
+                if self.model.network.activate(&a, &self.exports, None) {
+                    continue;
+                }
             }
             if self
                 .model
@@ -248,7 +268,7 @@ impl Application for Settings {
         self.dirty |= self.model.tick(self.client.session());
         self.chosen_icon()?;
         let actions = self.host.idle()?;
-        self.actions(actions, window)?;
+        self.actions(actions, window, None)?;
         self.dirty |= self
             .model
             .flush(&mut self.client, &self.exports, Instant::now())?;
@@ -277,8 +297,24 @@ impl Application for Settings {
             self.dirty = true;
             self.commit(window)?;
         }
+        let serial = match &event {
+            Event::Button { serial, .. } => Some(*serial),
+            Event::Key(key) => key.serial,
+            _ => None,
+        };
+        let outcome = match &event {
+            Event::ActivationToken { request, token } => Some((request, Some(token.clone()))),
+            Event::ActivationTokenFailed { request, .. } => Some((request, None)),
+            _ => None,
+        };
+        if let Some((request, token)) = outcome
+            && let Some(action) = self.network_tokens.remove(request)
+            && self.model.selected() == Some(nk_settings::network::PAGE)
+        {
+            self.dirty |= self.model.network.activate(&action, &self.exports, token);
+        }
         let (_, actions) = self.host.event(event, window)?;
-        self.actions(actions, window)?;
+        self.actions(actions, window, serial)?;
         self.commit(window)
     }
     fn paint(&mut self, frame: Frame) -> Result<Vec<u8>> {
@@ -360,6 +396,7 @@ fn run() -> Result<()> {
         model: Model::default(),
         host,
         pointer_down: false,
+        network_tokens: HashMap::new(),
         ready: false,
         dirty: true,
         shown: None,

@@ -25,6 +25,7 @@ pub enum Operation {
     RevokeControl,
     Reload,
     ActivateOwnWindow,
+    SessionPrompt,
     WindowControl,
     Spawn,
     EndSession,
@@ -76,6 +77,9 @@ fn permitted(role: Role, op: Operation, consent: Consent) -> bool {
     use Operation::*;
     if matches!(op, Read | OpenSurface | RevokeControl | Reload) {
         return true;
+    }
+    if op == SessionPrompt {
+        return role == Role::Shell;
     }
     let own = match role {
         Role::LegacySettings => matches!(op, ActivateOwnWindow),
@@ -345,6 +349,29 @@ impl ConsentWatch {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn session_prompt_stacking_is_reserved_for_the_rust_shell() {
+        let control = Consent {
+            control: true,
+            ..Consent::default()
+        };
+        for role in [
+            Role::External,
+            Role::Settings,
+            Role::Session,
+            Role::LegacyShell,
+            Role::LegacySettings,
+            Role::Launcher,
+        ] {
+            assert!(!permitted(role, Operation::SessionPrompt, control));
+        }
+        assert!(permitted(
+            Role::Shell,
+            Operation::SessionPrompt,
+            Consent::default()
+        ));
+    }
+
     #[test]
     fn application_roles_are_scoped() {
         let no = Consent::default();

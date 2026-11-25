@@ -110,6 +110,8 @@ pub enum Event {
     /// A layer root was closed by the compositor (its output went away). The run
     /// loop ends after the app has seen this; a new output gets a new surface.
     Closed,
+    /// The compositor requested that this toplevel close. The loop ends after delivery.
+    CloseRequested,
     /// A `Waker` of this loop was woken (layer roots started with a `WakeSource`).
     Wake,
     PopupDone,
@@ -1700,7 +1702,7 @@ fn run_inner(
             // An IME's own edit/caret echo must not look like an external
             // change: fcitx5 uses this cause to decide whether to reset preedit.
             w.input_from_ime = matches!(&event, Event::Ime(_));
-            let closed = matches!(event, Event::Closed);
+            let closed = matches!(event, Event::Closed | Event::CloseRequested);
             app.event(event, &mut w)?;
             w.input_from_ime = false;
             if closed {
@@ -1937,7 +1939,7 @@ impl Dispatch<xdg_toplevel::XdgToplevel, ()> for Window {
                     if height > 0 { height as u32 } else { w.height },
                 ));
             }
-            xdg_toplevel::Event::Close => w.closed = true,
+            xdg_toplevel::Event::Close => w.events.push(Event::CloseRequested),
             _ => {}
         }
     }

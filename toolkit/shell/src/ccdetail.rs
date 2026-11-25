@@ -21,6 +21,10 @@ pub enum Action {
         owner: String,
         action: Box<Action>,
     },
+    WithActivation {
+        action: Box<Action>,
+        token: nk_wayland::ActivationToken,
+    },
     Back,
     Number(&'static str, i32),
     Time(&'static str, i32),
@@ -96,8 +100,10 @@ impl Action {
     }
     pub fn connects(&self) -> bool {
         match self {
-            Self::Connect { .. } | Self::Activate(_) => true,
-            Self::Call { action, .. } => action.connects(),
+            Self::Connect { .. } | Self::Activate(_) | Self::Bluetooth { connect: true, .. } => {
+                true
+            }
+            Self::Call { action, .. } | Self::WithActivation { action, .. } => action.connects(),
             _ => false,
         }
     }
@@ -1410,22 +1416,27 @@ fn rows(page: &str, s: &Status, mode: &'static str, audio: bool) -> Vec<Row> {
 }
 
 pub(crate) fn write(conn: &zbus::blocking::Connection, action: &Action) -> Result<(), String> {
-    write_to(conn, action, None)
+    write_to(conn, action, None, None)
 }
 fn write_to(
     conn: &zbus::blocking::Connection,
     action: &Action,
     owner: Option<&str>,
+    activation: Option<&str>,
 ) -> Result<(), String> {
     let dest = |default| owner.unwrap_or(default);
     use zbus::zvariant::{ObjectPath, Value as Variant};
     let path = |s: &str| ObjectPath::try_from(s.to_owned()).map_err(|e| e.to_string());
+    let token = activation.unwrap_or("");
     match action {
         Action::Call { owner, action } => {
             if !owner.starts_with(':') {
                 return Err("invalid snapshot service owner".into());
             }
-            write_to(conn, action, Some(owner))
+            write_to(conn, action, Some(owner), activation)
+        }
+        Action::WithActivation { action, token } => {
+            write_to(conn, action, owner, Some(token.as_str()))
         }
         Action::ClipboardList => crate::ccaux::refresh_clipboard(),
         Action::Clipboard {
@@ -1465,6 +1476,33 @@ fn write_to(
             "org.nidara.Network1",
             "Scan",
             &(path(device)?,),
+        ),
+        Action::Connect { device, ap, uuid } if !token.is_empty() => call(
+            conn,
+            dest("org.nidara.Network"),
+            "/org/nidara/Network",
+            "org.nidara.Network1",
+            "ConnectDefaultWithActivation",
+            &(path(device)?, path(ap)?, uuid.as_str(), token),
+        ),
+        Action::Activate(uuid) if !token.is_empty() => call(
+            conn,
+            dest("org.nidara.Network"),
+            "/org/nidara/Network",
+            "org.nidara.Network1",
+            "ActivateWithActivation",
+            &(uuid.as_str(), path("/")?, token),
+        ),
+        Action::Bluetooth {
+            device,
+            connect: true,
+        } if !token.is_empty() => call(
+            conn,
+            dest("org.nidara.Bluetooth"),
+            "/org/nidara/Bluetooth",
+            "org.nidara.Bluetooth1",
+            "ConnectWithActivation",
+            &(path(device)?, token),
         ),
         Action::Connect { device, ap, uuid } => call(
             conn,

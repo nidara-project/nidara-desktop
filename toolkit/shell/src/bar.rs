@@ -240,6 +240,8 @@ pub struct Bar {
     nc_view: crate::nc_view::View,
     nc_generation: u64,
     cc_writer: Option<crate::cc::Writer>,
+    cc_tokens:
+        std::collections::HashMap<nk_wayland::TokenRequest, (u64, crate::cc::detail::Action)>,
     /// The output's logical height: the surface's while the Control Center is open.
     output_height: u32,
 }
@@ -335,6 +337,7 @@ impl Bar {
             nc_view: Default::default(),
             nc_generation: 0,
             cc_writer: None,
+            cc_tokens: Default::default(),
             output_height,
         }
     }
@@ -1185,6 +1188,42 @@ impl Bar {
         }
         self.nc_view_key(key, w);
     }
+    fn cc_act_from_input(&mut self, act: crate::cc::Act, serial: Option<u32>, w: &mut Window) {
+        if let crate::cc::Act::Detail(action) = &act
+            && action.connects()
+            && let Some(serial) = serial
+            && let Ok(request) =
+                w.request_activation_token(serial, Some(nk_platform::SESSION_PROMPT_APP_ID))
+        {
+            self.cc_tokens
+                .insert(request, (self.cc.view_id(), action.clone()));
+        } else {
+            self.act(act, w);
+        }
+    }
+
+    fn cc_token(
+        &mut self,
+        request: nk_wayland::TokenRequest,
+        token: Option<nk_wayland::ActivationToken>,
+        w: &mut Window,
+    ) -> bool {
+        let Some((view, action)) = self.cc_tokens.remove(&request) else {
+            return false;
+        };
+        if self.cc_open && view == self.cc.view_id() && !self.frame.locked {
+            let action = match token {
+                Some(token) => crate::cc::detail::Action::WithActivation {
+                    action: Box::new(action),
+                    token,
+                },
+                None => action,
+            };
+            self.act(crate::cc::Act::Detail(action), w);
+        }
+        true
+    }
+
     /// A Control Center act, to its service off the bar's thread.
     fn act(&mut self, act: crate::cc::Act, w: &mut Window) {
         match act {
@@ -2141,7 +2180,7 @@ impl Application for Bar {
                     w.redraw();
                 } else if self.cc_open && self.cc.contains(p) {
                     if let Some(act) = self.cc.press(p, &self.frame.status) {
-                        self.act(act, w);
+                        self.cc_act_from_input(act, Some(serial), w);
                     }
                     self.refresh(w);
                 } else if let Some(item) = self.item_at(p) {
@@ -2196,7 +2235,7 @@ impl Application for Bar {
                 }
                 let (released, act) = self.cc.release(&self.frame.status);
                 if let Some(act) = act {
-                    self.act(act, w);
+                    self.cc_act_from_input(act, Some(serial), w);
                 }
                 if released || editing || self.cc.editor.active {
                     // A rejected/outside drop has no Act but must still restore its layers.
@@ -2249,7 +2288,7 @@ impl Application for Bar {
             }
             Event::Key(key) if self.cc_open => {
                 if let Some(act) = self.cc.key(&key, &self.frame.status) {
-                    self.act(act, w);
+                    self.cc_act_from_input(act, key.serial, w);
                 }
                 self.refresh(w);
             }
@@ -2320,6 +2359,10 @@ impl Application for Bar {
                 }
             }
             Event::ActivationToken { request, token } => {
+                if self.cc_tokens.contains_key(&request) {
+                    self.cc_token(request, Some(token), w);
+                    return Ok(());
+                }
                 if self.card_pending.as_ref().is_some_and(|p| p.0 == request) {
                     let (_, instance, content, key) = self.card_pending.take().unwrap();
                     self.card_send(instance, content, Some(key), Some(token.into_string()));
@@ -2334,6 +2377,9 @@ impl Application for Bar {
                 }
             }
             Event::ActivationTokenFailed { request, reason } => {
+                if self.cc_token(request, None, w) {
+                    return Ok(());
+                }
                 if self.card_pending.as_ref().is_some_and(|p| p.0 == request) {
                     let (_, instance, content, _) = self.card_pending.take().unwrap();
                     self.card_error(instance, content, "Could not activate. Try again.");

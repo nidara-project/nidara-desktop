@@ -77,13 +77,24 @@ impl Client {
         })
     }
 
-    fn call(&self, snapshot: &Snapshot, lane: &'static str, sequence: u64, operation: Call) {
+    fn call(
+        &self,
+        snapshot: &Snapshot,
+        lane: &'static str,
+        sequence: u64,
+        operation: Call,
+        activation: Option<nk_wayland::ActivationToken>,
+    ) {
         let conn = self.conn.clone();
         let send = self.send.clone();
         let owner = snapshot.owner.clone();
         let epoch = snapshot.epoch;
         std::thread::spawn(move || {
-            let result = operation.send(&conn, &owner);
+            let result = operation.send(
+                &conn,
+                &owner,
+                activation.as_ref().map(|token| token.as_str()),
+            );
             let _ = send.send(Reply {
                 owner,
                 epoch,
@@ -117,7 +128,12 @@ enum Call {
 }
 
 impl Call {
-    fn send(self, conn: &Connection, owner: &str) -> Result<Option<Form>, String> {
+    fn send(
+        self,
+        conn: &Connection,
+        owner: &str,
+        activation: Option<&str>,
+    ) -> Result<Option<Form>, String> {
         if network::owner(conn)? != owner {
             return Err("Network1 owner changed".into());
         }
@@ -126,7 +142,29 @@ impl Call {
         }
         let dest = Some(owner);
         let iface = Some(IFACE);
+        let token = activation.unwrap_or("");
         let reply = match &self {
+            Self::Connect(device, ap, uuid) if !token.is_empty() => conn.call_method(
+                dest,
+                PATH,
+                iface,
+                "ConnectDefaultWithActivation",
+                &(path(device)?, path(ap)?, uuid, token),
+            ),
+            Self::ConnectProfile(device, ap, profile) if !token.is_empty() => conn.call_method(
+                dest,
+                PATH,
+                iface,
+                "ConnectProfileWithActivation",
+                &(path(device)?, path(ap)?, profile, token),
+            ),
+            Self::Activate(uuid, device) if !token.is_empty() => conn.call_method(
+                dest,
+                PATH,
+                iface,
+                "ActivateWithActivation",
+                &(uuid, path(device)?, token),
+            ),
             Self::Wifi(on) => conn.call_method(dest, PATH, iface, "SetWifiEnabled", &(on,)),
             Self::Scan(device) => conn.call_method(dest, PATH, iface, "Scan", &(path(device)?,)),
             Self::Connect(device, ap, uuid) => conn.call_method(
@@ -349,13 +387,22 @@ impl Network {
     }
 
     fn request(&mut self, lane: &'static str, call: Call) -> bool {
+        self.request_with_activation(lane, call, None)
+    }
+
+    fn request_with_activation(
+        &mut self,
+        lane: &'static str,
+        call: Call,
+        activation: Option<nk_wayland::ActivationToken>,
+    ) -> bool {
         if let (Some(snapshot), Some(client)) = (&self.snapshot, &self.client)
             && !self.pending.contains_key(lane)
         {
             self.sequence += 1;
             self.pending.insert(lane, self.sequence);
             self.error = None;
-            client.call(snapshot, lane, self.sequence, call);
+            client.call(snapshot, lane, self.sequence, call, activation);
             true
         } else {
             false
@@ -407,7 +454,20 @@ impl Network {
         }
     }
 
-    pub fn activate(&mut self, activated: &Activated, e: &Exports) -> bool {
+    pub fn may_prompt(action: &Activated) -> bool {
+        action
+            .action
+            .strip_prefix(PREFIX)
+            .and_then(|text| text.split('|').nth(2))
+            .is_some_and(|verb| matches!(verb, "connect" | "activate" | "join-apply"))
+    }
+
+    pub fn activate(
+        &mut self,
+        activated: &Activated,
+        e: &Exports,
+        activation: Option<nk_wayland::ActivationToken>,
+    ) -> bool {
         let Some(action) = activated.action.strip_prefix(PREFIX) else {
             return false;
         };
@@ -450,7 +510,7 @@ impl Network {
                     if let Some(profile) = join.profile() {
                         let operation =
                             Call::ConnectProfile(join.device.clone(), join.ap.clone(), profile);
-                        let busy = self.request("join", operation);
+                        let busy = self.request_with_activation("join", operation, activation);
                         if let Some(join) = &mut self.join {
                             join.busy = busy;
                         }
@@ -568,7 +628,7 @@ impl Network {
             _ => None,
         };
         if let Some((lane, command)) = command {
-            self.request(lane, command);
+            self.request_with_activation(lane, command, activation);
         }
         true
     }

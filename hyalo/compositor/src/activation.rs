@@ -105,7 +105,10 @@ impl XdgActivationHandler for Hyalo {
     }
 
     fn request_activation(&mut self, token: XdgActivationToken, token_data: XdgActivationTokenData, surface: WlSurface) {
-        let Some((id, mapped, x11)) = self.wm.by_surface(&surface).map(|m| (m.id, m.mapped, m.window.x11_surface().is_some())) else { return };
+        let Some((id, mapped, x11, system_dialog)) = self.wm.by_surface(&surface).map(|m| (m.id, m.mapped, m.window.x11_surface().is_some(), m.system_dialog)) else { return };
+        if system_dialog && (self.lock.is_locked() || token_data.app_id.as_deref() != Some("nidara-session-prompt")) {
+            return;
+        }
         use smithay::reexports::wayland_server::Resource;
         let Ok(client) = self.display_handle.get_client(surface.id()) else { return };
         // An inherited token in a child's different Wayland connection is no evidence

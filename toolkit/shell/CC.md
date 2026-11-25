@@ -166,11 +166,18 @@ before registration and is renewed on service replacement. Replies target the un
 owner and request ID (plus the Bluetooth epoch). The dialog lane stays separate from
 the Connect writer and the compositor's input thread.
 
-One shell overlay displays the first live request. Its controls use AppWindow and
+One standalone Wayland toplevel displays the first live request. It uses AppWindow and
 the kit's PasswordEntry. Wi-Fi metadata chooses allowlisted PSK, WEP or enterprise
 secret fields. Bluetooth supports PIN and passkey entry, code confirmation and
 display (with progress), connection authorization and incoming file consent.
 For incoming files the dialog shows the peer, filename and size or unknown size.
+
+The authenticated shell's `nidara-session-prompt` toplevel is centred by Hyalo and
+stacked above fullscreen windows. The close control is compositor-rendered. A
+request without a valid Wayland activation token marks the window as demanding
+attention and leaves the current keyboard focus in place. Connect and Pair
+initiators can route a token for this app-id through the service; a bare request
+carries no token. Esc and the close control both cancel the request.
 
 The service withdraws the dialog on its close signal or owner loss. Lock removes
 the surface and its input state. If the original request is still pending on
@@ -181,6 +188,8 @@ registration or a pending request.
 
 Run `NK_SESSION_PROMPTS_ONLY=1 toolkit/shell/check-cc-headless.sh` for the
 private-bus prompt check, including Wi-Fi owner replacement and Bluetooth progress.
+With an authenticated shell and matching Hyalo, `NK_SESSION_PROMPT_TRUSTED=1`
+also asserts the compositor's initial attention state.
 
 ### Screenshot and recording
 

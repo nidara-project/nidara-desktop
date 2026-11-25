@@ -792,8 +792,11 @@ belong only to their issuing view; slider writes coalesce per destination.
 The shell holds Network1 and Bluetooth1 prompt registrations for the session.
 `prompts/` subscribes before registering with each unique service owner and answers
 only its current ticket, on a worker separate from the view and Connect.
-Both services use one overlay with kit components. AppWindow's standalone dialog
-mode supplies focus, reader, IME and clipboard handling without window navigation.
+Both services use one AppWindow toplevel with kit components. Hyalo authenticates
+the Rust shell before granting the prompt centred placement above fullscreen and
+attention-only mapping. Input initiators use a real xdg-activation token carried
+through the operation; the compositor alone decides keyboard activation.
+AppWindow supplies reader, IME and clipboard routing without window navigation.
 Lock drops the surface and input state; a pending request is rebuilt empty on
 unlock. Never put a password in Debug, accessibility text or IME surrounding text.
 The capture controller owns its recorder child, signals only that child and preserves

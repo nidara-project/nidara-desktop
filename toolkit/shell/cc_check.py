@@ -18,7 +18,7 @@ password='privatepassword'
 def args(*types,direction='in'):
     return ''.join('<arg type="'+t+'" direction="'+direction+'"/>' for t in types)
 methods={'Snapshot':('',args('t','t','s',direction='out')),'SetWifiEnabled':(args('b'),''),'Scan':(args('o'),''),
-'ConnectDefault':(args('o','o','s'),args('o',direction='out')),'Disconnect':(args('o'),''),'Activate':(args('s','o'),args('o',direction='out')),
+'ConnectDefault':(args('o','o','s'),args('o',direction='out')),'ConnectDefaultWithActivation':(args('o','o','s','s'),args('o',direction='out')),'Disconnect':(args('o'),''),'Activate':(args('s','o'),args('o',direction='out')),
 'RegisterSecretsUi':('',''),'SubmitSecrets':(args('t','a{sa{sv}}'),''),'CancelSecrets':(args('t'),'')}
 xml='<node><interface name="org.nidara.Network1">'+''.join('<method name="'+k+'">'+a+b+'</method>' for k,(a,b) in methods.items())+('<signal name="Updated">'+args('t','t','s',direction='out')+'</signal><signal name="SecretsRequested">'+args('t','s',direction='out')+'</signal><signal name="SecretsClosed">'+args('t','s',direction='out')+'</signal></interface></node>')
 state={'revision':1,'strength':90,'enabled':True,'active':'/ap/1','ui':None,'pending':None,'id':0}
@@ -40,11 +40,12 @@ def answer(conn,sender,path,iface,method,params,inv):
     if method=='Snapshot':inv.return_value(GLib.Variant('(tts)',(1,state['revision'],doc())));return
     if method=='RegisterSecretsUi':
         state['ui']=sender;record(method,[]);inv.return_value(None);return
-    if method=='ConnectDefault':
-        record(method,list(p))
+    if method in ('ConnectDefault','ConnectDefaultWithActivation'):
+        record(method,list(p[:3]))
         if p[1]=='/ap/secure':
             state['id']+=1;state['pending']=(state['id'],inv)
             meta={'setting':'802-11-wireless-security','hints':['psk'],'name':'Secure test','profile':{'802-11-wireless-security':{'key-mgmt':'wpa-psk'}}}
+            if method=='ConnectDefaultWithActivation':meta['activationToken']=p[3]
             bus.emit_signal(state['ui'],path,iface,'SecretsRequested',GLib.Variant('(ts)',(state['id'],json.dumps(meta))))
         else:state['active']=p[1];updated();inv.return_value(GLib.Variant('(o)',('/activation/1',)))
         return
@@ -92,13 +93,26 @@ def prompt_nodes(ctx, title):
 def prompt_button(ctx, title, name):
     return next((n for n in prompt_nodes(ctx, title) if n.get_name() == name
                  and n.get_role_name() == 'button'), None)
+def prompt_window(ctx, title):
+    windows = ctx['ipc']('windows').get('ok', {}).get('windows', [])
+    return next((window for window in windows if window['app_id'] == 'nidara-session-prompt'
+                 and window['title'] == title), None)
+
+
+def focus_prompt(ctx, pipe, title):
+    from gi.repository import Atspi
+    window = ctx['until']('session prompt toplevel', lambda: prompt_window(ctx, title))
+    if not window['focused']:
+        pipe.write(f'click {window["x"] + window["width"] // 2} {window["y"] + 24}\n')
+    return ctx['until']('keyboard focus on the dialog',
+        lambda: (dialog := ctx['dock_node'](title)) and dialog.get_state_set().contains(Atspi.StateType.ACTIVE))
+
+
 def respond_wifi(ctx, pipe):
     from gi.repository import Atspi
     until = ctx['until']
     title = 'Wi-Fi authentication'
-    until('Wi-Fi dialog has keyboard focus',
-          lambda: (dialog := ctx['dock_node'](title)) and
-          dialog.get_state_set().contains(Atspi.StateType.ACTIVE))
+    focus_prompt(ctx, pipe, title)
     password = until('focused native password question',
         lambda: next((n for n in prompt_nodes(ctx, title)
                       if n.get_role_name() == 'password text'
@@ -137,7 +151,11 @@ def run_prompts(ctx):
         caller = ctx['start']('external-wifi', connect)
         # While Wi-Fi is active, Bluetooth queues on the same surface.
         until('Bluetooth renderer registered', lambda: bt_actions.exists() and 'RegisterUi' in bt_actions.read_text())
-        until('external Wi-Fi dialog', lambda: ctx['dock_node']('Wi-Fi authentication'))
+        wifi = until('external Wi-Fi dialog window', lambda: prompt_window(ctx, 'Wi-Fi authentication'))
+        assert all(layer['namespace'] != 'nidara-session-prompt'
+                   for layer in ctx['ipc']('layers').get('ok', {}).get('layers', []))
+        if os.environ.get('NK_SESSION_PROMPT_TRUSTED') == '1':
+            assert wifi['floating'] and wifi['demands_attention'] and not wifi['focused'], wifi
         trigger = bt_actions.with_name('bluetooth-prompt')
         trigger.write_text('file')
         until('queued Bluetooth request signalled', lambda: not trigger.exists())
@@ -164,9 +182,7 @@ def run_prompts(ctx):
         until('display withdrawn', lambda: ctx['dock_node']('Bluetooth') is None)
         trigger.write_text('confirm')
         until('Bluetooth confirmation code', lambda: any(n.get_name() == '000042' for n in prompt_nodes(ctx, 'Bluetooth')))
-        until('keyboard focus on Bluetooth confirmation',
-              lambda: (dialog := ctx['dock_node']('Bluetooth')) and
-              dialog.get_state_set().contains(Atspi.StateType.ACTIVE))
+        focus_prompt(ctx, pipe, 'Bluetooth')
         pipe.write('key 15\n')
         until('Reject has keyboard focus',
               lambda: (button := prompt_button(ctx, 'Bluetooth', 'Reject')) and
@@ -188,9 +204,7 @@ def run_prompts(ctx):
         until('Wi-Fi renderer registered with the replacement', lambda:
               sum(1 for method, _ in actions() if method == 'RegisterSecretsUi') == 2)
         caller = ctx['start']('wifi-after-replacement', connect)
-        until('keyboard focus on the replacement prompt',
-              lambda: (dialog := ctx['dock_node'](title)) and
-              dialog.get_state_set().contains(Atspi.StateType.ACTIVE))
+        focus_prompt(ctx, pipe, title)
         pipe.write('key 1\n')
         until('Cancel reached the replacement', lambda: ['CancelSecrets', [1]] in actions())
         until('replacement dialog withdrawn', lambda: ctx['dock_node'](title) is None)

@@ -10,8 +10,7 @@ use nk::{
 use nk_platform::{exports::Exports, portal::Portal};
 use nk_text::{FontSet, ParleyBackend};
 use nk_wayland::{
-    Application, Edges, Event as Wayland, Frame, KeyboardMode, LayerLevel, LayerPlacement,
-    LayerSpec, Material, Options, Result, WakeSource, Waker, Window,
+    Application, ControlsButtons, Event as Wayland, Frame, Material, Options, Result, Window,
 };
 use serde_json::Value as Json;
 use std::{
@@ -20,7 +19,7 @@ use std::{
 };
 use zbus::blocking::Connection;
 
-const NAMESPACE: &str = "nidara-session-prompt";
+use nk_platform::SESSION_PROMPT_APP_ID;
 
 pub(super) enum Change {
     Metadata(Json),
@@ -33,14 +32,11 @@ pub(super) struct Running {
     pub ticket: Ticket,
     pub stopping: bool,
     input: mpsc::Sender<Change>,
-    wake: Waker,
 }
 
 impl Running {
     pub fn send(&self, change: Change) {
-        if self.input.send(change).is_ok() {
-            let _ = self.wake.wake();
-        }
+        let _ = self.input.send(change);
     }
 
     pub fn stop(&mut self) {
@@ -62,7 +58,6 @@ pub(super) fn start(
     output: &mpsc::Sender<Event>,
 ) -> Option<Running> {
     let (tx, rx) = mpsc::channel();
-    let (wake, source) = nk_wayland::wake_channel().ok()?;
     let ticket = request.ticket.clone();
     let meta = request.meta.clone();
     let events = output.clone();
@@ -70,15 +65,7 @@ pub(super) fn start(
     std::thread::Builder::new()
         .name("session-prompt".into())
         .spawn(move || {
-            let result = run(
-                serial,
-                target.clone(),
-                &meta,
-                bus,
-                rx,
-                events.clone(),
-                source,
-            );
+            let result = run(serial, target.clone(), &meta, bus, rx, events.clone());
             if let Err(error) = result {
                 eprintln!("nidara-shell: could not show the session prompt: {error}");
             }
@@ -90,7 +77,6 @@ pub(super) fn start(
         ticket,
         stopping: false,
         input: tx,
-        wake,
     })
 }
 
@@ -254,7 +240,14 @@ impl Body {
         }
     }
 
-    fn page(&self, host: &AppWindow, exports: &Exports, busy: bool, failed: bool) -> Page {
+    fn page(
+        &self,
+        host: &AppWindow,
+        exports: &Exports,
+        busy: bool,
+        failed: bool,
+        controls: Option<nk_wayland::ControlsLayout>,
+    ) -> Page {
         let text = |key: &str| exports.text(key).unwrap_or("").to_owned();
         let types = &host.look().types;
         let body = types.style(Type::Body, Weight::Regular);
@@ -379,15 +372,27 @@ impl Body {
             );
         }
         let title = text(self.title());
+        let mut header = vec![
+            Label::new(
+                "title",
+                title.clone(),
+                types.style(Type::Subtitle, Weight::Semibold),
+            )
+            .grow()
+            .into(),
+        ];
+        if let Some(controls) = controls {
+            let index = if controls.side == nk_wayland::ControlsSide::Left {
+                0
+            } else {
+                1
+            };
+            header.insert(index, nk::Slot::new("controls/room", controls.width).into());
+        }
         let content = Column::new(
             "layout",
             vec![
-                Label::new(
-                    "title",
-                    title.clone(),
-                    types.style(Type::Subtitle, Weight::Semibold),
-                )
-                .into(),
+                Row::new("header", header).gap(Space::S2).into(),
                 Scroll::new(
                     "fields",
                     Column::new("prompt/fields", fields).gap(Space::S3),
@@ -424,14 +429,19 @@ struct Prompt {
     busy: bool,
     failed: bool,
     initial_focus: bool,
+    activation: Option<String>,
+    controls: Option<nk_wayland::ControlsLayout>,
 }
 
 impl Prompt {
     fn show(&mut self) {
-        self.host.show(
-            self.body
-                .page(&self.host, &self.exports, self.busy, self.failed),
-        );
+        self.host.show(self.body.page(
+            &self.host,
+            &self.exports,
+            self.busy,
+            self.failed,
+            self.controls,
+        ));
     }
 
     fn changes(&mut self, window: &mut Window) -> Result<()> {
@@ -513,12 +523,20 @@ impl Prompt {
 
     fn commit(&mut self, window: &mut Window) -> Result<()> {
         self.host.commit(window, |host| {
-            self.body.page(host, &self.exports, self.busy, self.failed)
+            self.body
+                .page(host, &self.exports, self.busy, self.failed, self.controls)
         })
     }
 }
 
 impl Application for Prompt {
+    fn window_controls(&self) -> bool {
+        true
+    }
+    fn window_control_buttons(&self) -> ControlsButtons {
+        ControlsButtons::Close
+    }
+
     fn poll_interval_ms(&self) -> u32 {
         self.host.poll_interval_ms()
     }
@@ -526,6 +544,11 @@ impl Application for Prompt {
     fn idle(&mut self, window: &mut Window) -> Result<()> {
         self.changes(window)?;
         if !window.is_closed() {
+            if window.commits() > 1
+                && let Some(token) = self.activation.take()
+            {
+                let _ = window.activate(token);
+            }
             let actions = self.host.idle()?;
             self.actions(actions);
             self.commit(window)?;
@@ -538,7 +561,17 @@ impl Application for Prompt {
         if window.is_closed() || matches!(event, Wayland::Closed) {
             return Ok(());
         }
+        if matches!(event, Wayland::Configure) {
+            window.set_title(self.exports.text(self.body.title())?)?;
+        }
+        let gets_focus = matches!(event, Wayland::Focus(true));
         match event {
+            Wayland::CloseRequested => self.answer(Answer::Cancel),
+            Wayland::ControlsLayout(controls) => {
+                self.controls = Some(controls);
+                self.host.event(Wayland::ControlsLayout(controls), window)?;
+                self.show();
+            }
             Wayland::Key(ref key) if key.sym == 0xff1b => self.answer(Answer::Cancel),
             Wayland::Key(ref key) if matches!(key.sym, 0xff0d | 0xff8d) => {
                 if let Some((handled, actions)) = self.host.dialog_enter(key) {
@@ -553,7 +586,7 @@ impl Application for Prompt {
                 self.actions(actions);
             }
         }
-        if self.initial_focus && window.size().0 > 0 {
+        if self.initial_focus && gets_focus {
             if self.body.has_input() {
                 self.host.focus_first_under("prompt/fields");
             }
@@ -578,7 +611,6 @@ fn run(
     bus: Connection,
     input: mpsc::Receiver<Change>,
     events: mpsc::Sender<Event>,
-    wake: WakeSource,
 ) -> Result<()> {
     let body = Body::new(ticket.service, meta).ok_or("unsupported session prompt")?;
     let exports = Exports::load(&Exports::root())?;
@@ -618,32 +650,24 @@ fn run(
         busy: false,
         failed: false,
         initial_focus: true,
+        controls: None,
+        activation: meta["activationToken"]
+            .as_str()
+            .filter(|t| !t.is_empty())
+            .map(str::to_owned),
     };
     app.show();
     let size = (440, 385);
-    nk_wayland::run_layer(
+    nk_wayland::run(
         app,
         Options {
             material: true,
             map: true,
-            app_id: NAMESPACE,
-            title: "",
+            app_id: SESSION_PROMPT_APP_ID,
+            title: "Session prompt",
             size,
             require_material: None,
         },
-        LayerSpec {
-            namespace: NAMESPACE,
-            output: None,
-            layer: LayerLevel::Overlay,
-            placement: LayerPlacement {
-                anchor: Edges::empty(),
-                size,
-                exclusive_zone: -1,
-                margin: [0; 4],
-                keyboard: KeyboardMode::Exclusive,
-            },
-        },
-        Some(wake),
         Instant::now(),
     )
 }

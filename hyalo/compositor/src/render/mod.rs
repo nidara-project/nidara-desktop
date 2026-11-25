@@ -393,22 +393,19 @@ impl<'a> Scene<'a> {
     }
 }
 
-/// The windows shown on `output`, front to back, split where top layers go between them: a
-/// fullscreen window covers the bar, so it — and anything stacked above it, like a special
-/// workspace — is drawn over the top layers; every other window under them.
+/// The windows shown on the output, front to back, split around the top layers.
 pub fn windows_front_to_back(space: &Space<Window>, wm: &crate::wm::Wm, output: &Output) -> (Vec<Window>, Vec<Window>) {
-    let all: Vec<Window> = space.elements_for_output(output).rev().cloned().collect();
-    let fullscreen = all.iter().position(|w| {
+    let mut all: Vec<Window> = space.elements_for_output(output).rev().cloned().collect();
+    // Fullscreen also lifts windows stacked in a special workspace above it.
+    // A system dialog owns its place over the shell chrome on either kind of workspace.
+    let split = all.iter().position(|w| {
         wm.by_window(w).is_some_and(|m| m.fullscreen == crate::wm::Fullscreen::Fullscreen)
-    });
-    match fullscreen {
-        Some(i) => {
-            let mut above = all;
-            let below = above.split_off(i + 1);
-            (above, below)
-        }
-        None => (Vec::new(), all),
-    }
+    }).map_or_else(
+        || all.iter().take_while(|w| wm.by_window(w).is_some_and(|m| m.system_dialog)).count(),
+        |fullscreen| fullscreen + 1,
+    );
+    let below = all.split_off(split);
+    (all, below)
 }
 
 /// Everything on `output`, front to back.
