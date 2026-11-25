@@ -114,11 +114,13 @@ def respond_wifi(ctx, pipe):
 
 
 def run_prompts(ctx):
+    from gi.repository import Atspi
     until, run_dir, log = ctx['until'], ctx['RUN'], ctx['LOG']
     signal = run_dir / 'wifi-strength'
     signal.write_text('90')
     bt_actions = log / 'bluetooth-actions.jsonl'
-    ctx['start']('network', ['python3','-I','-c',NETWORK,str(signal)])
+    network_args = ['python3', '-I', '-c', NETWORK, str(signal)]
+    network = ctx['start']('network', network_args)
     ctx['start']('bluetooth', ['python3','-I','-c',BLUETOOTH,str(bt_actions)])
     def actions():
         return network_actions(log)
@@ -126,9 +128,10 @@ def run_prompts(ctx):
     with open(os.environ['HYALO_CONTROL'], 'w', buffering=1) as pipe:
         # Network1's issuer is independent of the control-center panel.
         before = sum(1 for method, _ in actions() if method == 'SubmitSecrets')
-        caller = ctx['start']('external-wifi', ['busctl', '--user', 'call',
-            'org.nidara.Network', '/org/nidara/Network', 'org.nidara.Network1',
-            'ConnectDefault', 'oos', '/device/wifi', '/ap/secure', ''])
+        connect = ['busctl', '--user', 'call', 'org.nidara.Network',
+            '/org/nidara/Network', 'org.nidara.Network1', 'ConnectDefault',
+            'oos', '/device/wifi', '/ap/secure', '']
+        caller = ctx['start']('external-wifi', connect)
         # While Wi-Fi is active, Bluetooth queues on the same surface.
         until('Bluetooth renderer registered', lambda: bt_actions.exists() and 'RegisterUi' in bt_actions.read_text())
         until('external Wi-Fi dialog', lambda: ctx['dock_node']('Wi-Fi authentication'))
@@ -156,8 +159,27 @@ def run_prompts(ctx):
         until('Bluetooth cancelled display at the service', lambda: ['CancelRequest', [7, 13]] in
               [json.loads(line) for line in bt_actions.read_text().splitlines()])
         until('display withdrawn', lambda: ctx['dock_node']('Bluetooth') is None)
+        # Owner loss must withdraw a live form, and the shell must register
+        # with the replacement without opening a bar detail.
+        title = 'Wi-Fi authentication'
+        caller = ctx['start']('wifi-before-replacement', connect)
+        until('prompt before owner loss', lambda: ctx['dock_node'](title))
+        network.terminate()
+        network.wait(timeout=5)
+        until('Wi-Fi dialog withdrawn on owner loss', lambda: ctx['dock_node'](title) is None)
+        until('request failed with its old owner', lambda: (code := caller.poll()) is not None and code != 0)
+        ctx['start']('network-replacement', network_args)
+        until('Wi-Fi renderer registered with the replacement', lambda:
+              sum(1 for method, _ in actions() if method == 'RegisterSecretsUi') == 2)
+        caller = ctx['start']('wifi-after-replacement', connect)
+        until('keyboard focus on the replacement prompt',
+              lambda: (dialog := ctx['dock_node'](title)) and
+              dialog.get_state_set().contains(Atspi.StateType.ACTIVE))
+        pipe.write('key 1\n')
+        until('Cancel reached the replacement', lambda: ['CancelSecrets', [1]] in actions())
+        until('replacement dialog withdrawn', lambda: ctx['dock_node'](title) is None)
     assert 'privatepassword' not in (log/'shell.log').read_text()
-    print('PASS session prompts: Wi-Fi outside CC, masked password, queued Bluetooth file consent and passkey updates', flush=True)
+    print('PASS session prompts: Wi-Fi outside CC, masked password, queued Bluetooth consent, passkey updates and owner replacement', flush=True)
 
 
 def run(ctx):

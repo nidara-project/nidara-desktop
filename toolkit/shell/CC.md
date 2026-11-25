@@ -178,6 +178,9 @@ unlock, the shell builds it with empty inputs. Escape or the Cancel button sends
 the appropriate service cancellation. Leaving the Control Center does not affect
 registration or a pending request.
 
+Run `NK_SESSION_PROMPTS_ONLY=1 toolkit/shell/check-cc-headless.sh` for the
+private-bus prompt check, including Wi-Fi owner replacement and Bluetooth progress.
+
 ### Screenshot and recording
 
 Screenshot chooses area/screen/window and Save/Copy. It closes the panel before
