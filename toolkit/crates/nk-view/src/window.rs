@@ -173,7 +173,7 @@ impl Convergence {
 pub(crate) fn retain_rebuilds(state: &ViewState, requests: &mut Vec<ReplyTarget>) -> bool {
     let mut live = Vec::new();
     for target in std::mem::take(requests) {
-        if state.retained_target(&target) && !live.contains(&target) {
+        if state.pending_rebuild(&target) && !live.contains(&target) {
             live.push(target);
         }
     }
@@ -183,6 +183,7 @@ pub(crate) fn retain_rebuilds(state: &ViewState, requests: &mut Vec<ReplyTarget>
 
 pub struct AppWindow {
     modal_frame: Option<dialog::ModalFrame>,
+    standalone_dialog: bool,
     page_fills_window: bool,
     suspended: bool,
     active: bool,
@@ -296,6 +297,7 @@ impl AppWindow {
         band.set_slides(false);
         Self {
             modal_frame: None,
+            standalone_dialog: false,
             page_fills_window: false,
             suspended: false,
             active: false,
@@ -370,6 +372,16 @@ impl AppWindow {
             m.dirty = true;
         }
     }
+    /// Use the page as a surface-level dialog, with no application navigation.
+    /// Set this before mapping. The caller owns the dialog's content and responses.
+    pub fn set_standalone_dialog(&mut self) {
+        self.standalone_dialog = true;
+    }
+
+    fn has_band(&self) -> bool {
+        self.modal_frame.is_none() && !self.standalone_dialog
+    }
+
     /// Give the page the window's available height. Its grow children can
     /// fill it, with any scrolling regions nested inside the page.
     pub fn set_page_fills_window(&mut self, fill: bool) {
@@ -444,6 +456,20 @@ impl AppWindow {
         let Some(page) = self.page.clone() else {
             return;
         };
+        if self.standalone_dialog {
+            self.state.set_slides(false);
+            self.state.layout(
+                &page.content,
+                self.size,
+                self.scale,
+                self.look.tokens.with_types(&self.look.types),
+                self.text.as_mut(),
+                now,
+            );
+            self.changed = true;
+            self.paint_dirty = true;
+            return;
+        }
         let f = &self.look.frame;
         let shown = self.sidebar.shown(now, &self.look.tokens.motion);
         let narrow = self.sidebar.narrow();
@@ -773,10 +799,7 @@ impl AppWindow {
                 let (w, h) = window.size();
                 self.size = (w as f64, h as f64);
                 self.scale = window.scale();
-                if self.modal_frame.is_none()
-                    && self.band_layer.is_none()
-                    && window.supports_layers()
-                {
+                if self.has_band() && self.band_layer.is_none() && window.supports_layers() {
                     // The blur first, so the band's buttons lie over it, and the sidebar
                     // last, over both. The blur takes no pointer.
                     let blur = window.create_layer((1, 1))?;
@@ -787,7 +810,7 @@ impl AppWindow {
                     // Only with a layer to draw it on: without (D5) the window paints it.
                     self.state.lift(Some(SIDE.into()));
                 }
-                if self.modal_frame.is_none() {
+                if self.has_band() {
                     self.sidebar.adapt(self.size.0, &self.look.frame);
                 }
                 self.lay(now);
@@ -1005,7 +1028,13 @@ impl AppWindow {
     }
 
     fn semantic_tree(&mut self, window: &Window) -> nk_a11y::Tree {
-        let mut root = nk_a11y::Node::new(ROOT, nk_a11y::Role::Window, self.name.clone());
+        let role = if self.standalone_dialog {
+            nk_a11y::Role::Dialog
+        } else {
+            nk_a11y::Role::Window
+        };
+        let mut root = nk_a11y::Node::new(ROOT, role, self.name.clone());
+        root.states.modal = self.standalone_dialog;
         root.bounds = nk_a11y::Bounds {
             x: 0.,
             y: 0.,
@@ -1572,6 +1601,7 @@ impl AppWindow {
             // No layers (D5): the sidebar is painted with the rest, its washes ours.
             self.last = self.state.frame(&self.look.tokens, now);
         }
+        let has_band = self.has_band();
         let glyphs = &mut self.glyphs;
         self.state.paint_with_glyphs(
             &mut c,
@@ -1580,7 +1610,7 @@ impl AppWindow {
             (!frame.material).then_some(&self.last),
             false,
         )?;
-        if self.modal_frame.is_none() && self.band_layer.is_none() {
+        if has_band && self.band_layer.is_none() {
             // No layers (D5): the band in the window itself, opaque, over the content.
             let f = &self.look.frame;
             let opaque = FrameStyle {
@@ -1602,7 +1632,7 @@ impl AppWindow {
         self.look.glass(&self.last)
     }
     pub fn window_background(&self) -> Option<WindowBackground> {
-        if self.modal_frame.is_some() {
+        if !self.has_band() {
             return None;
         }
         Some(WindowBackground {
