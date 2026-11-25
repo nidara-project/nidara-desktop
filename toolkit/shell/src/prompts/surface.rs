@@ -544,8 +544,7 @@ impl Application for Prompt {
     fn idle(&mut self, window: &mut Window) -> Result<()> {
         self.changes(window)?;
         if !window.is_closed() {
-            // The first buffer maps the toplevel. A second repaint may never be needed.
-            if window.commits() > 0
+            if window.commits() > 1
                 && let Some(token) = self.activation.take()
             {
                 let _ = window.activate(token);
