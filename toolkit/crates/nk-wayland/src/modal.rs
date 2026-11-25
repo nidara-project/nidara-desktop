@@ -12,6 +12,7 @@ fn parent_event(event: &Event) -> bool {
         Event::Configure
             | Event::PreferredScale(_)
             | Event::Closed
+            | Event::CloseRequested
             | Event::Focus(false)
             | Event::ControlsLayout(_)
             | Event::FrameDone
@@ -30,7 +31,7 @@ pub(super) fn pump_parent(parent: &mut Window, adapter: &mut dyn Application) ->
             return Err(error);
         }
         if parent_event(&event) {
-            let closed = matches!(event, Event::Closed);
+            let closed = matches!(event, Event::Closed | Event::CloseRequested);
             adapter.event(event, parent)?;
             parent.closed |= closed;
         }
@@ -57,6 +58,7 @@ mod tests {
         assert!(parent_event(&Event::FrameDone));
         assert!(parent_event(&Event::Focus(false)));
         assert!(parent_event(&Event::Closed));
+        assert!(parent_event(&Event::CloseRequested));
         for event in [
             Event::Focus(true),
             Event::Motion(3., 4.),
