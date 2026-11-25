@@ -17,5 +17,6 @@ pub mod clock;
 pub mod exports;
 pub mod font_description;
 pub mod material;
+pub mod network;
 pub mod portal;
 pub mod styles;

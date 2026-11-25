@@ -635,6 +635,28 @@ impl Entry {
     control_setters!();
 }
 widget!(
+    /// A single-line password field that publishes only a redacted application payload.
+    PasswordEntry
+);
+impl PasswordEntry {
+    pub fn new(key: impl Into<Key>, name: impl Into<String>, changed: impl Into<String>) -> Self {
+        let key = key.into();
+        let mut node = Node::control(
+            key.clone(),
+            name,
+            changed,
+            Node::spacer(format!("{}/body", key.0)),
+        )
+        .role(Role::Field);
+        if let Kind::Control(control) = &mut node.kind {
+            control.part = Some(Box::new(Part::Password(crate::components::PasswordEntry)));
+        }
+        Self(node)
+    }
+    control_setters!();
+}
+
+widget!(
     /// A time of day, hours and minutes (`NSDatePicker` in its hour-and-minute mode): one
     /// field, one Tab stop. Left and Right pick the part, Up and Down step it, digits type it.
     /// `changed` is reported on every change with "HH:MM" (24 h) as its value.

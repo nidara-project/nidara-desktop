@@ -396,6 +396,7 @@ fn page(id: &str, m: &Model, cat: &Catalogue, t: &TypeScale, k: &Measures) -> Ve
         // that still uses the old one.
         "entry" => {
             let mut nodes = entries(m, t);
+            nodes.push(nk::PasswordEntry::new("e/password", "Password", "noop").into());
             nodes.extend(fields(t));
             nodes
         }

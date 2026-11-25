@@ -2,6 +2,25 @@
 use super::*;
 use crate::{Placed, Role, TextCache};
 
+/// An application-only password payload. It cannot be serialized or printed.
+#[derive(Clone, PartialEq)]
+pub struct Secret(String);
+
+impl Secret {
+    pub(super) fn new(value: String) -> Self {
+        Self(value)
+    }
+    pub fn as_str(&self) -> &str {
+        &self.0
+    }
+}
+
+impl std::fmt::Debug for Secret {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str("Secret([redacted])")
+    }
+}
+
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub enum Value {
     Bool(bool),
@@ -14,6 +33,8 @@ pub enum Value {
         indices: std::collections::BTreeSet<usize>,
     },
     Text(String),
+    #[serde(skip)]
+    Secret(Secret),
 }
 impl Value {
     pub fn number(&self) -> Option<f64> {

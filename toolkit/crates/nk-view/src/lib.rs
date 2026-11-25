@@ -55,9 +55,9 @@ mod widgets;
 pub use widgets::{
     Arrangement, Button, CheckButton, Column, DropDown, Entry, Expander, Field, FieldState,
     FontButton, Grid, Group, Image, Label, ListBox, ListBoxOption, ListRow, ListView, MenuItem,
-    Overlay, Pane, Placeholder, Revealer, Row, Scroll, SearchEntry, Segmented, SidebarEntry,
-    SidebarList, Slider, SliderEnd, SliderRange, Slot, Spacer, Swatches, Switch, TimeField, Widget,
-    prelude,
+    Overlay, Pane, PasswordEntry, Placeholder, Revealer, Row, Scroll, SearchEntry, Segmented,
+    SidebarEntry, SidebarList, Slider, SliderEnd, SliderRange, Slot, Spacer, Swatches, Switch,
+    TimeField, Widget, prelude,
 };
 pub use window::{
     Alert, AppWindow, CONTENT, Dialog, DialogAnswer, DialogButton, DialogContent, DialogUpdate,
@@ -69,7 +69,7 @@ mod tests;
 
 pub use components::{ButtonAppearance, ComponentLook, Drawing, Part};
 
-pub use components::{Host, HostRequest, Value};
+pub use components::{Host, HostRequest, Secret, Value};
 
 #[cfg(test)]
 mod editable_tests;

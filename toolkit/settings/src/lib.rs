@@ -33,6 +33,7 @@ pub mod font_chooser;
 pub mod header;
 pub mod image_load;
 pub mod manifest;
+pub mod network;
 pub mod page;
 pub mod region;
 pub mod render;

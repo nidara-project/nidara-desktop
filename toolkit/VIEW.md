@@ -1405,6 +1405,16 @@ explicitly deferred risk). Default/destructive button paints use the exported `b
 primary/destructive records; ordinary button and shared focus recipes are preserved.
 
 
+### Password entry
+
+`nk::PasswordEntry` keeps the secret in retained state and lays out bullets.
+The input method receives the password hint and an empty surrounding text.
+The reader gets the password role and focus action. Paste replies are bound to
+the current control and revision. Copy and cut are unavailable. The app
+receives a `Value::Secret` when the value changes. This payload is redacted
+in Debug and excluded from serialization. The gallery's Text field page
+demonstrates the control.
+
 ### External data in an AppWindow choice context (#1103 7a)
 
 An application can call `AppWindow::cancel_menu()` when external data invalidates

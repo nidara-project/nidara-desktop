@@ -24,7 +24,9 @@ pub use slider_end::SliderRow;
 mod slider;
 pub use slider::SliderControl;
 mod field;
+mod password;
 pub use field::DisplayField;
+pub(crate) use password::PasswordEntry;
 mod time_field;
 pub use time_field::{TimeField, parse_time};
 mod dropdown;
@@ -320,6 +322,7 @@ pub enum Part {
     MenuRow(MenuRow),
     Disclosure(Disclosure),
     Editable(EditableField),
+    Password(PasswordEntry),
     Time(TimeField),
     Search(Search),
     SearchClear(Clear),
@@ -356,6 +359,7 @@ impl Part {
             Self::MenuRow(c) => c,
             Self::Disclosure(c) => c,
             Self::Editable(c) => c,
+            Self::Password(c) => c,
             Self::Time(c) => c,
             Self::Search(c) => c,
             Self::SearchClear(c) => c,

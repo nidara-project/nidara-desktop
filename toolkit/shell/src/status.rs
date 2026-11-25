@@ -19,9 +19,6 @@ use zbus::message::Type;
 use zbus::zvariant::{OwnedObjectPath, OwnedValue};
 
 pub(crate) const SESSION: &str = "org.nidara.Session";
-const NETWORK: &str = "org.nidara.Network";
-const NETWORK_PATH: &str = "/org/nidara/Network";
-const NETWORK_IFACE: &str = "org.nidara.Network1";
 const POWER_PATH: &str = "/org/nidara/Power";
 const BRIGHTNESS_PATH: &str = "/org/nidara/DisplayBrightness";
 const BRIGHTNESS_IFACE: &str = "org.nidara.DisplayBrightness1";
@@ -31,16 +28,8 @@ const BLUETOOTH_IFACE: &str = "org.nidara.Bluetooth1";
 pub(crate) const MEDIA_PATH: &str = "/org/nidara/Media";
 pub(crate) const MEDIA_IFACE: &str = "org.nidara.Media1";
 
-#[derive(Clone, Copy, Debug, PartialEq)]
-pub enum Wifi {
-    Off,
-    /// Joining a network.
-    Connecting,
-    /// On a network, its signal in 0–3 arcs.
-    Connected(u8),
-    /// On, on no network.
-    Disconnected,
-}
+pub use nk_platform::network::Wifi;
+use nk_platform::network::{wifi_name, wifi_of};
 
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct Volume {
@@ -231,70 +220,6 @@ impl Status {
     }
 }
 
-/// Signal strength (0–100) as arcs: GNOME's thresholds on our four glyphs.
-pub fn signal_level(strength: u64) -> u8 {
-    match strength {
-        80.. => 3,
-        55.. => 2,
-        30.. => 1,
-        _ => 0,
-    }
-}
-
-/// The Wi-Fi adapter's state from a Network1 snapshot: the one on a network if any, else
-/// the first. None without an adapter.
-pub fn wifi_of(snapshot: &Value) -> Option<Wifi> {
-    // NM_DEVICE_TYPE_WIFI; NM_DEVICE_STATE_PREPARE and _ACTIVATED.
-    const WIFI: u64 = 2;
-    const PREPARE: u64 = 40;
-    const ACTIVATED: u64 = 100;
-    let devices = snapshot["devices"].as_array()?;
-    let adapters: Vec<&Value> = devices
-        .iter()
-        .filter(|d| d["kind"].as_u64() == Some(WIFI))
-        .collect();
-    let device = adapters
-        .iter()
-        .find(|d| d["state"].as_u64() == Some(ACTIVATED))
-        .or(adapters.first())?;
-    if !snapshot["wirelessEnabled"].as_bool().unwrap_or(false) {
-        return Some(Wifi::Off);
-    }
-    let state = device["state"].as_u64().unwrap_or(0);
-    let active = device["activeAp"].as_str().unwrap_or("/");
-    let ap = device["accessPoints"]
-        .as_array()
-        .and_then(|aps| aps.iter().find(|a| a["path"].as_str() == Some(active)));
-    Some(match (state, ap) {
-        (ACTIVATED, Some(ap)) => {
-            Wifi::Connected(signal_level(ap["strength"].as_u64().unwrap_or(0)))
-        }
-        (s, _) if (PREPARE..ACTIVATED).contains(&s) => Wifi::Connecting,
-        _ => Wifi::Disconnected,
-    })
-}
-
-/// The network the Wi-Fi adapter is on or joining: its access point's name.
-pub fn wifi_name(snapshot: &Value) -> String {
-    const WIFI: u64 = 2;
-    let Some(devices) = snapshot["devices"].as_array() else {
-        return String::new();
-    };
-    devices
-        .iter()
-        .filter(|d| d["kind"].as_u64() == Some(WIFI))
-        .find_map(|d| {
-            let active = d["activeAp"].as_str()?;
-            d["accessPoints"]
-                .as_array()?
-                .iter()
-                .find(|a| a["path"].as_str() == Some(active))?["label"]
-                .as_str()
-                .map(str::to_string)
-        })
-        .unwrap_or_default()
-}
-
 /// DisplayBrightness1's device: id, output, provider, min, max, current, available,
 /// writable, epoch.
 pub type DeviceRecord = (String, String, String, u32, u32, u32, bool, bool, u64);
@@ -380,16 +305,30 @@ pub fn watch(conn: &Connection, emit: Sender<Update>) {
                 let _ = audio.send(Update::Volume(None));
             }
         });
-    let watchers: [(&str, Reader, Update, _); 5] = [
-        (
-            "network",
-            read_wifi,
-            Update::Wifi(None, String::new()),
-            vec![
-                signal(NETWORK, NETWORK_IFACE, "Updated", NETWORK_PATH, false),
-                owner(NETWORK),
-            ],
-        ),
+    let network = emit.clone();
+    let _ = std::thread::Builder::new()
+        .name("status-network".into())
+        .spawn(move || {
+            let result = Connection::session()
+                .map_err(|e| e.to_string())
+                .and_then(|conn| {
+                    nk_platform::network::watch(&conn, |snapshot| {
+                        network
+                            .send(snapshot.map_or_else(
+                                || Update::Wifi(None, String::new()),
+                                |snapshot| {
+                                    Update::Network(std::sync::Arc::new(snapshot.with_identity()))
+                                },
+                            ))
+                            .is_ok()
+                    })
+                });
+            if let Err(error) = result {
+                eprintln!("nidara-shell: cannot watch Network1: {error}");
+                let _ = network.send(Update::Wifi(None, String::new()));
+            }
+        });
+    let watchers: [(&str, Reader, Update, _); 4] = [
         (
             "power",
             read_battery,
@@ -609,28 +548,6 @@ fn service_owner(conn: &Connection, name: &str) -> Result<String, String> {
     .deserialize()
     .map_err(|e| e.to_string())
 }
-fn read_wifi(conn: &Connection) -> Result<Update, String> {
-    let owner = service_owner(conn, NETWORK)?;
-    let reply = conn
-        .call_method(
-            Some(owner.as_str()),
-            NETWORK_PATH,
-            Some(NETWORK_IFACE),
-            "Snapshot",
-            &(),
-        )
-        .map_err(|e| e.to_string())?;
-    let (epoch, _, json): (u64, u64, String) =
-        reply.body().deserialize().map_err(|e| e.to_string())?;
-    let mut snapshot: Value = serde_json::from_str(&json).map_err(|e| e.to_string())?;
-    if snapshot["schemaVersion"] != 1 {
-        return Err("unsupported service snapshot schema".into());
-    }
-    snapshot["_serviceOwner"] = Value::String(owner);
-    snapshot["_serviceEpoch"] = Value::from(epoch);
-    Ok(Update::Network(std::sync::Arc::new(snapshot)))
-}
-
 #[cfg(test)]
 fn read_volume(conn: &Connection) -> Result<Update, String> {
     nk_platform::audio::snapshot(conn).map(audio_update)
