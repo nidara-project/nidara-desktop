@@ -362,6 +362,12 @@ impl PairAgent {
         let metadata = json!({"kind":kind,"device":path.as_str(),"deviceName":super::files::safe_name(&label),"address":bus::text(&props,"Address"),"adapter":bus::text(&props,"Adapter")});
         Ok((props, metadata))
     }
+    fn activation(&self, peer: &Peer, device: &str, metadata: &mut Json) {
+        if let Some(token) = self.0.activation.take(&peer.owner, device) {
+            metadata["activationToken"] = token.into();
+        }
+    }
+
     async fn ask(
         &self,
         p: &Peer,
@@ -373,6 +379,7 @@ impl PairAgent {
         if let Some((k, v)) = extra {
             m[k] = v;
         }
+        self.activation(p, path, &mut m);
         Ok(self
             .0
             .broker
@@ -485,6 +492,7 @@ impl PairAgent {
         let p = self.peer(&h).await?;
         let (_, mut m) = self.metadata(&p, &device, "display-pin").await?;
         m["code"] = json!(pincode);
+        self.activation(&p, &device, &mut m);
         self.0.broker.display(&device, "display-pin", m).await?;
         Ok(())
     }
@@ -502,6 +510,7 @@ impl PairAgent {
         let (_, mut m) = self.metadata(&p, &device, "display-passkey").await?;
         m["code"] = json!(format!("{passkey:06}"));
         m["entered"] = json!(entered);
+        self.activation(&p, &device, &mut m);
         self.0.broker.display(&device, "display-passkey", m).await?;
         Ok(())
     }

@@ -134,8 +134,200 @@ impl Network {
             eprintln!("[network] could not remove failed new profile's secrets");
         }
     }
-    async fn activate_inner(&self, nm: &Nm, uuid: &str, device: &Path) -> Result<Path, Error> {
+    fn new_profile_activation(
+        &self,
+        nm: &Nm,
+        settings: &mut Settings,
+        token: Option<String>,
+    ) -> Result<Option<crate::prompt_activation::Operation>, Error> {
+        let mut uuid = text(settings.get("connection"), "uuid");
+        if uuid.is_empty() {
+            if token.is_none() {
+                return Ok(None);
+            }
+            uuid = glib::uuid_string_random().into();
+            settings
+                .entry("connection".into())
+                .or_default()
+                .insert("uuid".into(), owned(uuid.as_str()));
+        }
+        self.activation(nm, &uuid, token).map(Some)
+    }
+
+    fn activation(
+        &self,
+        nm: &Nm,
+        uuid: &str,
+        token: Option<String>,
+    ) -> Result<crate::prompt_activation::Operation, Error> {
+        self.agent
+            .activation
+            .bind(&nm.owner, uuid, token)
+            .ok_or_else(|| Error::Conflict("profile activation in progress".into()))
+    }
+
+    async fn connect_inner(
+        &self,
+        device: Path,
+        ap: Path,
+        uuid: String,
+        mode: String,
+        all_users: bool,
+        token: Option<String>,
+    ) -> Result<Path, Error> {
+        let mode = storage::Mode::parse(&mode)?;
+        let nm = self.nm(true).await?;
+        if !uuid.is_empty() {
+            return self.activate_inner(&nm, &uuid, &device, token).await;
+        }
+        if ap.as_str() == "/" {
+            return Err(Error::NeedsProfile(
+                "a hidden network needs a saved profile".into(),
+            ));
+        }
+        let aps: Vec<Path> = nm
+            .call(&device, nm::WIFI, "GetAllAccessPoints", &())
+            .await?;
+        if !aps.contains(&ap) {
+            return Err(Error::Invalid("AP does not belong to this device".into()));
+        }
+        let p = nm
+            .props(&ap, "org.freedesktop.NetworkManager.AccessPoint")
+            .await?;
+        let ssid = nm::bytes(Some(&p), "Ssid");
+        let flags = nm::number(Some(&p), "WpaFlags") | nm::number(Some(&p), "RsnFlags");
+        let enterprise = flags & 0x200 != 0;
+        let mut profiles = nm.profiles().await?;
+        profiles
+            .sort_by_key(|(_, s)| std::cmp::Reverse(nm::number(s.get("connection"), "timestamp")));
+        // Keep security domains separate: an open/enterprise BSS with the same SSID
+        // must not steal the saved personal profile.
+        let secured = nm::number(Some(&p), "Flags") & 1 != 0 || flags != 0;
+        if let Some((path, saved)) = profiles.iter().find(|(_, s)| {
+            text(s.get("connection"), "type") == "802-11-wireless"
+                && nm::bytes(s.get("802-11-wireless"), "ssid") == ssid
+                && s.contains_key("802-11-wireless-security") == secured
+                && s.contains_key("802-1x") == enterprise
+        }) {
+            let uuid = text(saved.get("connection"), "uuid");
+            let _activation = self.activation(&nm, &uuid, token)?;
+            let a = nm.activate(path, &device, &ap).await?;
+            self.activation_result(nm.wait_active(&a).await, &uuid)
+                .await?;
+            return Ok(a);
+        }
+        if enterprise {
+            return Err(Error::NeedsProfile(
+                "enterprise Wi-Fi needs a configured profile".into(),
+            ));
+        }
+        let mut settings = Settings::new();
+        if secured {
+            let key_mgmt = if flags & 0x400 != 0 {
+                "sae"
+            } else if flags & 0x800 != 0 {
+                "owe"
+            } else if flags != 0 {
+                "wpa-psk"
+            } else {
+                "none"
+            };
+            let mut sec = nm::Props::from([("key-mgmt".into(), owned(key_mgmt))]);
+            if key_mgmt == "none" {
+                sec.insert("wep-key-flags".into(), mode.flags().into());
+            } else if key_mgmt != "owe" {
+                sec.insert("psk-flags".into(), mode.flags().into());
+            }
+            settings.insert("802-11-wireless-security".into(), sec);
+        }
+        storage::permissions(&mut settings, all_users)?;
+        let _activation = self.new_profile_activation(&nm, &mut settings, token)?;
+        let (profile, active): (Path, Path) = nm
+            .call(
+                nm::ROOT,
+                nm::NAME,
+                "AddAndActivateConnection",
+                &(settings, &device, &ap),
+            )
+            .await?;
+        let uuid = nm
+            .call::<Settings>(&profile, nm::PROFILE, "GetSettings", &())
+            .await
+            .ok()
+            .map(|s| text(s.get("connection"), "uuid"))
+            .unwrap_or_default();
+        let result = self
+            .activation_result(nm.wait_active(&active).await, &uuid)
+            .await;
+        if result.is_err() {
+            self.cleanup_new_profile(&nm, &profile, &uuid).await;
+        }
+        result?;
+        Ok(active)
+    }
+    /// The renderer can supply a configured enterprise profile, as libnma does in TS.
+    /// A missing enterprise/hidden profile is never guessed from an SSID.
+    async fn connect_profile_inner(
+        &self,
+        device: Path,
+        ap: Path,
+        mut settings: Settings,
+        token: Option<String>,
+    ) -> Result<Path, Error> {
+        storage::validate(&settings)?;
+        let nm = self.nm(true).await?;
+        if text(settings.get("connection"), "type") != "802-11-wireless" {
+            return Err(Error::Invalid("expected a Wi-Fi profile".into()));
+        }
+        if nm::bytes(settings.get("802-11-wireless"), "ssid").is_empty() {
+            return Err(Error::Invalid("missing SSID".into()));
+        }
+        if ap.as_str() != "/" {
+            let aps: Vec<Path> = nm
+                .call(&device, nm::WIFI, "GetAllAccessPoints", &())
+                .await?;
+            if !aps.contains(&ap) {
+                return Err(Error::Invalid("AP does not belong to device".into()));
+            }
+        }
+        let _activation = self.new_profile_activation(&nm, &mut settings, token)?;
+        let (profile, active): (Path, Path) = nm
+            .call(
+                nm::ROOT,
+                nm::NAME,
+                "AddAndActivateConnection",
+                &(&settings, &device, &ap),
+            )
+            .await?;
+        let mut merged: Settings = nm.call(&profile, nm::PROFILE, "GetSettings", &()).await?;
+        let uuid = text(merged.get("connection"), "uuid");
+        let result = self
+            .activation_result(nm.wait_active(&active).await, &uuid)
+            .await;
+        if result.is_err() {
+            self.cleanup_new_profile(&nm, &profile, &uuid).await;
+        } else {
+            let canonical = merged.get("connection").cloned();
+            for (name, keys) in settings {
+                merged.entry(name).or_default().extend(keys);
+            }
+            if let Some(canonical) = canonical {
+                merged.insert("connection".into(), canonical);
+            }
+            self.agent.save_profile_secrets(merged);
+        }
+        result?;
+        Ok(active)
+    }
+    async fn activate_inner(
+        &self,
+        nm: &Nm,
+        uuid: &str,
+        device: &Path,
+        token: Option<String>,
+    ) -> Result<Path, Error> {
         let (p, _) = nm.profile(uuid).await?;
+        let _activation = self.activation(nm, uuid, token)?;
         let a = nm.activate(&p, device, &nm::root_path()).await?;
         self.activation_result(nm.wait_active(&a).await, uuid)
             .await?;
@@ -166,7 +358,18 @@ impl Network {
             .await
     }
     async fn connect_default(&self, device: Path, ap: Path, uuid: String) -> Result<Path, Error> {
-        self.connect(device, ap, uuid, "user".into(), true).await
+        self.connect_inner(device, ap, uuid, "user".into(), true, None)
+            .await
+    }
+    async fn connect_default_with_activation(
+        &self,
+        device: Path,
+        ap: Path,
+        uuid: String,
+        token: String,
+    ) -> Result<Path, Error> {
+        self.connect_inner(device, ap, uuid, "user".into(), true, Some(token))
+            .await
     }
     async fn connect(
         &self,
@@ -176,155 +379,26 @@ impl Network {
         mode: String,
         all_users: bool,
     ) -> Result<Path, Error> {
-        let mode = storage::Mode::parse(&mode)?;
-        let nm = self.nm(true).await?;
-        if !uuid.is_empty() {
-            return self.activate_inner(&nm, &uuid, &device).await;
-        }
-        if ap.as_str() == "/" {
-            return Err(Error::NeedsProfile(
-                "a hidden network needs a saved profile".into(),
-            ));
-        }
-        let aps: Vec<Path> = nm
-            .call(&device, nm::WIFI, "GetAllAccessPoints", &())
-            .await?;
-        if !aps.contains(&ap) {
-            return Err(Error::Invalid("AP does not belong to this device".into()));
-        }
-        let p = nm
-            .props(&ap, "org.freedesktop.NetworkManager.AccessPoint")
-            .await?;
-        let ssid = nm::bytes(Some(&p), "Ssid");
-        let flags = nm::number(Some(&p), "WpaFlags") | nm::number(Some(&p), "RsnFlags");
-        let enterprise = flags & 0x200 != 0;
-        let mut profiles = nm.profiles().await?;
-        profiles
-            .sort_by_key(|(_, s)| std::cmp::Reverse(nm::number(s.get("connection"), "timestamp")));
-        // Keep security domains separate: an open/enterprise BSS with the same SSID
-        // must not steal the saved personal profile.
-        let secured = nm::number(Some(&p), "Flags") & 1 != 0 || flags != 0;
-        if let Some((path, _)) = profiles.iter().find(|(_, s)| {
-            text(s.get("connection"), "type") == "802-11-wireless"
-                && nm::bytes(s.get("802-11-wireless"), "ssid") == ssid
-                && s.contains_key("802-11-wireless-security") == secured
-                && s.contains_key("802-1x") == enterprise
-        }) {
-            let a = nm.activate(path, &device, &ap).await?;
-            self.activation_result(
-                nm.wait_active(&a).await,
-                &text(
-                    profiles
-                        .iter()
-                        .find(|(p, _)| p == path)
-                        .unwrap()
-                        .1
-                        .get("connection"),
-                    "uuid",
-                ),
-            )
-            .await?;
-            return Ok(a);
-        }
-        if enterprise {
-            return Err(Error::NeedsProfile(
-                "enterprise Wi-Fi needs a configured profile".into(),
-            ));
-        }
-        let mut settings = Settings::new();
-        if secured {
-            let key_mgmt = if flags & 0x400 != 0 {
-                "sae"
-            } else if flags & 0x800 != 0 {
-                "owe"
-            } else if flags != 0 {
-                "wpa-psk"
-            } else {
-                "none"
-            };
-            let mut sec = nm::Props::from([("key-mgmt".into(), owned(key_mgmt))]);
-            if key_mgmt == "none" {
-                sec.insert("wep-key-flags".into(), mode.flags().into());
-            } else if key_mgmt != "owe" {
-                sec.insert("psk-flags".into(), mode.flags().into());
-            }
-            settings.insert("802-11-wireless-security".into(), sec);
-        }
-        storage::permissions(&mut settings, all_users)?;
-        let (profile, active): (Path, Path) = nm
-            .call(
-                nm::ROOT,
-                nm::NAME,
-                "AddAndActivateConnection",
-                &(settings, &device, &ap),
-            )
-            .await?;
-        let uuid = nm
-            .call::<Settings>(&profile, nm::PROFILE, "GetSettings", &())
+        self.connect_inner(device, ap, uuid, mode, all_users, None)
             .await
-            .ok()
-            .map(|s| text(s.get("connection"), "uuid"))
-            .unwrap_or_default();
-        let result = self
-            .activation_result(nm.wait_active(&active).await, &uuid)
-            .await;
-        if result.is_err() {
-            self.cleanup_new_profile(&nm, &profile, &uuid).await;
-        }
-        result?;
-        Ok(active)
     }
-    /// The renderer can supply a configured enterprise profile, as libnma does in TS.
-    /// A missing enterprise/hidden profile is never guessed from an SSID.
     async fn connect_profile(
         &self,
         device: Path,
         ap: Path,
         settings: Settings,
     ) -> Result<Path, Error> {
-        storage::validate(&settings)?;
-        let nm = self.nm(true).await?;
-        if text(settings.get("connection"), "type") != "802-11-wireless" {
-            return Err(Error::Invalid("expected a Wi-Fi profile".into()));
-        }
-        if nm::bytes(settings.get("802-11-wireless"), "ssid").is_empty() {
-            return Err(Error::Invalid("missing SSID".into()));
-        }
-        if ap.as_str() != "/" {
-            let aps: Vec<Path> = nm
-                .call(&device, nm::WIFI, "GetAllAccessPoints", &())
-                .await?;
-            if !aps.contains(&ap) {
-                return Err(Error::Invalid("AP does not belong to device".into()));
-            }
-        }
-        let (profile, active): (Path, Path) = nm
-            .call(
-                nm::ROOT,
-                nm::NAME,
-                "AddAndActivateConnection",
-                &(&settings, &device, &ap),
-            )
-            .await?;
-        let mut merged: Settings = nm.call(&profile, nm::PROFILE, "GetSettings", &()).await?;
-        let uuid = text(merged.get("connection"), "uuid");
-        let result = self
-            .activation_result(nm.wait_active(&active).await, &uuid)
-            .await;
-        if result.is_err() {
-            self.cleanup_new_profile(&nm, &profile, &uuid).await;
-        } else {
-            let canonical = merged.get("connection").cloned();
-            for (name, keys) in settings {
-                merged.entry(name).or_default().extend(keys);
-            }
-            if let Some(canonical) = canonical {
-                merged.insert("connection".into(), canonical);
-            }
-            self.agent.save_profile_secrets(merged);
-        }
-        result?;
-        Ok(active)
+        self.connect_profile_inner(device, ap, settings, None).await
+    }
+    async fn connect_profile_with_activation(
+        &self,
+        device: Path,
+        ap: Path,
+        settings: Settings,
+        token: String,
+    ) -> Result<Path, Error> {
+        self.connect_profile_inner(device, ap, settings, Some(token))
+            .await
     }
     async fn disconnect(&self, device: Path) -> Result<(), Error> {
         self.nm(true)
@@ -334,7 +408,16 @@ impl Network {
     }
     async fn activate(&self, uuid: String, device: Path) -> Result<Path, Error> {
         let nm = self.nm(true).await?;
-        self.activate_inner(&nm, &uuid, &device).await
+        self.activate_inner(&nm, &uuid, &device, None).await
+    }
+    async fn activate_with_activation(
+        &self,
+        uuid: String,
+        device: Path,
+        token: String,
+    ) -> Result<Path, Error> {
+        let nm = self.nm(true).await?;
+        self.activate_inner(&nm, &uuid, &device, Some(token)).await
     }
     async fn deactivate(&self, active: Path) -> Result<(), Error> {
         self.nm(true)
@@ -434,7 +517,7 @@ impl Network {
             return Ok(());
         }
         let p = nm.props(&active, nm::ACTIVE).await?;
-        self.activate_inner(&nm, &text(Some(&p), "Uuid"), &device)
+        self.activate_inner(&nm, &text(Some(&p), "Uuid"), &device, None)
             .await?;
         Ok(())
     }

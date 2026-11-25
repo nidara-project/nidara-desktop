@@ -54,6 +54,7 @@ before the next periodic snapshot. They are authenticated by OBEX's unique owner
 | Forget | `o device` | Remove on that device's adapter |
 | HoldDiscovery / HoldDiscoverable | `o adapter` | `t lease` belonging to the caller's unique name |
 | ReleaseDiscovery / ReleaseDiscoverable | `t lease` | Only its owning caller/kind may release it |
+| PairWithActivation / ConnectWithActivation | `o device, s token` | Pair / Connect with a one-use session prompt activation grant |
 | RegisterUi / UnregisterUi | none | One renderer slot, owned by its unique sender |
 | ReplyRequest | `t epoch, t id, b accept, s value` | Only the registered UI; typed reply for that request |
 | CancelRequest | `t epoch, t id` | Withdraw consent; cancel display-only pairing at BlueZ too |
@@ -89,6 +90,11 @@ with six digits. Pairing has a 120-second service deadline or BlueZ's earlier on
 Cancel/Release, device/provider loss, renderer loss and deadlines withdraw requests;
 stale sender/epoch/ID replies cannot answer another question. The registration slot
 prevents accidental competing renderers, not malicious programs of the same user.
+
+Activation grants are transient opaque xdg-activation tokens, scoped to
+the current BlueZ owner and device path. The first matching unicast prompt can
+consume its operation's grant through `activationToken` metadata. Hyalo validates
+the input serial, target app-id and lifetime before giving focus.
 
 AuthorizeService rejects OBEX FTP (1106) even for paired/trusted peers when BlueZ
 asks: a deliberate exception because FTP has no per-file consent. Other service

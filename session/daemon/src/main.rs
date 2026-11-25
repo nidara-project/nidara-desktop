@@ -11,6 +11,7 @@ mod model;
 mod network;
 mod options;
 mod power;
+mod prompt_activation;
 mod store;
 mod tray;
 
