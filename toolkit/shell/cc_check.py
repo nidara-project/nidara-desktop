@@ -96,6 +96,9 @@ def respond_wifi(ctx, pipe):
     from gi.repository import Atspi
     until = ctx['until']
     title = 'Wi-Fi authentication'
+    until('Wi-Fi dialog has keyboard focus',
+          lambda: (dialog := ctx['dock_node'](title)) and
+          dialog.get_state_set().contains(Atspi.StateType.ACTIVE))
     password = until('focused native password question',
         lambda: next((n for n in prompt_nodes(ctx, title)
                       if n.get_role_name() == 'password text'
