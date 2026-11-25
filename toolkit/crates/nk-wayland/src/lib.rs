@@ -1165,11 +1165,11 @@ fn err(e: impl std::fmt::Display) -> String {
 }
 
 #[derive(Clone, Copy)]
-pub struct Options {
+pub struct Options<'a> {
     pub material: bool,
     pub map: bool,
     pub app_id: &'static str,
-    pub title: &'static str,
+    pub title: &'a str,
     /// Logical size until the compositor configures one.
     pub size: (u32, u32),
     /// Refuse to start without `nidara-material-v1` (Hyalo), with this message.
@@ -1218,7 +1218,7 @@ pub fn capabilities<'a>(globals: impl IntoIterator<Item = &'a str>) -> Result<Ca
         drag_feedback: has("nidara_drag_feedback_v1"),
     })
 }
-pub fn run(app: impl Application, options: Options, start: Instant) -> Result<()> {
+pub fn run(app: impl Application, options: Options<'_>, start: Instant) -> Result<()> {
     run_inner(app, options, start, None, None, None, None).map(|_| ())
 }
 /// A layer-shell root (SHELL-SURFACES.md §1) on its own connection: the one
@@ -1228,7 +1228,7 @@ pub fn run(app: impl Application, options: Options, start: Instant) -> Result<()
 /// shell ends a dock with it when the watcher reports its output removed.
 pub fn run_layer(
     app: impl Application,
-    options: Options,
+    options: Options<'_>,
     layer: LayerSpec,
     wake: Option<WakeSource>,
     start: Instant,
@@ -1259,7 +1259,7 @@ pub fn run_dialog(app: impl Application, parent: &mut Window) -> Result<()> {
 pub fn run_dialog_with_options(
     app: impl Application,
     parent: &mut Window,
-    mut options: Options,
+    mut options: Options<'_>,
 ) -> Result<()> {
     if options.size.0 == 0 || options.size.1 == 0 {
         return Err("dialog needs a nonempty size".into());
@@ -1275,7 +1275,7 @@ pub fn run_dialog_with_options(
 /// to an independent window. Revocation after mapping closes the dialog.
 pub fn run_foreign_dialog(
     app: impl Application,
-    options: Options,
+    options: Options<'_>,
     parent_window: &str,
     modal: bool,
 ) -> Result<()> {
@@ -1299,7 +1299,7 @@ pub fn run_foreign_dialog(
 
 fn run_inner(
     mut app: impl Application,
-    options: Options,
+    options: Options<'_>,
     start: Instant,
     mut parent: Option<&mut Window>,
     popup_options: Option<(PopupPlacement, Option<u32>)>,

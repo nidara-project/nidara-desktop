@@ -544,7 +544,8 @@ impl Application for Prompt {
     fn idle(&mut self, window: &mut Window) -> Result<()> {
         self.changes(window)?;
         if !window.is_closed() {
-            if window.commits() > 1
+            // The first buffer maps the toplevel. A second repaint may never be needed.
+            if window.commits() > 0
                 && let Some(token) = self.activation.take()
             {
                 let _ = window.activate(token);
@@ -560,9 +561,6 @@ impl Application for Prompt {
         self.changes(window)?;
         if window.is_closed() || matches!(event, Wayland::Closed) {
             return Ok(());
-        }
-        if matches!(event, Wayland::Configure) {
-            window.set_title(self.exports.text(self.body.title())?)?;
         }
         let gets_focus = matches!(event, Wayland::Focus(true));
         match event {
@@ -664,7 +662,7 @@ fn run(
             material: true,
             map: true,
             app_id: SESSION_PROMPT_APP_ID,
-            title: "Session prompt",
+            title: &title,
             size,
             require_material: None,
         },

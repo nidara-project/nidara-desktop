@@ -130,6 +130,56 @@ def respond_wifi(ctx, pipe):
     until('question withdrawn',lambda:ctx['dock_node'](title) is None)
 
 
+def verify_cc_initiates_prompt(ctx, actions):
+    from gi.repository import Atspi
+    until = ctx['until']
+    def layer():
+        return next((item for item in ctx['ipc']('layers').get('ok', {}).get('layers', [])
+                     if item['namespace'] == 'nidara-bar'), None)
+
+    def children(node):
+        return ctx['children'](node) if node is not None else []
+
+    def bar_control():
+        return next((node for node in children(ctx['dock_node']('Bar'))
+                     if node.get_name() == 'Control Center' and node.get_action_iface()), None)
+
+    def panel_control(name):
+        panel = next((node for node in children(ctx['dock_node']('Bar'))
+                      if node.get_name() == 'Control Center' and node.get_role_name() == 'panel'), None)
+        return next((node for node in children(panel) if node.get_name() == name), None)
+
+    def click(pipe, node):
+        region = node.get_component_iface().get_extents(Atspi.CoordType.WINDOW)
+        x = region.x + region.width // 2
+        y = region.y + region.height // 2
+        surface = until(f'bar layer covers {node.get_name()}', lambda:
+                        (item := layer()) and 0 <= x < item['width'] and 0 <= y < item['height'] and item)
+        x += surface['x']
+        y += surface['y']
+        pipe.write(f'move {x} {y}\n')
+        time.sleep(.3)
+        pipe.write(f'click {x} {y}\n')
+
+    with open(os.environ['HYALO_CONTROL'], 'w', buffering=1) as pipe:
+        click(pipe, until('Control Center button', bar_control))
+        tile = until('Wi-Fi tile', lambda: panel_control('Wi-Fi'))
+        time.sleep(1.2)
+        click(pipe, tile)
+        row = until('secure network in the Wi-Fi detail', lambda: panel_control('Secure test'))
+        time.sleep(1.2)
+        click(pipe, row)
+        until('Control Center connection carries its activation grant', lambda:
+              any(method == 'ConnectDefaultWithActivation' for method, _ in actions()))
+        title = 'Wi-Fi authentication'
+        until('Control Center request activates the session prompt', lambda:
+              (dialog := ctx['dock_node'](title)) and dialog.get_state_set().contains(Atspi.StateType.ACTIVE))
+        wifi = prompt_window(ctx, title)
+        assert wifi and wifi['focused'] and wifi['initial_title'] == title, wifi
+        respond_wifi(ctx, pipe)
+    print('PASS Control Center click: the prompt takes focus with its Wayland activation grant', flush=True)
+
+
 FULLSCREEN_CLIENT = """
 import gi
 gi.require_version('Gtk', '4.0')
@@ -162,6 +212,10 @@ def run_prompts(ctx):
         return network_actions(log)
     until('Wi-Fi renderer registered', lambda: any(m == 'RegisterSecretsUi' for m, _ in actions()))
     trusted = os.environ.get('NK_SESSION_PROMPT_TRUSTED') == '1'
+    if os.environ.get('NK_SESSION_PROMPT_CC') == '1':
+        assert trusted, 'Control Center focus requires the trusted shell fixture'
+        return verify_cc_initiates_prompt(ctx, actions)
+
     def foreground():
         return next((window for window in ctx['ipc']('windows').get('ok', {}).get('windows', [])
                      if window['title'] == 'Fullscreen fixture'), None)
@@ -181,6 +235,7 @@ def run_prompts(ctx):
         # While Wi-Fi is active, Bluetooth queues on the same surface.
         until('Bluetooth renderer registered', lambda: bt_actions.exists() and 'RegisterUi' in bt_actions.read_text())
         wifi = until('external Wi-Fi dialog window', lambda: prompt_window(ctx, 'Wi-Fi authentication'))
+        assert wifi['initial_title'] == 'Wi-Fi authentication', wifi
         assert all(layer['namespace'] != 'nidara-session-prompt'
                    for layer in ctx['ipc']('layers').get('ok', {}).get('layers', []))
         if trusted:

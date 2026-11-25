@@ -531,6 +531,8 @@ def section_drags():
 
 try:
     os.environ['GSETTINGS_SCHEMA_DIR'] = schemas()
+    prompt_cc_only = (os.environ.get('NK_SESSION_PROMPTS_ONLY') == '1' and
+                      os.environ.get('NK_SESSION_PROMPT_CC') == '1')
     accessibility()
     if os.environ.get('NK_ICON_CHECK') == '1':
         from icon_check import setup
@@ -578,8 +580,9 @@ try:
         bars = until('a bar layer', lambda: [l for l in ipc('layers').get('ok', {}).get('layers', [])
                                              if l.get('namespace') == 'nidara-bar' and l.get('width', 0) > 0 and l.get('height', 0) > 0])
         assert bars[0]['y'] == 0 and bars[0]['height'] == 48, bars
-        time.sleep(1.5)  # the glass and the text (software Hyalo)
-        shot(LOG / 'bar.png')
+        if not prompt_cc_only:
+            time.sleep(1.5)  # the glass and the text (software Hyalo)
+            shot(LOG / 'bar.png')
         result['bar'] = {'layer': bars}
     # Shell1 (crates/nidara-shell-ipc): this process owns the name, says what it can do,
     # and refuses what it cannot rather than doing nothing.

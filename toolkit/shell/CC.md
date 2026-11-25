@@ -193,6 +193,9 @@ also asserts that a spontaneous dialog asks for attention above the active
 fullscreen window, that focusing it preserves fullscreen, and that lock withdraws it. Set
 `NK_SESSION_PROMPT_SETTINGS_BIN` to the native Settings binary to also test
 a user-initiated connection taking focus through its activation grant.
+Set `NK_SESSION_PROMPT_CC=1` with the trusted prompt check to run only the
+Control Center path. It clicks a protected Wi-Fi network and checks that the
+dialog takes focus with the activation grant and has its translated title at map.
 
 ### Screenshot and recording
 
