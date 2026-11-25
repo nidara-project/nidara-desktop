@@ -759,3 +759,32 @@ fn editor_finishing_a_close_animation_retires_focus_and_cannot_take_hidden_input
     );
     assert_eq!(text(&s), "alpha");
 }
+
+#[test]
+fn password_retains_only_bullets_in_the_view_and_keeps_the_secret_out_of_external_channels() {
+    let mut state = ViewState::new(100);
+    let password: Node = crate::PasswordEntry::new("password", "Wi-Fi password", "changed").into();
+    lay(&mut state, &password, 260.);
+    state.request(&"password".into(), false);
+    let change = key(&mut state, 0x70, "private", false, false).unwrap();
+    let Some(Value::Secret(ref secret)) = change.value else {
+        panic!("password payload")
+    };
+    assert_eq!(secret.as_str(), "private");
+    assert!(!format!("{change:?}").contains("private"));
+    assert!(serde_json::to_string(&change.value).is_err());
+    lay(&mut state, &password, 260.);
+    let ime = state.text_input();
+    assert!(ime.password);
+    assert!(ime.text.is_empty());
+    let node = tree(&mut state)
+        .nodes
+        .into_values()
+        .find(|n| n.name == "Wi-Fi password")
+        .unwrap();
+    assert_eq!(node.role, nk_a11y::Role::Password);
+    assert!(node.text.is_none());
+    state.take_host_requests();
+    key(&mut state, 0x63, "", true, false);
+    assert!(state.take_host_requests().is_empty());
+}

@@ -51,7 +51,7 @@
         {"name": "Label", "nk": ["nk::Label"], "gtk": "Gtk.Label", "appkit": "NSTextField (label)", "status": "both", "users": "everything", "page": "text"},
         {"name": "Heading", "nk": ["nk::Label"], "gtk": "Gtk.Label (title class)", "appkit": "NSTextField (title font)", "status": "view", "users": "NC, CC", "page": "text"},
         {"name": "Text field", "nk": ["nk::Entry"], "gtk": "Gtk.Entry", "appkit": "NSTextField", "status": "both", "users": "Settings (nk-widgets), gallery editor (nk-view); CC uses owner-edited display field", "page": "entry"},
-        {"name": "Password field", "nk": ["nk::Field", "nk::FieldState"], "gtk": "Gtk.PasswordEntry", "appkit": "NSSecureTextField", "status": "view", "users": "CC passwords (old: until nk::Entry has a password mode)", "page": "entry"},
+        {"name": "Password field", "nk": ["nk::Field", "nk::FieldState", "nk::PasswordEntry"], "gtk": "Gtk.PasswordEntry", "appkit": "NSSecureTextField", "status": "view", "users": "Settings Wi-Fi profiles and Control Center prompts", "page": "entry"},
         {"name": "Search field", "nk": ["nk::SearchEntry"], "gtk": "Gtk.SearchEntry", "appkit": "NSSearchField", "status": "both", "users": "Settings (nk-widgets), gallery (nk-view); Apps remains by hand", "page": "search"},
         {"name": "Text editor", "nk": [], "gtk": "Gtk.TextView", "appkit": "NSTextView", "status": "missing", "users": ""},
         {"name": "Link", "nk": [], "gtk": "Gtk.LinkButton", "appkit": "NSTextField (link)", "status": "missing", "users": ""},
