@@ -388,6 +388,7 @@
     "shell.prompt.bluetooth.passkey": "e35828da",
     "shell.prompt.bluetooth.progress": "2aec7aa8",
     "shell.prompt.bluetooth.receive": "713d1cfd",
+    "shell.prompt.bluetooth.reject": "2b03b592",
     "shell.prompt.bluetooth.accept-file": "72208421",
     "shell.prompt.bluetooth.file-size": "74203f83",
     "shell.prompt.bluetooth.unknown-size": "55366e0b",
@@ -1016,7 +1017,7 @@
   "locales": {
     "de": {
       "translated": 835,
-      "of": 1011,
+      "of": 1012,
       "untranslated": [
         "bar.edit.done",
         "bar.edit.hint",
@@ -1188,6 +1189,7 @@
         "shell.prompt.bluetooth.passkey",
         "shell.prompt.bluetooth.progress",
         "shell.prompt.bluetooth.receive",
+        "shell.prompt.bluetooth.reject",
         "shell.prompt.bluetooth.unknown-size",
         "shell.prompt.error",
         "shell.prompt.wifi.title",
@@ -1198,14 +1200,14 @@
       "stale": []
     },
     "es": {
-      "translated": 1011,
-      "of": 1011,
+      "translated": 1012,
+      "of": 1012,
       "untranslated": [],
       "stale": []
     },
     "fr": {
       "translated": 835,
-      "of": 1011,
+      "of": 1012,
       "untranslated": [
         "bar.edit.done",
         "bar.edit.hint",
@@ -1377,6 +1379,7 @@
         "shell.prompt.bluetooth.passkey",
         "shell.prompt.bluetooth.progress",
         "shell.prompt.bluetooth.receive",
+        "shell.prompt.bluetooth.reject",
         "shell.prompt.bluetooth.unknown-size",
         "shell.prompt.error",
         "shell.prompt.wifi.title",
@@ -1388,7 +1391,7 @@
     },
     "it": {
       "translated": 835,
-      "of": 1011,
+      "of": 1012,
       "untranslated": [
         "bar.edit.done",
         "bar.edit.hint",
@@ -1560,6 +1563,7 @@
         "shell.prompt.bluetooth.passkey",
         "shell.prompt.bluetooth.progress",
         "shell.prompt.bluetooth.receive",
+        "shell.prompt.bluetooth.reject",
         "shell.prompt.bluetooth.unknown-size",
         "shell.prompt.error",
         "shell.prompt.wifi.title",
@@ -1571,7 +1575,7 @@
     },
     "ja": {
       "translated": 835,
-      "of": 1011,
+      "of": 1012,
       "untranslated": [
         "bar.edit.done",
         "bar.edit.hint",
@@ -1743,6 +1747,7 @@
         "shell.prompt.bluetooth.passkey",
         "shell.prompt.bluetooth.progress",
         "shell.prompt.bluetooth.receive",
+        "shell.prompt.bluetooth.reject",
         "shell.prompt.bluetooth.unknown-size",
         "shell.prompt.error",
         "shell.prompt.wifi.title",
@@ -1754,7 +1759,7 @@
     },
     "nl": {
       "translated": 835,
-      "of": 1011,
+      "of": 1012,
       "untranslated": [
         "bar.edit.done",
         "bar.edit.hint",
@@ -1926,6 +1931,7 @@
         "shell.prompt.bluetooth.passkey",
         "shell.prompt.bluetooth.progress",
         "shell.prompt.bluetooth.receive",
+        "shell.prompt.bluetooth.reject",
         "shell.prompt.bluetooth.unknown-size",
         "shell.prompt.error",
         "shell.prompt.wifi.title",
@@ -1937,7 +1943,7 @@
     },
     "pl": {
       "translated": 835,
-      "of": 1011,
+      "of": 1012,
       "untranslated": [
         "bar.edit.done",
         "bar.edit.hint",
@@ -2109,6 +2115,7 @@
         "shell.prompt.bluetooth.passkey",
         "shell.prompt.bluetooth.progress",
         "shell.prompt.bluetooth.receive",
+        "shell.prompt.bluetooth.reject",
         "shell.prompt.bluetooth.unknown-size",
         "shell.prompt.error",
         "shell.prompt.wifi.title",
@@ -2120,7 +2127,7 @@
     },
     "pt-BR": {
       "translated": 835,
-      "of": 1011,
+      "of": 1012,
       "untranslated": [
         "bar.edit.done",
         "bar.edit.hint",
@@ -2292,6 +2299,7 @@
         "shell.prompt.bluetooth.passkey",
         "shell.prompt.bluetooth.progress",
         "shell.prompt.bluetooth.receive",
+        "shell.prompt.bluetooth.reject",
         "shell.prompt.bluetooth.unknown-size",
         "shell.prompt.error",
         "shell.prompt.wifi.title",
@@ -2303,7 +2311,7 @@
     },
     "pt-PT": {
       "translated": 835,
-      "of": 1011,
+      "of": 1012,
       "untranslated": [
         "bar.edit.done",
         "bar.edit.hint",
@@ -2475,6 +2483,7 @@
         "shell.prompt.bluetooth.passkey",
         "shell.prompt.bluetooth.progress",
         "shell.prompt.bluetooth.receive",
+        "shell.prompt.bluetooth.reject",
         "shell.prompt.bluetooth.unknown-size",
         "shell.prompt.error",
         "shell.prompt.wifi.title",
@@ -2486,7 +2495,7 @@
     },
     "ru": {
       "translated": 835,
-      "of": 1011,
+      "of": 1012,
       "untranslated": [
         "bar.edit.done",
         "bar.edit.hint",
@@ -2658,6 +2667,7 @@
         "shell.prompt.bluetooth.passkey",
         "shell.prompt.bluetooth.progress",
         "shell.prompt.bluetooth.receive",
+        "shell.prompt.bluetooth.reject",
         "shell.prompt.bluetooth.unknown-size",
         "shell.prompt.error",
         "shell.prompt.wifi.title",
@@ -2669,7 +2679,7 @@
     },
     "zh-CN": {
       "translated": 835,
-      "of": 1011,
+      "of": 1012,
       "untranslated": [
         "bar.edit.done",
         "bar.edit.hint",
@@ -2841,6 +2851,7 @@
         "shell.prompt.bluetooth.passkey",
         "shell.prompt.bluetooth.progress",
         "shell.prompt.bluetooth.receive",
+        "shell.prompt.bluetooth.reject",
         "shell.prompt.bluetooth.unknown-size",
         "shell.prompt.error",
         "shell.prompt.wifi.title",

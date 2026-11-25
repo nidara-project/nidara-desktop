@@ -420,6 +420,7 @@ export default {
     "shell.prompt.bluetooth.passkey": "Passkey",
     "shell.prompt.bluetooth.progress": "Digits entered on the device: {entered} of 6",
     "shell.prompt.bluetooth.receive": "Allow this device to send you a file?",
+    "shell.prompt.bluetooth.reject": "Reject",
     "shell.prompt.bluetooth.accept-file": "Accept file",
     "shell.prompt.bluetooth.file-size": "File size: {bytes} bytes",
     "shell.prompt.bluetooth.unknown-size": "Unknown file size",

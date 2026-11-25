@@ -175,7 +175,8 @@ For incoming files the dialog shows the peer, filename and size or unknown size.
 The service withdraws the dialog on its close signal or owner loss. Lock removes
 the surface and its input state. If the original request is still pending on
 unlock, the shell builds it with empty inputs. Escape or the Cancel button sends
-the appropriate service cancellation. Leaving the Control Center does not affect
+the appropriate service cancellation. Reject sends a negative Bluetooth consent
+reply for confirmation, authorization or incoming files. Leaving the Control Center does not affect
 registration or a pending request.
 
 Run `NK_SESSION_PROMPTS_ONLY=1 toolkit/shell/check-cc-headless.sh` for the

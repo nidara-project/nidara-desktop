@@ -125,6 +125,10 @@ impl BluetoothKind {
         }
     }
 
+    fn consent(self) -> bool {
+        matches!(self, Self::Confirm | Self::Authorize | Self::IncomingFile)
+    }
+
     fn display(self) -> bool {
         matches!(self, Self::DisplayPin | Self::DisplayPasskey)
     }
@@ -356,15 +360,16 @@ impl Body {
         if failed {
             fields.push(label("error", text("shell.prompt.error")));
         }
+        let (dismiss, action) = match self {
+            Self::Bluetooth(form) if form.kind.consent() => {
+                ("shell.prompt.bluetooth.reject", "reject")
+            }
+            _ => ("settings.native.cancel", "cancel"),
+        };
         let mut buttons = vec![
-            Button::new(
-                "cancel",
-                text("settings.native.cancel"),
-                "cancel",
-                body.clone(),
-            )
-            .enabled(!busy)
-            .into(),
+            Button::new("cancel", text(dismiss), action, body.clone())
+                .enabled(!busy)
+                .into(),
         ];
         if let Some(key) = submit {
             buttons.push(
@@ -493,6 +498,7 @@ impl Prompt {
             match action.action.as_str() {
                 "submit" => self.submit(),
                 "cancel" => self.answer(Answer::Cancel),
+                "reject" => self.answer(Answer::Reject),
                 name if let Some(id) = name.strip_prefix("edit/")
                     && let Some(value) = &action.value =>
                 {

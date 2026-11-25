@@ -13,6 +13,7 @@ use zbus::{
 
 pub(super) enum Answer {
     Cancel,
+    Reject,
     Wifi(super::Secrets),
     Bluetooth(String),
 }
@@ -173,8 +174,8 @@ fn watch(
                     return;
                 }
             }
-            Ok(Input::Reply(ticket, answer)) if pending.as_ref() == Some(&ticket) => {
-                if let Err(()) = reply(bus, &ticket, answer)
+            Ok(Input::Reply(ticket, answer)) => {
+                if (pending.as_ref() != Some(&ticket) || reply(bus, &ticket, answer).is_err())
                     && events.send(Event::Failed(ticket)).is_err()
                 {
                     return;
@@ -246,6 +247,13 @@ fn reply(bus: &Connection, ticket: &Ticket, answer: Answer) -> Result<(), ()> {
         (Service::Bluetooth, Answer::Cancel) => {
             bus.call_method(target, path, interface, "CancelRequest", &(epoch, id))
         }
+        (Service::Bluetooth, Answer::Reject) => bus.call_method(
+            target,
+            path,
+            interface,
+            "ReplyRequest",
+            &(epoch, id, false, ""),
+        ),
         (Service::Bluetooth, Answer::Bluetooth(value)) => bus.call_method(
             target,
             path,

@@ -432,6 +432,7 @@ export default {
     "shell.prompt.bluetooth.passkey": "Clave de emparejamiento",
     "shell.prompt.bluetooth.progress": "Dígitos introducidos en el dispositivo: {entered} de 6",
     "shell.prompt.bluetooth.receive": "¿Permitir que este dispositivo te envíe un archivo?",
+    "shell.prompt.bluetooth.reject": "Rechazar",
     "shell.prompt.bluetooth.accept-file": "Aceptar archivo",
     "shell.prompt.bluetooth.file-size": "Tamaño del archivo: {bytes} bytes",
     "shell.prompt.bluetooth.unknown-size": "Tamaño del archivo desconocido",

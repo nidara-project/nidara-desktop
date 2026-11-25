@@ -162,6 +162,19 @@ def run_prompts(ctx):
         until('Bluetooth cancelled display at the service', lambda: ['CancelRequest', [7, 13]] in
               [json.loads(line) for line in bt_actions.read_text().splitlines()])
         until('display withdrawn', lambda: ctx['dock_node']('Bluetooth') is None)
+        trigger.write_text('confirm')
+        until('Bluetooth confirmation code', lambda: any(n.get_name() == '000042' for n in prompt_nodes(ctx, 'Bluetooth')))
+        until('keyboard focus on Bluetooth confirmation',
+              lambda: (dialog := ctx['dock_node']('Bluetooth')) and
+              dialog.get_state_set().contains(Atspi.StateType.ACTIVE))
+        pipe.write('key 15\n')
+        until('Reject has keyboard focus',
+              lambda: (button := prompt_button(ctx, 'Bluetooth', 'Reject')) and
+              button.get_state_set().contains(Atspi.StateType.FOCUSED))
+        pipe.write('key 28\n')
+        until('Bluetooth declined the pairing', lambda: ['ReplyRequest', [7, 14, False, '']] in
+              [json.loads(line) for line in bt_actions.read_text().splitlines()])
+        until('pairing confirmation withdrawn', lambda: ctx['dock_node']('Bluetooth') is None)
         # Owner loss must withdraw a live form, and the shell must register
         # with the replacement without opening a bar detail.
         title = 'Wi-Fi authentication'
@@ -326,6 +339,9 @@ def poll():
     if kind=='file':
         state['id']=12
         signal('Request',12,json.dumps({'kind':'incoming-file','deviceName':'Test phone','name':'fixture.txt','size':None}))
+    if kind=='confirm':
+        state['id']=14
+        signal('Request',14,json.dumps({'kind':'confirm','deviceName':'Test phone','code':'000042'}))
     if kind=='display':
         state['id']=13
         meta={'kind':'display-passkey','deviceName':'Test keyboard','code':'000042','entered':0}
