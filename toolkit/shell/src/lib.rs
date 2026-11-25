@@ -35,6 +35,7 @@ pub mod notifications;
 pub mod paths;
 pub mod popup;
 pub mod prefs;
+pub mod prompts;
 pub mod reorder;
 pub mod resize;
 pub mod semantics;

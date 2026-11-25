@@ -398,7 +398,7 @@ several cards off in turn and reports once. The NC is the first consumer and the
 `nk::Slider` is the Settings slider's rules (one `ValueRange`); `nk::Field` only SHOWS a
 field (the owner edits it, and a secret reaches the view as bullets, never its text);
 `nk::Slot::new` is room the surface paints itself (`VIEW.md` §12). The CC's detail pages are the
-second consumer: `ccdetail.rs` keeps the model and ccauth's secret editing, and its rows act on
+second consumer: `ccdetail.rs` keeps the detail model, and its rows act on
 release, like every nk-view control (`toolkit/shell/CC.md`). The CC's grid is the third:
 `nk::Grid::new` places tiles on cells the editor computes; a control can be `on` (white, content
 in the accent), a `surface` well, or `keys_only` (Tab and readers, no pointer); `Slider::fill`
@@ -788,10 +788,15 @@ check is `toolkit/shell/check-bar-headless.sh` (the dock's check plus the bar).
 Its Control Center (B2) is `toolkit/shell/CC.md`.
 B2.2 details replace the grid on this same surface. Read CC.md before editing:
 row identities pin service owners/epochs (seek also pins its track); stale replies
-belong only to their issuing view; slider writes coalesce per destination. Wi-Fi
-owns a private Network1 secrets-renderer connection only while its detail exists.
-Never put a password in Debug, accessibility text or IME surrounding text. The
-capture controller owns its recorder child, signals only that child and preserves
+belong only to their issuing view; slider writes coalesce per destination.
+The shell holds Network1 and Bluetooth1 prompt registrations for the session.
+`prompts/` subscribes before registering with each unique service owner and answers
+only its current ticket, on a worker separate from the view and Connect.
+Both services use one overlay with kit components. AppWindow's standalone dialog
+mode supplies focus, reader, IME and clipboard handling without window navigation.
+Lock drops the surface and input state; a pending request is rebuilt empty on
+unlock. Never put a password in Debug, accessibility text or IME surrounding text.
+The capture controller owns its recorder child, signals only that child and preserves
 recording preferences; screenshot and Stop use independent lanes. The extended
 private check is check-cc-headless.sh; export settings **and** tokens for it.
 B2.3 editing uses pure cclayout operations, a write barrier released by echo or

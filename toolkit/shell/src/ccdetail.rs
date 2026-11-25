@@ -22,9 +22,6 @@ pub enum Action {
         action: Box<Action>,
     },
     Back,
-    SecretFocus(usize),
-    SecretSubmit,
-    SecretCancel,
     Number(&'static str, i32),
     Time(&'static str, i32),
     Brightness {
@@ -203,8 +200,6 @@ pub struct Detail {
     pub max_height: f64,
     /// The output's scale, for crisp edges.
     pub scale: f64,
-    pub auth_ready: bool,
-    pub form: Option<crate::ccauth::Form>,
     /// The rows' layout, hover, press, focus, held slider and scroll: nk-view's (#1048).
     pub state: nk::ViewState,
     pub tokens: Option<nk::Tokens>,
@@ -262,8 +257,6 @@ impl Detail {
             error: String::new(),
             max_height: 1080.,
             scale: 1.,
-            auth_ready: false,
-            form: None,
             state: nk::ViewState::new(REGIONS),
             tokens: None,
             types: None,
@@ -298,47 +291,7 @@ impl Detail {
         self.lay(&mut look.text, &style, &labels, &remove, panel);
     }
     fn model(&mut self, status: &Status) {
-        let mut rows = if let Some(form) = &self.form {
-            let mut fields: Vec<_> = form
-                .fields
-                .iter()
-                .enumerate()
-                .map(|(i, f)| {
-                    let label = match f.key.as_str() {
-                        "private-key-password" => Label::Key("cc.detail.certificate-password"),
-                        "phase2-private-key-password" => {
-                            Label::Key("cc.detail.inner-certificate-password")
-                        }
-                        "pin" => Label::Text("PIN".into()),
-                        _ => Label::Key("settings.users.password"),
-                    };
-                    Row::new(
-                        format!("secret:{}:{}", form.id, f.key),
-                        label,
-                        Some(Action::SecretFocus(i)),
-                    )
-                })
-                .collect();
-            if !form.name.is_empty() {
-                let mut prompt = Row::new("prompt-name", Label::Text(form.name.clone()), None);
-                prompt.description = form.identity.clone();
-                fields.insert(0, prompt);
-            }
-            if form.retry {
-                fields.insert(
-                    0,
-                    Row::new("retry", Label::Key("settings.network.ap.failed"), None),
-                );
-            }
-            fields.push(Row::key(
-                "settings.network.ap.connect",
-                Action::SecretSubmit,
-            ));
-            fields.push(Row::key("settings.native.cancel", Action::SecretCancel));
-            fields
-        } else {
-            rows(self.page, status, self.mode, self.audio)
-        };
+        let mut rows = rows(self.page, status, self.mode, self.audio);
         if self.page == "clipboard" && self.clipboard_confirm {
             rows.retain(|r| !matches!(r.action, Some(Action::ClipboardConfirm(_))));
             rows.push(Row::key(
@@ -354,13 +307,6 @@ impl Detail {
                     wipe: true,
                 },
             ));
-        }
-        if self.page == "wifi" && !self.auth_ready {
-            for r in &mut rows {
-                if matches!(r.action, Some(Action::Connect { .. } | Action::Activate(_))) {
-                    r.action = None;
-                }
-            }
         }
         if !self.error.is_empty() {
             rows.insert(0, Row::new("error", Label::Text(self.error.clone()), None));
@@ -452,39 +398,6 @@ impl Detail {
                     return nk::Column::new(k("slot"), vec![head.into(), slider.into()])
                         .gap(Space::S1)
                         .padding(Padding::symmetric(Space::S2, Space::S2))
-                        .into();
-                }
-                if let Some(Action::SecretFocus(index)) = row.action {
-                    // A secret field: its bullets only (VIEW.md §12.2).
-                    let (shown, caret, anchor) = self
-                        .form
-                        .as_ref()
-                        .and_then(|f| f.fields.get(index))
-                        .map(|f| {
-                            let count = |end: usize| f.text[..end].chars().count().min(32);
-                            let dot = '•'.len_utf8();
-                            (
-                                "•".repeat(count(f.text.len())),
-                                count(f.caret) * dot,
-                                count(f.anchor.min(f.text.len())) * dot,
-                            )
-                        })
-                        .unwrap_or_default();
-                    let field = nk::Field::new(
-                        k("field"),
-                        label.clone(),
-                        "submit",
-                        nk::FieldState {
-                            shown,
-                            caret,
-                            anchor,
-                            secret: true,
-                        },
-                        small.clone(),
-                    );
-                    return nk::Column::new(k("slot"), vec![title.into(), field.into()])
-                        .gap(Space::S1)
-                        .padding(Padding::symmetric(Space::S2, Space::S3))
                         .into();
                 }
                 let mut line: Vec<Node> = vec![];
@@ -616,33 +529,7 @@ impl Detail {
             );
         }
         self.panel = bounds;
-        if self.form.is_some()
-            && self.focused().is_none_or(|id| self.row(id).is_none())
-            && let Some(first) = self
-                .rows
-                .iter()
-                .find(|r| matches!(r.action, Some(Action::SecretFocus(_))))
-                .map(|r| r.id)
-        {
-            // A question for a secret takes the focus to its first field.
-            self.focus_row(first);
-        }
-        self.sync_form();
     }
-    /// Back to the first row, as a new question arrives.
-    pub fn to_top(&mut self) {
-        self.state.key(nk::KeyInput::Home);
-    }
-
-    /// The secret field nk-view focused is the form's.
-    fn sync_form(&mut self) {
-        if let Some(index) = self.focused_field()
-            && let Some(form) = &mut self.form
-        {
-            form.focus(index);
-        }
-    }
-
     /// The row the focus is on.
     pub fn focused(&self) -> Option<u64> {
         self.state.focus().and_then(row_of)
@@ -650,15 +537,6 @@ impl Detail {
     fn row(&self, id: u64) -> Option<&Row> {
         self.rows.iter().find(|r| r.id == id)
     }
-    /// The control a row's focus lands on: a secret row's field, else the row.
-    fn focus_key(&self, id: u64) -> Option<nk::Key> {
-        let row = self.row(id)?;
-        Some(match row.action {
-            Some(Action::SecretFocus(_)) => nk::Key::from(format!("r{id}/field")),
-            _ => row_key(id),
-        })
-    }
-
     pub fn key(&mut self, key: &nk_wayland::Key) -> Option<Action> {
         use nk::KeyInput as K;
         let input = match key.sym {
@@ -688,37 +566,11 @@ impl Detail {
             return None;
         }
         let a = self.state.key(input);
-        self.sync_form();
         a.and_then(|a| self.activated(&a))
     }
     pub fn focus_row(&mut self, id: u64) {
-        let Some(key) = self.focus_key(id) else {
-            return;
-        };
-        self.state.request(&key, false);
-        self.sync_form();
-    }
-    pub fn focused_field(&self) -> Option<usize> {
-        let id = row_of(self.state.editing()?)?;
-        match self.row(id)?.action {
-            Some(Action::SecretFocus(index)) => Some(index),
-            _ => None,
-        }
-    }
-    pub fn text_input(&self) -> nk_wayland::TextInput {
-        let Some(key) = self.state.editing() else {
-            return Default::default();
-        };
-        let Some(r) = self.state.caret(key) else {
-            return Default::default();
-        };
-        nk_wayland::TextInput {
-            focused: true,
-            password: true,
-            text: String::new(),
-            cursor: 0,
-            anchor: 0,
-            rect: [r[0] as i32, r[1] as i32, 1, r[3].ceil() as i32],
+        if self.row(id).is_some() {
+            self.state.request(&row_key(id), false);
         }
     }
     /// Whether something in the page still moves (a switch sliding, the scroll bar fading):
@@ -777,7 +629,6 @@ impl Detail {
     /// A press: a slider takes the value under the pointer; a field takes the focus.
     pub fn press(&mut self) -> Option<Action> {
         let a = self.state.button(true, std::time::Instant::now());
-        self.sync_form();
         a.and_then(|a| self.activated(&a))
     }
     /// A release: a row activates when released over itself; a slider reports its last value.
@@ -794,7 +645,6 @@ impl Detail {
         let id = row_of(&a.key)?;
         match a.action.as_str() {
             "remove" => self.named(id, "Remove"),
-            "submit" => Some(Action::SecretSubmit),
             _ => {
                 let value = self.state.value(&row_key(id));
                 self.action(id, value)
@@ -853,12 +703,6 @@ impl Detail {
             Action::Clipboard { wipe: true, .. } => {
                 self.clipboard_confirm = false;
                 Some(a)
-            }
-            Action::SecretFocus(index) => {
-                if let Some(form) = &mut self.form {
-                    form.focus(index);
-                }
-                None
             }
             Action::SetMode(mode) => {
                 self.mode = mode;
@@ -966,9 +810,7 @@ impl Detail {
                     .or_else(|| self.state.rect(&format!("r{}/slot", row.id).into()))
                     .unwrap_or([self.panel[0], self.panel[1], self.panel[2], 0.]);
                 let label = row.label(look);
-                let role = if matches!(row.action, Some(Action::SecretFocus(_))) {
-                    Role::Password
-                } else if row.value.is_some() {
+                let role = if row.value.is_some() {
                     Role::Slider
                 } else if row.checked.is_some() {
                     Role::ToggleButton
@@ -987,12 +829,7 @@ impl Detail {
                 n.states.offscreen = r[1] + r[3] <= window[1] || r[1] >= window[1] + window[3];
                 n.states.focused = self.focused() == Some(row.id);
                 n.states.disabled = row.action.is_none();
-                if let Some(Action::SecretFocus(_)) = row.action {
-                    n.text = Some(Default::default());
-                }
-                n.actions = if role == Role::Password {
-                    vec![A::Focus, A::SetText]
-                } else if row.action.is_none() {
+                n.actions = if row.action.is_none() {
                     vec![]
                 } else if row.value.is_some() {
                     vec![A::Focus, A::SetValue]
@@ -1762,13 +1599,9 @@ fn write_to(
         Action::Capture { .. } | Action::Record { .. } | Action::StopRecording => {
             Err("capture requires its current bar surface".into())
         }
-        Action::Back
-        | Action::ClipboardConfirm(_)
-        | Action::SetMode(_)
-        | Action::ToggleAudio
-        | Action::SecretFocus(_)
-        | Action::SecretSubmit
-        | Action::SecretCancel => Ok(()),
+        Action::Back | Action::ClipboardConfirm(_) | Action::SetMode(_) | Action::ToggleAudio => {
+            Ok(())
+        }
     }
 }
 
@@ -1844,7 +1677,6 @@ mod tests {
     fn a11y_targets_keep_identity_after_service_reorder_and_disappear_on_owner_loss() {
         let mut s = status();
         let mut d = Detail::new("wifi", 1);
-        d.auth_ready = true;
         d.refresh(&s, [0., 50., 396., 400.], None);
         let home = d
             .rows
@@ -1870,69 +1702,6 @@ mod tests {
         s.apply(crate::status::Update::Wifi(None, String::new()));
         d.refresh(&s, d.panel, None);
         assert!(d.action(home, None).is_none());
-    }
-    #[test]
-    fn credentials_are_not_readable_in_the_semantic_tree_and_close_with_the_view() {
-        let mut d = Detail::new("wifi", 1);
-        let mut form = crate::ccauth::Form::new(
-            7,
-            &json!({"setting":"802-11-wireless-security","hints":["psk"]}),
-        )
-        .unwrap();
-        form.replace(0, "private日本password");
-        d.form = Some(form);
-        d.refresh(&status(), [0., 50., 396., 400.], None);
-        let nodes = d.nodes(901, None);
-        let password = &nodes
-            .iter()
-            .find(|(n, _)| n.role == nk_a11y::Role::Password)
-            .unwrap()
-            .0;
-        assert!(password.actions.contains(&nk_a11y::Action::SetText));
-        assert_eq!(password.text.as_ref().unwrap().text, "");
-        assert!(!format!("{nodes:?}").contains("private日本password"));
-    }
-    #[test]
-    fn secret_keyboard_navigation_reaches_buttons_and_disables_text_input_there() {
-        let mut detail = Detail::new("wifi", 1);
-        detail.form =
-            crate::ccauth::Form::new(1, &json!({"setting":"802-1x","hints":["password"]}));
-        if !laid(&mut detail, &status(), [0., 50., 396., 400.]) {
-            return;
-        }
-        assert_eq!(detail.focused_field(), Some(0));
-        assert!(detail.text_input().focused);
-        assert!(detail.text_input().password);
-        assert!(detail.text_input().text.is_empty());
-        let tab = nk_wayland::Key {
-            serial: None,
-            sym: 0xff09,
-            text: String::new(),
-            shift: false,
-            ctrl: false,
-            alt: false,
-        };
-        let mut reached_submit = false;
-        for _ in 0..detail.rows.len() {
-            detail.key(&tab);
-            if detail
-                .rows
-                .iter()
-                .any(|r| Some(r.id) == detail.focused() && r.action == Some(Action::SecretSubmit))
-            {
-                reached_submit = true;
-                assert!(!detail.text_input().focused);
-                assert_eq!(
-                    detail.key(&nk_wayland::Key {
-                        sym: 0x20,
-                        ..tab.clone()
-                    }),
-                    Some(Action::SecretSubmit)
-                );
-                break;
-            }
-        }
-        assert!(reached_submit);
     }
     #[test]
     fn short_outputs_scroll_and_every_detail_exposes_a_back_action() {
@@ -2165,30 +1934,6 @@ mod tests {
             .id;
         assert_eq!(d.action(id, None), None);
         assert_eq!(d.mode, "window");
-    }
-    #[test]
-    fn a_secret_reaches_the_view_only_as_its_bullets() {
-        let mut d = Detail::new("wifi", 1);
-        let mut form = crate::ccauth::Form::new(
-            7,
-            &json!({"setting":"802-11-wireless-security","hints":["psk"]}),
-        )
-        .unwrap();
-        form.replace(0, "private日本password");
-        d.form = Some(form);
-        if !laid(&mut d, &status(), [0., 50., 396., 400.]) {
-            return;
-        }
-        let placed = format!("{:?}", d.state.placed());
-        assert!(!placed.contains("private"), "the view holds no secret");
-        assert!(placed.contains(&"•".repeat(17)), "one per character");
-        // Its caret stands at the end of the bullets, for the input method.
-        let caret = d.text_input().rect;
-        let field = d
-            .state
-            .rect(&d.focus_key(d.focused().unwrap()).unwrap())
-            .unwrap();
-        assert!(f64::from(caret[0]) > field[0] + 20., "{caret:?} {field:?}");
     }
     #[test]
     fn a_setting_that_is_on_or_off_ends_with_a_switch_and_a_choice_keeps_its_mark() {

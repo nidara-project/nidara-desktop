@@ -240,8 +240,6 @@ pub struct Bar {
     nc_view: crate::nc_view::View,
     nc_generation: u64,
     cc_writer: Option<crate::cc::Writer>,
-    cc_auth: Option<crate::ccauth::Auth>,
-    cc_paste: Option<(u64, (u64, usize, u64))>,
     /// The output's logical height: the surface's while the Control Center is open.
     output_height: u32,
 }
@@ -337,8 +335,6 @@ impl Bar {
             nc_view: Default::default(),
             nc_generation: 0,
             cc_writer: None,
-            cc_auth: None,
-            cc_paste: None,
             output_height,
         }
     }
@@ -1212,37 +1208,10 @@ impl Bar {
                         );
                     }
                 }
-                self.cc_auth = None;
-                if page == "wifi" {
-                    self.cc_auth = Some(crate::ccauth::Auth::new(self.waker.clone()));
-                }
                 return;
             }
             crate::cc::Act::Detail(crate::cc::detail::Action::Back) => {
-                if let (Some(auth), Some(form)) = (
-                    &self.cc_auth,
-                    self.cc.detail.as_ref().and_then(|d| d.form.as_ref()),
-                ) {
-                    auth.cancel(form.id);
-                }
                 self.cc.back();
-                return;
-            }
-            crate::cc::Act::Detail(crate::cc::detail::Action::SecretSubmit) => {
-                if let (Some(auth), Some(d)) = (&self.cc_auth, &mut self.cc.detail)
-                    && let Some(mut form) = d.form.take()
-                {
-                    let values = form.take();
-                    auth.submit(form.id, form.setting.clone(), values);
-                }
-                return;
-            }
-            crate::cc::Act::Detail(crate::cc::detail::Action::SecretCancel) => {
-                if let (Some(auth), Some(d)) = (&self.cc_auth, &mut self.cc.detail)
-                    && let Some(form) = d.form.take()
-                {
-                    auth.cancel(form.id);
-                }
                 return;
             }
             crate::cc::Act::Detail(crate::cc::detail::Action::Capture { mode, copy }) => {
@@ -1305,41 +1274,6 @@ impl Bar {
         }
     }
 
-    fn auth_events(&mut self, w: &mut Window) {
-        let events: Vec<_> = self
-            .cc_auth
-            .as_ref()
-            .map(|a| a.events.try_iter().collect())
-            .unwrap_or_default();
-        for event in events {
-            if let Some(d) = &mut self.cc.detail {
-                match event {
-                    crate::ccauth::Event::Ready => d.auth_ready = true,
-                    crate::ccauth::Event::Prompt(id, meta) => {
-                        d.form = crate::ccauth::Form::new(id, &meta);
-                        if d.form.is_none() {
-                            if let Some(auth) = &self.cc_auth {
-                                auth.cancel(id);
-                            }
-                            d.error = "unsupported network authentication request".into();
-                        }
-                        d.to_top();
-                    }
-                    crate::ccauth::Event::Closed(id) => {
-                        if d.form.as_ref().is_some_and(|f| f.id == id) {
-                            d.form = None;
-                        }
-                    }
-                    crate::ccauth::Event::Error(error) => {
-                        d.auth_ready = false;
-                        d.form = None;
-                        d.error = error;
-                    }
-                }
-            }
-            self.refresh(w);
-        }
-    }
     fn clear_cc_layers(&mut self, w: &mut Window) {
         for (_, (id, _, _)) in self.cc_layers.drain() {
             let _ = w.destroy_layer(id);
@@ -1535,10 +1469,6 @@ impl Bar {
 
     fn refresh(&mut self, w: &mut Window) {
         self.nc_sync_appear();
-        if self.cc.detail.as_ref().is_none_or(|d| d.page != "wifi") {
-            self.cc_auth = None;
-        }
-
         self.cc.detail_scale = w.scale();
         self.relayout();
         self.relayout_nc_view(w.scale());
@@ -1570,13 +1500,6 @@ impl Bar {
         self.sync_input(w);
         w.redraw();
         self.publish_semantics(w);
-        let input = self
-            .cc
-            .detail
-            .as_ref()
-            .map(|d| d.text_input())
-            .unwrap_or_default();
-        w.set_text_input(input);
     }
 
     /// What a reader is told: a window named Bar holding its items in the order drawn, an
@@ -1756,43 +1679,6 @@ impl Bar {
                 if !current_nc {
                     continue;
                 }
-            }
-            if let nk_a11y::Request::SetText(id, ref value) = request {
-                if let Some(crate::cc::Target::Detail(row)) = self.cc_target(id) {
-                    if let Some(d) = &mut self.cc.detail {
-                        let index =
-                            d.rows
-                                .iter()
-                                .find(|r| r.id == row)
-                                .and_then(|r| match r.action {
-                                    Some(crate::cc::detail::Action::SecretFocus(i)) => Some(i),
-                                    _ => None,
-                                });
-                        if let (Some(index), Some(form)) = (index, &mut d.form) {
-                            form.replace(index, value);
-                        }
-                    }
-                    self.refresh(w);
-                }
-                continue;
-            }
-            if let nk_a11y::Request::SetSelection(id, ref range) = request {
-                if let Some(crate::cc::Target::Detail(row)) = self.cc_target(id)
-                    && let Some(d) = &mut self.cc.detail
-                {
-                    let index = d
-                        .rows
-                        .iter()
-                        .find(|r| r.id == row)
-                        .and_then(|r| match r.action {
-                            Some(crate::cc::detail::Action::SecretFocus(i)) => Some(i),
-                            _ => None,
-                        });
-                    if let (Some(index), Some(form)) = (index, &mut d.form) {
-                        form.selection(index, range.clone());
-                    }
-                }
-                continue;
             }
             if let nk_a11y::Request::SetValue(id, value) = request {
                 let target = self.cc_target(id);
@@ -2351,79 +2237,6 @@ impl Application for Bar {
                     self.card_activate(instance, content, target, key.serial, w);
                 }
             }
-            Event::Key(key)
-                if self.cc_open && self.cc.detail.as_ref().is_some_and(|d| d.form.is_some()) =>
-            {
-                if key.sym == ESCAPE {
-                    self.act(
-                        crate::cc::Act::Detail(crate::cc::detail::Action::SecretCancel),
-                        w,
-                    );
-                } else if [0xff09, 0xfe20].contains(&key.sym)
-                    || self
-                        .cc
-                        .detail
-                        .as_ref()
-                        .and_then(|d| d.focused_field())
-                        .is_none()
-                {
-                    if let Some(act) = self.cc.key(&key, &self.frame.status) {
-                        self.act(act, w);
-                    }
-                } else if key.ctrl && [b'v' as u32, b'V' as u32].contains(&key.sym) {
-                    self.cc_paste = self
-                        .cc
-                        .detail
-                        .as_ref()
-                        .and_then(|d| d.form.as_ref())
-                        .map(|f| (self.cc.view_id(), f.paste_tag()));
-                    if let Err(error) = w.paste() {
-                        self.cc_paste = None;
-                        if let Some(d) = &mut self.cc.detail {
-                            d.error = error.to_string();
-                        }
-                    }
-                } else if key.sym == 0xff0d {
-                    self.act(
-                        crate::cc::Act::Detail(crate::cc::detail::Action::SecretSubmit),
-                        w,
-                    );
-                } else if let Some(form) = self.cc.detail.as_mut().and_then(|d| d.form.as_mut()) {
-                    form.key(&key);
-                }
-                self.refresh(w);
-            }
-            Event::Paste(text) => {
-                if let Some((view, tag)) = self.cc_paste.take()
-                    && view == self.cc.view_id()
-                    && self.cc.detail.as_ref().and_then(|d| d.focused_field()) == Some(tag.1)
-                    && let Some(form) = self.cc.detail.as_mut().and_then(|d| d.form.as_mut())
-                {
-                    form.paste(tag, &text);
-                    self.refresh(w);
-                }
-            }
-            Event::Ime(batch) if self.cc_open => {
-                if self
-                    .cc
-                    .detail
-                    .as_ref()
-                    .and_then(|d| d.focused_field())
-                    .is_some()
-                    && let Some(text) = batch.commit
-                    && let Some(form) = self.cc.detail.as_mut().and_then(|d| d.form.as_mut())
-                {
-                    form.key(&nk_wayland::Key {
-                        serial: None,
-                        sym: 0,
-                        text,
-                        shift: false,
-                        ctrl: false,
-                        alt: false,
-                    });
-                }
-                self.refresh(w);
-            }
             Event::Key(key) if self.cc_open && key.sym == ESCAPE => {
                 if self.cc.editor.active {
                     self.cc.key(&key, &self.frame.status);
@@ -2541,7 +2354,6 @@ impl Application for Bar {
             Arc::make_mut(&mut self.frame).status.aux = aux;
             self.refresh(w);
         }
-        self.auth_events(w);
         self.a11y(w);
         let results: Vec<_> = self
             .cc_writer
@@ -2586,7 +2398,6 @@ impl Application for Bar {
     }
 
     fn idle(&mut self, w: &mut Window) -> nk_wayland::Result<()> {
-        self.auth_events(w);
         if self.cc_appear.moving(std::time::Instant::now()) {
             w.redraw();
             self.cc_moved = true;

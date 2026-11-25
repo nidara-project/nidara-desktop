@@ -384,6 +384,14 @@
     "settings.bluetooth.pairing.enter-passkey": "5a632bb5",
     "settings.bluetooth.pairing.enter-pin": "1cdfe626",
     "settings.bluetooth.pairing.authorize": "80a4e986",
+    "shell.prompt.wifi.title": "dd75b9b0",
+    "shell.prompt.bluetooth.passkey": "e35828da",
+    "shell.prompt.bluetooth.progress": "2aec7aa8",
+    "shell.prompt.bluetooth.receive": "713d1cfd",
+    "shell.prompt.bluetooth.accept-file": "72208421",
+    "shell.prompt.bluetooth.file-size": "74203f83",
+    "shell.prompt.bluetooth.unknown-size": "55366e0b",
+    "shell.prompt.error": "f67b0677",
     "settings.widgets.tooltip.no-space": "4b49accd",
     "settings.widgets.tooltip.cc-fixed": "114dc78d",
     "settings.widgets.tooltip.no-hardware": "51f7da74",
@@ -1008,7 +1016,7 @@
   "locales": {
     "de": {
       "translated": 835,
-      "of": 1003,
+      "of": 1011,
       "untranslated": [
         "bar.edit.done",
         "bar.edit.hint",
@@ -1175,6 +1183,14 @@
         "settings.region.tz.none",
         "settings.region.tz.search",
         "settings.region.tz.search.desc",
+        "shell.prompt.bluetooth.accept-file",
+        "shell.prompt.bluetooth.file-size",
+        "shell.prompt.bluetooth.passkey",
+        "shell.prompt.bluetooth.progress",
+        "shell.prompt.bluetooth.receive",
+        "shell.prompt.bluetooth.unknown-size",
+        "shell.prompt.error",
+        "shell.prompt.wifi.title",
         "widget.screenrecord.failed",
         "workspace.mode.floating",
         "workspace.mode.tiling"
@@ -1182,14 +1198,14 @@
       "stale": []
     },
     "es": {
-      "translated": 1003,
-      "of": 1003,
+      "translated": 1011,
+      "of": 1011,
       "untranslated": [],
       "stale": []
     },
     "fr": {
       "translated": 835,
-      "of": 1003,
+      "of": 1011,
       "untranslated": [
         "bar.edit.done",
         "bar.edit.hint",
@@ -1356,6 +1372,14 @@
         "settings.region.tz.none",
         "settings.region.tz.search",
         "settings.region.tz.search.desc",
+        "shell.prompt.bluetooth.accept-file",
+        "shell.prompt.bluetooth.file-size",
+        "shell.prompt.bluetooth.passkey",
+        "shell.prompt.bluetooth.progress",
+        "shell.prompt.bluetooth.receive",
+        "shell.prompt.bluetooth.unknown-size",
+        "shell.prompt.error",
+        "shell.prompt.wifi.title",
         "widget.screenrecord.failed",
         "workspace.mode.floating",
         "workspace.mode.tiling"
@@ -1364,7 +1388,7 @@
     },
     "it": {
       "translated": 835,
-      "of": 1003,
+      "of": 1011,
       "untranslated": [
         "bar.edit.done",
         "bar.edit.hint",
@@ -1531,6 +1555,14 @@
         "settings.region.tz.none",
         "settings.region.tz.search",
         "settings.region.tz.search.desc",
+        "shell.prompt.bluetooth.accept-file",
+        "shell.prompt.bluetooth.file-size",
+        "shell.prompt.bluetooth.passkey",
+        "shell.prompt.bluetooth.progress",
+        "shell.prompt.bluetooth.receive",
+        "shell.prompt.bluetooth.unknown-size",
+        "shell.prompt.error",
+        "shell.prompt.wifi.title",
         "widget.screenrecord.failed",
         "workspace.mode.floating",
         "workspace.mode.tiling"
@@ -1539,7 +1571,7 @@
     },
     "ja": {
       "translated": 835,
-      "of": 1003,
+      "of": 1011,
       "untranslated": [
         "bar.edit.done",
         "bar.edit.hint",
@@ -1706,6 +1738,14 @@
         "settings.region.tz.none",
         "settings.region.tz.search",
         "settings.region.tz.search.desc",
+        "shell.prompt.bluetooth.accept-file",
+        "shell.prompt.bluetooth.file-size",
+        "shell.prompt.bluetooth.passkey",
+        "shell.prompt.bluetooth.progress",
+        "shell.prompt.bluetooth.receive",
+        "shell.prompt.bluetooth.unknown-size",
+        "shell.prompt.error",
+        "shell.prompt.wifi.title",
         "widget.screenrecord.failed",
         "workspace.mode.floating",
         "workspace.mode.tiling"
@@ -1714,7 +1754,7 @@
     },
     "nl": {
       "translated": 835,
-      "of": 1003,
+      "of": 1011,
       "untranslated": [
         "bar.edit.done",
         "bar.edit.hint",
@@ -1881,6 +1921,14 @@
         "settings.region.tz.none",
         "settings.region.tz.search",
         "settings.region.tz.search.desc",
+        "shell.prompt.bluetooth.accept-file",
+        "shell.prompt.bluetooth.file-size",
+        "shell.prompt.bluetooth.passkey",
+        "shell.prompt.bluetooth.progress",
+        "shell.prompt.bluetooth.receive",
+        "shell.prompt.bluetooth.unknown-size",
+        "shell.prompt.error",
+        "shell.prompt.wifi.title",
         "widget.screenrecord.failed",
         "workspace.mode.floating",
         "workspace.mode.tiling"
@@ -1889,7 +1937,7 @@
     },
     "pl": {
       "translated": 835,
-      "of": 1003,
+      "of": 1011,
       "untranslated": [
         "bar.edit.done",
         "bar.edit.hint",
@@ -2056,6 +2104,14 @@
         "settings.region.tz.none",
         "settings.region.tz.search",
         "settings.region.tz.search.desc",
+        "shell.prompt.bluetooth.accept-file",
+        "shell.prompt.bluetooth.file-size",
+        "shell.prompt.bluetooth.passkey",
+        "shell.prompt.bluetooth.progress",
+        "shell.prompt.bluetooth.receive",
+        "shell.prompt.bluetooth.unknown-size",
+        "shell.prompt.error",
+        "shell.prompt.wifi.title",
         "widget.screenrecord.failed",
         "workspace.mode.floating",
         "workspace.mode.tiling"
@@ -2064,7 +2120,7 @@
     },
     "pt-BR": {
       "translated": 835,
-      "of": 1003,
+      "of": 1011,
       "untranslated": [
         "bar.edit.done",
         "bar.edit.hint",
@@ -2231,6 +2287,14 @@
         "settings.region.tz.none",
         "settings.region.tz.search",
         "settings.region.tz.search.desc",
+        "shell.prompt.bluetooth.accept-file",
+        "shell.prompt.bluetooth.file-size",
+        "shell.prompt.bluetooth.passkey",
+        "shell.prompt.bluetooth.progress",
+        "shell.prompt.bluetooth.receive",
+        "shell.prompt.bluetooth.unknown-size",
+        "shell.prompt.error",
+        "shell.prompt.wifi.title",
         "widget.screenrecord.failed",
         "workspace.mode.floating",
         "workspace.mode.tiling"
@@ -2239,7 +2303,7 @@
     },
     "pt-PT": {
       "translated": 835,
-      "of": 1003,
+      "of": 1011,
       "untranslated": [
         "bar.edit.done",
         "bar.edit.hint",
@@ -2406,6 +2470,14 @@
         "settings.region.tz.none",
         "settings.region.tz.search",
         "settings.region.tz.search.desc",
+        "shell.prompt.bluetooth.accept-file",
+        "shell.prompt.bluetooth.file-size",
+        "shell.prompt.bluetooth.passkey",
+        "shell.prompt.bluetooth.progress",
+        "shell.prompt.bluetooth.receive",
+        "shell.prompt.bluetooth.unknown-size",
+        "shell.prompt.error",
+        "shell.prompt.wifi.title",
         "widget.screenrecord.failed",
         "workspace.mode.floating",
         "workspace.mode.tiling"
@@ -2414,7 +2486,7 @@
     },
     "ru": {
       "translated": 835,
-      "of": 1003,
+      "of": 1011,
       "untranslated": [
         "bar.edit.done",
         "bar.edit.hint",
@@ -2581,6 +2653,14 @@
         "settings.region.tz.none",
         "settings.region.tz.search",
         "settings.region.tz.search.desc",
+        "shell.prompt.bluetooth.accept-file",
+        "shell.prompt.bluetooth.file-size",
+        "shell.prompt.bluetooth.passkey",
+        "shell.prompt.bluetooth.progress",
+        "shell.prompt.bluetooth.receive",
+        "shell.prompt.bluetooth.unknown-size",
+        "shell.prompt.error",
+        "shell.prompt.wifi.title",
         "widget.screenrecord.failed",
         "workspace.mode.floating",
         "workspace.mode.tiling"
@@ -2589,7 +2669,7 @@
     },
     "zh-CN": {
       "translated": 835,
-      "of": 1003,
+      "of": 1011,
       "untranslated": [
         "bar.edit.done",
         "bar.edit.hint",
@@ -2756,6 +2836,14 @@
         "settings.region.tz.none",
         "settings.region.tz.search",
         "settings.region.tz.search.desc",
+        "shell.prompt.bluetooth.accept-file",
+        "shell.prompt.bluetooth.file-size",
+        "shell.prompt.bluetooth.passkey",
+        "shell.prompt.bluetooth.progress",
+        "shell.prompt.bluetooth.receive",
+        "shell.prompt.bluetooth.unknown-size",
+        "shell.prompt.error",
+        "shell.prompt.wifi.title",
         "widget.screenrecord.failed",
         "workspace.mode.floating",
         "workspace.mode.tiling"

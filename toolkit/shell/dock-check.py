@@ -584,6 +584,10 @@ try:
     # Shell1 (crates/nidara-shell-ipc): this process owns the name, says what it can do,
     # and refuses what it cannot rather than doing nothing.
     until('Shell1 answering', lambda: shell1('GetState') is not None)
+    if os.environ.get('NK_SESSION_PROMPTS_ONLY') == '1':
+        from cc_check import run_prompts
+        run_prompts(globals())
+        raise SystemExit(0)
     if os.environ.get('NK_ICON_CHECK') == '1':
         from icon_check import run as icon_check
         icon_check(globals())

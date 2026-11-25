@@ -8,12 +8,13 @@ import subprocess
 import time
 
 NETWORK = r'''
-import json,sys
+import json,os,sys
 import gi
 gi.require_version('Gio','2.0')
 from gi.repository import Gio,GLib
 root=__import__('pathlib').Path(sys.argv[1])
-log=root.with_name('cc-network-actions')
+log=__import__('pathlib').Path(os.environ['NK_WIDGETS_LOG'])/'cc-network-actions'
+password='privatepassword'
 def args(*types,direction='in'):
     return ''.join('<arg type="'+t+'" direction="'+direction+'"/>' for t in types)
 methods={'Snapshot':('',args('t','t','s',direction='out')),'SetWifiEnabled':(args('b'),''),'Scan':(args('o'),''),
@@ -49,7 +50,7 @@ def answer(conn,sender,path,iface,method,params,inv):
         return
     if method=='SubmitSecrets':
         ident,values=p
-        valid=(values.get('802-11-wireless-security',{}).get('psk')=='private日本password')
+        valid=(values.get('802-11-wireless-security',{}).get('psk')==password)
         record(method,{'id':ident,'valid':valid})
         pending=state['pending'];assert pending and ident==pending[0] and sender==state['ui']
         if not valid:inv.return_dbus_error('org.nidara.Network1.Error.Invalid','incorrect test value');return
@@ -74,6 +75,91 @@ GLib.MainLoop().run()
 '''
 
 
+def network_actions(evidence_dir):
+    log = evidence_dir / 'cc-network-actions'
+    return [json.loads(line) for line in log.read_text().splitlines()] if log.exists() else []
+
+
+def prompt_nodes(ctx, title):
+    root = ctx['dock_node'](title)
+    if root is None:
+        return []
+    def descend(node):
+        yield node
+        for child in ctx['children'](node):
+            yield from descend(child)
+    return list(descend(root))
+def prompt_button(ctx, title, name):
+    return next((n for n in prompt_nodes(ctx, title) if n.get_name() == name
+                 and n.get_role_name() == 'button'), None)
+def respond_wifi(ctx, pipe):
+    from gi.repository import Atspi
+    until = ctx['until']
+    title = 'Wi-Fi authentication'
+    password = until('focused native password question',
+        lambda: next((n for n in prompt_nodes(ctx, title)
+                      if n.get_role_name() == 'password text'
+                      and n.get_state_set().contains(Atspi.StateType.FOCUSED)), None))
+    assert password.get_text_iface() is None or password.get_text_iface().get_text(0, -1) == ''
+    # Linux evdev codes for the fixture credential "privatepassword".
+    for code in [25, 19, 23, 47, 30, 20, 18, 25, 30, 31, 31, 17, 24, 19, 32]:
+        pipe.write(f'key {code}\n')
+        time.sleep(.02)
+    until('password enables Connect',
+        lambda: (n := prompt_button(ctx, title, 'Connect')) and
+                n.get_state_set().contains(Atspi.StateType.ENABLED) and n)
+    assert password.get_text_iface() is None or password.get_text_iface().get_text(0, -1) == ''
+    pipe.write('key 28\n')
+    until('question withdrawn',lambda:ctx['dock_node'](title) is None)
+
+
+def run_prompts(ctx):
+    until, run_dir, log = ctx['until'], ctx['RUN'], ctx['LOG']
+    signal = run_dir / 'wifi-strength'
+    signal.write_text('90')
+    bt_actions = log / 'bluetooth-actions.jsonl'
+    ctx['start']('network', ['python3','-I','-c',NETWORK,str(signal)])
+    ctx['start']('bluetooth', ['python3','-I','-c',BLUETOOTH,str(bt_actions)])
+    def actions():
+        return network_actions(log)
+    until('Wi-Fi renderer registered', lambda: any(m == 'RegisterSecretsUi' for m, _ in actions()))
+    with open(os.environ['HYALO_CONTROL'], 'w', buffering=1) as pipe:
+        # Network1's issuer is independent of the control-center panel.
+        before = sum(1 for method, _ in actions() if method == 'SubmitSecrets')
+        caller = ctx['start']('external-wifi', ['busctl', '--user', 'call',
+            'org.nidara.Network', '/org/nidara/Network', 'org.nidara.Network1',
+            'ConnectDefault', 'oos', '/device/wifi', '/ap/secure', ''])
+        # While Wi-Fi is active, Bluetooth queues on the same surface.
+        until('Bluetooth renderer registered', lambda: bt_actions.exists() and 'RegisterUi' in bt_actions.read_text())
+        until('external Wi-Fi dialog', lambda: ctx['dock_node']('Wi-Fi authentication'))
+        trigger = bt_actions.with_name('bluetooth-prompt')
+        trigger.write_text('file')
+        until('queued Bluetooth request signalled', lambda: not trigger.exists())
+        assert ctx['dock_node']('Bluetooth') is None
+        respond_wifi(ctx, pipe)
+        until('external connection answered', lambda: caller.poll() == 0)
+        assert sum(1 for method, _ in actions() if method == 'SubmitSecrets') == before + 1
+        assert sum(1 for method, _ in actions() if method == 'RegisterSecretsUi') == 1
+
+        until('incoming file name', lambda: any(n.get_name() == 'fixture.txt' for n in prompt_nodes(ctx, 'Bluetooth')))
+        assert any(n.get_name() == 'Unknown file size' for n in prompt_nodes(ctx, 'Bluetooth'))
+        time.sleep(1.5)
+        ctx['shot'](log / 'bluetooth-file-consent.png')
+        assert until('file accept button', lambda: prompt_button(ctx, 'Bluetooth', 'Accept file')).get_action_iface().do_action(0)
+        until('Bluetooth replied to current epoch and ID', lambda: ['ReplyRequest', [7, 12, True, '']] in
+              [json.loads(line) for line in bt_actions.read_text().splitlines()])
+        until('incoming file prompt withdrawn', lambda: ctx['dock_node']('Bluetooth') is None)
+        trigger.write_text('display')
+        until('Bluetooth displayed passkey', lambda: any(n.get_name() == '000042' for n in prompt_nodes(ctx, 'Bluetooth')))
+        until('Bluetooth updated passkey progress', lambda: any('3 of 6' in n.get_name() for n in prompt_nodes(ctx, 'Bluetooth')))
+        assert until('display cancel button', lambda: prompt_button(ctx, 'Bluetooth', 'Cancel')).get_action_iface().do_action(0)
+        until('Bluetooth cancelled display at the service', lambda: ['CancelRequest', [7, 13]] in
+              [json.loads(line) for line in bt_actions.read_text().splitlines()])
+        until('display withdrawn', lambda: ctx['dock_node']('Bluetooth') is None)
+    assert 'privatepassword' not in (log/'shell.log').read_text()
+    print('PASS session prompts: Wi-Fi outside CC, masked password, queued Bluetooth file consent and passkey updates', flush=True)
+
+
 def run(ctx):
     from gi.repository import Atspi
     until, log, run_dir = ctx['until'], ctx['LOG'], ctx['RUN']
@@ -91,8 +177,7 @@ def run(ctx):
         n=until('control '+name,lambda:node(name))
         assert n.get_action_iface().do_action(0),name
     def actions():
-        p=run_dir/'cc-network-actions'
-        return [json.loads(line) for line in p.read_text().splitlines()] if p.exists() else []
+        return network_actions(log)
     def back():
         click(next(name for name in names() if name=='Back' or name.endswith(' · Back')));until('grid restored',lambda:'Screenshot' in tiles())
     def open_detail(entry, marker):
@@ -101,22 +186,16 @@ def run(ctx):
             if 'Screenshot' in tiles():click(entry)
             return False
         until('detail '+entry,ready)
+    until('secrets renderer registered before opening the Wi-Fi detail',lambda:any(m=='RegisterSecretsUi' for m,_ in actions()))
     open_detail('Wi-Fi','Secure test')
-    until('secrets renderer registered',lambda:any(m=='RegisterSecretsUi' for m,_ in actions()))
     assert any('Home' in name for name in names()),names()
     time.sleep(1.5);ctx['shot'](log/'cc-wifi.png')
     click('Scan')
     until('scan reaches Network1',lambda:any(m=='Scan' for m,_ in actions()))
     click('Secure test')
-    password=until('native password question',lambda:next((n for n in tiles().values() if n.get_role_name()=='password text'),None))
-    assert (password.get_text_iface() is None or password.get_text_iface().get_text(0,-1)==''),'credential exposed before entry'
-    assert password.get_editable_text_iface().set_text_contents('private日本password')
-    time.sleep(.2)
-    assert (password.get_text_iface() is None or password.get_text_iface().get_text(0,-1)==''),'credential exposed through AT-SPI'
-    click('Connect')
+    respond_wifi(ctx, pipe)
     until('credential submitted without a blocked Connect lane',lambda:any(m=='SubmitSecrets' and p['valid'] for m,p in actions()))
-    until('question withdrawn',lambda:not any(n.get_role_name()=='password text' for n in tiles().values()))
-    assert 'private日本password' not in (log/'shell.log').read_text()
+    assert 'privatepassword' not in (log/'shell.log').read_text()
     time.sleep(1.5);ctx['shot'](log/'cc-wifi-connected.png')
     back()
     bt_entry=until('Bluetooth detail entry',lambda:next((name for name in names() if name.startswith('Bluetooth · ')),None))
@@ -179,26 +258,61 @@ def run(ctx):
         assert video_info['streams'] and int(video_info['streams'][0].get('nb_frames',0))>0,video_info
         (log/'native-recording.mp4').write_bytes(video.read_bytes())
         back()
-    report={'network_actions':actions(),'credentials_readable':False,'details':['wifi','screenshot','screenrecord','night_light'],'temperature':4500,'bluetooth':json.loads(bt_actions.read_text().splitlines()[0]),'media_selection':True,'screenshot':video_info is not None,'recording':video_info}
+    report={'network_actions':actions(),'credentials_readable':False,'details':['wifi','screenshot','screenrecord','night_light'],'temperature':4500,'bluetooth':[json.loads(line) for line in bt_actions.read_text().splitlines()],'media_selection':True,'screenshot':video_info is not None,'recording':video_info}
     (log/'cc-details.json').write_text(json.dumps(report,indent=2))
-    print('PASS B2.2: Wi-Fi list, scan, real secret renderer/submit, redacted AT-SPI password, details, temperature and Back/Escape',flush=True)
+    print('PASS B2.2: Wi-Fi in CC, redacted password, details and Back/Escape',flush=True)
 
 BLUETOOTH = r'''
 import json,sys
 from pathlib import Path
 from gi.repository import Gio,GLib
-log=Path(sys.argv[1]);state={'powered':True,'connected':False,'revision':1}
-xml='<node><interface name="org.nidara.Bluetooth1"><method name="Snapshot"><arg type="t" direction="out"/><arg type="t" direction="out"/><arg type="s" direction="out"/></method><method name="SetPowered"><arg type="o"/><arg type="b"/></method><method name="Connect"><arg type="o"/></method><method name="Disconnect"><arg type="o"/></method><signal name="Updated"><arg type="t"/><arg type="t"/><arg type="s"/></signal></interface></node>'
+log=Path(sys.argv[1]);state={'powered':True,'connected':False,'revision':1,'ui':None,'id':None}
+path='/org/nidara/Bluetooth'
+iface='org.nidara.Bluetooth1'
+xml="""<node><interface name="org.nidara.Bluetooth1">
+<method name="Snapshot"><arg type="t" direction="out"/><arg type="t" direction="out"/><arg type="s" direction="out"/></method>
+<method name="SetPowered"><arg type="o"/><arg type="b"/></method><method name="Connect"><arg type="o"/></method>
+<method name="Disconnect"><arg type="o"/></method><method name="RegisterUi"/>
+<method name="ReplyRequest"><arg type="t"/><arg type="t"/><arg type="b"/><arg type="s"/></method>
+<method name="CancelRequest"><arg type="t"/><arg type="t"/></method>
+<signal name="Updated"><arg type="t"/><arg type="t"/><arg type="s"/></signal>
+</interface></node>"""
 def doc():return json.dumps({'schemaVersion':1,'available':True,'adapters':[{'path':'/adapter/1','powered':state['powered']}],'devices':[{'path':'/device/headphones','adapter':'/adapter/1','name':'Test headphones','alias':'Test headphones','paired':True,'connected':state['connected']}]})
 bus=Gio.bus_get_sync(Gio.BusType.SESSION,None)
+def signal(member, ident, data):
+    bus.emit_signal(state['ui'],path,iface,member,GLib.Variant('(tts)',(7,ident,data)))
 def call(c,s,p,i,m,args,inv):
     if m=='Snapshot':inv.return_value(GLib.Variant('(tts)',(1,state['revision'],doc())));return
-    with log.open('a') as f:f.write(json.dumps([m,args.unpack()])+'\n')
-    if m=='SetPowered':state['powered']=args.unpack()[1]
+    values=args.unpack()
+    with log.open('a') as f:f.write(json.dumps([m,values])+'\n')
+    if m=='RegisterUi':
+        state['ui']=s;inv.return_value(None);return
+    if m in ('ReplyRequest','CancelRequest'):
+        assert s==state['ui'] and values[:2]==(7,state['id'])
+        signal('RequestClosed',state['id'],'answered')
+        state['id']=None;inv.return_value(None);return
+    if m=='SetPowered':state['powered']=values[1]
     else:state['connected']=m=='Connect'
     state['revision']+=1;bus.emit_signal(None,p,i,'Updated',GLib.Variant('(tts)',(1,state['revision'],doc())));inv.return_value(None)
-bus.register_object('/org/nidara/Bluetooth',Gio.DBusNodeInfo.new_for_xml(xml).interfaces[0],call,None,None)
+def poll():
+    trigger=log.with_name('bluetooth-prompt')
+    if not state['ui'] or not trigger.exists():return True
+    kind=trigger.read_text();trigger.unlink()
+    if kind=='file':
+        state['id']=12
+        signal('Request',12,json.dumps({'kind':'incoming-file','deviceName':'Test phone','name':'fixture.txt','size':None}))
+    if kind=='display':
+        state['id']=13
+        meta={'kind':'display-passkey','deviceName':'Test keyboard','code':'000042','entered':0}
+        signal('Request',13,json.dumps(meta))
+        def update():
+            if state['id']==13:signal('RequestUpdated',13,json.dumps({**meta,'entered':3}))
+            return False
+        GLib.timeout_add(500,update)
+    return True
+bus.register_object(path,Gio.DBusNodeInfo.new_for_xml(xml).interfaces[0],call,None,None)
 Gio.bus_own_name_on_connection(bus,'org.nidara.Bluetooth',0,None,None)
+GLib.timeout_add(100,poll)
 GLib.MainLoop().run()
 '''
 
