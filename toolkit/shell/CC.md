@@ -27,7 +27,7 @@ things (its detail, its panel, its control), never editing.
 | `ccedit.rs` | View-local edit mode, preview, gallery, keyboard and named reader actions |
 | `ccaux.rs` | Mapped-only resources, bounded clipboard helpers and visible image previews |
 | `ccdata.rs` | Audio/Media object snapshots from the status workers |
-| `ccauth.rs` | A view-owned Network1 secrets renderer and bounded password editing |
+| `prompts.rs`, `prompts/`, `ccauth.rs` | Session Network1 and Bluetooth1 prompt registrations, shared layer and allowlisted Wi-Fi fields |
 | `capture.rs` | Screenshot jobs and one recorder shared across outputs |
 | `status.rs` | The tiles' sources beside the bar's widgets (below) |
 | `prefs.rs` | `watch_cc`: dark mode, Night Light, the layout keys |
@@ -158,18 +158,44 @@ owner/destination/key; a long Connect has its own bounded lane so Disconnect and
 secret replies remain usable. Errors are visible in the view that issued them,
 never a subsequently opened detail.
 
-### Network passwords
+### Session prompts
 
-Opening Wi-Fi creates a private connection, subscribes, resolves the unique
-Network1 owner, then RegisterSecretsUi. A second renderer is refused visibly.
-Only that owner's current SecretsRequested ID can be answered. Metadata chooses
-allowlisted fields (PSK, selected WEP slot, or the existing enterprise profile's
-requested secrets); no settings or credentials are invented. Password text never
-enters Debug, command arguments, semantic snapshots or surrounding IME text.
-AT-SPI exposes EditableText but no readable Text interface; keyboard/IME entry and
-Unicode selection stay view-local. SecretsClosed/owner loss clears the question.
-Closing the connection withdraws it through renderer loss; Cancel explicitly calls
-CancelSecrets. No renderer or secret is retained after leaving Wi-Fi.
+The Rust shell registers once per service owner for Network1 secrets and Bluetooth1
+consent, independently of the Control Center and Settings. Each connection subscribes
+before registration and is renewed on service replacement. Replies target the unique
+owner and request ID (plus the Bluetooth epoch). The dialog lane stays separate from
+the Connect writer and the compositor's input thread.
+
+One standalone Wayland toplevel displays the first live request. It uses AppWindow and
+the kit's PasswordEntry. Wi-Fi metadata chooses allowlisted PSK, WEP or enterprise
+secret fields. Bluetooth supports PIN and passkey entry, code confirmation and
+display (with progress), connection authorization and incoming file consent.
+For incoming files the dialog shows the peer, filename and size or unknown size.
+
+The authenticated shell's `nidara-session-prompt` toplevel is centred by Hyalo and
+stacked above fullscreen windows. The close control is compositor-rendered. A
+request without a valid Wayland activation token marks the window as demanding
+attention and leaves the current keyboard focus in place. Connect and Pair
+initiators can route a token for this app-id through the service; a bare request
+carries no token. Esc and the close control both cancel the request.
+
+The service withdraws the dialog on its close signal or owner loss. Lock removes
+the surface and its input state. If the original request is still pending on
+unlock, the shell builds it with empty inputs. Escape or the Cancel button sends
+the appropriate service cancellation. Reject sends a negative Bluetooth consent
+reply for confirmation, authorization or incoming files. Leaving the Control Center does not affect
+registration or a pending request.
+
+Run `NK_SESSION_PROMPTS_ONLY=1 toolkit/shell/check-cc-headless.sh` for the
+private-bus prompt check, including Wi-Fi owner replacement and Bluetooth progress.
+With an authenticated shell and matching Hyalo, `NK_SESSION_PROMPT_TRUSTED=1`
+also asserts that a spontaneous dialog asks for attention above the active
+fullscreen window, that focusing it preserves fullscreen, and that lock withdraws it. Set
+`NK_SESSION_PROMPT_SETTINGS_BIN` to the native Settings binary to also test
+a user-initiated connection taking focus through its activation grant.
+Set `NK_SESSION_PROMPT_CC=1` with the trusted prompt check to run only the
+Control Center path. It clicks a protected Wi-Fi network and checks that the
+dialog takes focus with the activation grant and has its translated title at map.
 
 ### Screenshot and recording
 

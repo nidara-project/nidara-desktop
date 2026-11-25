@@ -304,12 +304,6 @@ impl Cc {
         if let Target::Detail(id) = target {
             if let Some(d) = &mut self.detail {
                 d.focus_row(id);
-                if d.rows
-                    .iter()
-                    .any(|r| r.id == id && matches!(r.action, Some(detail::Action::SecretFocus(_))))
-                {
-                    let _ = d.action(id, None);
-                }
             }
         } else {
             self.editor.set_focus(None, false);

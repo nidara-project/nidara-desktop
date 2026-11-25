@@ -213,8 +213,22 @@ fn main() {
         Err(e) => eprintln!("nidara-shell: no session bus: {e}"),
     }
     let t = hub_tx.clone();
+    let dialogs = if bar_wanted() {
+        apps_conn.clone().map(nidara_shell::prompts::Dialogs::start)
+    } else {
+        None
+    };
     spawn("hyalo", move || {
-        hyalo::watch(move |u| drop(t.send(hub::HubEvent::Hyalo(u))))
+        hyalo::watch(move |u| {
+            if let Some(dialogs) = &dialogs {
+                match &u {
+                    hyalo::HyaloUpdate::Lock(locked) => dialogs.locked(*locked),
+                    hyalo::HyaloUpdate::Unavailable(_) => dialogs.locked(true),
+                    _ => {}
+                }
+            }
+            let _ = t.send(hub::HubEvent::Hyalo(u));
+        })
     });
     let t = hub_tx.clone();
     spawn("prefs", move || {

@@ -226,11 +226,12 @@ def exercise(binary,root,managed=False):
         def done(c,res):
             try:c.call_finish(res);completion.append(True)
             except GLib.Error as e:completion.append(str(e))
-        session.call(N,P,I,'Pair',v('(o)',(D,)),None,Gio.DBusCallFlags.NONE,150000,None,done)
+        session.call(N,P,I,'PairWithActivation',v('(os)',(D,'fixture-pair-grant')),None,Gio.DBusCallFlags.NONE,150000,None,done)
         wait(lambda:len(questions)>before,'pairing question');epoch,rid,raw=questions[-1];check(json.loads(raw)['deviceName']=='_Fixture_ keyboard___'and json.loads(raw)['address']=='AA:BB:CC:DD:EE:FF','pair consent sanitizes remote label and keeps address');check(json.loads(raw)['code']=='000007','pairing confirmation formatted')
         fails(lambda:bt('ReplyRequest','(ttbs)',(epoch,rid,True,''),bus=spy),'Denied')
         bt('ReplyRequest','(ttbs)',(epoch,rid,True,''),bus=ui);wait(lambda:completion,'Pair completes')
         check(completion==[True] and snapshot()['devices'][0]['paired'] and snapshot()['devices'][0]['trusted'],'pair trusts only after success without UI deadlock')
+        check(json.loads(raw).get('activationToken')=='fixture-pair-grant','local pairing prompt receives its initiating activation grant')
         check(not leaks,'consent requests unicast only');check('000007'not in bt('Snapshot')[2],'Snapshot redacts passcodes')
         for kind,value in [('pin','abc123'),('passkey','000008')]:
             before=len(questions);ctrl('Prompt',{'kind':kind});wait(lambda:len(questions)>before,kind+' question');epoch,rid,_=questions[-1]
@@ -277,7 +278,8 @@ def exercise(binary,root,managed=False):
         def incoming(name='received.txt',size=5):
             before=len(questions);ctrl('Incoming',{'name':name,'size':size});wait(lambda:len(questions)>before,'incoming consent');return questions[-1]
         def accept(q):epoch,rid,_=q;bt('ReplyRequest','(ttbs)',(epoch,rid,True,''),bus=ui);wait(lambda:ctrl('Info')['incomingResult']is not None,'incoming result');check(ctrl('Info')['incomingResult']['ok'],'consented incoming receives private stage')
-        q=incoming();check(json.loads(q[2])['size']==5,'incoming consent includes known size');check(json.loads(q[2])['deviceName']=='_Fixture_ keyboard___'and json.loads(q[2])['address']=='AA:BB:CC:DD:EE:FF','file consent sanitizes remote label and keeps address')
+        q=incoming();check('activationToken' not in json.loads(q[2]),'incoming file has no activation grant')
+        check(json.loads(q[2])['size']==5,'incoming consent includes known size');check(json.loads(q[2])['deviceName']=='_Fixture_ keyboard___'and json.loads(q[2])['address']=='AA:BB:CC:DD:EE:FF','file consent sanitizes remote label and keeps address')
         bt('ReplyRequest','(ttbs)',(q[0],q[1],False,''),bus=ui);wait(lambda:ctrl('Info')['incomingResult']is not None,'incoming reject');check(not ctrl('Info')['incomingResult']['ok'],'trusted file still requires explicit consent')
         downloads=root/'downloads';downloads.mkdir(exist_ok=True);(downloads/'received.txt').write_text('preserve')
         outside=root/'outside';outside.write_text('untouched');(downloads/'received (1).txt').symlink_to(outside)

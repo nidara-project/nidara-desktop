@@ -48,6 +48,9 @@ service exposes all devices and APs. SSID bytes preserve non-UTF-8 identities.
 | SetSecretStorage | `s UUID, s storage, b all_users` | Migrate supported Wi-Fi secrets and permissions |
 | SetSecretStorageWithSecrets | `s UUID, s storage, b all_users, a{sa{sv}} values` | Fill missing secrets explicitly, including ask to persistent storage |
 | ReconcileSecretStorage | `s UUID` | Finish interrupted storage cleanup according to NM flags |
+| ConnectDefaultWithActivation | `o device, o AP, s UUID, s token` | ConnectDefault, with an optional one-use session prompt activation grant |
+| ConnectProfileWithActivation | `o device, o AP, a{sa{sv}} settings, s token` | ConnectProfile with the same grant |
+| ActivateWithActivation | `s UUID, o device, s token` | Activate with the same grant |
 | RegisterSecretsUi | none | Reserve the renderer slot for the calling unique sender |
 | SubmitSecrets | `t id, a{sa{sv}} values` | Answer the pending question from that renderer |
 | CancelSecrets | `t id` | Explicit user cancellation from that renderer |
@@ -87,6 +90,11 @@ secrets and must never be serialized. Replies accept only secret keys and types 
 the requested setting. IDs cannot answer a different request, or a request already
 closed. NM cancellation, owner change, renderer loss and the 120-second deadline
 withdraw the question. Only explicit UI cancellation creates a cancellation record.
+
+Activation grants are transient opaque xdg-activation tokens, scoped to
+the current NetworkManager owner and profile UUID. The first matching unicast prompt can
+consume its operation's grant through `activationToken` metadata. Hyalo validates
+the input serial, target app-id and lifetime before giving focus.
 
 Secret Service writes the existing NM attributes `connection-uuid`, `setting-name`,
 `setting-key` and `xdg:schema=org.freedesktop.NetworkManager.Connection`, matching

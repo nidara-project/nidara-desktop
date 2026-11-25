@@ -13,6 +13,7 @@ struct State {
     caret: usize,
     anchor: usize,
     revision: u64,
+    rebuild: bool,
 }
 
 impl State {
@@ -89,6 +90,7 @@ impl PasswordEntry {
             return;
         };
         let changed = edit(state);
+        state.rebuild = true;
         state.revision += 1;
         cx.effects.handled = true;
         if changed {
@@ -122,6 +124,18 @@ impl Component for PasswordEntry {
 
     fn revision(&self, state: Option<&dyn Any>) -> Option<u64> {
         Some(state?.downcast_ref::<State>()?.revision)
+    }
+
+    fn rebuild_pending(&self, state: Option<&dyn Any>) -> bool {
+        state
+            .and_then(|s| s.downcast_ref::<State>())
+            .is_some_and(|s| s.rebuild)
+    }
+
+    fn reconcile(&self, state: Option<&mut dyn Any>) {
+        if let Some(state) = state.and_then(|s| s.downcast_mut::<State>()) {
+            state.rebuild = false;
+        }
     }
 
     fn body(&self, cx: &Build<'_>) -> Node {
@@ -262,6 +276,10 @@ impl Component for PasswordEntry {
             }
             false
         });
+    }
+
+    fn enter(&self, _cx: &mut Input<'_>) {
+        // The single-line field leaves Enter to the dialog's default response.
     }
 
     fn request(&self, cx: &mut Input<'_>, request: Request) {

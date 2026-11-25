@@ -961,17 +961,19 @@ impl ViewState {
             })
             .unwrap_or_default()
     }
+    fn target_component(&self, target: &ReplyTarget) -> Option<&dyn crate::components::Component> {
+        let component = self.placed[self.index(&target.owner)?].part()?.component();
+        (component.type_id() == target.kind
+            && self.components.instance(&target.owner) == target.instance
+            && component.revision(self.components.get(&target.owner)) == Some(target.revision))
+        .then_some(component)
+    }
     pub(crate) fn retained_target(&self, target: &ReplyTarget) -> bool {
-        self.index(&target.owner).is_some_and(|i| {
-            self.placed[i].part().is_some_and(|part| {
-                part.component().type_id() == target.kind
-                    && self.components.instance(&target.owner) == target.instance
-                    && part
-                        .component()
-                        .revision(self.components.get(&target.owner))
-                        == Some(target.revision)
-            })
-        })
+        self.target_component(target).is_some()
+    }
+    pub(crate) fn pending_rebuild(&self, target: &ReplyTarget) -> bool {
+        self.target_component(target)
+            .is_some_and(|c| c.rebuild_pending(self.components.get(&target.owner)))
     }
     pub(crate) fn accepts_target(&self, target: &ReplyTarget) -> bool {
         self.retained_target(target)

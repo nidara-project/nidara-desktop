@@ -416,6 +416,15 @@ export default {
     "settings.bluetooth.pairing.enter-passkey": "Enter the 6-digit code shown on the device:",
     "settings.bluetooth.pairing.enter-pin": "Enter the PIN for the device:",
     "settings.bluetooth.pairing.authorize": "This device wants to connect to this computer.",
+    "shell.prompt.wifi.title": "Wi-Fi authentication",
+    "shell.prompt.bluetooth.passkey": "Passkey",
+    "shell.prompt.bluetooth.progress": "Digits entered on the device: {entered} of 6",
+    "shell.prompt.bluetooth.receive": "Allow this device to send you a file?",
+    "shell.prompt.bluetooth.reject": "Reject",
+    "shell.prompt.bluetooth.accept-file": "Accept file",
+    "shell.prompt.bluetooth.file-size": "File size: {bytes} bytes",
+    "shell.prompt.bluetooth.unknown-size": "Unknown file size",
+    "shell.prompt.error": "The response could not be sent. Try again.",
 
     // Control Center
     "settings.widgets.tooltip.no-space": "Not enough space — remove a control first",

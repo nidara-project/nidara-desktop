@@ -659,9 +659,11 @@ def exercise(binary, directory, managed=False):
                 completion.append('unexpected-success')
             except GLib.Error as e:
                 completion.append(str(e))
-        bus.call(NET,NETPATH,IFACE,'Connect',v('(oossb)',(DEV,AP,'','user',True)),None,Gio.DBusCallFlags.NONE,20000,None,connected)
+        bus.call(NET,NETPATH,IFACE,'ConnectDefaultWithActivation',v('(ooss)',(DEV,AP,'','fixture-wifi-grant')),None,Gio.DBusCallFlags.NONE,20000,None,connected)
         wait(lambda:len(leaks)>before,'new connection secret question')
-        new_uuid=json.loads(leaks[-1][1])['uuid']
+        metadata=json.loads(leaks[-1][1])
+        check(metadata.get('activationToken')=='fixture-wifi-grant','new profile prompt receives its initiating activation grant')
+        new_uuid=metadata['uuid']
         net('SubmitSecrets','(ta{sa{sv}})',(leaks[-1][0],{'802-11-wireless-security':{'psk':v('s','wrong-new-key')}}),c=competitor)
         wait(lambda:info()['heldStores']>0 and info()['profileDeletes']>before_deletes,'NM failed and save is still pending')
         ctrl('ReleaseStores')
@@ -673,6 +675,7 @@ def exercise(binary, directory, managed=False):
         before=len(leaks)
         ctrl('Ask','(us)',(3,'802-11-wireless-security'))
         wait(lambda: len(leaks)>before,'question before NM restart')
+        check('activationToken' not in json.loads(leaks[-1][1]),'spontaneous Wi-Fi request has no activation grant')
         ctrl('Drop')
         wait(lambda: info()['result'] is not None and 'UserCanceled' in info()['result'].get('error',''),'NM loss withdraws pending secrets')
         wait(lambda: not snapshot()[2]['available'],'NM loss clears snapshot')

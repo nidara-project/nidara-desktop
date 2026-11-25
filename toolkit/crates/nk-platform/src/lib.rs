@@ -20,3 +20,6 @@ pub mod material;
 pub mod network;
 pub mod portal;
 pub mod styles;
+
+/// Target of compositor activation grants for session authentication and consent.
+pub const SESSION_PROMPT_APP_ID: &str = "nidara-session-prompt";

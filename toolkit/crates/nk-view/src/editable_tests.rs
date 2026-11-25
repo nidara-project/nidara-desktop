@@ -773,10 +773,21 @@ fn password_retains_only_bullets_in_the_view_and_keeps_the_secret_out_of_externa
     assert_eq!(secret.as_str(), "private");
     assert!(!format!("{change:?}").contains("private"));
     assert!(serde_json::to_string(&change.value).is_err());
+    let mut rebuilds = state
+        .take_host_requests()
+        .into_iter()
+        .filter_map(|request| match request {
+            crate::HostRequest::Rebuild { target } => Some(target),
+            _ => None,
+        })
+        .collect();
+    assert!(crate::window::retain_rebuilds(&state, &mut rebuilds));
     lay(&mut state, &password, 260.);
+    assert!(!crate::window::retain_rebuilds(&state, &mut rebuilds));
     let ime = state.text_input();
     assert!(ime.password);
     assert!(ime.text.is_empty());
+    assert!(matches!(state.enter(), (false, None)));
     let node = tree(&mut state)
         .nodes
         .into_values()

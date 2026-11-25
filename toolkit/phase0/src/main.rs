@@ -722,7 +722,7 @@ impl Application for App {
 fn contains(r: Rect, p: Point) -> bool {
     p.x >= r.x && p.x < r.x + r.width && p.y >= r.y && p.y < r.y + r.height
 }
-fn options(material: bool, map: bool) -> nk_wayland::Options {
+fn options(material: bool, map: bool) -> nk_wayland::Options<'static> {
     nk_wayland::Options {
         material,
         map,

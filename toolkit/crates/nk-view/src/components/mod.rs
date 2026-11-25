@@ -178,6 +178,10 @@ pub trait Component: Any {
     fn revision(&self, _state: Option<&dyn Any>) -> Option<u64> {
         None
     }
+    /// Whether a rebuild request at this revision still needs to be laid out.
+    fn rebuild_pending(&self, _state: Option<&dyn Any>) -> bool {
+        true
+    }
     fn body(&self, cx: &Build<'_>) -> Node;
     fn frame(&self, _look: ComponentLook<'_>) -> FrameSpec {
         FrameSpec::default()

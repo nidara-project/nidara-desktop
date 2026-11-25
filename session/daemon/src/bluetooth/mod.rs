@@ -116,6 +116,7 @@ pub struct Bluetooth {
     epoch: Arc<AtomicU64>,
     next: Arc<AtomicU64>,
     broker: Broker,
+    activation: crate::prompt_activation::Activations,
     state: Arc<Mutex<Published>>,
     refreshing: Arc<Mutex<()>>,
     registration: Arc<Mutex<Registration>>,
@@ -184,6 +185,7 @@ impl Bluetooth {
             system: system.clone(),
             session: session.clone(),
             read_only,
+            activation: Default::default(),
             broker: Broker::new(session.clone(), epoch.clone()),
             epoch: epoch.clone(),
             next: Arc::new(AtomicU64::new(epoch.load(Ordering::SeqCst))),
@@ -210,6 +212,40 @@ impl Bluetooth {
         } else {
             Ok(())
         }
+    }
+    async fn pair_inner(&self, device: Path, token: Option<String>) -> Result<(), Error> {
+        let (p, _) = self.device(true, &device).await?;
+        let _guard = self.operation(&device)?;
+        let _activation = self.activation.bind(&p.owner, &device, token);
+        let result = p
+            .call_for::<()>(&device, bus::DEVICE, "Pair", &(), Duration::from_secs(120))
+            .await;
+        self.broker.close_device(&device).await;
+        let result = match result {
+            Ok(()) => p
+                .set(&device, bus::DEVICE, "Trusted", true.into())
+                .await
+                .map_err(|_| Error::Incomplete("paired, but setting trusted failed".into())),
+            Err(e) => Err(e),
+        };
+        self.refresh(true).await?;
+        result
+    }
+    async fn connect_inner(&self, device: Path, token: Option<String>) -> Result<(), Error> {
+        let (p, _) = self.device(true, &device).await?;
+        let _guard = self.operation(&device)?;
+        let _activation = self.activation.bind(&p.owner, &device, token);
+        let result = p
+            .call_for::<()>(
+                &device,
+                bus::DEVICE,
+                "Connect",
+                &(),
+                Duration::from_secs(120),
+            )
+            .await;
+        self.refresh(true).await?;
+        result
     }
     fn operation(&self, device: &str) -> Result<DeviceGuard, Error> {
         let mut ops = self.operations.lock().unwrap();
@@ -1005,21 +1041,10 @@ impl Bluetooth {
         self.refresh(true).await
     }
     async fn pair(&self, device: Path) -> Result<(), Error> {
-        let (p, _) = self.device(true, &device).await?;
-        let _guard = self.operation(&device)?;
-        let result = p
-            .call_for::<()>(&device, bus::DEVICE, "Pair", &(), Duration::from_secs(120))
-            .await;
-        self.broker.close_device(&device).await;
-        let result = match result {
-            Ok(()) => p
-                .set(&device, bus::DEVICE, "Trusted", true.into())
-                .await
-                .map_err(|_| Error::Incomplete("paired, but setting trusted failed".into())),
-            Err(e) => Err(e),
-        };
-        self.refresh(true).await?;
-        result
+        self.pair_inner(device, None).await
+    }
+    async fn pair_with_activation(&self, device: Path, token: String) -> Result<(), Error> {
+        self.pair_inner(device, Some(token)).await
     }
     async fn cancel_pairing(&self, device: Path) -> Result<(), Error> {
         let (p, _) = self.device(true, &device).await?;
@@ -1029,19 +1054,10 @@ impl Bluetooth {
         self.refresh(true).await
     }
     async fn connect(&self, device: Path) -> Result<(), Error> {
-        let (p, _) = self.device(true, &device).await?;
-        let _guard = self.operation(&device)?;
-        let result = p
-            .call_for::<()>(
-                &device,
-                bus::DEVICE,
-                "Connect",
-                &(),
-                Duration::from_secs(120),
-            )
-            .await;
-        self.refresh(true).await?;
-        result
+        self.connect_inner(device, None).await
+    }
+    async fn connect_with_activation(&self, device: Path, token: String) -> Result<(), Error> {
+        self.connect_inner(device, Some(token)).await
     }
     async fn disconnect(&self, device: Path) -> Result<(), Error> {
         let (p, _) = self.device(true, &device).await?;

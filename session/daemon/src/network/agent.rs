@@ -57,6 +57,7 @@ struct State {
 }
 #[derive(Clone)]
 pub struct Agent {
+    pub(super) activation: crate::prompt_activation::Activations,
     system: Connection,
     session: Connection,
     state: Arc<Mutex<State>>,
@@ -67,6 +68,7 @@ pub struct Agent {
 impl Agent {
     pub fn new(system: Connection, session: Connection) -> Self {
         Self {
+            activation: Default::default(),
             system,
             storage_busy: Arc::new(std::sync::Mutex::new(std::collections::HashSet::new())),
             keyring: keyring::Queue::new(session.clone()),
@@ -388,7 +390,14 @@ impl Agent {
                 s.ui.clone()
                     .ok_or_else(|| AgentError::NoSecrets("no secrets UI registered".into()))?;
             s.pending.as_mut().unwrap().asked = true;
-            let meta=json!({"uuid":uuid,"name":text(connection.get("connection"),"id"),"setting":setting_name,"hints":hints,"retry":flags&2!=0,"ssid":nm::bytes(connection.get("802-11-wireless"),"ssid"),"profile":prompt_profile(&connection)}).to_string();
+            let mut meta = json!({"uuid":uuid,"name":text(connection.get("connection"),"id"),"setting":setting_name,"hints":hints,"retry":flags&2!=0,"ssid":nm::bytes(connection.get("802-11-wireless"),"ssid"),"profile":prompt_profile(&connection)});
+            if let Some(token) = header
+                .sender()
+                .and_then(|sender| self.activation.take(sender.as_str(), &uuid))
+            {
+                meta["activationToken"] = token.into();
+            }
+            let meta = meta.to_string();
             self.session
                 .emit_signal(
                     Some(ui.as_str()),
