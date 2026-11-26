@@ -303,8 +303,14 @@ pub(super) fn run(
 ) -> Result<std::result::Result<(), Error>> {
     let mut names = Vec::new();
     request.identities.retain(|uid| {
-        if let Some(name) = conversation::account_name(*uid) {
-            names.push(plain(&name, 100));
+        if let Some((login, real_name)) = conversation::account_name(*uid) {
+            let login = plain(&login, 100);
+            let real_name = plain(&real_name, 100);
+            if real_name.trim().is_empty() || real_name == login {
+                names.push(login);
+            } else {
+                names.push(format!("{real_name} ({login})"));
+            }
             true
         } else {
             false

@@ -44,6 +44,7 @@ pub struct Status {
     pub apps: AtomicBool,
     pub(crate) system_alert: AtomicBool,
     pub(crate) prompt_slots: std::sync::Mutex<crate::prompts::Slots>,
+    pub(crate) prompt_slot_changed: std::sync::Condvar,
     pub(crate) alert_unlocked: AtomicBool,
     pub(crate) lock_generation: AtomicUsize,
 }
@@ -51,13 +52,23 @@ pub struct Status {
 impl Status {
     pub(crate) fn unlocked_generation(&self) -> Option<usize> {
         let generation = self.lock_generation.load(Ordering::Acquire);
-        self.alert_unlocked.load(Ordering::Acquire).then_some(generation)
+        self.alert_unlocked
+            .load(Ordering::Acquire)
+            .then_some(generation)
+    }
+
+    pub(crate) fn wake_prompt_waiters(&self) {
+        // Synchronize a change in the lock or polkit ticket with a waiter
+        // moving from its validity check into Condvar::wait.
+        let _slots = self.prompt_slots.lock().unwrap();
+        self.prompt_slot_changed.notify_all();
     }
 
     pub fn update_alert_lock(&self, locked: bool) {
         if locked {
             self.alert_unlocked.store(false, Ordering::Release);
             self.lock_generation.fetch_add(1, Ordering::AcqRel);
+            self.wake_prompt_waiters();
         } else {
             self.alert_unlocked.store(true, Ordering::Release);
         }

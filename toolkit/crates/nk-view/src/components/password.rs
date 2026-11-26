@@ -29,7 +29,8 @@ impl State {
     }
 
     fn boundaries(&self) -> Vec<usize> {
-        self.secret.as_str()
+        self.secret
+            .as_str()
             .grapheme_indices(true)
             .map(|(at, _)| at)
             .chain(std::iter::once(self.secret.as_str().len()))
@@ -64,7 +65,8 @@ impl State {
     }
 
     fn replace(&mut self, range: std::ops::Range<usize>, text: &str) -> bool {
-        if text.chars().any(char::is_control) || self.secret.as_str().len() - range.len() + text.len() > 4096
+        if text.chars().any(char::is_control)
+            || self.secret.as_str().len() - range.len() + text.len() > 4096
         {
             return false;
         }

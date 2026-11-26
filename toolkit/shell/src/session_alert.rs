@@ -150,15 +150,30 @@ pub(crate) fn open(
     kind: Kind,
     activation: Option<String>,
 ) -> Result<async_channel::Receiver<bool>> {
-    let prompt_slot = crate::prompts::Slot::take(&status, SlotKind::Other)
-        .ok_or("polkit authentication is already open")?;
-    let slot = Slot::take(status)?;
-    let generation = slot.0.lock_generation.load(Ordering::Acquire);
+    let generation = status
+        .unlocked_generation()
+        .ok_or("the session is locked")?;
     let (answer, result) = async_channel::bounded(1);
+    let prompt_slot = crate::prompts::Slot::take(&status, SlotKind::Other);
+    // A display preview cannot wait behind authentication. Tell Settings
+    // to cancel its lease now instead of leaving the display at the preview mode.
+    if prompt_slot.is_none() && matches!(kind, Kind::Display { .. }) {
+        let _ = answer.try_send(false);
+        return Ok(result);
+    }
+    let slot = Slot::take(status)?;
     std::thread::Builder::new()
         .name("system-alert".into())
         .spawn(move || {
+            let prompt_slot = prompt_slot.or_else(|| {
+                crate::prompts::Slot::wait(&slot.0, SlotKind::Other, || {
+                    slot.0.unlocked_generation() == Some(generation)
+                })
+            });
             let run = || -> Result<bool> {
+                if prompt_slot.is_none() || slot.0.unlocked_generation() != Some(generation) {
+                    return Ok(false);
+                }
                 let bus = Connection::session().map_err(|error| error.to_string())?;
                 let portal = Portal::watch(&bus)?;
                 let exports = Exports::load(&Exports::root())?;
@@ -194,4 +209,41 @@ pub(crate) fn open(
         })
         .map_err(|error| error.to_string())?;
     Ok(result)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn polkit_declines_display_preview_and_defers_power_until_lock() {
+        let status = Arc::new(Status::default());
+        status.update_alert_lock(false);
+        let _polkit = crate::prompts::Slot::take(&status, SlotKind::Polkit).unwrap();
+
+        let display = open(
+            status.clone(),
+            Kind::Display {
+                deadline: Instant::now() + Duration::from_secs(15),
+            },
+            None,
+        )
+        .unwrap();
+        assert!(!display.try_recv().unwrap());
+
+        let power = open(status.clone(), Kind::Power(System::Shutdown), None).unwrap();
+        assert_eq!(power.try_recv(), Err(async_channel::TryRecvError::Empty));
+
+        status.update_alert_lock(true);
+        let result =
+            futures_lite::future::block_on(futures_lite::future::race(power.recv(), async {
+                async_io::Timer::after(Duration::from_secs(2)).await;
+                panic!("queued alert did not wake");
+            }));
+        assert_eq!(
+            result,
+            Ok(false),
+            "locking discards the queued power action"
+        );
+    }
 }

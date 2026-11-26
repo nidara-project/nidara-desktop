@@ -57,10 +57,15 @@ Bluetooth, or system alert to close under polkit's deadline. The native agent
 cancels both queued and visible requests on lock or compositor loss. Hyalo focuses
 the dedicated `nidara-polkit-prompt` identity at map only after checking the
 Wayland peer as the installed shell and confirming the session is unlocked. Other
-system prompts keep their existing activation and attention rules.
+system prompts keep their existing activation and attention rules. A power
+confirmation requested during authentication waits for the slot and is discarded
+on lock. A display preview requested during authentication returns Revert
+immediately so Settings can cancel the preview lease.
 
 The dialog uses an explicit confirmation before starting `PolkitAgentSession`
-and displays only the identities offered by polkit. The library owns the
+and displays only the identities offered by polkit. Account labels use the NSS
+real name and login, with a login fallback. AccountsService avatars are a
+follow-up. The library owns the
 distribution helper and PAM policy. The shell keeps PAM input masked, including
 when a module requests terminal echo. Its editor and transient FFI response
 wipe their owned buffers. The action identifier is in Details. A caller name

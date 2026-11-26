@@ -118,7 +118,7 @@ struct Agent {
 }
 
 // Reset even on transport failure during registration or name-owner subscription.
-struct Registered(Arc<Mutex<State>>);
+struct Registered(Arc<Mutex<State>>, Arc<Status>);
 
 impl Drop for Registered {
     fn drop(&mut self) {
@@ -126,6 +126,7 @@ impl Drop for Registered {
         state.owner = None;
         if let Some(ticket) = &state.pending {
             ticket.cancel();
+            self.1.wake_prompt_waiters();
         }
     }
 }
@@ -238,6 +239,7 @@ impl Agent {
             && ticket.cookie.as_bytes() == cookie.as_bytes()
         {
             ticket.cancel();
+            self.status.wake_prompt_waiters();
         }
         Ok(())
     }
@@ -363,16 +365,12 @@ fn show_when_ready(
     pam: &conversation::Library,
     request: Request,
 ) -> Result<(), Error> {
-    while request.ticket.valid(status, request.generation) {
-        if let Some(_slot) = Slot::take(status, SlotKind::Polkit) {
-            return view::run(status, bus, context, pam, request).map_err(|_| {
-                Error::Failed("The authentication dialog could not be shown".into())
-            })?;
-        }
-        // Only while a request is waiting. Its lifetime remains owned by polkitd.
-        std::thread::sleep(Duration::from_millis(30));
-    }
-    Err(cancelled())
+    let _slot = Slot::wait(status, SlotKind::Polkit, || {
+        request.ticket.valid(status, request.generation)
+    })
+    .ok_or_else(cancelled)?;
+    view::run(status, bus, context, pam, request)
+        .map_err(|_| Error::Failed("The authentication dialog could not be shown".into()))?
 }
 
 async fn session(connection: &Connection) -> zbus::Result<String> {
@@ -448,7 +446,7 @@ async fn registration(
         ));
     }
     let proxy = Proxy::new(connection, owner.clone(), AUTHORITY, AUTHORITY_INTERFACE).await?;
-    let registered = Registered(agent.state.clone());
+    let registered = Registered(agent.state.clone(), agent.status.clone());
     agent.state.lock().unwrap().owner = Some(owner.to_string());
     proxy
         .call::<_, _, ()>("RegisterAuthenticationAgent", &(&subject, locale(), AGENT))

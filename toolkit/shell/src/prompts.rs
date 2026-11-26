@@ -12,7 +12,6 @@ use std::{
         Arc,
         mpsc::{self, Sender},
     },
-    time::Duration,
 };
 use wire::{Answer, Wire};
 use zbus::zvariant::OwnedValue;
@@ -67,6 +66,7 @@ enum Event {
     Lock(bool),
     Answer(u64, Ticket, Answer),
     Ended(u64, Ticket),
+    SlotAvailable,
 }
 
 /// Independent alerts and service prompts keep their existing policy with one another.
@@ -75,6 +75,7 @@ enum Event {
 pub(crate) struct Slots {
     other: usize,
     polkit: bool,
+    service_waiter: Option<Sender<Event>>,
 }
 
 #[derive(Clone, Copy)]
@@ -89,8 +90,7 @@ pub(crate) struct Slot {
 }
 
 impl Slot {
-    pub(crate) fn take(status: &Arc<Status>, kind: SlotKind) -> Option<Self> {
-        let mut slots = status.prompt_slots.lock().unwrap();
+    fn acquire(status: &Arc<Status>, slots: &mut Slots, kind: SlotKind) -> Option<Self> {
         if slots.polkit || (matches!(kind, SlotKind::Polkit) && slots.other != 0) {
             return None;
         }
@@ -103,15 +103,49 @@ impl Slot {
             kind,
         })
     }
+
+    pub(crate) fn take(status: &Arc<Status>, kind: SlotKind) -> Option<Self> {
+        Self::acquire(status, &mut status.prompt_slots.lock().unwrap(), kind)
+    }
+
+    fn take_service(status: &Arc<Status>, events: &Sender<Event>) -> Option<Self> {
+        let mut slots = status.prompt_slots.lock().unwrap();
+        if slots.polkit {
+            slots.service_waiter = Some(events.clone());
+            return None;
+        }
+        Self::acquire(status, &mut slots, SlotKind::Other)
+    }
+
+    pub(crate) fn wait(
+        status: &Arc<Status>,
+        kind: SlotKind,
+        valid: impl Fn() -> bool,
+    ) -> Option<Self> {
+        let mut slots = status.prompt_slots.lock().unwrap();
+        while valid() {
+            if let Some(slot) = Self::acquire(status, &mut slots, kind) {
+                return Some(slot);
+            }
+            slots = status.prompt_slot_changed.wait(slots).unwrap();
+        }
+        None
+    }
 }
 
 impl Drop for Slot {
     fn drop(&mut self) {
         let mut slots = self.status.prompt_slots.lock().unwrap();
         match self.kind {
-            SlotKind::Polkit => slots.polkit = false,
+            SlotKind::Polkit => {
+                slots.polkit = false;
+                if let Some(waiter) = slots.service_waiter.take() {
+                    let _ = waiter.send(Event::SlotAvailable);
+                }
+            }
             SlotKind::Other => slots.other -= 1,
         }
+        self.status.prompt_slot_changed.notify_all();
     }
 }
 
@@ -131,22 +165,9 @@ impl Dialogs {
             // Preserve pending service requests through lock. Reopening builds a fresh field.
             // Wait for Hyalo's initial state before showing or accepting any request.
             let mut locked = true;
-            let mut waiting_for_slot = false;
-            loop {
-                let next_event = if waiting_for_slot {
-                    match rx.recv_timeout(Duration::from_millis(30)) {
-                        Ok(event) => Some(event),
-                        Err(mpsc::RecvTimeoutError::Timeout) => None,
-                        Err(mpsc::RecvTimeoutError::Disconnected) => break,
-                    }
-                } else {
-                    match rx.recv() {
-                        Ok(event) => Some(event),
-                        Err(_) => break,
-                    }
-                };
-                match next_event {
-                    Some(Event::Lock(value)) => {
+            while let Ok(event) = rx.recv() {
+                match event {
+                    Event::Lock(value) => {
                         locked = value;
                         if locked {
                             for request in &mut requests {
@@ -156,7 +177,7 @@ impl Dialogs {
                             }
                         }
                     }
-                    Some(Event::Prompt(ticket, mut meta)) => {
+                    Event::Prompt(ticket, mut meta) => {
                         requests.retain(|r| r.ticket.service != ticket.service);
                         if locked && let Some(obj) = meta.as_object_mut() {
                             obj.remove("activationToken");
@@ -165,7 +186,7 @@ impl Dialogs {
                             requests.push_back(Request { ticket, meta });
                         }
                     }
-                    Some(Event::Update(ticket, mut meta)) => {
+                    Event::Update(ticket, mut meta) => {
                         if let Some(request) = requests.iter_mut().find(|r| r.ticket == ticket) {
                             let activation = request.meta.get("activationToken").cloned();
                             if let Some(document) = meta.as_object_mut() {
@@ -180,14 +201,14 @@ impl Dialogs {
                             }
                         }
                     }
-                    Some(Event::Closed(ticket)) => requests.retain(|r| r.ticket != ticket),
-                    Some(Event::Reset(service)) => requests.retain(|r| r.ticket.service != service),
-                    Some(Event::Failed(ticket)) => {
+                    Event::Closed(ticket) => requests.retain(|r| r.ticket != ticket),
+                    Event::Reset(service) => requests.retain(|r| r.ticket.service != service),
+                    Event::Failed(ticket) => {
                         if let Some(view) = running.as_ref().filter(|v| v.ticket == ticket) {
                             view.send(surface::Change::Failed);
                         }
                     }
-                    Some(Event::Answer(serial, ticket, answer)) => {
+                    Event::Answer(serial, ticket, answer) => {
                         if !locked
                             && running
                                 .as_ref()
@@ -200,7 +221,7 @@ impl Dialogs {
                             }
                         }
                     }
-                    Some(Event::Ended(serial, ticket)) => {
+                    Event::Ended(serial, ticket) => {
                         if let Some(view) = running.take_if(|v| v.serial == serial)
                             && !view.stopping
                         {
@@ -208,23 +229,20 @@ impl Dialogs {
                             requests.retain(|r| r.ticket != ticket);
                         }
                     }
-                    None => {}
+                    Event::SlotAvailable => {}
                 }
-                waiting_for_slot = false;
                 let request = requests.front().filter(|_| !locked);
                 if let Some(view) = &mut running {
                     if request.is_none_or(|r| r.ticket != view.ticket) {
                         view.stop();
                     }
-                } else if let Some(request) = request {
-                    if let Some(slot) = Slot::take(&status, SlotKind::Other) {
-                        next += 1;
-                        running = surface::start(next, request, bus.clone(), &events, slot);
-                        if running.is_none() {
-                            requests.pop_front();
-                        }
-                    } else {
-                        waiting_for_slot = true;
+                } else if let Some(request) = request
+                    && let Some(slot) = Slot::take_service(&status, &events)
+                {
+                    next += 1;
+                    running = surface::start(next, request, bus.clone(), &events, slot);
+                    if running.is_none() {
+                        requests.pop_front();
                     }
                 }
             }
@@ -234,5 +252,33 @@ impl Dialogs {
 
     pub fn locked(&self, locked: bool) {
         let _ = self.0.send(Event::Lock(locked));
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::time::Duration;
+
+    #[test]
+    fn polkit_wait_and_service_notification_follow_slot_release() {
+        let status = Arc::new(Status::default());
+        let other = Slot::take(&status, SlotKind::Other).unwrap();
+        let (send, acquired) = mpsc::channel();
+        let waiter = status.clone();
+        let thread = std::thread::spawn(move || {
+            send.send(Slot::wait(&waiter, SlotKind::Polkit, || true).unwrap())
+                .unwrap();
+        });
+
+        assert!(acquired.try_recv().is_err());
+        drop(other);
+        let polkit = acquired.recv_timeout(Duration::from_secs(2)).unwrap();
+        thread.join().unwrap();
+        let (events, received) = mpsc::channel();
+        assert!(Slot::take_service(&status, &events).is_none());
+        drop(polkit);
+        assert!(matches!(received.try_recv(), Ok(Event::SlotAvailable)));
+        assert!(Slot::take_service(&status, &events).is_some());
     }
 }

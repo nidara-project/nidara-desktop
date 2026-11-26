@@ -132,44 +132,60 @@ impl Drop for Session<'_> {
     }
 }
 
-fn account(
+fn account<T>(
     read: impl FnOnce(*mut libc::passwd, &mut [u8], *mut *mut libc::passwd) -> i32,
-) -> Option<(u32, String)> {
+    extract: impl FnOnce(libc::passwd) -> T,
+) -> Option<T> {
     let mut buffer = vec![0; 64 * 1024];
     let mut entry = std::mem::MaybeUninit::<libc::passwd>::uninit();
     let mut result = std::ptr::null_mut();
     if read(entry.as_mut_ptr(), &mut buffer, &mut result) != 0 || result.is_null() {
         return None;
     }
-    // SAFETY: a successful NSS lookup with a non-null result initializes entry and
-    // fills pw_name with a NUL-terminated string backed by the buffer above.
-    let entry = unsafe { entry.assume_init() };
-    let name = unsafe { CStr::from_ptr(entry.pw_name) }
-        .to_string_lossy()
-        .into_owned();
-    Some((entry.pw_uid, name))
+    // SAFETY: a successful NSS lookup with a non-null result initializes entry.
+    // Any pointers into buffer are used by extract before the buffer is dropped.
+    Some(extract(unsafe { entry.assume_init() }))
 }
 
 pub(super) fn account_uid(name: &CStr) -> Option<u32> {
-    account(|entry, buf, result| {
-        // SAFETY: the pointers and the length describe the available storage.
-        unsafe {
-            libc::getpwnam_r(
-                name.as_ptr(),
-                entry,
-                buf.as_mut_ptr().cast(),
-                buf.len(),
-                result,
-            )
-        }
-    })
-    .map(|(uid, _)| uid)
+    account(
+        |entry, buf, result| {
+            // SAFETY: the pointers and the length describe the available storage.
+            unsafe {
+                libc::getpwnam_r(
+                    name.as_ptr(),
+                    entry,
+                    buf.as_mut_ptr().cast(),
+                    buf.len(),
+                    result,
+                )
+            }
+        },
+        |entry| entry.pw_uid,
+    )
 }
 
-pub(super) fn account_name(uid: u32) -> Option<String> {
-    account(|entry, buf, result| {
-        // SAFETY: the pointers and the length describe the available storage.
-        unsafe { libc::getpwuid_r(uid, entry, buf.as_mut_ptr().cast(), buf.len(), result) }
-    })
-    .map(|(_, name)| name)
+pub(super) fn account_name(uid: u32) -> Option<(String, String)> {
+    account(
+        |entry, buf, result| {
+            // SAFETY: the pointers and the length describe the available storage.
+            unsafe { libc::getpwuid_r(uid, entry, buf.as_mut_ptr().cast(), buf.len(), result) }
+        },
+        |entry| {
+            // SAFETY: NSS supplies NUL-terminated fields and account keeps the buffer alive.
+            let login = unsafe { CStr::from_ptr(entry.pw_name) }.to_string_lossy();
+            let gecos = if entry.pw_gecos.is_null() {
+                std::borrow::Cow::Borrowed("")
+            } else {
+                unsafe { CStr::from_ptr(entry.pw_gecos) }.to_string_lossy()
+            };
+            let real_name = gecos
+                .split(',')
+                .next()
+                .unwrap_or_default()
+                .trim()
+                .to_owned();
+            (login.into_owned(), real_name)
+        },
+    )
 }
