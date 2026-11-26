@@ -43,6 +43,28 @@ The gallery's System dialogs page opens independent Dialog and Alert examples.
 They use the gallery's app ID, so Hyalo places them as ordinary windows.
 The Dialog and alert page continues to exercise the parented host.
 
+## Alerts with a countdown
+
+`AlertCountdown` uses a monotonic deadline and a localized message suffix
+with `%d`. The number appears inside the alert message. The kit announces it
+at the start and when the countdown crosses 30, 10 and 5 seconds. Both the
+app-modal and the independent alert use this policy. The gallery has a
+ten-second sample on each dialog page.
+
+A timed response names an enabled default button. A key press, pointer press,
+reader action or focus loss stops automatic selection. Explicit responses
+remain available. Expiry selects the button only while the alert has focus.
+The shell uses this for its 60-second log out, restart and shutdown alerts.
+Locking or losing the compositor withdraws an outstanding system alert.
+
+Display1 records its deadline once the preview is visible. The shell shows
+the countdown in a system alert and returns the person's choice to the
+Settings connection that initiated the preview. Revert cancels that lease
+and Keep confirms it. The compositor's Display1 service owns the layout,
+deadline and automatic rollback. Its deadline remains in force during
+interaction and expiry sends no duplicate display write. Loss of the
+initiating connection revokes the lease and closes the shell alert.
+
 ## Audit findings
 
 - Hyalo wm/mod.rs initially centres over a mapped parent but then cascades off any fully

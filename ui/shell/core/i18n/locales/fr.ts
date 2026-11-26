@@ -687,6 +687,7 @@ export default {
     "bar.system-menu.confirm.restart": "Redémarrer cet ordinateur ?",
     "bar.system-menu.confirm.shutdown": "Éteindre cet ordinateur ?",
     "bar.system-menu.confirm.cancel": "Annuler",
+    "bar.system-menu.confirm.countdown": "L’action sélectionnée sera exécutée dans %d secondes.",
     "bar.system-menu.confirm.action.logout": "Se déconnecter",
     "bar.system-menu.confirm.action.restart": "Redémarrer",
     "bar.system-menu.confirm.action.shutdown": "Éteindre",

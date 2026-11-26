@@ -15,6 +15,9 @@ fi
 : "${SESSIOND_BIN:?Set the exact built sessiond binary}"
 : "${NK_SETTINGS_BIN:?Set the exact built native Settings binary}"
 : "${DISPLAY_SELECTOR_BIN:?Set the exact built selector binary}"
+if [ "${DISPLAY_SETTINGS_BASELINE:-}" != appearance ]; then
+    : "${NK_SHELL_BIN:?Set the exact built shell binary}"
+fi
 : "${NK_SETTINGS_DATA:?Set complete exported settings-data}"
 export DISPLAY_SETTINGS_OUT=${OUT:-$repo/target/display-settings/headless-$(date +%s-%N)}
 mkdir -p "$(dirname "$DISPLAY_SETTINGS_OUT")"

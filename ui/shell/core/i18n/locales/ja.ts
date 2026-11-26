@@ -687,6 +687,7 @@ export default {
     "bar.system-menu.confirm.restart": "このコンピューターを再起動しますか?",
     "bar.system-menu.confirm.shutdown": "このコンピューターをシャットダウンしますか?",
     "bar.system-menu.confirm.cancel": "キャンセル",
+    "bar.system-menu.confirm.countdown": "選択した操作は %d 秒後に実行されます。",
     "bar.system-menu.confirm.action.logout": "ログアウト",
     "bar.system-menu.confirm.action.restart": "再起動",
     "bar.system-menu.confirm.action.shutdown": "シャットダウン",

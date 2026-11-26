@@ -15,6 +15,13 @@ fn button(id: &str, label: &str, default: bool, cancel: bool, destructive: bool)
         enabled: true,
     }
 }
+fn sample_countdown() -> nk::AlertCountdown {
+    nk::AlertCountdown {
+        deadline: Instant::now() + std::time::Duration::from_secs(10),
+        text: "Continuing in %d seconds.".into(),
+        response: Some("continue".into()),
+    }
+}
 fn appearance(portal: &Portal, exports: &Exports) -> Result<DialogUpdate> {
     Ok(if portal.changed() {
         let a = portal.read()?;
@@ -146,13 +153,14 @@ impl Gallery {
                     parent,
                 )
             }
-            "alert-open" => self.window.run_alert(
+            "alert-open" | "alert-timed" => self.window.run_alert(
                 window,
                 &launcher,
                 Alert {
                     title: "Continue?".into(),
                     message: "Continue with this sample?".into(),
                     detail: Some("The parent stays unavailable until this alert closes.".into()),
+                    countdown: (kind == "alert-timed").then(sample_countdown),
                     buttons: vec![button("continue", "Continue", true, false, false), cancel],
                 },
                 || appearance(&self.portal, &self.exports),
@@ -165,6 +173,7 @@ impl Gallery {
                     title: "Delete sample?".into(),
                     message: "Delete this sample?".into(),
                     detail: Some("This is a gallery response; no files are deleted.".into()),
+                    countdown: None,
                     buttons: vec![
                         button("delete", "Delete", false, false, true),
                         button("keep", "Keep", false, false, false),
@@ -250,7 +259,7 @@ impl DialogContent for SystemSample<'_> {
     }
 }
 
-fn system_sample(alert: bool) -> Result<DialogAnswer> {
+fn system_sample(alert: bool, timed: bool) -> Result<DialogAnswer> {
     let bus = zbus::blocking::Connection::session().map_err(|e| e.to_string())?;
     let portal = Portal::watch(&bus)?;
     let exports = Exports::load(&Exports::root())?;
@@ -297,6 +306,7 @@ fn system_sample(alert: bool) -> Result<DialogAnswer> {
             title: title.into(),
             message: "Continue with this sample?".into(),
             detail: None,
+            countdown: timed.then(sample_countdown),
             buttons,
         }
         .run_parentless(host, options, None, &mut model)
@@ -311,13 +321,13 @@ fn system_sample(alert: bool) -> Result<DialogAnswer> {
 }
 
 impl Gallery {
-    pub(super) fn open_system_dialog(&mut self, alert: bool) {
+    pub(super) fn open_system_dialog(&mut self, alert: bool, timed: bool) {
         if self.system_dialog.is_some() {
             return;
         }
         let (send, receive) = std::sync::mpsc::channel();
         std::thread::spawn(move || {
-            let _ = send.send(system_sample(alert).map_err(|error| error.to_string()));
+            let _ = send.send(system_sample(alert, timed).map_err(|error| error.to_string()));
         });
         self.system_dialog = Some(receive);
     }

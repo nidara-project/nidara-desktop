@@ -39,6 +39,7 @@ pub mod prompts;
 pub mod reorder;
 pub mod resize;
 pub mod semantics;
+mod session_alert;
 pub mod shell1;
 pub mod spring;
 pub mod status;

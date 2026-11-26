@@ -11,7 +11,6 @@ use nk::{
 };
 
 pub(crate) const ID: &str = "display";
-pub(crate) const REVERT_GROUP: &str = "display/confirmation/buttons";
 const PREFIX: &str = "display:";
 const TRANSFORMS: [&str; 8] = [
     "normal",
@@ -38,8 +37,6 @@ pub struct Display {
     selected: String,
     draft: Option<Layout>,
     busy: bool,
-    last_second: Option<u64>,
-    focus_revert: bool,
     drag: Option<Drag>,
     coordinates: [Option<String>; 2],
 }
@@ -108,10 +105,6 @@ impl Display {
         }
     }
 
-    pub(crate) fn take_revert_focus(&mut self) -> bool {
-        !self.busy && self.state.owned.is_some() && std::mem::take(&mut self.focus_revert)
-    }
-
     pub fn poll(&mut self) -> bool {
         let mut changed = false;
         if let Some(client) = &self.client
@@ -119,8 +112,6 @@ impl Display {
         {
             changed = true;
             self.busy = client.busy(&state);
-            self.focus_revert =
-                state.owned.is_some() && (self.focus_revert || self.state.owned.is_none());
             let old = self.state.snapshot.as_ref();
             let new = state.snapshot.as_ref();
             let replace_draft = self.state.owner != state.owner
@@ -155,13 +146,6 @@ impl Display {
             }
             self.state = state;
         }
-        let second = self
-            .state
-            .owned
-            .as_ref()
-            .map(|pending| seconds(pending.deadline_us, now_us()));
-        changed |= second != self.last_second;
-        self.last_second = second;
         changed
     }
 
@@ -195,6 +179,7 @@ impl Display {
         held: bool,
         size: (f64, f64),
         inset: f64,
+        activation: Option<String>,
     ) -> bool {
         let Some(action_name) = action.action.strip_prefix(PREFIX) else {
             return false;
@@ -219,17 +204,7 @@ impl Display {
             });
             return true;
         }
-        if let Some(pending) = &self.state.owned {
-            match action_name {
-                "keep"
-                    if pending.phase == "confirming"
-                        && seconds(pending.deadline_us, now_us()) > 0 =>
-                {
-                    self.send(Command::Confirm(pending.token.clone()));
-                }
-                "revert" => self.send(Command::Cancel),
-                _ => {}
-            }
+        if self.state.owned.is_some() {
             return true;
         }
         let Some(snapshot) = self.state.snapshot.as_ref() else {
@@ -295,11 +270,12 @@ impl Display {
         self.drag = None;
         match action_name {
             "apply" if valid_coordinates(&self.coordinates) && *layout != snapshot.layout => {
-                let command = Command::Preview {
+                let command = Command::PreviewWithAlert {
                     owner: self.state.owner.clone(),
                     epoch: snapshot.epoch,
                     revision: snapshot.revision,
                     layout: layout.clone(),
+                    activation,
                 };
                 self.send(command);
             }
@@ -502,31 +478,8 @@ impl Display {
         if self.state.error.is_some() {
             rows.push(nk::Label::new("display/status", label(e, "native.error")?, body()).into());
         }
-        if let Some(pending) = &self.state.owned {
-            let seconds = seconds(pending.deadline_us, now_us());
-            let confirming = pending.phase == "confirming";
-            let message = if confirming {
-                label(e, "confirm.body")?.replace("%d", &seconds.to_string())
-            } else {
-                label(e, "native.busy")?.into()
-            };
-            rows.push(title("display/confirmation/title", label(e, "confirm.title")?).into());
-            rows.push(nk::Label::new("display/confirmation/countdown", message, body()).into());
-            rows.push(
-                nk::Row::new(
-                    REVERT_GROUP,
-                    vec![
-                        button("revert", "confirm.revert", !self.busy)?,
-                        button(
-                            "keep",
-                            "confirm.keep",
-                            !self.busy && confirming && seconds > 0,
-                        )?,
-                    ],
-                )
-                .gap(Space::S2)
-                .into(),
-            );
+        if self.state.owned.is_some() {
+            rows.push(nk::Label::new("display/pending", label(e, "native.busy")?, body()).into());
             return Ok(rows);
         }
         rows.push(button("refresh", "native.refresh", !self.busy)?);
@@ -860,7 +813,7 @@ mod tests {
                 action: format!("display:{name}"),
                 value,
             };
-            assert!(page.activate(&action, dragging, (300., 150.), 12.));
+            assert!(page.activate(&action, dragging, (300., 150.), 12., None));
         };
         activate(&mut page, "output", Some(Value::Index(1)), false);
         activate(&mut page, "mode", Some(Value::Index(1)), false);
@@ -896,13 +849,20 @@ mod tests {
         activate(&mut page, "apply", None, false);
         wait(|| {
             page.poll();
-            page.state.owned.is_some() && !page.busy
+            !page.busy
+                && page.state.owned.is_none()
+                && fixture
+                    .fake
+                    .calls
+                    .lock()
+                    .unwrap()
+                    .iter()
+                    .any(|call| call == "cancel")
         });
-        assert!(page.take_revert_focus());
-        assert!(!page.take_revert_focus());
+        assert!(page.state.owned.is_none());
         assert_eq!(
             &*fixture.fake.calls.lock().unwrap(),
-            &["validate", "preview"]
+            &["validate", "preview", "cancel"]
         );
 
         let sender = fixture.fake.sender.lock().unwrap().clone();

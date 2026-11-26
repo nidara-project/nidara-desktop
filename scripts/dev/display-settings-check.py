@@ -11,7 +11,15 @@ RUN=Path(os.environ['DISPLAY_SETTINGS_RUN']).resolve()
 OUT=Path(os.environ['DISPLAY_SETTINGS_OUT']).resolve()
 if Path(os.environ['XDG_RUNTIME_DIR']).resolve()!=RUN/'runtime/nr':
     raise SystemExit('private rust-session runtime required')
-(OUT/'environment.json').write_text(json.dumps({key:{'path':os.environ[key],'sha256':hashlib.sha256(Path(os.environ[key]).read_bytes()).hexdigest()} for key in ['HYALO_BIN','NK_SETTINGS_BIN','DISPLAY_SELECTOR_BIN','SESSIOND_BIN']},indent=2))
+binaries = ['HYALO_BIN', 'NK_SETTINGS_BIN', 'DISPLAY_SELECTOR_BIN', 'SESSIOND_BIN']
+if os.environ.get('DISPLAY_SETTINGS_BASELINE') != 'appearance':
+    binaries.append('NK_SHELL_BIN')
+def binary_info(key):
+    path = Path(os.environ[key])
+    with path.open('rb') as stream:
+        digest = hashlib.file_digest(stream, 'sha256').hexdigest()
+    return {'path': str(path), 'sha256': digest}
+(OUT/'environment.json').write_text(json.dumps({key: binary_info(key) for key in binaries}, indent=2))
 log=(OUT/'check.log').open('w',buffering=1)
 def report(message): print(message,file=log)
 def wait(test,label,seconds=20):
@@ -54,9 +62,14 @@ def walk(node):
         if child:result.extend(walk(child))
     return result
 def root(name):
-    app=next((a for a in children(Atspi.get_desktop(0)) if a.get_name()==name),None)
-    if app:app.set_cache_mask(Atspi.Cache.NONE)
-    return app
+    for app in children(Atspi.get_desktop(0)):
+        if app:
+            app.set_cache_mask(Atspi.Cache.NONE)
+            if app.get_name() == name:
+                return app
+            if match := next((child for child in children(app) if child and child.get_name() == name), None):
+                return match
+    return None
 def nodes(name):
     app=root(name)
     return walk(app) if app else []
@@ -78,7 +91,11 @@ def screenshot(stem):
     scan=b''.join(b'\0'+pixels[i*width*3:(i+1)*width*3] for i in range(height))
     path.with_suffix('.png').write_bytes(b'\x89PNG\r\n\x1a\n'+chunk(b'IHDR',struct.pack('!IIBBBBB',width,height,8,2,0,0,0))+chunk(b'IDAT',zlib.compress(scan))+chunk(b'IEND',b''))
 process=None
+shell=None
 try:
+    if 'NK_SHELL_BIN' in binaries:
+        with (OUT/'shell.log').open('w') as stream:
+            shell=subprocess.Popen([os.environ['NK_SHELL_BIN'], '--bar'], stdout=stream, stderr=stream)
     baseline=wait(lambda:display(),'Display1')
     original=baseline[4]
     with (OUT/'settings.log').open('w') as stream:
@@ -92,6 +109,7 @@ try:
         report('ok: D7 Appearance baseline capture only; no Display acceptance')
         raise SystemExit(0)
     appname='Settings'
+    alertname='Keep display settings?'
     wait(lambda:node(appname,'Apply display changes'),'display controls')
     assert display()[4]==original and not pending(),'opening wrote output state'
     screenshot('display-initial')
@@ -102,15 +120,17 @@ try:
     wait(lambda:(n:=value_node(appname,'Scale')) and abs(n.get_value_iface().get_current_value()-0.75)<.001,'draft scale')
     assert display()[4]==original and not pending(),'editing a draft wrote hardware'
     activate(appname,'Apply display changes');wait(pending,'preview')
-    wait(lambda:any('Reverting to the previous setting in ' in n.get_name() for n in nodes(appname)),'accessible countdown')
-    deadline=display()[5][2]
-    wait(lambda:f'deadline={deadline}' in (OUT/'settings.log').read_text(),'confirmation root frame callback')
+    wait(lambda:any('Reverting to the previous setting in ' in n.get_name() for n in nodes(alertname)),
+         'accessible system alert countdown')
+    alert=wait(lambda:next((w for w in msg('windows')['windows'] if w['title']==alertname),None),
+               'mapped system alert')
+    assert alert['parent'] is None and alert['app_id']=='nidara-session-prompt',alert
     screenshot('display-confirmation')
-    activate(appname,'Revert');wait(lambda:not pending(),'cancelled preview')
+    activate(alertname,'Revert');wait(lambda:not pending(),'cancelled preview')
     assert display()[4]==original,'cancel did not restore layout'
     scale=wait(lambda:value_node(appname,'Scale'),'scale after cancel');assert scale.get_value_iface().set_current_value(0.75)
     activate(appname,'Apply display changes');wait(pending,'second preview')
-    activate(appname,'Keep changes');wait(lambda:not pending(),'confirmed preview')
+    activate(alertname,'Keep changes');wait(lambda:not pending(),'confirmed preview')
     confirmed=display()[4];assert confirmed!=original,'confirmation did not keep draft'
     screenshot('display-page')
     # Navigate away while a lease belongs to the page. This is the production
@@ -119,6 +139,7 @@ try:
     activate(appname,'Apply display changes');wait(pending,'preview before unmount')
     call('org.nidara.SettingsNative','/org/nidara/Settings','org.nidara.Settings','Request',GLib.Variant('(as)',(['page','appearance'],)))
     wait(lambda:not pending(),'unmount rollback');assert display()[4]==confirmed
+    wait(lambda:root(alertname) is None,'system alert withdraws when preview owner disconnects')
     report('ok: actual page, retained accessible selection, draft/no write, preview/countdown, cancel, confirm and unmount rollback')
     native=next(w for w in msg('windows')['windows'] if w['pid']==process.pid)
     msg('do',f"set-workspace-mode {native['workspace']} tiling")
@@ -144,10 +165,11 @@ try:
     report('ok: factory Super+P binding, floating/centered on a tiling workspace, app-id, accessible choices, unsupported mode refusal, repeated activation, Escape rollback')
     (OUT/'result.json').write_text(json.dumps({'passed':True,'scope':'private rust-session/winit/AT-SPI; no hardware/Orca/installation acceptance'},indent=2))
 finally:
-    if process and process.poll() is None:
-        process.terminate()
-        try:process.wait(timeout=5)
-        except subprocess.TimeoutExpired:process.kill();process.wait()
+    for child in (process, shell):
+        if child and child.poll() is None:
+            child.terminate()
+            try:child.wait(timeout=5)
+            except subprocess.TimeoutExpired:child.kill();child.wait()
     try:msg('quit')
     except Exception:pass
     log.close()

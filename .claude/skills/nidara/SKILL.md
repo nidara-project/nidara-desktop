@@ -625,8 +625,9 @@ Display1 client and geometry model shared with the projection selector.
 The kit's `nk::Arrangement` reports displacements in the diagram's logical
 coordinates. The Settings page owns the draft and applies snapping on release.
 Keep the Display1 client dedicated to the visit so leaving the page releases
-its preview lease. The countdown uses the compositor's monotonic deadline
-and Revert takes initial focus. See `toolkit/settings/src/display/README.md`.
+its preview lease. The shell displays a parentless Alert using Display1's
+monotonic deadline and returns the choice to the original Settings connection.
+Display1 owns automatic rollback. See `toolkit/settings/src/display/README.md`.
 Sound (8g) uses `nk_platform::audio` for the ordered Audio1 graph shared
 with the bar and Control Center. Subscribe before reading root properties and
 managed objects. Apply sparse changes in bus order and discard the graph on

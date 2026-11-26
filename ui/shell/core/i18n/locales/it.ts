@@ -687,6 +687,7 @@ export default {
     "bar.system-menu.confirm.restart": "Riavviare questo computer?",
     "bar.system-menu.confirm.shutdown": "Arrestare questo computer?",
     "bar.system-menu.confirm.cancel": "Annulla",
+    "bar.system-menu.confirm.countdown": "L’azione selezionata verrà eseguita tra %d secondi.",
     "bar.system-menu.confirm.action.logout": "Disconnetti",
     "bar.system-menu.confirm.action.restart": "Riavvia",
     "bar.system-menu.confirm.action.shutdown": "Arresta",

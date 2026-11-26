@@ -213,6 +213,8 @@ fn main() {
         Err(e) => eprintln!("nidara-shell: no session bus: {e}"),
     }
     let t = hub_tx.clone();
+    let status = Arc::new(shell1::Status::default());
+    let alert_status = status.clone();
     let dialogs = if bar_wanted() {
         apps_conn.clone().map(nidara_shell::prompts::Dialogs::start)
     } else {
@@ -220,6 +222,11 @@ fn main() {
     };
     spawn("hyalo", move || {
         hyalo::watch(move |u| {
+            match &u {
+                hyalo::HyaloUpdate::Lock(locked) => alert_status.update_alert_lock(*locked),
+                hyalo::HyaloUpdate::Unavailable(_) => alert_status.update_alert_lock(true),
+                _ => {}
+            }
             if let Some(dialogs) = &dialogs {
                 match &u {
                     hyalo::HyaloUpdate::Lock(locked) => dialogs.locked(*locked),
@@ -234,7 +241,6 @@ fn main() {
     spawn("prefs", move || {
         prefs::watch(move |p| drop(t.send(hub::HubEvent::Prefs(p))))
     });
-    let status = Arc::new(shell1::Status::default());
     let shell1 = shell1::serve(status.clone(), hub_tx.clone())
         .map_err(|e| eprintln!("nidara-shell: Shell1 not served: {e}"))
         .ok();

@@ -42,6 +42,20 @@ pub struct Status {
     pub docks: AtomicUsize,
     /// Apps is open.
     pub apps: AtomicBool,
+    pub(crate) system_alert: AtomicBool,
+    pub(crate) alert_unlocked: AtomicBool,
+    pub(crate) lock_generation: AtomicUsize,
+}
+
+impl Status {
+    pub fn update_alert_lock(&self, locked: bool) {
+        if locked {
+            self.alert_unlocked.store(false, Ordering::Release);
+            self.lock_generation.fetch_add(1, Ordering::AcqRel);
+        } else {
+            self.alert_unlocked.store(true, Ordering::Release);
+        }
+    }
 }
 
 pub fn state(locked: bool, apps: bool, nc: bool) -> State {
@@ -114,6 +128,117 @@ impl Shell1 {
             self.status.nc.load(Ordering::Acquire),
         )
     }
+    /// Show a decision for a live Display1 preview. Settings keeps its lease and
+    /// performs the selected action on the original connection.
+    async fn confirm_display_preview(
+        &self,
+        display_owner: &str,
+        lease: &str,
+        activation: &str,
+        #[zbus(header)] header: zbus::message::Header<'_>,
+        #[zbus(connection)] connection: &zbus::Connection,
+    ) -> Result<bool, Error> {
+        use futures_lite::{StreamExt, future};
+        use nidara_access::{Consent, Operation, Peer};
+        use std::time::{Duration, Instant};
+
+        let sender = header
+            .sender()
+            .ok_or_else(|| Error::AccessDenied("missing sender".into()))?;
+        let dbus = zbus::fdo::DBusProxy::new(connection).await?;
+        let credentials = dbus
+            .get_connection_credentials(sender.clone().into())
+            .await
+            .map_err(|error| Error::AccessDenied(error.to_string()))?;
+        let pid = credentials
+            .process_id()
+            .ok_or_else(|| Error::AccessDenied("missing PID".into()))?;
+        let uid = credentials
+            .unix_user_id()
+            .ok_or_else(|| Error::AccessDenied("missing UID".into()))?;
+        Peer::from_credentials(pid, uid)
+            .map_err(|error| Error::AccessDenied(error.to_string()))?
+            .authorize(Operation::Configure, Consent::default())
+            .map_err(Error::AccessDenied)?;
+        let settings = dbus
+            .get_name_owner("org.nidara.SettingsNative".try_into().unwrap())
+            .await
+            .map_err(|error| Error::AccessDenied(error.to_string()))?;
+        let settings_peer = dbus
+            .get_connection_credentials(settings.into())
+            .await
+            .map_err(|error| Error::AccessDenied(error.to_string()))?;
+        if settings_peer.process_id() != Some(pid) || settings_peer.unix_user_id() != Some(uid) {
+            return Err(Error::AccessDenied(
+                "native Settings owns the display alert request".into(),
+            ));
+        }
+
+        let owner = dbus
+            .get_name_owner("org.nidara.Display".try_into().unwrap())
+            .await
+            .map_err(|error| Error::Unavailable(error.to_string()))?;
+        if owner.as_str() != display_owner || lease.is_empty() {
+            return Err(Error::Unavailable("display owner or lease changed".into()));
+        }
+        let mut disconnected = dbus
+            .receive_name_owner_changed_with_args(&[(0, sender.as_str())])
+            .await?;
+        if !dbus
+            .name_has_owner(sender.clone().into())
+            .await
+            .unwrap_or(false)
+        {
+            return Ok(false);
+        }
+        let display = zbus::Proxy::new(
+            connection,
+            owner.as_str(),
+            "/org/nidara/Display",
+            "org.nidara.Display1",
+        )
+        .await?;
+        let mut changed = display.receive_signal("Changed").await?;
+        let Some(deadline) = display_confirmation_deadline(&display, lease).await? else {
+            return Err(Error::Unavailable(
+                "display preview is no longer active".into(),
+            ));
+        };
+        let now = Instant::now();
+        let remaining = deadline.saturating_sub(glib::monotonic_time().max(0) as u64);
+        if remaining == 0 || remaining > 15_000_000 {
+            return Ok(false);
+        }
+        let result = crate::session_alert::open(
+            self.status.clone(),
+            crate::session_alert::Kind::Display {
+                deadline: now + Duration::from_micros(remaining),
+            },
+            (!activation.is_empty()).then(|| activation.to_owned()),
+        )
+        .map_err(|error| Error::Unavailable(error.to_string()))?;
+        loop {
+            let decision = future::race(
+                async { Some(result.recv().await.unwrap_or(false)) },
+                future::race(
+                    async {
+                        let _ = disconnected.next().await;
+                        Some(false)
+                    },
+                    async { changed.next().await.is_none().then_some(false) },
+                ),
+            )
+            .await;
+            if let Some(keep) = decision {
+                return Ok(
+                    keep && display_confirmation_deadline(&display, lease).await? == Some(deadline)
+                );
+            }
+            if display_confirmation_deadline(&display, lease).await? != Some(deadline) {
+                return Ok(false);
+            }
+        }
+    }
     fn focus_surface(&self, surface: &str) -> Result<(), Error> {
         focus(
             surface,
@@ -153,6 +278,34 @@ impl Shell1 {
     }
 }
 
+async fn display_confirmation_deadline(
+    display: &zbus::Proxy<'_>,
+    lease: &str,
+) -> Result<Option<u64>, Error> {
+    let reply = display.call_method("GetState", &()).await?;
+    preview_deadline(&reply, lease)
+}
+
+fn preview_deadline(reply: &zbus::Message, lease: &str) -> Result<Option<u64>, Error> {
+    use zbus::zvariant::{Structure, Value};
+    let body = reply.body();
+    let snapshot: Structure<'_> = body.deserialize()?;
+    // Display1's public snapshot ends with (token, phase, deadline_us) and last_error.
+    let Some(Value::Structure(pending)) = snapshot.fields().get(5) else {
+        return Err(Error::Unavailable(
+            "display preview state unavailable".into(),
+        ));
+    };
+    match pending.fields() {
+        [Value::Str(token), Value::Str(phase), Value::U64(deadline)] => {
+            Ok((token.as_str() == lease && phase.as_str() == "confirming").then_some(*deadline))
+        }
+        _ => Err(Error::Unavailable(
+            "display preview state unavailable".into(),
+        )),
+    }
+}
+
 /// Owns `org.nidara.Shell` on a connection of its own. Fails, and the dock carries on
 /// without it, when the name is already owned (the TS shell owns it in its session). It
 /// yields the name to the TS shell even when it got there first: both start together in
@@ -180,6 +333,33 @@ pub fn changed(conn: &Connection, locked: bool, apps: bool, nc: bool) {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn timed_alert_reads_only_the_current_display1_confirmation_deadline() {
+        let reply = |phase| {
+            zbus::Message::signal("/org/nidara/Display", "org.nidara.Display1", "Changed")
+                .unwrap()
+                .build(&(
+                    7u64,
+                    2u64,
+                    vec!["preview"],
+                    Vec::<u64>::new(),
+                    ("panel", 1u32),
+                    ("lease", phase, 42u64),
+                    "",
+                ))
+                .unwrap()
+        };
+        assert_eq!(
+            preview_deadline(&reply("confirming"), "lease").unwrap(),
+            Some(42)
+        );
+        assert_eq!(preview_deadline(&reply("saving"), "lease").unwrap(), None);
+        assert_eq!(
+            preview_deadline(&reply("confirming"), "older").unwrap(),
+            None
+        );
+    }
+
     #[test]
     fn focus_follows_the_vocabulary_lock_and_docks() {
         assert!(focus("dock", false, 1).is_ok());

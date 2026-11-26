@@ -129,6 +129,8 @@ pub struct Node {
     pub role: Role,
     pub name: String,
     pub description: String,
+    /// A polite announcement when this optional message changes.
+    pub announcement: Option<String>,
     pub states: States,
     pub actions: Vec<Action>,
     /// Translated labels keyed by stable AT-SPI action name.
@@ -148,6 +150,7 @@ impl Node {
             role,
             name: name.into(),
             description: String::new(),
+            announcement: None,
             states: States::default(),
             actions: vec![],
             action_labels: BTreeMap::new(),
@@ -374,6 +377,12 @@ pub fn diff(old: Option<&Tree>, new: &Tree) -> Result<Vec<Event>> {
                 n.name.clone(),
                 n.role == Role::Alert,
             ));
+        }
+        if !n.states.hidden
+            && let Some(message) = &n.announcement
+            && before.and_then(|old| old.announcement.as_ref()) != Some(message)
+        {
+            out.push(Event::Announcement(n.id, message.clone(), false));
         }
         let s = before.map(|n| n.states.clone()).unwrap_or_default();
         if s.focused != n.states.focused {

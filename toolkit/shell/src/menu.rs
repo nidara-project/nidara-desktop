@@ -152,38 +152,35 @@ pub fn system_menu(can_settings: bool) -> Vec<Row> {
     ]
 }
 
-/// The question before an action that ends something: the question itself (not a
-/// choice), then the action and Cancel.
-pub fn confirm_menu(action: System) -> Vec<Row> {
-    let (question, verb) = match action {
-        System::Logout => (
-            "bar.system-menu.confirm.logout",
-            "bar.system-menu.confirm.action.logout",
-        ),
-        System::Restart => (
-            "bar.system-menu.confirm.restart",
-            "bar.system-menu.confirm.action.restart",
-        ),
-        _ => (
-            "bar.system-menu.confirm.shutdown",
-            "bar.system-menu.confirm.action.shutdown",
-        ),
-    };
-    vec![
-        Row {
-            enabled: false,
-            ..row(Label::Key(question), Command::None)
-        },
-        separator(),
-        row(
-            Label::Key(verb),
-            Command::System {
-                action,
-                confirmed: true,
-            },
-        ),
-        row(Label::Key("bar.system-menu.confirm.cancel"), Command::None),
-    ]
+impl System {
+    pub(crate) fn alert_labels(self) -> Option<(&'static str, &'static str)> {
+        Some(match self {
+            Self::Logout => (
+                "bar.system-menu.confirm.logout",
+                "bar.system-menu.confirm.action.logout",
+            ),
+            Self::Restart => (
+                "bar.system-menu.confirm.restart",
+                "bar.system-menu.confirm.action.restart",
+            ),
+            Self::Shutdown => (
+                "bar.system-menu.confirm.shutdown",
+                "bar.system-menu.confirm.action.shutdown",
+            ),
+            _ => return None,
+        })
+    }
+
+    pub(crate) fn command(self) -> Option<&'static [&'static str]> {
+        Some(match self {
+            Self::Lock => &["nidara-lock"],
+            Self::Suspend => &["systemctl", "suspend"],
+            Self::Logout => &["uwsm", "stop"],
+            Self::Restart => &["systemctl", "reboot"],
+            Self::Shutdown => &["systemctl", "poweroff"],
+            _ => return None,
+        })
+    }
 }
 
 #[derive(Clone, Debug, PartialEq)]
@@ -513,16 +510,8 @@ mod tests {
                     action: System::Settings,
                     confirmed: true
                 }));
-        let confirm = confirm_menu(System::Restart);
-        assert!(!confirm[0].enabled);
-        assert_eq!(
-            confirm[2].command,
-            Command::System {
-                action: System::Restart,
-                confirmed: true
-            }
-        );
-        assert_eq!(confirm[3].command, Command::None);
+        assert!(System::Restart.alert_labels().is_some());
+        assert!(System::Lock.alert_labels().is_none());
     }
     use crate::model::{Autostart, DesktopAction};
 

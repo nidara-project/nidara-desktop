@@ -482,29 +482,12 @@ fn run(
     appearance.dark = true;
     let look = WindowLook::load(&exports, &appearance)?;
     let title = exports.text(body.title())?.to_owned();
-    let labels = Labels {
-        show_sidebar: String::new(),
-        hide_sidebar: String::new(),
-        back: String::new(),
-        forward: String::new(),
-    };
     let alert_message = body
         .alert_message()
         .map(|key| exports.text(key).map(str::to_owned))
         .transpose()?;
     let close_label = exports.text("settings.window.close")?.to_owned();
-    let host = AppWindow::new(
-        look,
-        labels,
-        &title,
-        Box::new(ParleyBackend::new(Arc::new(FontSet::discover_required()?))?),
-        Glyphs::new(nk_icons::Icons::new(
-            "",
-            &[],
-            &crate::paths::icon_reference(),
-        )?),
-        appearance.reduced_motion,
-    );
+    let host = dialog_host(look, &title, appearance.reduced_motion)?;
     let mut app = Prompt {
         serial,
         ticket,
@@ -521,19 +504,13 @@ fn run(
         .as_str()
         .filter(|t| !t.is_empty())
         .map(str::to_owned);
-    let options = Options {
-        material: true,
-        map: true,
-        app_id: SESSION_PROMPT_APP_ID,
-        title: "",
-        size: (440, 385),
-        require_material: None,
-    };
+    let options = dialog_options();
     if let Some(message) = alert_message {
         Alert {
             title,
             message,
             detail: None,
+            countdown: None,
             buttons: Vec::new(),
         }
         .run_parentless(host, options, activation, &mut app)?;
@@ -546,4 +523,41 @@ fn run(
         .run_parentless(host, options, activation, &mut app)?;
     }
     Ok(())
+}
+
+/// Shared rendering host for shell-owned system toplevels.
+pub(crate) fn dialog_host(
+    look: WindowLook,
+    title: &str,
+    reduced_motion: bool,
+) -> Result<AppWindow> {
+    let labels = Labels {
+        show_sidebar: String::new(),
+        hide_sidebar: String::new(),
+        back: String::new(),
+        forward: String::new(),
+    };
+    Ok(AppWindow::new(
+        look,
+        labels,
+        title,
+        Box::new(ParleyBackend::new(Arc::new(FontSet::discover_required()?))?),
+        Glyphs::new(nk_icons::Icons::new(
+            "",
+            &[],
+            &crate::paths::icon_reference(),
+        )?),
+        reduced_motion,
+    ))
+}
+
+pub(crate) fn dialog_options() -> Options<'static> {
+    Options {
+        material: true,
+        map: true,
+        app_id: SESSION_PROMPT_APP_ID,
+        title: "",
+        size: (440, 385),
+        require_material: None,
+    }
 }

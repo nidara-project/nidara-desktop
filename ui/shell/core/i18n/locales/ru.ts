@@ -694,6 +694,7 @@ export default {
     "bar.system-menu.confirm.restart": "Перезагрузить этот компьютер?",
     "bar.system-menu.confirm.shutdown": "Выключить этот компьютер?",
     "bar.system-menu.confirm.cancel": "Отмена",
+    "bar.system-menu.confirm.countdown": "Выбранное действие будет выполнено через %d с.",
     "bar.system-menu.confirm.action.logout": "Выйти",
     "bar.system-menu.confirm.action.restart": "Перезагрузить",
     "bar.system-menu.confirm.action.shutdown": "Выключить",

@@ -2790,6 +2790,7 @@ fn dialogs(m: &Model, t: &TypeScale) -> Vec<Node> {
                     .trailing(nk::FontButton::new("dialogs/font", &m.font, "font-open"))
                     .into(),
                 content_button("dialogs/alert", "Open alert", "alert-open", t).into(),
+                content_button("dialogs/timed", "Open timed alert", "alert-timed", t).into(),
                 content_button(
                     "dialogs/destructive",
                     "Open destructive alert",
@@ -2836,6 +2837,13 @@ fn system_dialogs(m: &Model, t: &TypeScale) -> Vec<Node> {
                     "system-dialogs/alert",
                     "Open system alert",
                     "system-alert-open",
+                    t,
+                )
+                .into(),
+                content_button(
+                    "system-dialogs/timed",
+                    "Open timed system alert",
+                    "system-alert-timed",
                     t,
                 )
                 .into(),

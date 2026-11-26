@@ -687,6 +687,7 @@ export default {
     "bar.system-menu.confirm.restart": "要重新启动这台电脑吗?",
     "bar.system-menu.confirm.shutdown": "要关闭这台电脑吗?",
     "bar.system-menu.confirm.cancel": "取消",
+    "bar.system-menu.confirm.countdown": "所选操作将在 %d 秒后执行。",
     "bar.system-menu.confirm.action.logout": "注销",
     "bar.system-menu.confirm.action.restart": "重新启动",
     "bar.system-menu.confirm.action.shutdown": "关机",

@@ -1236,6 +1236,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "nidara-access"
+version = "0.1.0"
+dependencies = [
+ "gio",
+ "libc",
+]
+
+[[package]]
 name = "nidara-corner"
 version = "0.1.0"
 
@@ -1268,9 +1276,12 @@ dependencies = [
 name = "nidara-shell"
 version = "0.1.0"
 dependencies = [
+ "async-channel",
+ "futures-lite",
  "gio",
  "glib",
  "image",
+ "nidara-access",
  "nidara-kit",
  "nidara-shell-ipc",
  "nk-a11y",
