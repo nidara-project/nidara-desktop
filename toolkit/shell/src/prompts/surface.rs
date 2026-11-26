@@ -1,22 +1,17 @@
 // SPDX-License-Identifier: LGPL-3.0-or-later
-//! The shared prompt's layer and kit components. A retired layer drops all input.
+//! The shell's service models for the kit's independent dialog and alert windows.
 use super::{Answer, Event, Request, Service, Ticket};
 use crate::ccauth;
-use nk::Widget;
 use nk::{
-    Activated, AppWindow, Button, Column, Corner, Glyphs, Label, Labels, Node, Padding, Page, Pane,
-    PasswordEntry, Radius, Row, Scroll, Space, Type, Value, Weight, WindowLook,
+    Activated, Alert, AppWindow, Column, Dialog, DialogAnswer, DialogButton, DialogContent,
+    DialogUpdate, Glyphs, Label, Labels, Node, PasswordEntry, Space, Type, Value, Weight,
+    WindowLook,
 };
 use nk_platform::{exports::Exports, portal::Portal};
 use nk_text::{FontSet, ParleyBackend};
-use nk_wayland::{
-    Application, ControlsButtons, Event as Wayland, Frame, Material, Options, Result, Window,
-};
+use nk_wayland::{Options, Result};
 use serde_json::Value as Json;
-use std::{
-    sync::{Arc, mpsc},
-    time::Instant,
-};
+use std::sync::{Arc, mpsc};
 use zbus::blocking::Connection;
 
 use nk_platform::SESSION_PROMPT_APP_ID;
@@ -218,13 +213,6 @@ impl Body {
         }
     }
 
-    fn has_input(&self) -> bool {
-        match self {
-            Self::Wifi(_) => true,
-            Self::Bluetooth(form) => form.kind.field().is_some(),
-        }
-    }
-
     fn ready(&self) -> bool {
         match self {
             Self::Wifi(form) => form.ready(),
@@ -240,14 +228,7 @@ impl Body {
         }
     }
 
-    fn page(
-        &self,
-        host: &AppWindow,
-        exports: &Exports,
-        busy: bool,
-        failed: bool,
-        controls: Option<nk_wayland::ControlsLayout>,
-    ) -> Page {
+    fn content(&self, host: &AppWindow, exports: &Exports, busy: bool, failed: bool) -> Node {
         let text = |key: &str| exports.text(key).unwrap_or("").to_owned();
         let types = &host.look().types;
         let body = types.style(Type::Body, Weight::Regular);
@@ -268,7 +249,7 @@ impl Body {
             .into()
         };
         let mut fields = Vec::new();
-        let submit = match self {
+        match self {
             Self::Wifi(form) => {
                 if !form.name.is_empty() {
                     fields.push(label("network", form.name.clone()));
@@ -290,7 +271,6 @@ impl Body {
                     };
                     fields.push(field(&entry.key, name));
                 }
-                Some("settings.network.ap.connect")
             }
             Self::Bluetooth(form) => {
                 let meta = &form.meta;
@@ -300,7 +280,9 @@ impl Body {
                     .or(meta["address"].as_str())
                     .unwrap_or("");
                 fields.push(label("device", device.into()));
-                fields.push(label("instruction", text(form.kind.instruction())));
+                if !form.kind.consent() {
+                    fields.push(label("instruction", text(form.kind.instruction())));
+                }
                 if let Some(code) = meta["code"]
                     .as_str()
                     .filter(|_| form.kind.display() || form.kind == BluetoothKind::Confirm)
@@ -342,77 +324,30 @@ impl Body {
                         },
                     );
                     fields.push(label("size", size));
-                    Some("shell.prompt.bluetooth.accept-file")
-                } else if form.kind.display() {
-                    None
-                } else {
-                    Some("settings.bluetooth.pairing.confirm")
                 }
             }
-        };
+        }
         if failed {
             fields.push(label("error", text("shell.prompt.error")));
         }
-        let (dismiss, action) = match self {
-            Self::Bluetooth(form) if form.kind.consent() => {
-                ("shell.prompt.bluetooth.reject", "reject")
+        Column::new("prompt/fields", fields).gap(Space::S3).into()
+    }
+
+    fn submit_label(&self) -> Option<&'static str> {
+        match self {
+            Self::Wifi(_) => Some("settings.network.ap.connect"),
+            Self::Bluetooth(form) if form.kind.display() => None,
+            Self::Bluetooth(form) if form.kind == BluetoothKind::IncomingFile => {
+                Some("shell.prompt.bluetooth.accept-file")
             }
-            _ => ("settings.native.cancel", "cancel"),
-        };
-        let mut buttons = vec![
-            Button::new("cancel", text(dismiss), action, body.clone())
-                .enabled(!busy)
-                .into(),
-        ];
-        if let Some(key) = submit {
-            buttons.push(
-                Button::new("submit", text(key), "submit", body)
-                    .enabled(!busy && self.ready())
-                    .into(),
-            );
+            Self::Bluetooth(_) => Some("settings.bluetooth.pairing.confirm"),
         }
-        let title = text(self.title());
-        let mut header = vec![
-            Label::new(
-                "title",
-                title.clone(),
-                types.style(Type::Subtitle, Weight::Semibold),
-            )
-            .grow()
-            .into(),
-        ];
-        if let Some(controls) = controls {
-            let index = if controls.side == nk_wayland::ControlsSide::Left {
-                0
-            } else {
-                1
-            };
-            header.insert(index, nk::Slot::new("controls/room", controls.width).into());
-        }
-        let content = Column::new(
-            "layout",
-            vec![
-                Row::new("header", header).gap(Space::S2).into(),
-                Scroll::new(
-                    "fields",
-                    Column::new("prompt/fields", fields).gap(Space::S3),
-                )
-                .grow()
-                .into(),
-                Row::new("actions", buttons)
-                    .gap(Space::S2)
-                    .justify(nk::Justify::End)
-                    .into(),
-            ],
-        )
-        .gap(Space::S3)
-        .padding(Padding::all(Space::S4));
-        Page {
-            title,
-            sidebar: Column::new("sidebar", vec![]).into(),
-            content: Pane::new("pane", Corner::Token(Radius::Md), content).into(),
-            can_back: false,
-            can_forward: false,
+    }
+
+    fn alert_message(&self) -> Option<&'static str> {
+        match self {
+            Self::Bluetooth(form) if form.kind.consent() => Some(form.kind.instruction()),
+            _ => None,
         }
     }
 }
@@ -425,179 +360,110 @@ struct Prompt {
     exports: Exports,
     portal: Portal,
     body: Body,
-    host: AppWindow,
     busy: bool,
     failed: bool,
-    initial_focus: bool,
-    activation: Option<String>,
-    controls: Option<nk_wayland::ControlsLayout>,
+    withdrawn: bool,
 }
 
-impl Prompt {
-    fn show(&mut self) {
-        self.host.show(self.body.page(
-            &self.host,
-            &self.exports,
-            self.busy,
-            self.failed,
-            self.controls,
-        ));
+impl DialogContent for Prompt {
+    fn content(&mut self, host: &AppWindow) -> Node {
+        self.body
+            .content(host, &self.exports, self.busy, self.failed)
     }
 
-    fn changes(&mut self, window: &mut Window) -> Result<()> {
-        let mut dirty = false;
-        for update in self.input.try_iter() {
-            match update {
+    fn buttons(&self) -> Option<Vec<DialogButton>> {
+        let (id, label) = if self.body.alert_message().is_some() {
+            ("reject", "shell.prompt.bluetooth.reject")
+        } else {
+            ("cancel", "settings.native.cancel")
+        };
+        let mut buttons = vec![DialogButton {
+            id: id.into(),
+            label: self.exports.text(label).unwrap_or("").into(),
+            default: false,
+            cancel: true,
+            destructive: false,
+            enabled: !self.busy,
+        }];
+        if let Some(key) = self.body.submit_label() {
+            buttons.push(DialogButton {
+                id: "submit".into(),
+                label: self.exports.text(key).unwrap_or("").into(),
+                default: true,
+                cancel: false,
+                destructive: false,
+                enabled: !self.busy && self.body.ready(),
+            });
+        }
+        Some(buttons)
+    }
+
+    fn activated(&mut self, action: Activated) -> Result<()> {
+        if !self.busy
+            && let Some(id) = action.action.strip_prefix("edit/")
+            && let Some(value) = &action.value
+        {
+            self.body.edit(id, value);
+            self.failed = false;
+        }
+        Ok(())
+    }
+
+    fn respond(&mut self, answer: &DialogAnswer, button: Option<&str>) -> Result<bool> {
+        if self.busy {
+            return Ok(false);
+        }
+        let answer = match answer {
+            DialogAnswer::Cancel if button == Some("reject") => Some(Answer::Reject),
+            DialogAnswer::Cancel => Some(Answer::Cancel),
+            DialogAnswer::Button(id) if id == "submit" => self.body.answer(),
+            DialogAnswer::Button(_) => None,
+        };
+        if let Some(answer) = answer {
+            self.events
+                .send(Event::Answer(self.serial, self.ticket.clone(), answer))
+                .map_err(|_| "the session prompt owner disconnected")?;
+            self.busy = true;
+            self.failed = false;
+        }
+        // Service close owns withdrawal. A failed reply restores the form.
+        Ok(false)
+    }
+
+    fn withdrawn(&self) -> bool {
+        self.withdrawn
+    }
+
+    fn poll(&mut self) -> Result<DialogUpdate> {
+        let mut update = DialogUpdate::default();
+        for change in self.input.try_iter() {
+            match change {
                 Change::Metadata(meta) => {
                     if let Body::Bluetooth(bluetooth) = &mut self.body {
                         bluetooth.update(&meta);
-                        dirty = true;
+                        update.content_changed = true;
                     }
                 }
                 Change::Failed => {
                     self.busy = false;
                     self.failed = true;
-                    dirty = true;
+                    update.content_changed = true;
                 }
                 Change::Stop => {
-                    window.close();
-                    return Ok(());
+                    self.withdrawn = true;
+                    return Ok(update);
                 }
             }
         }
         if self.portal.changed() {
             let mut appearance = self.portal.read()?;
             appearance.dark = true;
-            self.host.set_look(
+            update.appearance = Some((
                 WindowLook::load(&self.exports, &appearance)?,
                 appearance.reduced_motion,
-            );
+            ));
         }
-        if dirty {
-            self.show();
-        }
-        Ok(())
-    }
-
-    fn answer(&mut self, answer: Answer) {
-        if !self.busy
-            && self
-                .events
-                .send(Event::Answer(self.serial, self.ticket.clone(), answer))
-                .is_ok()
-        {
-            self.busy = true;
-            self.failed = false;
-            self.show();
-        }
-    }
-
-    fn submit(&mut self) {
-        if !self.busy
-            && let Some(answer) = self.body.answer()
-        {
-            self.answer(answer);
-        }
-    }
-
-    fn actions(&mut self, actions: Vec<Activated>) {
-        for action in actions {
-            if self.busy {
-                break;
-            }
-            match action.action.as_str() {
-                "submit" => self.submit(),
-                "cancel" => self.answer(Answer::Cancel),
-                "reject" => self.answer(Answer::Reject),
-                name if let Some(id) = name.strip_prefix("edit/")
-                    && let Some(value) = &action.value =>
-                {
-                    self.body.edit(id, value);
-                    self.failed = false;
-                    self.show();
-                }
-                _ => {}
-            }
-        }
-    }
-
-    fn commit(&mut self, window: &mut Window) -> Result<()> {
-        self.host.commit(window, |host| {
-            self.body
-                .page(host, &self.exports, self.busy, self.failed, self.controls)
-        })
-    }
-}
-
-impl Application for Prompt {
-    fn window_controls(&self) -> bool {
-        true
-    }
-    fn window_control_buttons(&self) -> ControlsButtons {
-        ControlsButtons::Close
-    }
-
-    fn poll_interval_ms(&self) -> u32 {
-        self.host.poll_interval_ms()
-    }
-
-    fn idle(&mut self, window: &mut Window) -> Result<()> {
-        self.changes(window)?;
-        if !window.is_closed() {
-            if window.commits() > 1
-                && let Some(token) = self.activation.take()
-            {
-                let _ = window.activate(token);
-            }
-            let actions = self.host.idle()?;
-            self.actions(actions);
-            self.commit(window)?;
-        }
-        Ok(())
-    }
-
-    fn event(&mut self, event: Wayland, window: &mut Window) -> Result<()> {
-        self.changes(window)?;
-        if window.is_closed() || matches!(event, Wayland::Closed) {
-            return Ok(());
-        }
-        let gets_focus = matches!(event, Wayland::Focus(true));
-        match event {
-            Wayland::CloseRequested => self.answer(Answer::Cancel),
-            Wayland::ControlsLayout(controls) => {
-                self.controls = Some(controls);
-                self.host.event(Wayland::ControlsLayout(controls), window)?;
-                self.show();
-            }
-            Wayland::Key(ref key) if key.sym == 0xff1b => self.answer(Answer::Cancel),
-            Wayland::Key(ref key) if matches!(key.sym, 0xff0d | 0xff8d) => {
-                if let Some((handled, actions)) = self.host.dialog_enter(key) {
-                    self.actions(actions);
-                    if !handled && self.body.has_input() {
-                        self.submit();
-                    }
-                }
-            }
-            event => {
-                let (_, actions) = self.host.event(event, window)?;
-                self.actions(actions);
-            }
-        }
-        if self.initial_focus && gets_focus {
-            if self.body.has_input() {
-                self.host.focus_first_under("prompt/fields");
-            }
-            self.initial_focus = false;
-        }
-        self.commit(window)
-    }
-
-    fn paint(&mut self, frame: Frame) -> Result<Vec<u8>> {
-        self.host.paint(frame)
-    }
-
-    fn material(&self) -> Option<Material> {
-        self.host.material()
+        Ok(update)
     }
 }
 
@@ -622,7 +488,12 @@ fn run(
         back: String::new(),
         forward: String::new(),
     };
-    let mut host = AppWindow::new(
+    let alert_message = body
+        .alert_message()
+        .map(|key| exports.text(key).map(str::to_owned))
+        .transpose()?;
+    let close_label = exports.text("settings.window.close")?.to_owned();
+    let host = AppWindow::new(
         look,
         labels,
         &title,
@@ -634,7 +505,6 @@ fn run(
         )?),
         appearance.reduced_motion,
     );
-    host.set_standalone_dialog();
     let mut app = Prompt {
         serial,
         ticket,
@@ -643,28 +513,37 @@ fn run(
         exports,
         portal,
         body,
-        host,
         busy: false,
         failed: false,
-        initial_focus: true,
-        controls: None,
-        activation: meta["activationToken"]
-            .as_str()
-            .filter(|t| !t.is_empty())
-            .map(str::to_owned),
+        withdrawn: false,
     };
-    app.show();
-    let size = (440, 385);
-    nk_wayland::run(
-        app,
-        Options {
-            material: true,
-            map: true,
-            app_id: SESSION_PROMPT_APP_ID,
-            title: &title,
-            size,
-            require_material: None,
-        },
-        Instant::now(),
-    )
+    let activation = meta["activationToken"]
+        .as_str()
+        .filter(|t| !t.is_empty())
+        .map(str::to_owned);
+    let options = Options {
+        material: true,
+        map: true,
+        app_id: SESSION_PROMPT_APP_ID,
+        title: "",
+        size: (440, 385),
+        require_material: None,
+    };
+    if let Some(message) = alert_message {
+        Alert {
+            title,
+            message,
+            detail: None,
+            buttons: Vec::new(),
+        }
+        .run_parentless(host, options, activation, &mut app)?;
+    } else {
+        Dialog {
+            title,
+            close_label,
+            buttons: Vec::new(),
+        }
+        .run_parentless(host, options, activation, &mut app)?;
+    }
+    Ok(())
 }

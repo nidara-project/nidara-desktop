@@ -92,6 +92,12 @@ The aesthetic is "Nidara literal": heavy-blur glass capsules with a 1px inner wh
 
 It is also **AI-native by design**: this skill ships *inside* the repo so that any user's agent — whichever it is: `AGENTS.md` is every agent's entry, `CLAUDE.md` only imports it, and `.agents/skills/nidara` is a symlink here; edit only `.claude/skills/nidara/` — can extend, customize, and fix their own desktop — and propose globally-useful improvements back upstream. If you're helping a user with their installed copy rather than the project itself, start at `references/agent-contribution.md`.
 
+Native dialogs use `nk::Dialog` or `nk::Alert` as an `xdg_toplevel` (#1185).
+An app dialog is modal over its parent. A system dialog is parentless and lets
+Hyalo own placement, activation, attention and the lock boundary. The kit owns
+response ordering and Enter/Escape. The shell's service model only supplies
+content, response eligibility and asynchronous replies. Start at `toolkit/DIALOGS.md`.
+
 ## The repo is FIVE separate bundles, not one app
 
 This is the single most important fact to internalize before touching anything:

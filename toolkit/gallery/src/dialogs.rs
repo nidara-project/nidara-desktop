@@ -219,3 +219,122 @@ impl Gallery {
         })
     }
 }
+
+struct SystemSample<'a> {
+    portal: &'a Portal,
+    exports: &'a Exports,
+    name: Option<String>,
+}
+
+impl DialogContent for SystemSample<'_> {
+    fn content(&mut self, _: &AppWindow) -> Node {
+        match &self.name {
+            Some(name) => {
+                nk::Entry::new("system-sample/name", "Name", "sample-name", name.clone()).into()
+            }
+            None => nk::Spacer::new("system-sample/no-detail").into(),
+        }
+    }
+
+    fn activated(&mut self, action: Activated) -> Result<()> {
+        if action.action == "sample-name"
+            && let Some(Value::Text(name)) = action.value
+        {
+            self.name = Some(name);
+        }
+        Ok(())
+    }
+
+    fn poll(&mut self) -> Result<DialogUpdate> {
+        appearance(self.portal, self.exports)
+    }
+}
+
+fn system_sample(alert: bool) -> Result<DialogAnswer> {
+    let bus = zbus::blocking::Connection::session().map_err(|e| e.to_string())?;
+    let portal = Portal::watch(&bus)?;
+    let exports = Exports::load(&Exports::root())?;
+    let a = portal.read()?;
+    let title = if alert {
+        "System alert sample"
+    } else {
+        "System dialog sample"
+    };
+    let host = AppWindow::new(
+        WindowLook::load(&exports, &a)?,
+        Labels {
+            show_sidebar: String::new(),
+            hide_sidebar: String::new(),
+            back: String::new(),
+            forward: String::new(),
+        },
+        title,
+        Box::new(ParleyBackend::with_system_fonts(Arc::new(
+            FontSet::discover_required()?,
+        ))?),
+        Glyphs::new(icons()?),
+        a.reduced_motion,
+    );
+    let options = Options {
+        material: true,
+        map: true,
+        app_id: "nidara-kit-gallery",
+        title,
+        size: (440, 385),
+        require_material: None,
+    };
+    let mut model = SystemSample {
+        portal: &portal,
+        exports: &exports,
+        name: (!alert).then(String::new),
+    };
+    let buttons = vec![
+        button("cancel", "Cancel", false, true, false),
+        button("continue", "Continue", true, false, false),
+    ];
+    if alert {
+        Alert {
+            title: title.into(),
+            message: "Continue with this sample?".into(),
+            detail: None,
+            buttons,
+        }
+        .run_parentless(host, options, None, &mut model)
+    } else {
+        Dialog {
+            title: title.into(),
+            close_label: "Close".into(),
+            buttons,
+        }
+        .run_parentless(host, options, None, &mut model)
+    }
+}
+
+impl Gallery {
+    pub(super) fn open_system_dialog(&mut self, alert: bool) {
+        if self.system_dialog.is_some() {
+            return;
+        }
+        let (send, receive) = std::sync::mpsc::channel();
+        std::thread::spawn(move || {
+            let _ = send.send(system_sample(alert).map_err(|error| error.to_string()));
+        });
+        self.system_dialog = Some(receive);
+    }
+
+    pub(super) fn poll_system_dialog(&mut self) {
+        use std::sync::mpsc::TryRecvError;
+        let Some(receive) = &self.system_dialog else {
+            return;
+        };
+        self.model.modal_result = match receive.try_recv() {
+            Ok(Ok(DialogAnswer::Button(id))) => id,
+            Ok(Ok(DialogAnswer::Cancel)) => "cancel".into(),
+            Ok(Err(error)) => error,
+            Err(TryRecvError::Empty) => return,
+            Err(TryRecvError::Disconnected) => "Sample closed".into(),
+        };
+        self.system_dialog = None;
+        self.rebuild();
+    }
+}

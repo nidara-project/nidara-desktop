@@ -183,7 +183,6 @@ pub(crate) fn retain_rebuilds(state: &ViewState, requests: &mut Vec<ReplyTarget>
 
 pub struct AppWindow {
     modal_frame: Option<dialog::ModalFrame>,
-    standalone_dialog: bool,
     page_fills_window: bool,
     suspended: bool,
     active: bool,
@@ -297,7 +296,6 @@ impl AppWindow {
         band.set_slides(false);
         Self {
             modal_frame: None,
-            standalone_dialog: false,
             page_fills_window: false,
             suspended: false,
             active: false,
@@ -372,14 +370,8 @@ impl AppWindow {
             m.dirty = true;
         }
     }
-    /// Use the page as a surface-level dialog, with no application navigation.
-    /// Set this before mapping. The caller owns the dialog's content and responses.
-    pub fn set_standalone_dialog(&mut self) {
-        self.standalone_dialog = true;
-    }
-
     fn has_band(&self) -> bool {
-        self.modal_frame.is_none() && !self.standalone_dialog
+        self.modal_frame.is_none()
     }
 
     /// Give the page the window's available height. Its grow children can
@@ -456,20 +448,6 @@ impl AppWindow {
         let Some(page) = self.page.clone() else {
             return;
         };
-        if self.standalone_dialog {
-            self.state.set_slides(false);
-            self.state.layout(
-                &page.content,
-                self.size,
-                self.scale,
-                self.look.tokens.with_types(&self.look.types),
-                self.text.as_mut(),
-                now,
-            );
-            self.changed = true;
-            self.paint_dirty = true;
-            return;
-        }
         let f = &self.look.frame;
         let shown = self.sidebar.shown(now, &self.look.tokens.motion);
         let narrow = self.sidebar.narrow();
@@ -1028,13 +1006,7 @@ impl AppWindow {
     }
 
     fn semantic_tree(&mut self, window: &Window) -> nk_a11y::Tree {
-        let role = if self.standalone_dialog {
-            nk_a11y::Role::Dialog
-        } else {
-            nk_a11y::Role::Window
-        };
-        let mut root = nk_a11y::Node::new(ROOT, role, self.name.clone());
-        root.states.modal = self.standalone_dialog;
+        let mut root = nk_a11y::Node::new(ROOT, nk_a11y::Role::Window, self.name.clone());
         root.bounds = nk_a11y::Bounds {
             x: 0.,
             y: 0.,

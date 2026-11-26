@@ -106,6 +106,15 @@ pub trait DialogContent {
     fn buttons(&self) -> Option<Vec<DialogButton>> {
         None
     }
+    /// Return false while an asynchronous response is pending or can be retried.
+    /// A cancel button supplies its id; Escape and the window close have none.
+    fn respond(&mut self, _answer: &DialogAnswer, _button: Option<&str>) -> Result<bool> {
+        Ok(true)
+    }
+    /// External withdrawal (for example service loss), without a response.
+    fn withdrawn(&self) -> bool {
+        false
+    }
     fn poll(&mut self) -> Result<DialogUpdate> {
         Ok(DialogUpdate::default())
     }
@@ -217,7 +226,7 @@ pub(super) struct ModalFrame {
     pub(super) alert: bool,
     pub(super) description: String,
     pub(super) namespace: Namespace,
-    pub(super) parent: Rc<RefCell<Tree>>,
+    pub(super) parent: Option<Rc<RefCell<Tree>>>,
     pub(super) close_label: String,
 }
 impl ModalFrame {
@@ -241,10 +250,11 @@ impl ModalFrame {
                 node.states.focused = false;
             }
         }
-        Ok(modal_tree(
-            self.parent.borrow().clone(),
-            self.namespace.tree(tree)?,
-        ))
+        let tree = self.namespace.tree(tree)?;
+        Ok(match &self.parent {
+            Some(parent) => modal_tree(parent.borrow().clone(), tree),
+            None => tree,
+        })
     }
     pub(super) fn content(
         &self,
@@ -363,7 +373,8 @@ impl nk_wayland::Application for SuspendedParent<'_> {
     }
 }
 struct Runner<'a> {
-    parent: SuspendedParent<'a>,
+    parent: Option<SuspendedParent<'a>>,
+    activation: Option<String>,
     child: &'a mut AppWindow,
     model: &'a mut dyn DialogContent,
     answer: &'a mut Option<DialogAnswer>,
@@ -407,9 +418,7 @@ impl Runner<'_> {
             return Ok(());
         }
         if action.action == "dialog:cancel" && action.key.0 == "dialog/close" {
-            *self.answer = Some(DialogAnswer::Cancel);
-            window.close();
-            return Ok(());
+            return self.respond(DialogAnswer::Cancel, None, window);
         }
         if let Some(id) = action.action.strip_prefix("dialog:response:")
             && action.key.0 == format!("dialog/response/{id}")
@@ -422,13 +431,54 @@ impl Runner<'_> {
                 .spec
                 .answer(id)
             {
-                *self.answer = Some(answer);
-                window.close();
+                self.respond(answer, Some(id), window)?;
             }
             return Ok(());
         }
         self.model.activated(action)?;
         self.dirty = true;
+        Ok(())
+    }
+    fn respond(
+        &mut self,
+        answer: DialogAnswer,
+        button: Option<&str>,
+        window: &mut Window,
+    ) -> Result<()> {
+        if self.answer.is_none() && !window.is_closed() {
+            if self.model.respond(&answer, button)? {
+                *self.answer = Some(answer);
+                window.close();
+            } else {
+                // Disable or refresh responses before another queued action is handled.
+                self.rebuild()?;
+            }
+        }
+        Ok(())
+    }
+    fn refresh(&mut self, window: &mut Window) -> Result<()> {
+        let update = self.model.poll()?;
+        if self.model.withdrawn() {
+            window.close();
+            return Ok(());
+        }
+        if let Some((look, reduced)) = update.appearance {
+            if let Some(parent) = &mut self.parent {
+                parent.host.set_look(look.clone(), reduced);
+                parent.dirty = true;
+            }
+            self.child.set_look(look, reduced);
+            self.dirty = true;
+        }
+        self.dirty |= update.content_changed;
+        if let Some(parent) = &mut self.parent {
+            parent.dirty |= update.parent_changed;
+        }
+        // Reconcile external changes before accepting queued reader actions.
+        if self.dirty {
+            self.rebuild()?;
+            self.dirty = false;
+        }
         Ok(())
     }
     fn focus(&mut self) {
@@ -449,7 +499,14 @@ impl Runner<'_> {
         }
     }
     fn commit(&mut self, window: &mut Window) -> Result<()> {
-        if self.parent.published.replace(false) {
+        if window.is_closed() {
+            return Ok(());
+        }
+        if self
+            .parent
+            .as_ref()
+            .is_some_and(|parent| parent.published.replace(false))
+        {
             self.child.changed = true;
         }
         if self.dirty {
@@ -473,10 +530,15 @@ impl Runner<'_> {
 }
 impl nk_wayland::Application for Runner<'_> {
     fn modal_parent(&mut self) -> Option<&mut dyn nk_wayland::Application> {
-        Some(&mut self.parent)
+        self.parent
+            .as_mut()
+            .map(|parent| parent as &mut dyn nk_wayland::Application)
     }
     fn window_controls(&self) -> bool {
         !self.child.modal_frame.as_ref().expect("modal host").alert
+    }
+    fn initial_size_limits(&self) -> Option<((u32, u32), (u32, u32))> {
+        self.parent.is_none().then_some(self.limits)
     }
     fn window_control_buttons(&self) -> nk_wayland::ControlsButtons {
         nk_wayland::ControlsButtons::Close
@@ -485,19 +547,14 @@ impl nk_wayland::Application for Runner<'_> {
         self.child.poll_interval_ms()
     }
     fn idle(&mut self, window: &mut Window) -> Result<()> {
-        let update = self.model.poll()?;
-        if let Some((look, reduced)) = update.appearance {
-            self.parent.host.set_look(look.clone(), reduced);
-            self.parent.dirty = true;
-            self.child.set_look(look, reduced);
-            self.dirty = true;
+        self.refresh(window)?;
+        if window.is_closed() {
+            return Ok(());
         }
-        self.dirty |= update.content_changed;
-        self.parent.dirty |= update.parent_changed;
-        // Reconcile external changes before accepting queued reader actions.
-        if self.dirty {
-            self.rebuild()?;
-            self.dirty = false;
+        if window.commits() > 1
+            && let Some(token) = self.activation.take()
+        {
+            let _ = window.activate(token);
         }
         for action in self.child.idle()? {
             self.activated(action, window)?;
@@ -505,7 +562,16 @@ impl nk_wayland::Application for Runner<'_> {
         self.commit(window)
     }
     fn event(&mut self, event: Event, window: &mut Window) -> Result<()> {
-        if matches!(&event, Event::Configure) {
+        if self.parent.is_none() {
+            self.refresh(window)?;
+            if window.is_closed() || matches!(event, Event::Closed) {
+                return Ok(());
+            }
+            if matches!(event, Event::CloseRequested) {
+                return self.respond(DialogAnswer::Cancel, None, window);
+            }
+        }
+        if matches!(&event, Event::Configure) && self.parent.is_some() {
             window.set_title(&self.child.name)?;
             window.set_size_limits(self.limits.0, self.limits.1)?;
         }
@@ -567,8 +633,7 @@ impl nk_wayland::Application for Runner<'_> {
             self.activated(action, window)?;
         }
         if escape && !handled {
-            *self.answer = Some(DialogAnswer::Cancel);
-            window.close();
+            self.respond(DialogAnswer::Cancel, None, window)?;
         }
         self.commit(window)
     }
@@ -641,7 +706,7 @@ impl AppWindow {
         let mut model = AlertContent {
             message: alert.message,
             detail: alert.detail,
-            updates: &mut updates,
+            body: AlertBody::Updates(&mut updates),
         };
         self.run_modal(
             window,
@@ -661,18 +726,6 @@ impl AppWindow {
         model: &mut dyn DialogContent,
         parent_page: &mut dyn FnMut(&AppWindow) -> Page,
     ) -> Result<DialogAnswer> {
-        let (alert, description) = match kind {
-            ModalKind::Dialog => (false, String::new()),
-            ModalKind::Alert(message) => (true, message),
-        };
-        let mut spec = spec;
-        if let Some(buttons) = model.buttons() {
-            spec.buttons = buttons;
-        }
-        spec.validate()?;
-        if !alert && (spec.close_label.is_empty() || spec.close_label.contains('\0')) {
-            return Err("dialog requires a localized close label".into());
-        }
         if self.suspended || self.modal_frame.is_some() {
             return Err("another modal host is already active".into());
         }
@@ -695,51 +748,16 @@ impl AppWindow {
             self.glyphs.clone(),
             self.reduced,
         );
-        child.modal_frame = Some(ModalFrame {
-            close_label: spec.close_label.clone(),
-            spec,
-            alert,
-            description,
-            namespace: Namespace::new()?,
-            parent: snapshot.clone(),
-        });
         let parent_size = window.size();
-        let maximum = (
-            f64::from(parent_size.0).min(self.look.frame.content),
-            f64::from(parent_size.1),
-        );
         child.scale = self.scale;
-        child.size = maximum;
-        let page = Page {
-            sidebar: Node::spacer("dialog/unused-sidebar"),
-            content: model.content(&child),
-            title: child.name.clone(),
-            can_back: false,
-            can_forward: false,
-        };
-        child.show(page);
-        let natural = child.state.natural_size(child.text.as_mut());
-        let modal = child.modal_frame.as_ref().expect("modal host");
-        let chrome = Page {
-            sidebar: Node::spacer("unused"),
-            content: Node::spacer("dialog/empty-measure"),
-            title: child.name.clone(),
-            can_back: false,
-            can_forward: false,
-        };
-        let root = modal.content(&chrome, &child.look, None);
-        let mut measured = ViewState::new(0);
-        measured.layout(
-            &root,
-            maximum,
-            child.scale,
-            child.look.tokens.with_types(&child.look.types),
-            child.text.as_mut(),
-            Instant::now(),
-        );
-        let minimum = measured.natural_size(child.text.as_mut());
-        child.size = fit_size(natural, minimum, maximum)?;
-        child.lay(Instant::now());
+        let limits = prepare(
+            &mut child,
+            spec,
+            kind,
+            model,
+            Some(snapshot.clone()),
+            parent_size,
+        )?;
         self.publish(window)?;
         self.suspended = true;
         self.active = false;
@@ -763,17 +781,18 @@ impl AppWindow {
         };
         let result = nk_wayland::run_dialog_with_options(
             Runner {
-                parent: SuspendedParent {
+                parent: Some(SuspendedParent {
                     host: self,
                     rebuild: parent_page,
                     snapshot,
                     dirty: false,
                     published: Rc::new(Cell::new(false)),
-                },
+                }),
+                activation: None,
                 child: &mut child,
                 model,
                 answer: &mut answer,
-                limits: (size(minimum), size(maximum)),
+                limits,
                 first_focus: true,
                 dirty: true,
             },
@@ -799,14 +818,161 @@ enum ModalKind {
     Alert(String),
 }
 
+/// Prepare the same measured host for an independent or an app-modal toplevel.
+fn prepare(
+    child: &mut AppWindow,
+    mut spec: Dialog,
+    kind: ModalKind,
+    model: &mut dyn DialogContent,
+    parent: Option<Rc<RefCell<Tree>>>,
+    available: (u32, u32),
+) -> Result<((u32, u32), (u32, u32))> {
+    let (alert, description) = match kind {
+        ModalKind::Dialog => (false, String::new()),
+        ModalKind::Alert(message) => (true, message),
+    };
+    if let Some(buttons) = model.buttons() {
+        spec.buttons = buttons;
+    }
+    spec.validate()?;
+    if !alert && (spec.close_label.is_empty() || spec.close_label.contains('\0')) {
+        return Err("dialog requires a localized close label".into());
+    }
+    child.modal_frame = Some(ModalFrame {
+        close_label: spec.close_label.clone(),
+        spec,
+        alert,
+        description,
+        namespace: Namespace::new()?,
+        parent,
+    });
+    let maximum = (
+        f64::from(available.0).min(child.look.frame.content),
+        f64::from(available.1),
+    );
+    child.size = maximum;
+    let page = Page {
+        sidebar: Node::spacer("dialog/unused-sidebar"),
+        content: model.content(child),
+        title: child.name.clone(),
+        can_back: false,
+        can_forward: false,
+    };
+    child.show(page);
+    let natural = child.state.natural_size(child.text.as_mut());
+    let modal = child.modal_frame.as_ref().expect("modal host");
+    let chrome = Page {
+        sidebar: Node::spacer("unused"),
+        content: Node::spacer("dialog/empty-measure"),
+        title: child.name.clone(),
+        can_back: false,
+        can_forward: false,
+    };
+    let root = modal.content(&chrome, &child.look, None);
+    let mut measured = ViewState::new(0);
+    measured.layout(
+        &root,
+        maximum,
+        child.scale,
+        child.look.tokens.with_types(&child.look.types),
+        child.text.as_mut(),
+        Instant::now(),
+    );
+    let minimum = measured.natural_size(child.text.as_mut());
+    child.size = fit_size(natural, minimum, maximum)?;
+    child.lay(Instant::now());
+    Ok((size(minimum), size(maximum)))
+}
+
+impl Dialog {
+    /// Run a parentless toplevel. The caller owns its model and supplies the app
+    /// identity, size cap and optional Wayland grant. Hyalo decides focus and placement.
+    pub fn run_parentless(
+        self,
+        host: AppWindow,
+        options: nk_wayland::Options<'_>,
+        activation: Option<String>,
+        model: &mut dyn DialogContent,
+    ) -> Result<DialogAnswer> {
+        run_parentless(self, ModalKind::Dialog, host, options, activation, model)
+    }
+}
+
+impl Alert {
+    /// Run a parentless alert. The model can supply detail below the alert text
+    /// and handle asynchronous service responses.
+    pub fn run_parentless(
+        self,
+        host: AppWindow,
+        options: nk_wayland::Options<'_>,
+        activation: Option<String>,
+        model: &mut dyn DialogContent,
+    ) -> Result<DialogAnswer> {
+        let spec = Dialog {
+            title: self.title,
+            buttons: self.buttons,
+            close_label: String::new(),
+        };
+        let kind = ModalKind::Alert(self.message.clone());
+        let mut model = AlertContent {
+            message: self.message,
+            detail: self.detail,
+            body: AlertBody::Content(model),
+        };
+        run_parentless(spec, kind, host, options, activation, &mut model)
+    }
+}
+
+fn run_parentless(
+    spec: Dialog,
+    kind: ModalKind,
+    mut child: AppWindow,
+    options: nk_wayland::Options<'_>,
+    activation: Option<String>,
+    model: &mut dyn DialogContent,
+) -> Result<DialogAnswer> {
+    child.name.clone_from(&spec.title);
+    let title = spec.title.clone();
+    let limits = prepare(&mut child, spec, kind, model, None, options.size)?;
+    let initial_size = size(child.size);
+    let mut answer = None;
+    nk_wayland::run(
+        Runner {
+            parent: None,
+            activation,
+            child: &mut child,
+            model,
+            answer: &mut answer,
+            limits,
+            first_focus: true,
+            dirty: false,
+        },
+        nk_wayland::Options {
+            title: &title,
+            size: initial_size,
+            ..options
+        },
+        Instant::now(),
+    )?;
+    Ok(answer.unwrap_or(DialogAnswer::Cancel))
+}
+
+enum AlertBody<'a> {
+    Updates(&'a mut dyn FnMut() -> Result<DialogUpdate>),
+    Content(&'a mut dyn DialogContent),
+}
+
 struct AlertContent<'a> {
     message: String,
     detail: Option<String>,
-    updates: &'a mut dyn FnMut() -> Result<DialogUpdate>,
+    body: AlertBody<'a>,
 }
 impl DialogContent for AlertContent<'_> {
     fn poll(&mut self) -> Result<DialogUpdate> {
-        (self.updates)()
+        match &mut self.body {
+            AlertBody::Content(body) => body.poll(),
+            AlertBody::Updates(updates) => updates(),
+        }
     }
     fn content(&mut self, host: &AppWindow) -> Node {
         let mut nodes = vec![
@@ -827,10 +993,31 @@ impl DialogContent for AlertContent<'_> {
                 .lines(usize::MAX),
             );
         }
+        if let AlertBody::Content(body) = &mut self.body {
+            nodes.push(body.content(host));
+        }
         Node::column("alert/content", nodes).gap(crate::Space::S3)
     }
-    fn activated(&mut self, _: Activated) -> Result<()> {
+    fn activated(&mut self, action: Activated) -> Result<()> {
+        if let AlertBody::Content(body) = &mut self.body {
+            body.activated(action)?;
+        }
         Ok(())
+    }
+    fn buttons(&self) -> Option<Vec<DialogButton>> {
+        match &self.body {
+            AlertBody::Content(body) => body.buttons(),
+            AlertBody::Updates(_) => None,
+        }
+    }
+    fn respond(&mut self, answer: &DialogAnswer, button: Option<&str>) -> Result<bool> {
+        match &mut self.body {
+            AlertBody::Content(body) => body.respond(answer, button),
+            AlertBody::Updates(_) => Ok(true),
+        }
+    }
+    fn withdrawn(&self) -> bool {
+        matches!(&self.body, AlertBody::Content(body) if body.withdrawn())
     }
 }
 
@@ -929,6 +1116,49 @@ mod tests {
             Some(Request::Activate(2))
         ));
         assert!(a.id(u64::from(u32::MAX) + 1).is_err());
+    }
+    #[test]
+    fn parentless_alert_is_the_published_root_without_claiming_focus() {
+        let namespace = Namespace::new().unwrap();
+        let frame = ModalFrame {
+            spec: Dialog {
+                title: "System alert".into(),
+                buttons: vec![button("confirm", true, false, false)],
+                close_label: String::new(),
+            },
+            alert: true,
+            description: "Confirm the request".into(),
+            namespace: namespace.clone(),
+            parent: None,
+            close_label: String::new(),
+        };
+        let mut root = nk_a11y::Node::new(1, nk_a11y::Role::Window, "System alert");
+        root.children.push(2);
+        let mut response = nk_a11y::Node::new(2, nk_a11y::Role::Button, "Confirm");
+        response.states.focused = true;
+        let tree = Tree {
+            root: 1,
+            nodes: [(1, root), (2, response)].into(),
+        };
+        let inactive = frame.publish(tree.clone(), false).unwrap();
+        inactive.validate().unwrap();
+        let root = &inactive.nodes[&inactive.root];
+        assert_eq!(root.id, namespace.id(1).unwrap());
+        assert_eq!(root.role, nk_a11y::Role::Alert);
+        assert_eq!(root.description, "Confirm the request");
+        assert!(root.states.modal);
+        let response = namespace.id(2).unwrap();
+        assert!(!inactive.nodes[&response].states.focused);
+        assert!(
+            frame.publish(tree, true).unwrap().nodes[&response]
+                .states
+                .focused
+        );
+        assert!(frame.request(Request::Activate(2)).is_none());
+        assert!(matches!(
+            frame.request(Request::Activate(response)),
+            Some(Request::Activate(2))
+        ));
     }
     #[test]
     fn modal_projection_disables_parent_and_remaps_relations_and_selection() {
