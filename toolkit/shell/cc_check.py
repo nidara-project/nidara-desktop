@@ -236,6 +236,8 @@ def run_prompts(ctx):
         until('Bluetooth renderer registered', lambda: bt_actions.exists() and 'RegisterUi' in bt_actions.read_text())
         wifi = until('external Wi-Fi dialog window', lambda: prompt_window(ctx, 'Wi-Fi authentication'))
         assert wifi['initial_title'] == 'Wi-Fi authentication', wifi
+        wifi_accessible = until('accessible Wi-Fi dialog', lambda: ctx['dock_node']('Wi-Fi authentication'))
+        assert wifi_accessible.get_role() == Atspi.Role.DIALOG, wifi_accessible.get_role_name()
         assert all(layer['namespace'] != 'nidara-session-prompt'
                    for layer in ctx['ipc']('layers').get('ok', {}).get('layers', []))
         if trusted:
@@ -255,6 +257,9 @@ def run_prompts(ctx):
         assert sum(1 for method, _ in actions() if method == 'RegisterSecretsUi') == 1
 
         until('incoming file name', lambda: any(n.get_name() == 'fixture.txt' for n in prompt_nodes(ctx, 'Bluetooth')))
+        alert = ctx['dock_node']('Bluetooth')
+        assert alert.get_role() == Atspi.Role.ALERT, alert.get_role_name()
+        assert alert.get_description()
         assert any(n.get_name() == 'Unknown file size' for n in prompt_nodes(ctx, 'Bluetooth'))
         time.sleep(1.5)
         ctx['shot'](log / 'bluetooth-file-consent.png')

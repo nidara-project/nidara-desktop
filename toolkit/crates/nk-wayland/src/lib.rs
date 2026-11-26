@@ -244,6 +244,10 @@ pub trait Application {
     fn window_controls(&self) -> bool {
         false
     }
+    /// Content-derived limits a toplevel needs on its initial commit.
+    fn initial_size_limits(&self) -> Option<((u32, u32), (u32, u32))> {
+        None
+    }
     fn idle(&mut self, _window: &mut Window) -> Result<()> {
         Ok(())
     }
@@ -1560,6 +1564,7 @@ fn run_inner(
                 );
             }
         }
+        let limits = app.initial_size_limits();
         if parent.is_some() || foreign_dialog.is_some_and(|(_, modal)| modal) {
             let manager =
                 bind!(modal::XdgWmDialogV1, 1).ok_or("modal dialog requires xdg_wm_dialog_v1")?;
@@ -1567,10 +1572,13 @@ fn run_inner(
             hint.set_modal();
             w.modal_hint = Some(hint);
             manager.destroy();
-        } else {
+        } else if limits.is_none() {
             top.set_min_size(400, 300);
         }
         w.toplevel = Some(top);
+        if let Some((minimum, maximum)) = limits {
+            w.set_size_limits(minimum, maximum)?;
+        }
     }
     w.material = materials
         .as_ref()

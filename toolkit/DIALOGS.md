@@ -20,6 +20,28 @@ alert's default, else the first enabled non-destructive response. If none exists
 leave response focus empty; a destructive response requires an explicit selection. Restore the original key only if it remains shown/enabled and the same
 retained component instance; cancellation/error must also retire the modal namespace.
 
+## System dialogs (#1185)
+
+Every native dialog uses `nk::Dialog` or `nk::Alert` and opens as an
+`xdg_toplevel`. App dialogs use the modal parent path above. Independent
+dialogs use `Dialog::run_parentless` or `Alert::run_parentless`, supply the
+window identity and available size, and can pass the initiating Wayland
+activation grant. Hyalo recognizes trusted shell dialogs by their identity,
+places them above ordinary and fullscreen windows, grants focus for valid user
+activation, and asks for attention on spontaneous requests. The lock screen
+takes priority.
+
+The shell uses Dialog for Wi-Fi secrets and Bluetooth PIN/passkey input or
+display, and Alert for Bluetooth confirmation, authorization and file consent.
+The kit supplies the header, responses, focus and keyboard policy. The service
+model supplies body content and response eligibility. An asynchronous response
+can keep the window open while the service decides. Failed replies re-enable
+the responses, and withdrawal closes without sending another answer. The
+explicit Reject button sends a negative reply. Escape cancels the request.
+
+The gallery's System dialogs page opens independent Dialog and Alert examples.
+The Dialog and alert page continues to exercise the parented host.
+
 ## Audit findings
 
 - Hyalo wm/mod.rs initially centres over a mapped parent but then cascades off any fully

@@ -32,6 +32,7 @@ struct Gallery {
     fault: Option<String>,
     paste_replies: usize,
     dialog_request: Option<(nk::Key, String)>,
+    system_dialog: Option<std::sync::mpsc::Receiver<std::result::Result<nk::DialogAnswer, String>>>,
 }
 
 impl Gallery {
@@ -166,6 +167,10 @@ impl Gallery {
             return;
         }
         match action {
+            "system-dialog-open" | "system-alert-open" => {
+                self.open_system_dialog(action == "system-alert-open");
+                return;
+            }
             "dialog-open" | "alert-open" | "alert-delete" | "dialog-invalid" | "font-open" => {
                 self.dialog_request = Some((a.key, action.to_owned()));
                 return;
@@ -279,13 +284,16 @@ impl Application for Gallery {
     }
     fn poll_interval_ms(&self) -> u32 {
         let interval = self.window.poll_interval_ms();
-        if PAGES[self.model.page].0 == "files" && self.model.files.loading() {
+        if self.system_dialog.is_some()
+            || (PAGES[self.model.page].0 == "files" && self.model.files.loading())
+        {
             interval.min(16)
         } else {
             interval
         }
     }
     fn idle(&mut self, window: &mut Window) -> Result<()> {
+        self.poll_system_dialog();
         if self.portal.changed() {
             let a = self.portal.read()?;
             self.window
@@ -455,6 +463,7 @@ fn run() -> Result<()> {
         fault: std::env::var("NK_GALLERY_FAULT").ok(),
         paste_replies: 0,
         dialog_request: None,
+        system_dialog: None,
     };
     if PAGES[page].0 == "files" {
         gallery.window.set_app_icon_theme(&app_icon_theme());

@@ -58,7 +58,7 @@ fn status_text(s: &str) -> &'static str {
 }
 
 /// Each page: its id (what the check and `--page` name), its title and its glyph.
-pub const PAGES: [(&str, &str, &str); 30] = [
+pub const PAGES: [(&str, &str, &str); 31] = [
     ("status", "Status", "nd-emblem-default"),
     ("window", "Window", "nd-sidebar-show"),
     ("button", "Button", "nd-hand"),
@@ -92,6 +92,7 @@ pub const PAGES: [(&str, &str, &str); 30] = [
     ("list", "Long list", "nd-clipboard-list"),
     ("focus", "Focus", "nd-input-keyboard"),
     ("dialog", "Dialog and alert", "nd-dialog-information"),
+    ("system-dialog", "System dialogs", "nd-dialog-information"),
     ("files", "Files", "nd-folder"),
 ];
 
@@ -406,6 +407,7 @@ fn page(id: &str, m: &Model, cat: &Catalogue, t: &TypeScale, k: &Measures) -> Ve
         "list" => long_list(m, t, k),
         "focus" => focus_page(t, k),
         "dialog" => dialogs(m, t),
+        "system-dialog" => system_dialogs(m, t),
         "files" => m.files.view(t, k.row_height, k.files_window, k.glyph),
         _ => vec![],
     }
@@ -2806,6 +2808,41 @@ fn dialogs(m: &Model, t: &TypeScale) -> Vec<Node> {
                     "dialogs/result",
                     format!("Dialog answers: {} · {}", m.modal_answers, m.modal_result),
                     t.style(Type::Body, Weight::Regular),
+                )
+                .into(),
+            ],
+        )
+        .gap(Space::S3)
+        .into(),
+    )]
+}
+
+fn system_dialogs(m: &Model, t: &TypeScale) -> Vec<Node> {
+    vec![section(
+        "system-dialogs",
+        "Independent windows",
+        t,
+        nk::Column::new(
+            "system-dialogs/samples",
+            vec![
+                content_button(
+                    "system-dialogs/open",
+                    "Open system dialog",
+                    "system-dialog-open",
+                    t,
+                )
+                .into(),
+                content_button(
+                    "system-dialogs/alert",
+                    "Open system alert",
+                    "system-alert-open",
+                    t,
+                )
+                .into(),
+                nk::Label::new(
+                    "system-dialogs/result",
+                    format!("Response: {}", m.modal_result),
+                    t.style(Type::Small, Weight::Regular),
                 )
                 .into(),
             ],
