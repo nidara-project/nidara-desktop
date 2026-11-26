@@ -2743,9 +2743,12 @@ Backlog of designed desktop enhancements to prioritize for upcoming iterations:
    - One-click export/import bundle (`.tar.gz` or JSON) of user preferences (`~/.config/nidara/`: appearance, wallpapers, dock pins, widget layout, autostart).
 
 ### 2. Structural & Core System Architecture
-1. **Native GTK4 Polkit Authentication Agent (`nidara-polkit` / `ui/polkit/`)**:
-   - Replace legacy GTK3 `polkit-gnome` daemon with a native Nidara GTK4 glass-styled elevation prompt.
-   - Seamless identity: displays the user's avatar (`~/.face`), real name, action description, and fluid shake/error feedback for password validation.
+1. **Native polkit authentication agent (#1185)**:
+   - Hyalo starts it inside the installed Rust shell. The system-bus adapter verifies
+     polkitd's unique name and UID, and libpolkit-agent owns the PAM conversation.
+     The dedicated trusted prompt takes focus only while unlocked. It waits behind
+     existing shell dialogs, with one pending polkit request at a time.
+   - See `toolkit/DIALOGS.md` for the trust boundary, lock cancellation, and validation.
 2. **Hardware OSD & Dynamic Island Feedback (Volume, Brightness, Mic Mute, CapsLock)**:
    - Animated visual feedback pill via Dynamic Island / OSD overlay whenever hardware keys (`XF86Audio*`, `XF86MonBrightness*`, CapsLock) are triggered, replacing silent shellouts.
 3. **Extensible D-Bus Search Providers in Prism (`org.gnome.Shell.SearchProvider2`)**:

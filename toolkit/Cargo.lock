@@ -1277,10 +1277,14 @@ name = "nidara-shell"
 version = "0.1.0"
 dependencies = [
  "async-channel",
+ "async-io",
+ "async-signal",
  "futures-lite",
  "gio",
  "glib",
  "image",
+ "libc",
+ "libloading",
  "nidara-access",
  "nidara-kit",
  "nidara-shell-ipc",

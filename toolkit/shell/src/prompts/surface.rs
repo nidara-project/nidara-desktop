@@ -51,6 +51,7 @@ pub(super) fn start(
     request: &Request,
     bus: Connection,
     output: &mpsc::Sender<Event>,
+    slot: super::Slot,
 ) -> Option<Running> {
     let (tx, rx) = mpsc::channel();
     let ticket = request.ticket.clone();
@@ -64,6 +65,7 @@ pub(super) fn start(
             if let Err(error) = result {
                 eprintln!("nidara-shell: could not show the session prompt: {error}");
             }
+            drop(slot);
             let _ = events.send(Event::Ended(serial, target));
         })
         .ok()?;

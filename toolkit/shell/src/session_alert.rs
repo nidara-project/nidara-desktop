@@ -2,7 +2,10 @@
 //! Trusted system alert toplevels. The lease connection and display effects stay with Display1
 //! and its initiating Settings worker. Power actions remain in the shell menu's effect path.
 use crate::menu::System;
-use crate::prompts::surface::{dialog_host, dialog_options};
+use crate::prompts::{
+    SlotKind,
+    surface::{dialog_host, dialog_options},
+};
 use crate::shell1::Status;
 use nk::{
     Activated, Alert, AlertCountdown, AppWindow, DialogAnswer, DialogButton, DialogContent,
@@ -147,6 +150,8 @@ pub(crate) fn open(
     kind: Kind,
     activation: Option<String>,
 ) -> Result<async_channel::Receiver<bool>> {
+    let prompt_slot = crate::prompts::Slot::take(&status, SlotKind::Other)
+        .ok_or("polkit authentication is already open")?;
     let slot = Slot::take(status)?;
     let generation = slot.0.lock_generation.load(Ordering::Acquire);
     let (answer, result) = async_channel::bounded(1);
@@ -184,6 +189,7 @@ pub(crate) fn open(
                 eprintln!("nidara-shell: system alert: {error}");
                 false
             });
+            drop(prompt_slot);
             let _ = answer.try_send(accepted);
         })
         .map_err(|error| error.to_string())?;

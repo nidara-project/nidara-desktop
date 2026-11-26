@@ -43,11 +43,17 @@ pub struct Status {
     /// Apps is open.
     pub apps: AtomicBool,
     pub(crate) system_alert: AtomicBool,
+    pub(crate) prompt_slots: std::sync::Mutex<crate::prompts::Slots>,
     pub(crate) alert_unlocked: AtomicBool,
     pub(crate) lock_generation: AtomicUsize,
 }
 
 impl Status {
+    pub(crate) fn unlocked_generation(&self) -> Option<usize> {
+        let generation = self.lock_generation.load(Ordering::Acquire);
+        self.alert_unlocked.load(Ordering::Acquire).then_some(generation)
+    }
+
     pub fn update_alert_lock(&self, locked: bool) {
         if locked {
             self.alert_unlocked.store(false, Ordering::Release);

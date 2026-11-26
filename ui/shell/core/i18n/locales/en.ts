@@ -425,6 +425,12 @@ export default {
     "shell.prompt.bluetooth.file-size": "File size: {bytes} bytes",
     "shell.prompt.bluetooth.unknown-size": "Unknown file size",
     "shell.prompt.error": "The response could not be sent. Try again.",
+    "shell.prompt.polkit.title": "Authentication required",
+    "shell.prompt.polkit.authenticate": "Authenticate",
+    "shell.prompt.polkit.account": "Account",
+    "shell.prompt.polkit.details": "Details",
+    "shell.prompt.polkit.retry": "Authentication failed. Try again.",
+    "shell.prompt.polkit.failed": "Authentication could not be completed.",
 
     // Control Center
     "settings.widgets.tooltip.no-space": "Not enough space — remove a control first",

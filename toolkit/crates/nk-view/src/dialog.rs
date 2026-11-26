@@ -124,6 +124,10 @@ pub struct DialogUpdate {
     pub appearance: Option<(WindowLook, bool)>,
     pub content_changed: bool,
     pub parent_changed: bool,
+    /// Move focus to a newly built control without taking the window's focus.
+    pub focus: Option<Key>,
+    /// A status change for assistive technology.
+    pub announcement: Option<String>,
 }
 #[derive(Clone, Debug)]
 pub struct Alert {
@@ -297,6 +301,7 @@ pub(super) struct ModalFrame {
     pub(super) parent: Option<Rc<RefCell<Tree>>>,
     pub(super) close_label: String,
     countdown: Option<Countdown>,
+    announcement: Option<String>,
 }
 impl ModalFrame {
     pub(super) fn request(&self, request: Request) -> Option<Request> {
@@ -316,7 +321,8 @@ impl ModalFrame {
         root.announcement = self
             .countdown
             .as_ref()
-            .and_then(|timer| timer.announcement.clone());
+            .and_then(|timer| timer.announcement.clone())
+            .or_else(|| self.announcement.clone());
         root.states.modal = true;
         if !active {
             for node in tree.nodes.values_mut() {
@@ -569,6 +575,12 @@ impl Runner<'_> {
             self.dirty = true;
         }
         self.dirty |= update.content_changed;
+        if let Some(announcement) = update.announcement
+            && let Some(frame) = &mut self.child.modal_frame
+        {
+            frame.announcement = Some(announcement);
+            self.child.changed = true;
+        }
         if let Some(parent) = &mut self.parent {
             parent.dirty |= update.parent_changed;
         }
@@ -576,6 +588,12 @@ impl Runner<'_> {
         if self.dirty {
             self.rebuild()?;
             self.dirty = false;
+        }
+        if let Some(key) = update.focus
+            && self.child.active
+        {
+            self.child.state.request(&key, false);
+            self.child.changed = true;
         }
         Ok(())
     }
@@ -965,6 +983,7 @@ fn prepare(
         namespace: Namespace::new()?,
         parent,
         countdown: countdown.map(Countdown::new),
+        announcement: None,
     });
     let maximum = (
         f64::from(available.0).min(child.look.frame.content),
@@ -1308,6 +1327,7 @@ mod tests {
             parent: None,
             close_label: String::new(),
             countdown: None,
+            announcement: None,
         };
         let mut root = nk_a11y::Node::new(1, nk_a11y::Role::Window, "System alert");
         root.children.push(2);

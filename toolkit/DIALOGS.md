@@ -43,6 +43,36 @@ The gallery's System dialogs page opens independent Dialog and Alert examples.
 They use the gallery's app ID, so Hyalo places them as ordinary windows.
 The Dialog and alert page continues to exercise the parented host.
 
+## Native polkit agent (#1185)
+
+The installed Hyalo shell opts in with `--bar --polkit`. It resolves its local
+Wayland login through logind and registers on the system bus as an agent for that
+session. Both callbacks require the current unique owner of `org.freedesktop.PolicyKit1`
+and the Arch `polkitd` UID from bus credentials. Owner or connection loss invalidates
+the active request. Duplicate registration leaves the other agent in place. The
+frozen Hyprland autostart is unchanged and its `polkit-gnome` is optional.
+
+One polkit request may be pending at a time. It waits for an existing Wi-Fi,
+Bluetooth, or system alert to close under polkit's deadline. The native agent
+cancels both queued and visible requests on lock or compositor loss. Hyalo focuses
+the dedicated `nidara-polkit-prompt` identity at map only after checking the
+Wayland peer as the installed shell and confirming the session is unlocked. Other
+system prompts keep their existing activation and attention rules.
+
+The dialog uses an explicit confirmation before starting `PolkitAgentSession`
+and displays only the identities offered by polkit. The library owns the
+distribution helper and PAM policy. The shell keeps PAM input masked, including
+when a module requests terminal echo. Its editor and transient FFI response
+wipe their owned buffers. The action identifier is in Details. A caller name
+with no verified source is omitted.
+
+Private bus tests exercise sender and busy checks without using the host
+authority. Real PAM, logind registration, focus above fullscreen, lock
+withdrawal, and spoken Orca behavior need separate acceptance in a disposable
+Hyalo session. The installed checklist also covers crash dumps while an
+authentication field is open. Keep build artifacts and test temporaries on disk
+and scope the process group with a memory limit.
+
 ## Alerts with a countdown
 
 `AlertCountdown` uses a monotonic deadline and a localized message suffix

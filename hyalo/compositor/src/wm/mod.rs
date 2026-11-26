@@ -767,7 +767,9 @@ impl Hyalo {
     fn is_system_dialog(&self, window: &Window) -> bool {
         use nidara_access::{Consent, Operation, Peer};
         use smithay::reexports::wayland_server::Resource;
-        if app_id(window) != "nidara-session-prompt" || window.x11_surface().is_some() {
+        if !matches!(app_id(window).as_str(), "nidara-session-prompt" | "nidara-polkit-prompt")
+            || window.x11_surface().is_some()
+        {
             return false;
         }
         let credentials = surface_of(window)
@@ -887,9 +889,13 @@ impl Hyalo {
         self.wm.dirty_workspaces = true;
         // Sent elsewhere `silent`ly: it opens there without taking the user — or the focus.
         if system_dialog {
-            // Only a compositor-validated activation token or an explicit focus action
-            // may give a system dialog the keyboard.
-            self.set_attention(id, Some(true), None);
+            // Polkit opens in front only from the credential-checked shell. Other
+            // prompts use the normal activation grant or ask for attention.
+            if app_id(window) == "nidara-polkit-prompt" && !self.lock.is_locked() {
+                self.focus_window(Some(id));
+            } else {
+                self.set_attention(id, Some(true), None);
+            }
         } else if !(fx.workspace.is_some() && fx.silent) {
             self.focus_window(Some(id));
         }
