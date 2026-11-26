@@ -75,8 +75,8 @@ impl Dialog {
                 let s = &self.browser.strings;
                 let alert = Alert {
                     title: s.replace_title.replace("{name}", &name),
-                    message: s.replace_title.replace("{name}", &name),
-                    detail: Some(s.replace_message.replace("{folder}", &folder)),
+                    message: s.replace_message.replace("{folder}", &folder),
+                    detail: None,
                     buttons: vec![
                         DialogButton {
                             id: "cancel".into(),
