@@ -40,6 +40,7 @@ the responses, and withdrawal closes without sending another answer. The
 explicit Reject button sends a negative reply. Escape cancels the request.
 
 The gallery's System dialogs page opens independent Dialog and Alert examples.
+They use the gallery's app ID, so Hyalo places them as ordinary windows.
 The Dialog and alert page continues to exercise the parented host.
 
 ## Audit findings

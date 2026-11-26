@@ -492,7 +492,7 @@ fn run(
         .alert_message()
         .map(|key| exports.text(key).map(str::to_owned))
         .transpose()?;
-    let close_label = exports.text("settings.native.cancel")?.to_owned();
+    let close_label = exports.text("settings.window.close")?.to_owned();
     let host = AppWindow::new(
         look,
         labels,
