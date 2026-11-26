@@ -206,7 +206,7 @@ impl Shell1 {
         };
         let now = Instant::now();
         let remaining = deadline.saturating_sub(glib::monotonic_time().max(0) as u64);
-        if remaining == 0 || remaining > 15_000_000 {
+        if remaining == 0 {
             return Ok(false);
         }
         let result = crate::session_alert::open(
