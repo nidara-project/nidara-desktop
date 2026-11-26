@@ -687,6 +687,7 @@ export default {
     "bar.system-menu.confirm.restart": "Deze computer opnieuw opstarten?",
     "bar.system-menu.confirm.shutdown": "Deze computer uitschakelen?",
     "bar.system-menu.confirm.cancel": "Annuleren",
+    "bar.system-menu.confirm.countdown": "De geselecteerde actie wordt over %d seconden uitgevoerd.",
     "bar.system-menu.confirm.action.logout": "Afmelden",
     "bar.system-menu.confirm.action.restart": "Opnieuw opstarten",
     "bar.system-menu.confirm.action.shutdown": "Uitschakelen",

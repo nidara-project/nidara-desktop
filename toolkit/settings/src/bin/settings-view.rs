@@ -12,6 +12,7 @@ struct Settings {
     model: Model,
     host: AppWindow,
     pointer_down: bool,
+    display_tokens: HashMap<nk_wayland::TokenRequest, nk::Activated>,
     network_tokens: HashMap<nk_wayland::TokenRequest, nk::Activated>,
     ready: bool,
     dirty: bool,
@@ -33,6 +34,11 @@ impl Settings {
             }
             if self.shown.as_deref() == Some(nk_settings::audio::PAGE) {
                 self.model.audio = Default::default();
+            }
+            if self.shown.as_deref() == Some("display") {
+                for (request, _) in self.display_tokens.drain() {
+                    window.cancel_activation_token(request);
+                }
             }
             if self.shown.as_deref() == Some(nk_settings::network::PAGE) {
                 for (request, _) in self.network_tokens.drain() {
@@ -60,15 +66,10 @@ impl Settings {
                 self.host.set_pictures(self.model.bar_pictures.current(s));
             }
         }
-        let revert_focus = self.model.take_display_focus();
         let (m, e, s) = (&self.model, &self.exports, self.client.session());
         if self.dirty {
             self.host.show(m.page(&self.host, s, e)?);
             self.dirty = false;
-        }
-        if let Some(group) = revert_focus {
-            self.host.to_top();
-            self.host.focus_first_under(group);
         }
         // Build errors are checked above; the same immutable input is used for host retries.
         self.host.commit(window, |host| {
@@ -86,7 +87,18 @@ impl Settings {
         for a in actions {
             let launcher = a.key.clone();
             let dragging = self.pointer_down && self.host.captured() == Some(&a.key);
-            if self.model.display_action(&a, dragging, &self.host)
+            if self.model.selected() == Some("display") && a.action == "display:apply" {
+                let target = Some(nk_platform::SESSION_PROMPT_APP_ID);
+                let token = match serial {
+                    Some(serial) => window.request_activation_token(serial, target),
+                    None => window.request_focused_activation_token(target),
+                };
+                if let Ok(request) = token {
+                    self.display_tokens.insert(request, a);
+                    continue;
+                }
+            }
+            if self.model.display_action(&a, dragging, &self.host, None)
                 || self.model.selected() == Some(nk_settings::audio::PAGE)
                     && self.model.audio.activate(&a, dragging)
             {
@@ -313,6 +325,18 @@ impl Application for Settings {
         {
             self.dirty |= self.model.network.activate(&action, &self.exports, token);
         }
+        let display_token = match &event {
+            Event::ActivationToken { request, token } => {
+                Some((request, Some(token.clone().into_string())))
+            }
+            Event::ActivationTokenFailed { request, .. } => Some((request, None)),
+            _ => None,
+        };
+        if let Some((request, token)) = display_token
+            && let Some(action) = self.display_tokens.remove(request)
+        {
+            self.dirty |= self.model.display_action(&action, false, &self.host, token);
+        }
         let (_, actions) = self.host.event(event, window)?;
         self.actions(actions, window, serial)?;
         self.commit(window)
@@ -397,6 +421,7 @@ fn run() -> Result<()> {
         host,
         pointer_down: false,
         network_tokens: HashMap::new(),
+        display_tokens: HashMap::new(),
         ready: false,
         dirty: true,
         shown: None,

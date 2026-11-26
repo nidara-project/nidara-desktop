@@ -28,7 +28,9 @@ use nk_wayland::{
 use std::time::Instant;
 #[path = "dialog.rs"]
 mod dialog;
-pub use dialog::{Alert, Dialog, DialogAnswer, DialogButton, DialogContent, DialogUpdate};
+pub use dialog::{
+    Alert, AlertCountdown, Dialog, DialogAnswer, DialogButton, DialogContent, DialogUpdate,
+};
 
 /// The content's scroll region.
 pub const CONTENT: &str = "frame/content";

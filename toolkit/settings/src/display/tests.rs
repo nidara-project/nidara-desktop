@@ -307,6 +307,67 @@ impl Fixture {
         Client::start(self.bus.connect()).unwrap()
     }
 }
+struct ShellChoice {
+    keep: bool,
+    display: Arc<Fake>,
+}
+
+#[zbus::interface(name = "org.nidara.Shell1")]
+impl ShellChoice {
+    fn confirm_display_preview(
+        &self,
+        _display_owner: &str,
+        token: &str,
+        activation: &str,
+        #[zbus(header)] header: zbus::message::Header<'_>,
+    ) -> bool {
+        assert_eq!(token, "lease-1");
+        assert_eq!(activation, "fixture-grant");
+        assert_eq!(
+            header.sender().unwrap().as_str(),
+            self.display.sender.lock().unwrap().as_str()
+        );
+        self.display.calls.lock().unwrap().push("alert".into());
+        self.keep
+    }
+}
+
+#[test]
+fn timed_alert_returns_keep_or_revert_to_the_original_display_connection() {
+    for (keep, command) in [(true, "confirm"), (false, "cancel")] {
+        let fixture = Fixture::new();
+        fixture
+            .service
+            .object_server()
+            .at(
+                "/org/nidara/Shell",
+                ShellChoice {
+                    keep,
+                    display: fixture.fake.clone(),
+                },
+            )
+            .unwrap();
+        fixture.service.request_name("org.nidara.Shell").unwrap();
+        let client = fixture.client();
+        let initial = state(&client, |s| s.snapshot.is_some());
+        let snapshot = initial.snapshot.unwrap();
+        client
+            .send(Command::PreviewWithAlert {
+                owner: initial.owner,
+                epoch: snapshot.epoch,
+                revision: snapshot.revision,
+                layout: snapshot.layout,
+                activation: Some("fixture-grant".into()),
+            })
+            .unwrap();
+        state(&client, |s| s.completed == 1 && s.owned.is_none());
+        assert_eq!(
+            &*fixture.fake.calls.lock().unwrap(),
+            &["validate", "preview", "alert", command]
+        );
+    }
+}
+
 fn state(client: &Client, mut test: impl FnMut(&State) -> bool) -> State {
     let mut result = None;
     wait(|| {

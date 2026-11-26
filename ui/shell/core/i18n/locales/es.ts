@@ -871,6 +871,7 @@ export default {
     "bar.system-menu.confirm.restart": "¿Reiniciar el equipo?",
     "bar.system-menu.confirm.shutdown": "¿Apagar el equipo?",
     "bar.system-menu.confirm.cancel": "Cancelar",
+    "bar.system-menu.confirm.countdown": "La acción seleccionada se ejecutará en %d segundos.",
     "bar.system-menu.confirm.action.logout": "Cerrar sesión",
     "bar.system-menu.confirm.action.restart": "Reiniciar",
     "bar.system-menu.confirm.action.shutdown": "Apagar",

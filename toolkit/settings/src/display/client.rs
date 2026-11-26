@@ -34,6 +34,18 @@ pub enum Command {
         revision: u64,
         layout: Layout,
     },
+    PreviewWithAlert {
+        owner: String,
+        epoch: u64,
+        revision: u64,
+        layout: Layout,
+        activation: Option<String>,
+    },
+    AlertResult {
+        owner: String,
+        token: String,
+        result: Result<bool, String>,
+    },
     Confirm(String),
     Cancel,
     Identify {
@@ -114,6 +126,25 @@ fn read(conn: &Connection, state: &mut State) -> Result<(), String> {
     }
     Ok(())
 }
+fn ask_shell(
+    connection: Connection,
+    display_owner: String,
+    token: String,
+    activation: String,
+) -> Result<bool, String> {
+    // Await the alert off the display worker, on the same dedicated connection.
+    // Leaving the page closes that connection and immediately revokes the lease.
+    let shell = owner(&connection, "org.nidara.Shell")?;
+    proxy(
+        &connection,
+        &shell,
+        "/org/nidara/Shell",
+        "org.nidara.Shell1",
+    )?
+    .call("ConfirmDisplayPreview", &(display_owner, token, activation))
+    .map_err(|error| error.to_string())
+}
+
 struct Startup(Option<Connection>);
 impl Drop for Startup {
     fn drop(&mut self) {
@@ -125,7 +156,7 @@ impl Drop for Startup {
 impl Client {
     pub fn connect() -> Result<Self, String> {
         let conn = zbus::blocking::connection::Builder::session()
-            .and_then(|b| b.method_timeout(Duration::from_secs(10)).build())
+            .and_then(|b| b.method_timeout(Duration::from_secs(20)).build())
             .map_err(|e| e.to_string())?;
         Self::start(conn)
     }
@@ -169,6 +200,7 @@ impl Client {
         let dedicated = conn.clone();
         let stop = closed.clone();
         let notice = notified.clone();
+        let alert_outcome = tx.clone();
         std::thread::Builder::new()
             .name("settings-display".into())
             .spawn(move || {
@@ -191,7 +223,16 @@ impl Client {
                         continue;
                     };
                     let is_refresh = matches!(&cmd, Command::Refresh);
-                    let tracked = !matches!(&cmd, Command::Refresh | Command::Brightness { .. });
+                    let tracked = !matches!(
+                        &cmd,
+                        Command::Refresh | Command::Brightness { .. } | Command::AlertResult { .. }
+                    );
+                    let alert = match &cmd {
+                        Command::PreviewWithAlert { activation, .. } => {
+                            Some(activation.clone().unwrap_or_default())
+                        }
+                        _ => None,
+                    };
                     let mut uncertain_preview = false;
                     let result = (|| -> Result<(), String> {
                         match cmd {
@@ -201,6 +242,13 @@ impl Client {
                                 epoch,
                                 revision,
                                 layout,
+                            }
+                            | Command::PreviewWithAlert {
+                                owner: expected,
+                                epoch,
+                                revision,
+                                layout,
+                                ..
                             } => {
                                 if owner(&conn, NAME)? != expected || state.owned.is_some() {
                                     return Err("stale/busy display draft".into());
@@ -217,7 +265,52 @@ impl Client {
                                         e.to_string()
                                     })?;
                                 uncertain_preview = false;
+                                if let Some(activation) = alert {
+                                    let sender = alert_outcome.clone();
+                                    let token = pending.token.clone();
+                                    let display_owner = expected.clone();
+                                    let holder = conn.clone();
+                                    std::thread::spawn(move || {
+                                        let result = ask_shell(
+                                            holder,
+                                            display_owner.clone(),
+                                            token.clone(),
+                                            activation,
+                                        );
+                                        let _ = sender.send(Command::AlertResult {
+                                            owner: display_owner,
+                                            token,
+                                            result,
+                                        });
+                                    });
+                                }
                                 state.owned = Some(pending);
+                            }
+                            Command::AlertResult {
+                                owner: expected,
+                                token,
+                                result,
+                            } => {
+                                if state.owner != expected
+                                    || state.owned.as_ref().is_none_or(|pending| {
+                                        pending.token != token
+                                            || pending.phase != "confirming"
+                                            || pending.deadline_us <= now_us()
+                                    })
+                                    || owner(&conn, NAME)? != expected
+                                {
+                                    return Ok(());
+                                }
+                                let method = if matches!(result, Ok(true)) {
+                                    "Confirm"
+                                } else {
+                                    "Cancel"
+                                };
+                                proxy(&conn, &expected, PATH, IFACE)?
+                                    .call::<_, _, ()>(method, &(token,))
+                                    .map_err(|error| error.to_string())?;
+                                state.owned = None;
+                                result.map(|_| ())?;
                             }
                             Command::Confirm(token) => {
                                 let pending = state

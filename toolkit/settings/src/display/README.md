@@ -11,7 +11,7 @@ components. The arrangement uses `nk::Arrangement`, with the same logical
 output coordinates used by the coordinate fields and before/after buttons.
 X and Y accept signed integers. Scale lists quarter-step values and keeps the
 current scale if it falls between steps. The page holds a dedicated Display1
-connection while selected and focuses Revert when its preview arrives.
+connection while selected. The shell presents the active preview as a system alert.
 
 `page::Page` owns retained rows in the existing nk-widgets Tree. Its output LIST
 publishes selection and the compositor's snapshot numbers/names; the diagram uses
@@ -24,12 +24,11 @@ is made on discovery, selection, styling or a draft edit.
 
 Apply sends Validate and then Preview using the captured unique owner, epoch and
 revision. Geometry/resource validation and durable profiles remain Hyalo's job.
-Observed layout changes replace stale drafts. A preview becomes a compact
-confirmation view near the leading edge, with Revert as the initial focus. Its
-accessible countdown reads the compositor's CLOCK_MONOTONIC deadline; receipt time
-never restarts the lease. Only the token returned to this client's own connection
-can be confirmed or cancelled. Save failure retains that token for retry. A foreign
-preview can be observed but not adopted. Closing, unmounting, navigation away or an
+Observed layout changes replace stale drafts. The native Settings page asks Shell1
+to present a system alert and returns Revert or Keep to the connection that owns
+the preview. Its accessible countdown reads the compositor's CLOCK_MONOTONIC
+deadline. The legacy projection selector keeps its compact confirmation. A
+foreign preview can be observed but not adopted. Closing, unmounting, navigation away or an
 uncertain Preview closes the dedicated lease connection, including replies that
 arrive late. A definite remote MethodError leaves the connection usable for a
 corrected draft; NoReply/Timeout and transport/decoding errors remain uncertain.
@@ -71,6 +70,9 @@ services, and retained Tree actions with real exports. The manual
 rust-session.sh, headless Cage, a private PID namespace, bus, runtime, configuration
 and portal fixture. It requires a final success marker, has a bounded lifetime and
 tears down all children; a timeout or setup exception fails, never counts as a
-negative control. Evidence is stored under target/display-settings. One nested
+negative control. Pass the matching shell as NK_SHELL_BIN for Display checks.
+The private environment must recognize the shell and native Settings binaries
+with their ordinary installed or authorized development identities. Evidence is
+stored under target/display-settings. One nested
 winit output does not validate physical multi-monitor, KMS, EDID, DDC, docks, lid,
 Orca speech or installed-package behavior.

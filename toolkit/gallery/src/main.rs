@@ -167,11 +167,15 @@ impl Gallery {
             return;
         }
         match action {
-            "system-dialog-open" | "system-alert-open" => {
-                self.open_system_dialog(action == "system-alert-open");
+            "system-dialog-open" | "system-alert-open" | "system-alert-timed" => {
+                self.open_system_dialog(
+                    action != "system-dialog-open",
+                    action == "system-alert-timed",
+                );
                 return;
             }
-            "dialog-open" | "alert-open" | "alert-delete" | "dialog-invalid" | "font-open" => {
+            "dialog-open" | "alert-open" | "alert-timed" | "alert-delete" | "dialog-invalid"
+            | "font-open" => {
                 self.dialog_request = Some((a.key, action.to_owned()));
                 return;
             }

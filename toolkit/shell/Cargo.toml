@@ -9,6 +9,8 @@ license.workspace = true
 publish.workspace = true
 
 [dependencies]
+async-channel = "2"
+futures-lite = "2"
 gio = "0.22"
 glib = "0.22"
 image = { version = "0.25.10", default-features = false, features = ["png", "jpeg"] }
@@ -17,6 +19,7 @@ serde_json = "1"
 zbus = "5.19"
 png = "0.18"
 resvg = { version = "0.45", default-features = false }
+nidara-access = { path = "../../crates/nidara-access" }
 nidara-shell-ipc = { path = "../../crates/nidara-shell-ipc" }
 nk-a11y = { path = "../crates/nk-a11y" }
 nk-icons = { path = "../crates/nk-icons" }

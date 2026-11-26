@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: LGPL-3.0-or-later
 //! Session-wide shell dialogs for Wi-Fi credentials and Bluetooth consent.
-mod surface;
+pub(crate) mod surface;
 mod wire;
 
 use serde_json::Value;

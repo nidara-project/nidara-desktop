@@ -902,6 +902,7 @@ export default {
     "bar.system-menu.confirm.restart": "Restart this computer?",
     "bar.system-menu.confirm.shutdown": "Shut down this computer?",
     "bar.system-menu.confirm.cancel": "Cancel",
+    "bar.system-menu.confirm.countdown": "The selected action will run in %d seconds.",
     "bar.system-menu.confirm.action.logout": "Log out",
     "bar.system-menu.confirm.action.restart": "Restart",
     "bar.system-menu.confirm.action.shutdown": "Shut down",

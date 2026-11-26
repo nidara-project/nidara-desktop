@@ -60,8 +60,8 @@ pub use widgets::{
     TimeField, Widget, prelude,
 };
 pub use window::{
-    Alert, AppWindow, CONTENT, Dialog, DialogAnswer, DialogButton, DialogContent, DialogUpdate,
-    Labels, Page, WindowLook,
+    Alert, AlertCountdown, AppWindow, CONTENT, Dialog, DialogAnswer, DialogButton, DialogContent,
+    DialogUpdate, Labels, Page, WindowLook,
 };
 
 #[cfg(test)]

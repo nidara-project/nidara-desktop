@@ -687,6 +687,7 @@ export default {
     "bar.system-menu.confirm.restart": "Uruchomić ponownie ten komputer?",
     "bar.system-menu.confirm.shutdown": "Wyłączyć ten komputer?",
     "bar.system-menu.confirm.cancel": "Anuluj",
+    "bar.system-menu.confirm.countdown": "Wybrana czynność zostanie wykonana za %d s.",
     "bar.system-menu.confirm.action.logout": "Wyloguj",
     "bar.system-menu.confirm.action.restart": "Uruchom ponownie",
     "bar.system-menu.confirm.action.shutdown": "Wyłącz",

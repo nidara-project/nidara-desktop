@@ -1584,8 +1584,30 @@ impl Hub {
             }
             Command::System {
                 action,
+                confirmed: false,
+            } if action.asks() => {
+                let status = self.status.clone();
+                worker(move || {
+                    let generation = status.lock_generation.load(Ordering::Acquire);
+                    let result = crate::session_alert::open(
+                        status.clone(),
+                        crate::session_alert::Kind::Power(action),
+                        token,
+                    )
+                    .map_err(|error| error.to_string())?;
+                    if result.recv_blocking().unwrap_or(false)
+                        && status.alert_unlocked.load(Ordering::Acquire)
+                        && status.lock_generation.load(Ordering::Acquire) == generation
+                    {
+                        run_session_command(action)?;
+                    }
+                    Ok(())
+                });
+            }
+            Command::System {
+                action,
                 confirmed: true,
-            } => self.system(action, token),
+            } if !action.asks() => self.system(action, token),
             other => eprintln!("nidara-shell: {other:?} is not available now"),
         }
     }
@@ -1594,8 +1616,8 @@ impl Hub {
     /// the session's own commands.
     fn system(&self, action: crate::menu::System, token: Option<String>) {
         use crate::menu::System;
-        let argv: &[&str] = match action {
-            System::About => return,
+        match action {
+            System::About => {}
             System::Settings => {
                 let Some(conn) = self.apps_conn.clone() else {
                     return;
@@ -1615,24 +1637,9 @@ impl Hub {
                     .map(|_| ())
                     .map_err(|e| format!("Settings: {e}"))
                 });
-                return;
             }
-            System::Lock => &["nidara-lock"],
-            System::Suspend => &["systemctl", "suspend"],
-            System::Logout => &["uwsm", "stop"],
-            System::Restart => &["systemctl", "reboot"],
-            System::Shutdown => &["systemctl", "poweroff"],
-        };
-        eprintln!("nidara-shell: system menu: {action:?}");
-        let argv: Vec<String> = argv.iter().map(|s| s.to_string()).collect();
-        worker(move || {
-            std::process::Command::new(&argv[0])
-                .args(&argv[1..])
-                // Waited for on this worker, so it never lingers as a zombie.
-                .status()
-                .map(drop)
-                .map_err(|e| format!("{}: {e}", argv[0]))
-        });
+            _ => worker(move || run_session_command(action)),
+        }
     }
 
     /// One EditLayout against the revision this hub last read: a concurrent edit is a
@@ -1773,6 +1780,18 @@ fn send_targets(output: String, targets: serde_json::Map<String, Value>) {
     if let Ok(tx) = queue.lock() {
         let _ = tx.send((output, targets));
     }
+}
+
+fn run_session_command(action: crate::menu::System) -> Result<(), String> {
+    let argv = action.command().ok_or("unknown session command")?;
+    eprintln!("nidara-shell: system menu: {action:?}");
+    std::process::Command::new(argv[0])
+        .args(&argv[1..])
+        .status()
+        .map_err(|e| format!("{}: {e}", argv[0]))?
+        .success()
+        .then_some(())
+        .ok_or_else(|| format!("{} failed", argv[0]))
 }
 
 fn worker(f: impl FnOnce() -> Result<(), String> + Send + 'static) {

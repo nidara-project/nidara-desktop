@@ -77,6 +77,7 @@ impl Dialog {
                     title: s.replace_title.replace("{name}", &name),
                     message: s.replace_message.replace("{folder}", &folder),
                     detail: None,
+                    countdown: None,
                     buttons: vec![
                         DialogButton {
                             id: "cancel".into(),

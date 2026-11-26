@@ -687,6 +687,7 @@ export default {
     "bar.system-menu.confirm.restart": "Diesen Computer neu starten?",
     "bar.system-menu.confirm.shutdown": "Diesen Computer herunterfahren?",
     "bar.system-menu.confirm.cancel": "Abbrechen",
+    "bar.system-menu.confirm.countdown": "Die ausgewählte Aktion wird in %d Sekunden ausgeführt.",
     "bar.system-menu.confirm.action.logout": "Abmelden",
     "bar.system-menu.confirm.action.restart": "Neu starten",
     "bar.system-menu.confirm.action.shutdown": "Herunterfahren",

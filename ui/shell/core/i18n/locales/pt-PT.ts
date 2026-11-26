@@ -687,6 +687,7 @@ export default {
     "bar.system-menu.confirm.restart": "Reiniciar este computador?",
     "bar.system-menu.confirm.shutdown": "Desligar este computador?",
     "bar.system-menu.confirm.cancel": "Cancelar",
+    "bar.system-menu.confirm.countdown": "A ação selecionada será executada dentro de %d segundos.",
     "bar.system-menu.confirm.action.logout": "Terminar sessão",
     "bar.system-menu.confirm.action.restart": "Reiniciar",
     "bar.system-menu.confirm.action.shutdown": "Desligar",

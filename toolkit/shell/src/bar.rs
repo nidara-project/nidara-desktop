@@ -908,7 +908,17 @@ impl Bar {
             Command::System {
                 action,
                 confirmed: false,
-            } => self.open_menu(w, crate::menu::confirm_menu(action), serial, Item::Logo),
+            } if action.asks() => {
+                let target = Some(nk_platform::SESSION_PROMPT_APP_ID);
+                let token = match serial {
+                    Some(serial) => w.request_activation_token(serial, target),
+                    None => w.request_focused_activation_token(target),
+                };
+                match token {
+                    Ok(request) => self.pending = Some((request, command)),
+                    Err(_) => self.send(command, None),
+                }
+            }
             Command::System {
                 action: System::Settings,
                 ..

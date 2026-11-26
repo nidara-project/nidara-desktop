@@ -141,18 +141,18 @@ impl Model {
         self.clock_text = text;
         changed
     }
-    pub fn display_action(&mut self, action: &Activated, held: bool, host: &AppWindow) -> bool {
+    pub fn display_action(
+        &mut self,
+        action: &Activated,
+        held: bool,
+        host: &AppWindow,
+        activation: Option<String>,
+    ) -> bool {
         if self.selected() != Some(crate::display::view::ID) {
             return false;
         }
         let (size, inset) = crate::display::view::diagram_metrics(host);
-        self.display.activate(action, held, size, inset)
-    }
-
-    pub fn take_display_focus(&mut self) -> Option<&'static str> {
-        self.display
-            .take_revert_focus()
-            .then_some(crate::display::view::REVERT_GROUP)
+        self.display.activate(action, held, size, inset, activation)
     }
 
     pub fn selected(&self) -> Option<&str> {

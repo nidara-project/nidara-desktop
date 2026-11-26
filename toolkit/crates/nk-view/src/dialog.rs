@@ -131,6 +131,74 @@ pub struct Alert {
     pub message: String,
     pub detail: Option<String>,
     pub buttons: Vec<DialogButton>,
+    pub countdown: Option<AlertCountdown>,
+}
+
+/// Monotonic deadline and a localized message suffix containing `%d`.
+#[derive(Clone, Debug)]
+pub struct AlertCountdown {
+    pub deadline: Instant,
+    pub text: String,
+    /// The enabled default response to invoke, or None for a deadline another
+    /// service owns. An external deadline is displayed but stays in force on input.
+    pub response: Option<String>,
+}
+
+struct Countdown {
+    config: AlertCountdown,
+    seconds: Option<u64>,
+    announcement: Option<String>,
+}
+
+impl Countdown {
+    fn seconds(config: &AlertCountdown, now: Instant) -> u64 {
+        let remaining = config.deadline.saturating_duration_since(now);
+        remaining.as_secs() + u64::from(remaining.subsec_nanos() != 0)
+    }
+
+    fn new(config: AlertCountdown) -> Self {
+        let seconds = Self::seconds(&config, Instant::now());
+        let announcement = Some(config.text.replace("%d", &seconds.to_string()));
+        Self {
+            config,
+            seconds: Some(seconds),
+            announcement,
+        }
+    }
+
+    fn interrupt(&mut self) -> bool {
+        if self.config.response.is_none() {
+            return false;
+        }
+        self.announcement = None;
+        self.seconds.take().is_some()
+    }
+
+    fn tick(&mut self, now: Instant) -> (bool, bool) {
+        let Some(before) = self.seconds else {
+            return (false, false);
+        };
+        if now >= self.config.deadline {
+            return (true, true);
+        }
+        let seconds = Self::seconds(&self.config, now);
+        if seconds == before {
+            return (false, false);
+        }
+        self.seconds = Some(seconds);
+        if [30, 10, 5]
+            .iter()
+            .any(|mark| seconds <= *mark && before > *mark)
+        {
+            self.announcement = self.message();
+        }
+        (true, false)
+    }
+
+    fn message(&self) -> Option<String> {
+        self.seconds
+            .map(|seconds| self.config.text.replace("%d", &seconds.to_string()))
+    }
 }
 
 // Low 32 bits are an AppWindow's existing local namespace. High bits give every
@@ -228,6 +296,7 @@ pub(super) struct ModalFrame {
     pub(super) namespace: Namespace,
     pub(super) parent: Option<Rc<RefCell<Tree>>>,
     pub(super) close_label: String,
+    countdown: Option<Countdown>,
 }
 impl ModalFrame {
     pub(super) fn request(&self, request: Request) -> Option<Request> {
@@ -244,6 +313,10 @@ impl ModalFrame {
             nk_a11y::Role::Dialog
         };
         root.description = self.description.clone();
+        root.announcement = self
+            .countdown
+            .as_ref()
+            .and_then(|timer| timer.announcement.clone());
         root.states.modal = true;
         if !active {
             for node in tree.nodes.values_mut() {
@@ -417,6 +490,7 @@ impl Runner<'_> {
         if self.answer.is_some() || window.is_closed() {
             return Ok(());
         }
+        self.interrupt_countdown();
         if action.action == "dialog:cancel" && action.key.0 == "dialog/close" {
             return self.respond(DialogAnswer::Cancel, None, window);
         }
@@ -452,6 +526,30 @@ impl Runner<'_> {
             } else {
                 // Disable or refresh responses before another queued action is handled.
                 self.rebuild()?;
+            }
+        }
+        Ok(())
+    }
+    fn interrupt_countdown(&mut self) {
+        let modal = self.child.modal_frame.as_mut().expect("modal host");
+        self.dirty |= modal.countdown.as_mut().is_some_and(Countdown::interrupt);
+    }
+    fn tick_countdown(&mut self, window: &mut Window) -> Result<()> {
+        let modal = self.child.modal_frame.as_mut().expect("modal host");
+        let Some(timer) = &mut modal.countdown else {
+            return Ok(());
+        };
+        let (changed, expired) = timer.tick(Instant::now());
+        self.dirty |= changed;
+        if expired {
+            let timer = modal.countdown.take().expect("expired countdown");
+            if self.child.active
+                && let Some(id) = timer.config.response
+                && let Some(answer) = modal.spec.answer(&id)
+            {
+                self.respond(answer, Some(&id), window)?;
+            } else {
+                window.close();
             }
         }
         Ok(())
@@ -559,9 +657,17 @@ impl nk_wayland::Application for Runner<'_> {
         for action in self.child.idle()? {
             self.activated(action, window)?;
         }
+        if !window.is_closed() {
+            self.tick_countdown(window)?;
+        }
         self.commit(window)
     }
     fn event(&mut self, event: Event, window: &mut Window) -> Result<()> {
+        if matches!(event, Event::Key(_) | Event::Button { pressed: true, .. })
+            || (self.child.active && matches!(event, Event::Focus(false)))
+        {
+            self.interrupt_countdown();
+        }
         if self.parent.is_none() {
             self.refresh(window)?;
             if window.is_closed() || matches!(event, Event::Closed) {
@@ -712,7 +818,7 @@ impl AppWindow {
             window,
             launcher,
             spec,
-            ModalKind::Alert(description),
+            ModalKind::Alert(description, alert.countdown),
             &mut model,
             &mut parent_page,
         )
@@ -815,7 +921,7 @@ impl AppWindow {
 }
 enum ModalKind {
     Dialog,
-    Alert(String),
+    Alert(String, Option<AlertCountdown>),
 }
 
 /// Prepare the same measured host for an independent or an app-modal toplevel.
@@ -827,9 +933,9 @@ fn prepare(
     parent: Option<Rc<RefCell<Tree>>>,
     available: (u32, u32),
 ) -> Result<((u32, u32), (u32, u32))> {
-    let (alert, description) = match kind {
-        ModalKind::Dialog => (false, String::new()),
-        ModalKind::Alert(message) => (true, message),
+    let (alert, description, countdown) = match kind {
+        ModalKind::Dialog => (false, String::new(), None),
+        ModalKind::Alert(message, countdown) => (true, message, countdown),
     };
     if let Some(buttons) = model.buttons() {
         spec.buttons = buttons;
@@ -838,6 +944,19 @@ fn prepare(
     if !alert && (spec.close_label.is_empty() || spec.close_label.contains('\0')) {
         return Err("dialog requires a localized close label".into());
     }
+    if let Some(timer) = &countdown
+        && (!timer.text.contains("%d")
+            || timer.response.as_ref().is_some_and(|id| {
+                !spec
+                    .buttons
+                    .iter()
+                    .any(|button| &button.id == id && button.default && button.enabled)
+            }))
+    {
+        return Err(
+            "alert countdown requires a localized template and an enabled default response".into(),
+        );
+    }
     child.modal_frame = Some(ModalFrame {
         close_label: spec.close_label.clone(),
         spec,
@@ -845,6 +964,7 @@ fn prepare(
         description,
         namespace: Namespace::new()?,
         parent,
+        countdown: countdown.map(Countdown::new),
     });
     let maximum = (
         f64::from(available.0).min(child.look.frame.content),
@@ -913,7 +1033,7 @@ impl Alert {
             buttons: self.buttons,
             close_label: String::new(),
         };
-        let kind = ModalKind::Alert(self.message.clone());
+        let kind = ModalKind::Alert(self.message.clone(), self.countdown);
         let mut model = AlertContent {
             message: self.message,
             detail: self.detail,
@@ -975,10 +1095,25 @@ impl DialogContent for AlertContent<'_> {
         }
     }
     fn content(&mut self, host: &AppWindow) -> Node {
+        let message = host
+            .modal_frame
+            .as_ref()
+            .and_then(|frame| frame.countdown.as_ref())
+            .and_then(Countdown::message)
+            .map_or_else(
+                || self.message.clone(),
+                |seconds| {
+                    if self.message.is_empty() {
+                        seconds
+                    } else {
+                        format!("{}\n{}", self.message, seconds)
+                    }
+                },
+            );
         let mut nodes = vec![
             Node::text(
                 "alert/message",
-                self.message.clone(),
+                message,
                 host.look.types.style(Type::Body, Weight::Regular),
             )
             .lines(usize::MAX),
@@ -1118,6 +1253,47 @@ mod tests {
         assert!(a.id(u64::from(u32::MAX) + 1).is_err());
     }
     #[test]
+    fn timed_alert_updates_the_message_and_announces_only_milestones() {
+        let now = Instant::now();
+        let deadline = now + std::time::Duration::from_secs(60);
+        let mut timer = Countdown::new(AlertCountdown {
+            deadline,
+            text: "In %d seconds".into(),
+            response: Some("yes".into()),
+        });
+        assert_eq!(timer.message().as_deref(), Some("In 60 seconds"));
+        assert_eq!(
+            timer.tick(now + std::time::Duration::from_secs(1)),
+            (true, false)
+        );
+        assert_eq!(timer.message().as_deref(), Some("In 59 seconds"));
+        assert_eq!(timer.announcement.as_deref(), Some("In 60 seconds"));
+        timer.tick(now + std::time::Duration::from_secs(31));
+        assert_eq!(timer.announcement.as_deref(), Some("In 29 seconds"));
+        assert_eq!(timer.tick(deadline), (true, true));
+    }
+
+    #[test]
+    fn timed_alert_input_stops_only_locally_owned_timeouts() {
+        let now = Instant::now();
+        let config = AlertCountdown {
+            deadline: now + std::time::Duration::from_secs(15),
+            text: "In %d seconds".into(),
+            response: None,
+        };
+        let mut external = Countdown::new(config.clone());
+        let mut local = Countdown::new(AlertCountdown {
+            response: Some("yes".into()),
+            ..config.clone()
+        });
+        assert!(!external.interrupt());
+        assert!(local.interrupt());
+        assert_eq!(local.tick(config.deadline), (false, false));
+        assert_eq!(local.message(), None);
+        assert_eq!(external.tick(config.deadline), (true, true));
+    }
+
+    #[test]
     fn parentless_alert_is_the_published_root_without_claiming_focus() {
         let namespace = Namespace::new().unwrap();
         let frame = ModalFrame {
@@ -1131,6 +1307,7 @@ mod tests {
             namespace: namespace.clone(),
             parent: None,
             close_label: String::new(),
+            countdown: None,
         };
         let mut root = nk_a11y::Node::new(1, nk_a11y::Role::Window, "System alert");
         root.children.push(2);
