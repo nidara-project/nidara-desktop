@@ -31,6 +31,11 @@ pub struct Keyboard {
     pub repeat: Option<(u32, Key, Instant)>,
 }
 impl Keyboard {
+    pub fn caps_lock(&self) -> bool {
+        self.state
+            .as_ref()
+            .is_some_and(|s| s.mod_name_is_active(xkb::MOD_NAME_CAPS, xkb::STATE_MODS_LOCKED))
+    }
     pub fn pointer_modifiers(&self) -> PointerModifiers {
         self.state
             .as_ref()

@@ -94,8 +94,15 @@ pub fn lock_session(timeout: Duration) -> Result<SessionLock> {
     })
 }
 
-impl SessionLock {
-    /// `id`'s exact instance bound on this lock's connection, or why not. Call it on the
+/// What binding an output to the lock needs, for the thread that watches the outputs: a
+/// screen plugged in while locked gets its lock surface there, as the protocol requires.
+#[derive(Clone)]
+pub struct LockBinder {
+    connection: Connection,
+    lock: ext_session_lock_v1::ExtSessionLockV1,
+}
+impl LockBinder {
+    /// `id`'s exact instance bound on the lock's connection, or why not. Call it on the
     /// watcher's thread, as `OutputWatch::bind_output`.
     pub fn bind_output(
         &self,
@@ -109,6 +116,24 @@ impl SessionLock {
             output,
             lock: self.lock.clone(),
         })
+    }
+}
+
+impl SessionLock {
+    pub fn binder(&self) -> LockBinder {
+        LockBinder {
+            connection: self.connection.clone(),
+            lock: self.lock.clone(),
+        }
+    }
+    /// `LockBinder::bind_output`, from the lock's own thread.
+    pub fn bind_output(
+        &self,
+        watch: &mut OutputWatch,
+        id: OutputId,
+        timeout: Duration,
+    ) -> std::result::Result<LockOutput, BindFailure> {
+        self.binder().bind_output(watch, id, timeout)
     }
     /// What the compositor has said so far, without waiting.
     pub fn status(&mut self) -> Result<LockStatus> {

@@ -24,7 +24,7 @@ pub use capture::{CaptureFailure, CaptureId, Image};
 mod connect;
 mod layer_shell;
 mod session_lock;
-pub use session_lock::{LockOutput, LockStatus, SessionLock, lock_session};
+pub use session_lock::{LockBinder, LockOutput, LockStatus, SessionLock, lock_session};
 mod outputs;
 pub use outputs::{BindFailure, OutputEvent, OutputInfo, OutputWatch, outputs};
 mod token;
@@ -507,6 +507,10 @@ impl Window {
             .then_some(self.pointer_position)
     }
     /// Physical pixels per logical pixel on the window's current output.
+    /// Whether Caps Lock is on, as the keyboard last said (the lock screen warns of it).
+    pub fn caps_lock(&self) -> bool {
+        self.keyboard.caps_lock()
+    }
     pub fn scale(&self) -> f64 {
         f64::from(self.scale) / 120.
     }
