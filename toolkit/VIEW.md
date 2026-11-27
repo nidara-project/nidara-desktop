@@ -1420,6 +1420,13 @@ receives a `Value::Secret` when the value changes. This payload is redacted
 in Debug and excluded from serialization. The gallery's Text field page
 demonstrates the control.
 
+`.submit(label, action)` puts a button inside the field, at its end (#1195): the pointer's
+way to do what Enter does, as the lock and login screens need ("Unlock", "Log in"). The field
+still reports its `changed` action with the secret; the button reports `action` with no
+value, and the reader hears it as a button named `label`. One outline goes round the field
+and its button. Enter itself stays the host's, as for every single-line field. Its glyph is
+the `submitIcon` of `tokens/search.json`.
+
 ### External data in an AppWindow choice context (#1103 7a)
 
 An application can call `AppWindow::cancel_menu()` when external data invalidates

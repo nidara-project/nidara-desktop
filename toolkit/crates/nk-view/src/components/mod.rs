@@ -26,7 +26,7 @@ pub use slider::SliderControl;
 mod field;
 mod password;
 pub use field::DisplayField;
-pub(crate) use password::PasswordEntry;
+pub(crate) use password::{PasswordEntry, PasswordSubmit, SubmitButton};
 mod time_field;
 pub use time_field::{TimeField, parse_time};
 mod dropdown;
@@ -327,6 +327,8 @@ pub enum Part {
     Disclosure(Disclosure),
     Editable(EditableField),
     Password(PasswordEntry),
+    PasswordSubmit(PasswordSubmit),
+    SubmitButton(SubmitButton),
     Time(TimeField),
     Search(Search),
     SearchClear(Clear),
@@ -364,6 +366,8 @@ impl Part {
             Self::Disclosure(c) => c,
             Self::Editable(c) => c,
             Self::Password(c) => c,
+            Self::PasswordSubmit(c) => c,
+            Self::SubmitButton(c) => c,
             Self::Time(c) => c,
             Self::Search(c) => c,
             Self::SearchClear(c) => c,

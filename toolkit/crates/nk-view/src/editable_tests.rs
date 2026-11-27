@@ -799,3 +799,54 @@ fn password_retains_only_bullets_in_the_view_and_keeps_the_secret_out_of_externa
     key(&mut state, 0x63, "", true, false);
     assert!(state.take_host_requests().is_empty());
 }
+
+/// #1195: the lock screen's field. The button inside it reports the submit action; the field
+/// still reports the secret, and the reader finds a password and a button named for what it
+/// does.
+#[test]
+fn a_password_with_a_submit_button_reports_the_secret_and_the_submit() {
+    let mut state = ViewState::new(100);
+    let field: Node = crate::PasswordEntry::new("lock", "Password", "changed")
+        .submit("Unlock", "unlock")
+        .into();
+    lay(&mut state, &field, 260.);
+    assert!(state.request(&"lock/input".into(), false).is_none());
+    let change = key(&mut state, 0x70, "p", false, false).unwrap();
+    assert_eq!(change.action, "changed");
+    assert!(matches!(change.value, Some(Value::Secret(ref s)) if s.as_str() == "p"));
+    // The pointer's way: a click on the button inside the field.
+    let button = state
+        .placed()
+        .iter()
+        .find(|p| p.key.0 == "lock/submit")
+        .map(|p| p.rect)
+        .unwrap();
+    let field_rect = state
+        .placed()
+        .iter()
+        .find(|p| p.key.0 == "lock")
+        .map(|p| p.rect)
+        .unwrap();
+    assert!(
+        button[0] + button[2] <= field_rect[0] + field_rect[2],
+        "inside the field"
+    );
+    assert!(button[0] > field_rect[0] + field_rect[2] / 2., "at its end");
+    let (x, y) = (button[0] + button[2] / 2., button[1] + button[3] / 2.);
+    state.pointer_motion(x, y);
+    assert!(state.button(true, Instant::now()).is_none());
+    let submit = state.button(false, Instant::now()).unwrap();
+    assert_eq!(submit.action, "unlock");
+    assert!(
+        submit.value.is_none(),
+        "the secret never travels with the button"
+    );
+    let tree = tree(&mut state);
+    let password = tree.nodes.values().find(|n| n.name == "Password").unwrap();
+    assert_eq!(password.role, nk_a11y::Role::Password);
+    assert!(
+        tree.nodes
+            .values()
+            .any(|n| n.name == "Unlock" && n.role == nk_a11y::Role::Button)
+    );
+}

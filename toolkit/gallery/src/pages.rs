@@ -398,6 +398,12 @@ fn page(id: &str, m: &Model, cat: &Catalogue, t: &TypeScale, k: &Measures) -> Ve
         "entry" => {
             let mut nodes = entries(m, t);
             nodes.push(nk::PasswordEntry::new("e/password", "Password", "noop").into());
+            // The lock screen's field, with its button inside (#1195).
+            nodes.push(
+                nk::PasswordEntry::new("e/password-submit", "Password", "noop")
+                    .submit("Unlock", "noop")
+                    .into(),
+            );
             nodes.extend(fields(t));
             nodes
         }
