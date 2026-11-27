@@ -1,11 +1,10 @@
-/* Nidara — Greeter / Lock stylesheet
+/* Nidara — Greeter stylesheet
    No GTK theme is loaded (`useNoGtkTheme()`, GTK_THEME=Empty), so this is the ONLY CSS.
    No Adwaita to fight. No resets needed. Just define what we want.
    GTK4 CSS subset: no color-mix(), no rgba(var(), n), no filter. */
 
-// This sheet is SHARED by two bundles — `ui/greeter` and `ui/lockscreen` —
-// which is why every class is named `.greeter-*`. A change here lands on the
-// login screen too; both have to be looked at.
+// This sheet was SHARED with the TS lock screen until it moved to Rust (#1195,
+// toolkit/lockscreen), which is why every class is named `.greeter-*`.
 //
 // There are NO lock-only rules left. There used to be a
 // `window.nidara-lock-window { … }` block switching the CSS box off for the

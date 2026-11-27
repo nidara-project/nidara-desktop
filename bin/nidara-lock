@@ -2,26 +2,21 @@
 # ─────────────────────────────────────────────────────────────────────────────
 # nidara-lock — Nidara lock screen launcher
 # Installed to /usr/bin/nidara-lock
-# Called by hypridle, loginctl lock-session, and Hyprland keybinds
+# Started by Hyalo (lock.rs: sleep, idle, `loginctl lock-session`, Super+L, and again when the
+# lock client dies), which owns everything about the lock but the screen itself.
+# The client is toolkit/lockscreen (#1195), installed to /usr/lib/nidara/nidara-lock.
 # ─────────────────────────────────────────────────────────────────────────────
 
 CONFIG_DIR="${XDG_CONFIG_HOME:-$HOME/.config}/nidara"
-SYS_BUNDLE="/usr/share/nidara/ui/lockscreen/build/nidara-lock"
+SYS_CLIENT="/usr/lib/nidara/nidara-lock"
 # Per-user log path, like every other nidara-* log. NEVER a path the session
 # user can't write (/var/log, another user's /tmp file): the `>> $LOG` redirect
-# fails and bash then skips launching the bundle entirely, so the screen
+# fails and bash then skips launching the client entirely, so the screen
 # silently never locks (bit us 2026-07-03 with /var/log).
 LOG="${XDG_RUNTIME_DIR:-/tmp}/nidara-lock.log"
 
-export GDK_BACKEND=wayland
-export GI_TYPELIB_PATH="/usr/lib/girepository-1.0:/usr/local/lib/girepository-1.0${GI_TYPELIB_PATH:+:$GI_TYPELIB_PATH}"
-export LD_LIBRARY_PATH="/usr/lib:/usr/local/lib${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
-# No LD_PRELOAD here: the bundle (and scripts/run.sh in dev) preloads gtk4-layer-shell for gjs
-# alone. Exported here it loaded GTK into every helper below — flock, nidara-ipc, nidara-wm,
-# run.sh's realpath/dirname/node — at ~17 ms each, and Super+L waited ~0.4 s for it.
-
 # One lock client per SESSION: a lock on a file of this session's runtime directory and
-# display, held (fd 9, inherited by the bundle) for as long as this launcher runs. Not
+# display, held (fd 9, inherited by the client through exec) for as long as it runs. Not
 # `pgrep -x nidara-lock`, which saw every process of that name on the machine: a nested Hyalo's
 # own lock client made the live session's launcher exit, and the live session stayed locked
 # with no lock screen (2026-10-26). And two launches 10 ms apart (idle lock + sleep) each saw
@@ -32,52 +27,24 @@ if ! flock -n 9; then
     exit 0
 fi
 
-# ── Dev mode check ───────────────────────────────────────────────────────────
+# ── Dev mode: the client built in the source tree ───────────────────────────
+CLIENT="$SYS_CLIENT"
 DEV_FILE="$CONFIG_DIR/.dev"
-USE_DEV="no"
 if [ -f "$DEV_FILE" ]; then
     SOURCE_DIR="$(cat "$DEV_FILE")"
-    if [ -f "$SOURCE_DIR/ui/lockscreen/app.ts" ]; then
-        USE_DEV="yes"
-    fi
+    for built in "$SOURCE_DIR/toolkit/target/release/nidara-lock" "$SOURCE_DIR/toolkit/target/debug/nidara-lock"; do
+        if [ -x "$built" ]; then
+            CLIENT="$built"
+            break
+        fi
+    done
 fi
 
-if [ "$USE_DEV" = "no" ] && [ ! -x "$SYS_BUNDLE" ]; then
-    echo "[$(date '+%H:%M:%S')] nidara-lock: ERROR — bundle not found at $SYS_BUNDLE" | tee -a "$LOG"
+if [ ! -x "$CLIENT" ]; then
+    echo "[$(date '+%H:%M:%S')] nidara-lock: ERROR — client not found at $CLIENT" | tee -a "$LOG"
     exit 1
 fi
 
-# Hide bar and dock, disable all keybinds
-# (workspace switch not needed — ext-session-lock-v1 covers all monitors at compositor level)
-nidara-ipc hideForLock >> "$LOG" 2>&1 || true
-nidara-wm lock-binds on >> "$LOG" 2>&1 || true
-
-# Run lockscreen — blocks until app.quit() on successful auth.
-# Watchdog: if the bundle dies abnormally (e.g. GTK4 segfault when a wl_output
-# vanishes on wake — seen 2026-06-10), relaunch it. misc.allow_session_lock_restore
-# lets the new instance take over the lock instead of leaving Hyprland's red
-# "lock app crashed" screen.
-attempts=0
-while true; do
-    if [ "$USE_DEV" = "yes" ]; then
-        cd "$SOURCE_DIR/ui/lockscreen"
-        "$SOURCE_DIR/scripts/run.sh" app.ts >> "$LOG" 2>&1
-        code=$?
-    else
-        cd /usr/share/nidara/ui/lockscreen
-        "$SYS_BUNDLE" >> "$LOG" 2>&1
-        code=$?
-    fi
-    [ "$code" -eq 0 ] && break
-    attempts=$((attempts + 1))
-    if [ "$attempts" -ge 5 ]; then
-        echo "[$(date '+%H:%M:%S')] nidara-lock: bundle crashed $attempts times (last exit $code) — giving up" | tee -a "$LOG"
-        break
-    fi
-    echo "[$(date '+%H:%M:%S')] nidara-lock: bundle exited $code — relaunching ($attempts/5)" >> "$LOG"
-    sleep 1
-done
-
-# Restore everything after unlock
-nidara-wm lock-binds off >> "$LOG" 2>&1 || true
-nidara-ipc showAfterLock >> "$LOG" 2>&1 || true
+# A client that dies leaves the session locked, and Hyalo starts this launcher again
+# (lock.rs: RELAUNCH_LIMIT): no watchdog of our own.
+exec "$CLIENT" >> "$LOG" 2>&1

@@ -102,8 +102,7 @@ tar -C "$REPO_DIR" -czf "$WORK/nidara-desktop-$PKGVER.tar.gz" \
     --exclude='./.git' \
     --exclude='./ui/shell/node_modules' --exclude='./ui/shell/@girs' \
     --exclude='./ui/shell/build' --exclude='./ui/greeter/build' \
-    --exclude='./ui/greeter/node_modules' --exclude='./ui/lockscreen/build' \
-    --exclude='./ui/lockscreen/node_modules' \
+    --exclude='./ui/greeter/node_modules' \
     --exclude='./ui/installer/build' --exclude='./ui/installer/node_modules' \
     --exclude='./out-pkg' \
     --exclude='./packaging/nidara/src' --exclude='./packaging/nidara/pkg' \

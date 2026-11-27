@@ -13,7 +13,7 @@
  * own, `GLib.spawn_*`, `Gio.AppInfo.launch*`) hands them over again, and nothing
  * on screen says why the next app looks wrong.
  *
- * Scope: the desktop bundles — `ui/shell/`, `ui/greeter/`, `ui/lockscreen/` and
+ * Scope: the desktop bundles — `ui/shell/`, `ui/greeter/` and
  * `ui/lib/` (shared by all). NOT `ui/installer/`: it starts archinstall, pkexec and
  * systemctl, never an application somebody then uses, and it lives on the live
  * medium only. A comment line is not code and is skipped.
@@ -27,7 +27,7 @@ import { readFileSync, readdirSync, statSync, existsSync } from "fs"
 import { join, resolve, relative } from "path"
 
 const REPO = resolve(process.argv[2] ?? new URL("../..", import.meta.url).pathname)
-const ROOTS = ["ui/settings", "ui/shell", "ui/greeter", "ui/lockscreen", "ui/lib"]
+const ROOTS = ["ui/settings", "ui/shell", "ui/greeter", "ui/lib"]
 const DOOR = "ui/lib/process.ts"
 const SKIP_DIRS = new Set(["node_modules", "@girs", "build"])
 

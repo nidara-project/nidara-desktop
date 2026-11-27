@@ -1211,65 +1211,38 @@ wallpaper as it started would stomp a running game's artwork (`core/GameSession.
 Do **not** "simplify" this by passing `--no-cache` to the daemon: the cache is also what paints a
 monitor hot-plugged mid-session, which nothing else currently handles.
 
-### The lockscreen: who draws it, and what the shell is actually hiding from
+### The lock screen: Hyalo locks, `nidara-lock` only draws (#1195)
 
-Under `ext-session-lock-v1` the compositor still composites, but the lockscreen's **content** comes
-from our own `nidara-lock` process (`ui/lockscreen/`): one GTK4 window per monitor, handed to
-`Gtk4SessionLock`'s `monitor` signal (`Lock.ts:52-56`). That is also why the lock paints its own
-`Gtk.Picture` wallpaper — awww's layer is not on screen behind it.
+Since #1195 the lock screen is Rust: `toolkit/lockscreen` → `/usr/lib/nidara/nidara-lock`, a
+client of `ext-session-lock-v1` built from the kit (`nk::ViewState`, `nk-wayland`'s
+`lock_session`). The TS bundle `ui/lockscreen/` and everything it worked around on Hyprland —
+`hideForLock`, the `lock` submap, its own blurred `GlassBackdrop` — are gone.
 
-**The protocol is stronger than it looks, and assuming otherwise has already cost a wrong comment**
-(verified against Hyprland 0.56 sources, 2026-08-07):
+**Who owns what.**
+- **Hyalo** (`hyalo/compositor/src/lock.rs`) owns the LOCK: it hides every window and layer the
+  moment a lock is asked for, draws the wallpaper and a uniform black veil (`lock::VEIL`, chosen
+  so white text reaches AA over a white wallpaper) under the lock surface, keeps the session
+  hidden if the client dies and starts `bin/nidara-lock` again, and locks anyway if no client
+  asks. The client never paints a wallpaper of its own.
+- **`bin/nidara-lock`** holds the one-client-per-SESSION flock and `exec`s the binary (dev
+  mode: the tree's `toolkit/target/*/nidara-lock`).
+- **`nidara-lock`** puts ONE surface on each output — a second for the same output is a
+  protocol error, so the outputs' thread remembers which it started — each on its own thread
+  and queue of one connection (`nk_wayland::LockBinder`). The avatar, the name and the
+  password field go on the output the pointer is on; the others show the clock alone (D6).
+  PAM goes through `lib/nidara-auth` (loaded with libloading), whose every line is shown.
+  Suspend is the one power action (D3): logind lets the active local session power off
+  without a password anyway.
 
-- **Render**: `renderAllClientsForWorkspace` (`Renderer.cpp`) returns *before* drawing ANY layer —
-  background, bottom, top, overlay and popups alike — as soon as the lock client confirms
-  (`clientLocked()`) and `misc:session_lock_xray` is off. `renderLockscreen` then draws primer →
-  lock surface → and only layers whose `above_lock` rule is set, filtered in `renderLayer`.
-- **Input**: `ViewHitTester::layerSurfaceAt` skips every layer without **`above_lock == 2`** while
-  locked, and `InputManager` forces keyboard focus onto the lock surface *"regardless of layers"* —
-  so an interactive above-lock layer gets the pointer but never the keyboard.
-- Nidara sets `above_lock` **nowhere**. No layer of ours can appear over, or be clicked through,
-  a confirmed lockscreen. A layer being on OVERLAY buys it nothing here.
+**Two kit facts the lock screen leans on**, both easy to break from elsewhere:
+- a composite's text (the password field's dots) is rebuilt only on relayout, so a host must
+  relayout after a key or an IME commit — AppWindow does through `changed`;
+- the compositor sends `wl_keyboard.modifiers` AFTER the key that changed them, so Caps Lock
+  is read on `Event::Modifiers`, never on the key event.
 
-So `hideForLock`/`showAfterLock` (`app.ts`) exist for the two gaps the protocol does *not* cover:
-the window **before** the lock surface is committed on every monitor (`bin/nidara-lock` calls
-`hideForLock` before it even launches the bundle — until then the session renders whole), and the
-**OVERLAY fallback** in `Lock.ts:59-80`, taken only when `Gtk4SessionLock.is_supported()` is false,
-where the lockscreen really is just another layer. Note the `nidara-lock` blur `layer_rule` in
-`hyprland.lua` applies to that fallback ONLY — a session-lock surface has no namespace.
-
-Also compositor-side, and easy to forget: **keybinds stay live while locked**, which is why
-`bin/nidara-lock` switches to the empty `lock` submap and why the media/brightness binds are
-explicitly marked `locked = true`. There is **no lockspace**: the workspace switch that used to
-precede the lock was dropped in `5c72f2c4` (2026-05-24) as redundant.
-
-#### The lockscreen's glass is blurred BY US, and that is not a shortcut
-
-`widget/GlassBackdrop.ts` paints a blurred copy of the wallpaper behind the password field and
-the power bar. Compositor blur is **unreachable** on a lock surface, and each escape route is
-closed by a different piece of Hyprland (0.56 sources; the third leg measured in a VM 2026-08-09,
-not deduced):
-
-- `misc:session_lock_blur` exists, but `renderdata.blur = PSESSIONLOCKBLUR && PSESSIONLOCKXRAY` —
-  and `xray` renders the **whole workspace** behind the lock (windows included) and disables the
-  black primer. It also blurs the *entire* surface: restricting blur to one widget needs
-  `ignore_alpha`, which is a LAYER rule a lock surface cannot carry.
-- Marking the wallpaper layer `above_lock` puts it **on top of** our UI: above-lock layers are
-  drawn *after* the lock surface (`Renderer.cpp:1655-1668`). There is no "below_lock".
-- Moving the UI onto an `above_lock = 2` layer renders and takes the pointer, but
-  `CFocusState::rawSurfaceFocus` (`FocusState.cpp:227`) refuses keyboard focus to every surface
-  that is not the lock surface — **measured**: the layer logged zero keys while locked, hyprlock
-  received all of them. `above_lock = 2` means render + pointer, never keyboard (arguably an
-  upstream inconsistency: the rule advertises input).
-
-hyprlock, swaylock and gtklock all blur their own copy for the same reason. Ours mirrors the
-compositor's pipeline so the material matches rather than resembles: `push_blur` for the gaussian,
-`push_color_matrix` for `contrast`/`brightness`/`vibrancy`, constants kept in lockstep with
-`blur { … }` in `hyprland.lua`. The blurred image is rendered **once** into a texture (blurring
-inside `vfunc_snapshot` would re-blur the wallpaper on every clock tick), and it is sampled in
-window coordinates so what shows through registers with the sharp wallpaper around it. The
-Kawase→gaussian radius mapping is an approximation between two algorithms — `BLUR_RADIUS` is the
-one constant to trim by eye if the lock's glass ever reads heavier than the bar's.
+The design decisions (one stage, no notifications, no card — the only glass is the field's —
+and who fades on unlock) are in #1195's approved comment; switching user waits for our own
+login manager.
 
 ## Directory map (`ui/shell/`)
 

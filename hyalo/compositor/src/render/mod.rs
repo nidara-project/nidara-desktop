@@ -472,6 +472,20 @@ fn scene_elements<R: HyaloRenderer>(
         if let Some(surface) = state.lock.surface_for(output) {
             push_surface(&mut out, renderer, surface, Point::from((0, 0)), scale, output_size, false, state.when);
         }
+        // The veil (#1195 D7): one uniform sheet between the wallpaper and the lock screen,
+        // whose clock, name and messages sit straight on it in white (lock.rs, VEIL).
+        {
+            use smithay::backend::renderer::element::{Kind, solid::{SolidColorBuffer, SolidColorRenderElement}};
+            struct VeilBuffer(std::sync::Mutex<SolidColorBuffer>);
+            output.user_data().insert_if_missing(|| VeilBuffer(std::sync::Mutex::new(
+                SolidColorBuffer::new(output_geo.size, Color32F::new(0.0, 0.0, 0.0, crate::lock::VEIL)),
+            )));
+            let mut buffer = output.user_data().get::<VeilBuffer>().unwrap().0.lock().unwrap();
+            buffer.resize(output_geo.size);
+            out.push(OutputElement::Debug(SolidColorRenderElement::from_buffer(
+                &buffer, (0, 0), scale, 1.0, Kind::Unspecified,
+            )));
+        }
         for l in map.layers_on(Layer::Background).rev() {
             push_surface(&mut out, renderer, l.wl_surface(), layer_loc(l), scale, output_size, false, state.when);
         }

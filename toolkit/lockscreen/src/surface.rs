@@ -381,7 +381,7 @@ impl Surface {
                 said_label = said_label.presentational();
             }
             let mut caps_label = nk::Label::new("lock/caps", caps.clone(), body.clone())
-                .ink(Ink::Secondary)
+                .ink(Ink::Primary)
                 .reserve(1);
             if caps.is_empty() {
                 caps_label = caps_label.presentational();

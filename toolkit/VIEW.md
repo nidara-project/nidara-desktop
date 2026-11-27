@@ -145,6 +145,9 @@ ellipsis. Its full text stays in the semantics. A weight the fonts have no face 
 installed) falls back to the regular weight, as the shell's own text does; a text is never
 dropped for its weight. A text may `reserve(n)` lines: it is that tall however few it fills, so
 cards of one kind share a height (TS reserved a notification body's two lines).
+An EMPTY reserved text still takes its lines (the style's size × line height), so a message
+that comes and goes moves nothing around it (#1195's lock screen). `TypeScale::display()` is the
+one size above Title1: `$fs-display`/`$fw-display`, for a clock that is the whole surface.
 
 **Pixel snapping.** Every placed edge is rounded to the output's device-pixel grid once, at
 placement. A size is the difference between two snapped edges. Sums of rounded sizes are never

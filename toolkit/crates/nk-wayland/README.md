@@ -71,6 +71,12 @@ the phase-0 check, deliberately leaving the parent uncommitted. Applications use
 
 See `phase0/README.md` for test 5's blocked-client, retarget and negative controls.
 
+## Modifiers and Caps Lock
+
+`Event::Modifiers` comes after every `wl_keyboard.modifiers`, and `Window::caps_lock()` reads the
+state it left. The compositor sends the modifiers AFTER the key that changed them, so reading
+Caps Lock on that key's own event gives the old state (#1195's warning was one press behind).
+
 ## Text input inside a layer
 
 `set_layer_text_input(id, input)` takes the same `TextInput` payload as the

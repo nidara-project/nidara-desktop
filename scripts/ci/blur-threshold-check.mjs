@@ -43,7 +43,7 @@ const lockFloor = parseFloat(lm[1])
 
 // ⚠️ `nidara-lock` is NOT compositor-blurred and its rule cannot be checked against
 // anything, because it never governs the lock people actually run. The primary path
-// is ext-session-lock-v1 (`Gtk4SessionLock`, ui/lockscreen/app.ts) — that surface is
+// is ext-session-lock-v1 (`Gtk4SessionLock`, the TS lock screen until #1195) — that surface is
 // not a layer surface at all, so no layer_rule matches it, and Hyprland's own primer
 // paints an opaque sheet over everything behind it (which is why `GlassBackdrop`
 // blurs its OWN copy of the wallpaper). The namespace exists only on `LockOverlay()`,

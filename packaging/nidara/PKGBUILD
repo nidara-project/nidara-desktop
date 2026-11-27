@@ -282,11 +282,6 @@ build() {
   mkdir -p build
   ../../scripts/bundle.sh app.ts build/nidara-greeter --native-host=nidara-greeter --kit-external=/usr/share/nidara-kit/js
 
-  # Lockscreen (shares the greeter's style.css)
-  cd ../lockscreen
-  mkdir -p build
-  ../../scripts/bundle.sh app.ts build/nidara-lock --native-host=nidara-lock --kit-external=/usr/share/nidara-kit/js
-
   # Installer (ISO-only package — see package_nidara-installer)
   cd ../installer
   mkdir -p build
@@ -327,6 +322,8 @@ build() {
   # The kit's gallery (#1079), an application like any other.
   cargo build --release --locked --offline -p nk-gallery --bin nidara-kit-gallery
   cargo build --release --locked --offline -p nidara-file-chooser
+  # The lock screen (#1195), started by Hyalo through /usr/bin/nidara-lock.
+  cargo build --release --locked --offline -p nidara-lock
 
   # Hyalo (package nidara-hyalo). Offline: prepare() fetched everything.
   cd "$srcdir/nidara-desktop-$pkgver/hyalo"
@@ -441,7 +438,6 @@ package_nidara-desktop() {
   install -Dm644 ui/greeter/style.css "$pkgdir/usr/share/nidara/ui/greeter/style.css"
   # The kit (kit.css + the modules the three bundles import) is NOT here: it is
   # its own package, `nidara-kit` — see package_nidara-kit below.
-  install -Dm755 ui/lockscreen/build/nidara-lock "$pkgdir/usr/share/nidara/ui/lockscreen/build/nidara-lock"
 
   # Shared Hyprland config (the session loads it via -c, see bin/nidara)
   mkdir -p "$pkgdir/usr/share/nidara/config"
@@ -643,6 +639,7 @@ package_nidara-hyalo() {
   install -Dm755 bin/nidara-hyalo-session "$pkgdir/usr/bin/nidara-hyalo-session"
   install -Dm755 toolkit/target/release/nidara-shell "$pkgdir/usr/bin/nidara-shell"
   install -Dm755 toolkit/target/release/nidara-file-chooser "$pkgdir/usr/lib/nidara/nidara-file-chooser"
+  install -Dm755 toolkit/target/release/nidara-lock "$pkgdir/usr/lib/nidara/nidara-lock"
   install -Dm755 toolkit/target/release/nidara-kit-gallery "$pkgdir/usr/bin/nidara-kit-gallery"
   install -Dm644 toolkit/gallery/nidara-kit-gallery.desktop "$pkgdir/usr/share/applications/nidara-kit-gallery.desktop"
   install -Dm644 bin/nidara-rust-shell.service "$pkgdir/usr/lib/systemd/user/nidara-rust-shell.service"
