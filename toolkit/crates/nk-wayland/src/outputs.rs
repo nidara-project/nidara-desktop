@@ -132,7 +132,7 @@ impl OutputWatch {
         })?;
         self.bind_output_with(connection, id, deadline, || {})
     }
-    fn bind_output_with(
+    pub(crate) fn bind_output_with(
         &mut self,
         connection: Connection,
         id: OutputId,
@@ -278,7 +278,7 @@ fn poll_read(
 }
 
 /// Flush, wait up to `timeout` for the socket, read and dispatch what came.
-fn read_once<S: 'static>(
+pub(crate) fn read_once<S: 'static>(
     connection: &Connection,
     queue: &mut EventQueue<S>,
     state: &mut S,
