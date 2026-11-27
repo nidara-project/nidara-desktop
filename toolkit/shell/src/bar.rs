@@ -14,7 +14,7 @@
 //! surface grows to the output's height — its strip reserved as before — takes the whole
 //! of its input, so a click outside the panel closes it, and the keyboard, for Escape.
 use crate::barmodel::{self as m, Content, Dot};
-use crate::menu::{Command, Label, System};
+use crate::menu::{Command, System};
 use crate::popup::Look;
 use crate::popup::{Outcome, Popup};
 use nk_a11y::{Action, Bounds, Node, NodeId, Role, Tree};
@@ -174,6 +174,7 @@ struct CardPress {
 }
 type CcLayer = (nk_wayland::LayerId, (u32, u32), [f64; 4]);
 pub struct Bar {
+    locale_generation: u64,
     cards: Vec<crate::notification_card::Card>,
     card_pages: std::collections::HashMap<u64, usize>,
     card_shape: Vec<(u64, u64, usize)>,
@@ -281,6 +282,7 @@ impl Bar {
             .and_then(|d| d.format("%x").ok())
             .map_or(m::Order::DayFirst, |s| m::order_of(&s));
         Self {
+            locale_generation: crate::i18n::generation(),
             cards: vec![],
             card_pages: Default::default(),
             card_shape: vec![],
@@ -400,16 +402,25 @@ impl Bar {
         let width = self.width;
         let dots = m::dots(&self.frame.workspaces, &self.name);
         let island_w = m::island_width(&dots);
-        let word = self.look.as_ref().map_or("Desktop".to_string(), |l| {
-            l.text_of(&Label::Key("overview.workspace"))
-        });
-        let title = self
-            .frame
-            .app
-            .clone()
-            .unwrap_or_else(|| m::desktop_title(&self.frame.workspaces, &self.name, &word));
         let room = m::title_room(width, island_w, &[Content::Icon]);
-        let title = self.frame.prefs.show_title.then(|| self.fit(&title, room));
+        let title = self.frame.prefs.show_title.then(|| {
+            if let Some(app) = self.frame.app.clone() {
+                return self.fit(&app, room);
+            }
+            let title =
+                |key| m::desktop_title(&self.frame.workspaces, &self.name, &crate::i18n::text(key));
+            let full = title("overview.workspace");
+            let short = title("shell.bar.workspace-short");
+            if full == short {
+                return self.fit(&full, room);
+            }
+            for text in [full, short] {
+                if self.measure(&text) <= room {
+                    return text;
+                }
+            }
+            String::new()
+        });
         let (left, left_items) = m::left_group(title.as_ref().map(|title| self.measure(title)));
         let island = [
             ((width - island_w) / 2.).round(),
@@ -617,7 +628,7 @@ impl Bar {
             }
             Err(e) => {
                 eprintln!("nidara-shell: notification activation unavailable: {e:?}");
-                self.card_error(instance, content, "Could not activate. Try again.");
+                self.card_error(instance, content, "shell.notification.activation-failed");
             }
         }
     }
@@ -734,11 +745,11 @@ impl Bar {
             look,
             crate::popup::Request {
                 rows: &rows,
-                title: if under == Item::Logo {
-                    "System"
+                title: &crate::i18n::text(if under == Item::Logo {
+                    "settings.about.group.system"
                 } else {
-                    "Tray"
-                },
+                    "shell.bar.tray"
+                }),
                 anchor: None,
                 rect: [x.round() as i32, m::MENU_TOP as i32 - 1, 1, 1],
                 side: nk_wayland::PopupSide::Below,
@@ -1056,7 +1067,7 @@ impl Bar {
         self.nc_view.refresh(
             look,
             self.frame.history.clone(),
-            &self.frame.nc_error,
+            &crate::i18n::text(&self.frame.nc_error),
             (self.nc.year, self.nc.month),
             cards,
             self.width,
@@ -1270,6 +1281,7 @@ impl Bar {
                     output: self.name.clone(),
                 };
                 if let Err(e) = crate::capture::send(job) {
+                    eprintln!("nidara-shell: capture: {e}");
                     if let Some(d) = &mut self.cc.detail {
                         d.error = e;
                     }
@@ -1285,6 +1297,7 @@ impl Bar {
                     output: self.name.clone(),
                 };
                 if let Err(e) = crate::capture::send(job) {
+                    eprintln!("nidara-shell: capture: {e}");
                     if let Some(d) = &mut self.cc.detail {
                         d.error = e;
                     }
@@ -1297,6 +1310,7 @@ impl Bar {
                 if let Err(error) = crate::capture::send(crate::capture::Job::Stop)
                     && let Some(detail) = &mut self.cc.detail
                 {
+                    eprintln!("nidara-shell: stop recording: {error}");
                     detail.error = error;
                 }
                 return;
@@ -1577,7 +1591,11 @@ impl Bar {
         }
         if self.cc_open {
             let panel = self.cc.panel();
-            let mut group = Node::new(CC_PANEL, Role::Panel, "Control Center");
+            let mut group = Node::new(
+                CC_PANEL,
+                Role::Panel,
+                crate::i18n::text("settings.bar.item.control-center"),
+            );
             group.description = if self.cc.editor.active {
                 self.cc.editor.description(self.look.as_ref())
             } else {
@@ -1851,35 +1869,40 @@ fn id_of(item: Item) -> Option<NodeId> {
 }
 
 /// What a widget says to a reader: its name and its state.
-fn widget_node(w: Widget, s: &crate::status::Status) -> (&'static str, String) {
+fn widget_node(w: Widget, s: &crate::status::Status) -> (String, String) {
     use crate::status::Wifi;
     match w {
-        Widget::Focus => ("Do Not Disturb", "on".into()),
+        Widget::Focus => (
+            crate::i18n::text("shell.status.do-not-disturb"),
+            crate::i18n::text("shell.status.on"),
+        ),
         Widget::Battery => (
-            "Battery",
+            crate::i18n::text("widget.battery.name"),
             s.battery.map_or(String::new(), |b| {
                 let pct = (b.fraction * 100.).round();
                 if b.charging {
-                    format!("{pct}%, on AC")
+                    crate::i18n::format("shell.bar.battery-ac", &[("percent", &pct.to_string())])
                 } else {
                     format!("{pct}%")
                 }
             }),
         ),
         Widget::Wifi => (
-            "Wi-Fi",
+            crate::i18n::text("cc.wifi.name"),
             match s.wifi {
-                Some(Wifi::Off) => "off".into(),
-                Some(Wifi::Connecting) => "connecting".into(),
-                Some(Wifi::Connected(l)) => format!("connected, signal {l} of 3"),
-                _ => "not connected".into(),
+                Some(Wifi::Off) => crate::i18n::text("cc.wifi.sub.off"),
+                Some(Wifi::Connecting) => crate::i18n::text("shell.status.connecting"),
+                Some(Wifi::Connected(l)) => {
+                    crate::i18n::format("shell.bar.wifi-signal", &[("level", &l.to_string())])
+                }
+                _ => crate::i18n::text("settings.network.status.disconnected"),
             },
         ),
         Widget::Volume => (
-            "Volume",
+            crate::i18n::text("cc.volume.name"),
             s.volume.map_or(String::new(), |v| {
                 if v.muted {
-                    "muted".into()
+                    crate::i18n::text("shell.status.muted")
                 } else {
                     format!("{}%", (v.level * 100.).round())
                 }
@@ -1896,7 +1919,11 @@ fn tree(
     tray: &[crate::tray::TrayItem],
     cc_open: bool,
 ) -> Tree {
-    let mut root = Node::new(ROOT, Role::Window, "Bar");
+    let mut root = Node::new(
+        ROOT,
+        Role::Window,
+        crate::i18n::text("settings.widgets.col.bar"),
+    );
     root.states.hidden = hidden;
     root.bounds = Bounds {
         x: 0.,
@@ -1911,18 +1938,32 @@ fn tree(
             continue;
         };
         let mut node = match item {
-            Item::Logo => Node::new(id, Role::Button, "System menu"),
+            Item::Logo => Node::new(
+                id,
+                Role::Button,
+                crate::i18n::text("settings.bar.item.system-menu"),
+            ),
             Item::Title => Node::new(id, Role::Label, &layout.title),
             Item::Island => {
-                let mut n = Node::new(id, Role::Button, "Desktops");
+                let mut n = Node::new(id, Role::Button, crate::i18n::text("shell.bar.desktops"));
                 n.states.disabled = true;
                 n.description = active.map_or(String::new(), |a| {
-                    format!("desktop {} of {}", a + 1, layout.dots.len())
+                    crate::i18n::format(
+                        "shell.bar.desktop-position",
+                        &[
+                            ("current", &(a + 1).to_string()),
+                            ("total", &layout.dots.len().to_string()),
+                        ],
+                    )
                 });
                 n
             }
             Item::ControlCenter => {
-                let mut n = Node::new(id, Role::Button, "Control Center");
+                let mut n = Node::new(
+                    id,
+                    Role::Button,
+                    crate::i18n::text("settings.bar.item.control-center"),
+                );
                 n.states.expandable = true;
                 n.states.expanded = cc_open;
                 n
@@ -2066,6 +2107,13 @@ impl Application for Bar {
                     }
                 }
                 if let Some(f) = latest {
+                    let generation = crate::i18n::generation();
+                    if self.locale_generation != generation {
+                        self.locale_generation = generation;
+                        self.close_popup(w);
+                        self.end_tray_menu();
+                        self.card_shape.clear();
+                    }
                     if f.nc_generation != self.nc_generation {
                         self.nc_generation = f.nc_generation;
                         let was_open = self.nc_open;
@@ -2360,7 +2408,7 @@ impl Application for Bar {
                                 self.card_error(
                                     instance,
                                     content,
-                                    "Could not activate. Try again.",
+                                    "shell.notification.activation-failed",
                                 );
                             }
                         }
@@ -2392,7 +2440,7 @@ impl Application for Bar {
                 }
                 if self.card_pending.as_ref().is_some_and(|p| p.0 == request) {
                     let (_, instance, content, _) = self.card_pending.take().unwrap();
-                    self.card_error(instance, content, "Could not activate. Try again.");
+                    self.card_error(instance, content, "shell.notification.activation-failed");
                     eprintln!("nidara-shell: notification token failed: {reason:?}");
                 }
                 if let Some((r, command)) = self.pending.take() {
@@ -2432,7 +2480,8 @@ impl Application for Bar {
             }
             if let Some(d) = &mut self.cc.detail {
                 d.error = result.clone().err().unwrap_or_default();
-                if result.is_err() {
+                if let Err(error) = &result {
+                    eprintln!("nidara-shell: Control Center action: {error}");
                     d.write_failed();
                 }
             } else if result.is_err() {
@@ -2497,7 +2546,7 @@ impl Application for Bar {
             .is_some_and(|p| p.3.elapsed() >= std::time::Duration::from_secs(2))
         {
             let (instance, content, _, _) = self.card_focus.take().unwrap();
-            self.card_error(instance, content, "Could not focus. Try again.");
+            self.card_error(instance, content, "shell.notification.focus-failed");
             self.refresh(w);
             eprintln!("nidara-shell: notification keyboard focus timed out");
         }

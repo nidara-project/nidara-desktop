@@ -50,4 +50,5 @@ pub mod tray;
 
 pub mod icon_metrics;
 
+pub mod i18n;
 pub mod icon_memory;

@@ -184,6 +184,7 @@ pub enum HubEvent {
     },
     Apps(AppsUpdate),
     IconsChanged,
+    Language,
     /// None: the Trash's fill cannot be told.
     Trash(Option<crate::trash::TrashState>),
     Hyalo(HyaloUpdate),
@@ -570,7 +571,11 @@ impl Hub {
                 key.as_deref(),
                 token.as_deref(),
             )
-            .err();
+            .err()
+            .map(|error| {
+                eprintln!("nidara-shell: notification action: {error}");
+                "shell.notification.activation-failed".into()
+            });
             let _ = inbox.send(HubEvent::NotificationDone {
                 instance,
                 content,
@@ -663,7 +668,10 @@ impl Hub {
                     worker(move || {
                         let error = crate::notification_wire::bulk(&conn, &owner, group.as_deref())
                             .err()
-                            .unwrap_or_default();
+                            .map_or_else(String::new, |error| {
+                                eprintln!("nidara-shell: clearing notifications: {error}");
+                                "shell.nc.clear-failed".into()
+                            });
                         let _ = inbox.send(HubEvent::NotificationBulkDone { view, error });
                         Ok(())
                     });
@@ -718,6 +726,11 @@ impl Hub {
                 key,
                 token,
             }) => self.notification_action(instance, content, key, token),
+            HubEvent::Language => {
+                if let Some(launcher) = &self.launcher {
+                    let _ = launcher.waker.wake();
+                }
+            }
             HubEvent::IconsChanged => {
                 self.request_icons();
             }

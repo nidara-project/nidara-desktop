@@ -294,7 +294,7 @@ impl Editor {
                     span: (w as usize, h as usize),
                     child: nk::Button::with_child(
                         format!("e:t:{}", t.id),
-                        translate(look, name_key(t.id), t.id),
+                        translate(look, name_key(t.id)),
                         "tile",
                         nk::Spacer::new(format!("e:t:{}/s", t.id)),
                     )
@@ -351,8 +351,8 @@ impl Editor {
                         .is_some();
                     let text = format!(
                         "{} {}",
-                        translate(look, "cc.grid.add", "Add"),
-                        translate(look, name_key(m.id), m.id)
+                        translate(look, "cc.grid.add"),
+                        translate(look, name_key(m.id))
                     );
                     nk::Pane::new(
                         format!("{key}/pane"),
@@ -376,9 +376,9 @@ impl Editor {
             nk::Placeholder::new(GRID, self.grid_height(&tiles)).into()
         };
         let toggle = if self.active {
-            translate(look, "cc.grid.done", "Done")
+            translate(look, "cc.grid.done")
         } else {
-            translate(look, "cc.grid.edit", "Edit")
+            translate(look, "cc.grid.edit")
         };
         let mut column: Vec<Node> = vec![nk::Scroll::new(SCROLL, content).grow().into()];
         if !self.error.is_empty() {
@@ -450,7 +450,7 @@ impl Editor {
                 );
             }
             if !meta.fixed {
-                let name = translate(look, "cc.menu.remove", "Remove");
+                let name = translate(look, "cc.menu.remove");
                 rows.push(
                     nk::Button::with_child("e:zx", name.clone(), "remove", label("e:zx", name))
                         .into(),
@@ -983,25 +983,13 @@ impl Editor {
         self.scroll_now(delta);
     }
     pub fn full_text(look: Option<&Look>) -> String {
-        look.map(|l| l.text_of(&crate::menu::Label::Key("cc.menu.size-full")))
-            .filter(|v| v != "cc.menu.size-full")
-            .unwrap_or_else(|| "Grid is full".into())
+        translate(look, "cc.menu.size-full")
     }
     fn error_text(&self, look: Option<&Look>) -> String {
-        if self.error == "cc.menu.size-full" {
-            Self::full_text(look)
-        } else {
-            let fallback = match self.error.as_str() {
-                "cc.grid.write-read-only" => "Control Center layout is read-only",
-                "cc.grid.write-changed" => "Control Center layout changed; retry the edit",
-                "cc.grid.write-failed" => "Could not save the Control Center layout",
-                _ => return self.error.clone(),
-            };
-            translate(look, &self.error, fallback)
-        }
+        translate(look, &self.error)
     }
     pub fn description(&self, look: Option<&Look>) -> String {
-        let mode = translate(look, "cc.grid.mode", "Edit mode");
+        let mode = translate(look, "cc.grid.mode");
         let message = self.error_text(look);
         if message.is_empty() {
             mode
@@ -1020,7 +1008,7 @@ impl Editor {
             "Remove" => "cc.menu.remove",
             _ => return name.into(),
         };
-        translate(look, key, name)
+        translate(look, key)
     }
     pub fn write_finished(&mut self, serial: u64, result: Result<(), String>) -> bool {
         if serial != self.write_serial {
@@ -1067,7 +1055,7 @@ impl Editor {
                 let mut n = Node::new(
                     first + SEMANTIC_BASE + 10000 + i * 16,
                     Role::Button,
-                    translate(look, name_key(p.tile.id), p.tile.id),
+                    translate(look, name_key(p.tile.id)),
                 );
                 n.bounds = bounds(p.rect);
                 n.states.disabled = self.pending;
@@ -1152,7 +1140,7 @@ impl Editor {
             n.description = if !enabled {
                 Self::full_text(look)
             } else if self.active && target == Target::Toggle {
-                translate(look, "cc.grid.mode", "Edit mode")
+                translate(look, "cc.grid.mode")
             } else {
                 self.error_text(look)
             };
@@ -1179,38 +1167,38 @@ impl Editor {
         match t {
             Target::Toggle => {
                 if self.active {
-                    translate(look, "cc.grid.done", "Done")
+                    translate(look, "cc.grid.done")
                 } else {
-                    translate(look, "cc.grid.edit", "Edit")
+                    translate(look, "cc.grid.edit")
                 }
             }
             Target::Add(id) => format!(
                 "{} {}",
-                translate(look, "cc.grid.add", "Add"),
-                translate(look, name_key(id), id)
+                translate(look, "cc.grid.add"),
+                translate(look, name_key(id))
             ),
-            Target::Remove(id) if self.menu == Some(id) => format!(
+            Target::Remove(id) => format!(
                 "{} {}",
-                translate(look, "cc.menu.remove", "Remove"),
-                translate(look, name_key(id), id)
+                translate(look, "cc.menu.remove"),
+                translate(look, name_key(id))
             ),
-            Target::Remove(_) => "×".into(),
             Target::Size(_, size) => {
-                let (key, fallback) = match size {
-                    Size::Single => ("cc.menu.size.small", "Small"),
-                    Size::Wide | Size::Tall => ("cc.menu.size.medium", "Medium"),
-                    _ => ("cc.menu.size.large", "Large"),
+                let key = match size {
+                    Size::Single => "cc.menu.size.small",
+                    Size::Wide | Size::Tall => "cc.menu.size.medium",
+                    _ => "cc.menu.size.large",
                 };
-                translate(look, key, fallback)
+                translate(look, key)
             }
-            Target::Tile(id) => translate(look, name_key(id), id),
+            Target::Tile(id) => translate(look, name_key(id)),
         }
     }
 }
-fn translate(look: Option<&Look>, key: &str, fallback: &str) -> String {
-    look.and_then(|l| l.exports.text(key).ok())
-        .map(str::to_owned)
-        .unwrap_or_else(|| fallback.into())
+fn translate(look: Option<&Look>, key: &str) -> String {
+    look.map_or_else(
+        || crate::i18n::text(key),
+        |l| crate::i18n::text_for(&l.exports, key),
+    )
 }
 fn index(id: &str) -> u64 {
     layout::REGISTRY.iter().position(|m| m.id == id).unwrap() as u64

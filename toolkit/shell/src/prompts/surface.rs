@@ -102,7 +102,7 @@ impl BluetoothKind {
 
     fn field(self) -> Option<&'static str> {
         match self {
-            Self::Pin => Some("PIN"),
+            Self::Pin => Some("shell.prompt.pin"),
             Self::Passkey => Some("shell.prompt.bluetooth.passkey"),
             _ => None,
         }
@@ -231,7 +231,7 @@ impl Body {
     }
 
     fn content(&self, host: &AppWindow, exports: &Exports, busy: bool, failed: bool) -> Node {
-        let text = |key: &str| exports.text(key).unwrap_or("").to_owned();
+        let text = |key: &str| crate::i18n::text_for(exports, key);
         let types = &host.look().types;
         let body = types.style(Type::Body, Weight::Regular);
         let label = |key: &str, value: String| -> Node {
@@ -268,7 +268,7 @@ impl Body {
                         "phase2-private-key-password" => {
                             text("cc.detail.inner-certificate-password")
                         }
-                        "pin" => "PIN".into(),
+                        "pin" => text("shell.prompt.pin"),
                         _ => text("settings.users.password"),
                     };
                     fields.push(field(&entry.key, name));
@@ -304,14 +304,7 @@ impl Body {
                     ));
                 }
                 if let Some(name) = form.kind.field() {
-                    fields.push(field(
-                        "code",
-                        if name == "PIN" {
-                            name.into()
-                        } else {
-                            text(name)
-                        },
-                    ));
+                    fields.push(field("code", text(name)));
                 }
                 if form.kind == BluetoothKind::IncomingFile {
                     fields.push(label(
@@ -360,6 +353,7 @@ struct Prompt {
     input: mpsc::Receiver<Change>,
     events: mpsc::Sender<Event>,
     exports: Exports,
+    locale_generation: u64,
     portal: Portal,
     body: Body,
     busy: bool,
@@ -381,7 +375,7 @@ impl DialogContent for Prompt {
         };
         let mut buttons = vec![DialogButton {
             id: id.into(),
-            label: self.exports.text(label).unwrap_or("").into(),
+            label: crate::i18n::text_for(&self.exports, label),
             default: false,
             cancel: true,
             destructive: false,
@@ -390,7 +384,7 @@ impl DialogContent for Prompt {
         if let Some(key) = self.body.submit_label() {
             buttons.push(DialogButton {
                 id: "submit".into(),
-                label: self.exports.text(key).unwrap_or("").into(),
+                label: crate::i18n::text_for(&self.exports, key),
                 default: true,
                 cancel: false,
                 destructive: false,
@@ -438,6 +432,15 @@ impl DialogContent for Prompt {
 
     fn poll(&mut self) -> Result<DialogUpdate> {
         let mut update = DialogUpdate::default();
+        let generation = crate::i18n::generation();
+        if self.locale_generation != generation {
+            self.locale_generation = generation;
+            let text = |key| crate::i18n::text_for(&self.exports, key);
+            update.title = Some(text(self.body.title()));
+            update.close_label = Some(text("settings.window.close"));
+            update.message = self.body.alert_message().map(text);
+            update.content_changed = true;
+        }
         for change in self.input.try_iter() {
             match change {
                 Change::Metadata(meta) => {
@@ -483,12 +486,10 @@ fn run(
     let mut appearance = portal.read()?;
     appearance.dark = true;
     let look = WindowLook::load(&exports, &appearance)?;
-    let title = exports.text(body.title())?.to_owned();
-    let alert_message = body
-        .alert_message()
-        .map(|key| exports.text(key).map(str::to_owned))
-        .transpose()?;
-    let close_label = exports.text("settings.window.close")?.to_owned();
+    let text = |key| crate::i18n::text_for(&exports, key);
+    let title = text(body.title());
+    let alert_message = body.alert_message().map(text);
+    let close_label = text("settings.window.close");
     let host = dialog_host(look, &title, appearance.reduced_motion)?;
     let mut app = Prompt {
         serial,
@@ -496,6 +497,7 @@ fn run(
         input,
         events,
         exports,
+        locale_generation: crate::i18n::generation(),
         portal,
         body,
         busy: false,

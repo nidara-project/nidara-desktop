@@ -950,12 +950,10 @@ impl Cc {
             if id == "cpu_memory" {
                 node.role = Role::Panel;
                 node.actions.clear();
-                node.description = status
-                    .aux
-                    .resources
-                    .map_or("CPU / RAM".into(), |(cpu, ram)| {
-                        format!("CPU {:.0}% · RAM {:.0}%", cpu * 100., ram * 100.)
-                    });
+                node.description = status.aux.resources.map_or_else(
+                    || text(name_key(id)),
+                    |(cpu, ram)| resource_values(cpu, ram),
+                );
             }
             node.bounds = bounds(p.rect);
             node.id += match node.role {
@@ -1192,9 +1190,9 @@ fn tile_view(
             let large = p.tile.size == Size::Square;
             let ring = if large { 56. } else { 34. };
             let names: &[&str] = if p.tile.size == Size::Single {
-                &["CPU"]
+                &["shell.cc.cpu"]
             } else {
-                &["CPU", "RAM"]
+                &["shell.cc.cpu", "shell.cc.ram"]
             };
             let mut row: Vec<Node> = vec![];
             for (n, name) in names.iter().enumerate() {
@@ -1207,9 +1205,14 @@ fn tile_view(
                         vec![
                             nk::Slot::new(k(&format!("ring{n}")), ring).into(),
                             strut(k(&format!("under{n}")), 3.).into(),
-                            text(&format!("name{n}"), (*name).into(), style.small, 400.)
-                                .ink(Ink::Secondary)
-                                .into(),
+                            text(
+                                &format!("name{n}"),
+                                crate::i18n::text(name),
+                                style.small,
+                                400.,
+                            )
+                            .ink(Ink::Secondary)
+                            .into(),
                         ],
                     )
                     .align(Align::Center)
@@ -1821,9 +1824,9 @@ fn texts(id: &str, s: &Status, look: &Look) -> (String, String) {
         "clipboard" => (t(name_key(id)), format!("{}", s.aux.clips.len())),
         "cpu_memory" => (
             t(name_key(id)),
-            s.aux.resources.map_or("—".into(), |(cpu, ram)| {
-                format!("CPU {:.0}% · RAM {:.0}%", cpu * 100., ram * 100.)
-            }),
+            s.aux
+                .resources
+                .map_or("—".into(), |(cpu, ram)| resource_values(cpu, ram)),
         ),
         "ethernet" => (
             t(name_key(id)),
@@ -1832,11 +1835,11 @@ fn texts(id: &str, s: &Status, look: &Look) -> (String, String) {
                     "{} · {}",
                     d["interface"].as_str().unwrap_or(""),
                     if d["state"] == 100 {
-                        "Connected"
+                        t("cc.ethernet.sub.connected")
                     } else if d["wiredEnabled"] != true {
-                        "Off"
+                        t("cc.ethernet.sub.off")
                     } else {
-                        "Disconnected"
+                        t("cc.ethernet.sub.disconnected")
                     }
                 )
             }),
@@ -1848,8 +1851,7 @@ fn texts(id: &str, s: &Status, look: &Look) -> (String, String) {
                 .and_then(|a| a["uuid"].as_str())
                 .and_then(|uuid| vpn_profiles(s).find(|p| p["uuid"] == uuid))
                 .and_then(|p| p["name"].as_str())
-                .unwrap_or("Disconnected")
-                .into(),
+                .map_or_else(|| t("settings.network.status.disconnected"), str::to_owned),
         ),
         "wifi" => (
             t("cc.wifi.name"),
@@ -1933,19 +1935,36 @@ pub(crate) fn lay_out(
 /// A capsule's text column in `b`: the title in bold over its subtitle, both centred on
 /// the tile's middle. Without a subtitle the title may take two lines, when its longest
 /// word fits the column (`makeCapsuleInner`); else one, cut.
+fn resource_values(cpu: f64, ram: f64) -> String {
+    crate::i18n::format(
+        "shell.cc.resources",
+        &[
+            ("cpu", &format!("{:.0}", cpu * 100.)),
+            ("ram", &format!("{:.0}", ram * 100.)),
+        ],
+    )
+}
 pub(super) fn battery_text(s: &Status, look: Option<&Look>) -> String {
-    let (key, fallback) = match s.battery_state {
-        1 | 5 => ("widget.battery.state.charging", "Charging"),
-        2 | 6 => ("widget.battery.state.discharging", "Discharging"),
-        4 => ("widget.battery.state.charged", "Fully charged"),
-        _ => ("cc.detail.unavailable", "Unknown"),
+    let key = match s.battery_state {
+        1 | 5 => "widget.battery.state.charging",
+        2 | 6 => "widget.battery.state.discharging",
+        3 => "shell.cc.battery-empty",
+        4 => "widget.battery.state.charged",
+        _ => "cc.detail.unavailable",
     };
     let state = look.map_or_else(
-        || fallback.into(),
+        || crate::i18n::text(key),
         |l| l.text_of(&crate::menu::Label::Key(key)),
     );
     if let Some(seconds) = s.battery_time.filter(|seconds| *seconds > 0) {
-        format!("{state} · {}h {:02}m", seconds / 3600, seconds % 3600 / 60)
+        crate::i18n::format(
+            "shell.cc.battery-time",
+            &[
+                ("state", &state),
+                ("hours", &(seconds / 3600).to_string()),
+                ("minutes", &format!("{:02}", seconds % 3600 / 60)),
+            ],
+        )
     } else {
         state
     }

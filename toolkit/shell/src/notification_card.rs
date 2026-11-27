@@ -89,7 +89,7 @@ pub fn layout(
             let rect = [right - width, y, width, h];
             let mut buttons = vec![(
                 Target::Close,
-                "Close notification".into(),
+                crate::i18n::text("shell.nc.close-notification"),
                 [right - 36., y + 8., 28., 28.],
             )];
             if !actions.is_empty() {
@@ -103,7 +103,7 @@ pub fn layout(
                 let room = (width - 32.) / count as f64;
                 for i in 0..count {
                     let (target, label) = if actions.len() > 3 && i == 2 {
-                        (Target::More, "More actions…".into())
+                        (Target::More, crate::i18n::text("shell.nc.more"))
                     } else {
                         let a = actions[(first + i) % actions.len()];
                         (Target::Action(a.id.clone()), a.label.clone())
@@ -192,7 +192,7 @@ impl Card {
         n.description = if b.error.is_empty() {
             b.notice.body.clone()
         } else {
-            format!("{} {}", b.notice.body, b.error)
+            format!("{} {}", b.notice.body, crate::i18n::text(&b.error))
         };
         if let Some(age) = &self.age {
             n.description = format!("{} {age}", n.description);
@@ -347,7 +347,7 @@ impl Card {
             text(
                 c,
                 look,
-                &b.error,
+                &crate::i18n::text(&b.error),
                 &style,
                 [r[0] + 16., r[1] + r[3] - 28., r[2] - 32., 20.],
                 1,
@@ -643,7 +643,7 @@ mod tests {
     #[test]
     fn error_has_its_own_row_and_reader_description() {
         let mut b = banner(1);
-        b.error = "Could not activate. Try again.".into();
+        b.error = "shell.notification.activation-failed".into();
         let cards = layout(&[b], 1276., 720, &HashMap::new());
         let c = &cards[0];
         let error_top = c.rect[1] + c.rect[3] - 28.;

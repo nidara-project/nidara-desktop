@@ -81,6 +81,7 @@ struct View<'a> {
     library: &'a conversation::Library,
     session: Option<conversation::Session<'a>>,
     exports: Exports,
+    locale_generation: u64,
     portal: Portal,
     names: Vec<String>,
     user: usize,
@@ -96,7 +97,7 @@ struct View<'a> {
 
 impl View<'_> {
     fn text(&self, key: &str) -> String {
-        self.exports.text(key).unwrap_or("").into()
+        crate::i18n::text_for(&self.exports, key)
     }
 
     fn valid(&self) -> bool {
@@ -335,6 +336,13 @@ impl DialogContent for View<'_> {
                 }
             }
         }
+        let generation = crate::i18n::generation();
+        if self.locale_generation != generation {
+            self.locale_generation = generation;
+            update.title = Some(self.text("shell.prompt.polkit.title"));
+            update.close_label = Some(self.text("settings.window.close"));
+            update.content_changed = true;
+        }
         if !announcements.is_empty() {
             update.announcement = Some(announcements.join("\n"));
         }
@@ -388,8 +396,8 @@ pub(super) fn run(
     let portal = Portal::watch(bus)?;
     let mut appearance = portal.read()?;
     appearance.dark = true;
-    let title = exports.text("shell.prompt.polkit.title")?.to_owned();
-    let close_label = exports.text("settings.window.close")?.to_owned();
+    let title = crate::i18n::text_for(&exports, "shell.prompt.polkit.title");
+    let close_label = crate::i18n::text_for(&exports, "settings.window.close");
     let look = WindowLook::load(&exports, &appearance)?;
     let host = dialog_host(look, &title, appearance.reduced_motion)?;
     let mut view = View {
@@ -399,6 +407,7 @@ pub(super) fn run(
         library,
         session: None,
         exports,
+        locale_generation: crate::i18n::generation(),
         portal,
         names,
         user,

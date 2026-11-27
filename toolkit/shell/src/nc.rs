@@ -39,10 +39,19 @@ pub fn group(b: &Banner) -> String {
 pub fn age(time: u64, now: u64) -> String {
     let seconds = now.saturating_sub(time);
     match seconds {
-        0..60 => "now".into(),
-        60..3600 => format!("{} min", seconds / 60),
-        3600..86400 => format!("{} h", seconds / 3600),
-        _ => format!("{} d", seconds / 86400),
+        0..60 => crate::i18n::text("shell.nc.age.now"),
+        60..3600 => crate::i18n::format(
+            "shell.nc.age.minutes",
+            &[("count", &(seconds / 60).to_string())],
+        ),
+        3600..86400 => crate::i18n::format(
+            "shell.nc.age.hours",
+            &[("count", &(seconds / 3600).to_string())],
+        ),
+        _ => crate::i18n::format(
+            "shell.nc.age.days",
+            &[("count", &(seconds / 86400).to_string())],
+        ),
     }
 }
 fn parse_week_start(text: &str) -> Option<usize> {

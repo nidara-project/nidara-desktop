@@ -2759,6 +2759,19 @@ Backlog of designed desktop enhancements to prioritize for upcoming iterations:
    - Deep two-way synchronization of protocol handlers (`mailto:`, `webcal:`, `tg:`, `magnet:`) and default mime associations in `DefaultApps.tsx`.
 
 
+## Native Rust shell translations (#1193)
+
+Use the shipped settings-data catalogue for every shell-owned visible or spoken
+label. Add English and Spanish keys to the shell locales and sync the translation
+ledger. Keep action IDs, service protocol values and diagnostics in English.
+Application-provided names and messages pass through as application data.
+The native shell starts with the session's `LANG`. It listens to the session
+bus for Config1 `Changed` signals carrying `region.language`; it starts from
+`LANG` even when the daemon does not yet provide the key. A language change
+wakes existing surfaces and rebuilds their labels, including those for
+assistive technology. Missing catalogue keys are logged and shown by key.
+Regional date formatting continues to use the session's regional format.
+
 ## Native toolkit range values
 
 A range control (`Slider`, `SpinButton`) publishes `nk_a11y::ValueInfo` (min, max, current,
