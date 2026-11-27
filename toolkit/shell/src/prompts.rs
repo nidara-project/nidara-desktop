@@ -1,12 +1,17 @@
 // SPDX-License-Identifier: LGPL-3.0-or-later
 //! Session-wide shell dialogs for Wi-Fi credentials and Bluetooth consent.
+pub mod polkit;
 pub(crate) mod surface;
 mod wire;
 
+use crate::shell1::Status;
 use serde_json::Value;
 use std::{
     collections::{HashMap, VecDeque},
-    sync::mpsc::{self, Sender},
+    sync::{
+        Arc,
+        mpsc::{self, Sender},
+    },
 };
 use wire::{Answer, Wire};
 use zbus::zvariant::OwnedValue;
@@ -61,13 +66,94 @@ enum Event {
     Lock(bool),
     Answer(u64, Ticket, Answer),
     Ended(u64, Ticket),
+    SlotAvailable,
+}
+
+/// Independent alerts and service prompts keep their existing policy with one another.
+/// Polkit needs exclusive use of their shared dialog slot.
+#[derive(Default)]
+pub(crate) struct Slots {
+    other: usize,
+    polkit: bool,
+    service_waiter: Option<Sender<Event>>,
+}
+
+#[derive(Clone, Copy)]
+pub(crate) enum SlotKind {
+    Polkit,
+    Other,
+}
+
+pub(crate) struct Slot {
+    status: Arc<Status>,
+    kind: SlotKind,
+}
+
+impl Slot {
+    fn acquire(status: &Arc<Status>, slots: &mut Slots, kind: SlotKind) -> Option<Self> {
+        if slots.polkit || (matches!(kind, SlotKind::Polkit) && slots.other != 0) {
+            return None;
+        }
+        match kind {
+            SlotKind::Polkit => slots.polkit = true,
+            SlotKind::Other => slots.other += 1,
+        }
+        Some(Self {
+            status: status.clone(),
+            kind,
+        })
+    }
+
+    pub(crate) fn take(status: &Arc<Status>, kind: SlotKind) -> Option<Self> {
+        Self::acquire(status, &mut status.prompt_slots.lock().unwrap(), kind)
+    }
+
+    fn take_service(status: &Arc<Status>, events: &Sender<Event>) -> Option<Self> {
+        let mut slots = status.prompt_slots.lock().unwrap();
+        if slots.polkit {
+            slots.service_waiter = Some(events.clone());
+            return None;
+        }
+        Self::acquire(status, &mut slots, SlotKind::Other)
+    }
+
+    pub(crate) fn wait(
+        status: &Arc<Status>,
+        kind: SlotKind,
+        valid: impl Fn() -> bool,
+    ) -> Option<Self> {
+        let mut slots = status.prompt_slots.lock().unwrap();
+        while valid() {
+            if let Some(slot) = Self::acquire(status, &mut slots, kind) {
+                return Some(slot);
+            }
+            slots = status.prompt_slot_changed.wait(slots).unwrap();
+        }
+        None
+    }
+}
+
+impl Drop for Slot {
+    fn drop(&mut self) {
+        let mut slots = self.status.prompt_slots.lock().unwrap();
+        match self.kind {
+            SlotKind::Polkit => {
+                slots.polkit = false;
+                if let Some(waiter) = slots.service_waiter.take() {
+                    let _ = waiter.send(Event::SlotAvailable);
+                }
+            }
+            SlotKind::Other => slots.other -= 1,
+        }
+        self.status.prompt_slot_changed.notify_all();
+    }
 }
 
 #[derive(Clone)]
 pub struct Dialogs(Sender<Event>);
 
 impl Dialogs {
-    pub fn start(bus: zbus::blocking::Connection) -> Self {
+    pub fn start(bus: zbus::blocking::Connection, status: Arc<Status>) -> Self {
         let (tx, rx) = mpsc::channel();
         let events = tx.clone();
         std::thread::spawn(move || {
@@ -143,15 +229,18 @@ impl Dialogs {
                             requests.retain(|r| r.ticket != ticket);
                         }
                     }
+                    Event::SlotAvailable => {}
                 }
                 let request = requests.front().filter(|_| !locked);
                 if let Some(view) = &mut running {
                     if request.is_none_or(|r| r.ticket != view.ticket) {
                         view.stop();
                     }
-                } else if let Some(request) = request {
+                } else if let Some(request) = request
+                    && let Some(slot) = Slot::take_service(&status, &events)
+                {
                     next += 1;
-                    running = surface::start(next, request, bus.clone(), &events);
+                    running = surface::start(next, request, bus.clone(), &events, slot);
                     if running.is_none() {
                         requests.pop_front();
                     }
@@ -163,5 +252,33 @@ impl Dialogs {
 
     pub fn locked(&self, locked: bool) {
         let _ = self.0.send(Event::Lock(locked));
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::time::Duration;
+
+    #[test]
+    fn polkit_wait_and_service_notification_follow_slot_release() {
+        let status = Arc::new(Status::default());
+        let other = Slot::take(&status, SlotKind::Other).unwrap();
+        let (send, acquired) = mpsc::channel();
+        let waiter = status.clone();
+        let thread = std::thread::spawn(move || {
+            send.send(Slot::wait(&waiter, SlotKind::Polkit, || true).unwrap())
+                .unwrap();
+        });
+
+        assert!(acquired.try_recv().is_err());
+        drop(other);
+        let polkit = acquired.recv_timeout(Duration::from_secs(2)).unwrap();
+        thread.join().unwrap();
+        let (events, received) = mpsc::channel();
+        assert!(Slot::take_service(&status, &events).is_none());
+        drop(polkit);
+        assert!(matches!(received.try_recv(), Ok(Event::SlotAvailable)));
+        assert!(Slot::take_service(&status, &events).is_some());
     }
 }

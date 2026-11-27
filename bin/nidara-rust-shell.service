@@ -11,7 +11,8 @@ StartLimitBurst=5
 [Service]
 Type=simple
 ExecStartPre=/usr/bin/nidara-migrate
-ExecStart=/usr/bin/nidara-shell --bar
+ExecStart=/usr/bin/nidara-shell --bar --polkit
+UnsetEnvironment=POLKIT_DEBUG DBUS_SYSTEM_BUS_ADDRESS
 Environment=NIDARA_SESSION=rust
 Restart=on-failure
 RestartSec=1

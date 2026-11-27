@@ -216,7 +216,18 @@ fn main() {
     let status = Arc::new(shell1::Status::default());
     let alert_status = status.clone();
     let dialogs = if bar_wanted() {
-        apps_conn.clone().map(nidara_shell::prompts::Dialogs::start)
+        apps_conn
+            .clone()
+            .map(|bus| nidara_shell::prompts::Dialogs::start(bus, status.clone()))
+    } else {
+        None
+    };
+    let mut polkit = if bar_wanted() && std::env::args().any(|arg| arg == "--polkit") {
+        apps_conn.clone().and_then(|bus| {
+            nidara_shell::prompts::polkit::start(bus, status.clone())
+                .map_err(|e| eprintln!("nidara-shell: could not start the polkit agent: {e}"))
+                .ok()
+        })
     } else {
         None
     };
@@ -339,6 +350,7 @@ fn main() {
         Ok(w) => w,
         Err(e) => {
             eprintln!("nidara-shell: no outputs: {e}");
+            drop(polkit.take());
             std::process::exit(1);
         }
     };
@@ -348,6 +360,7 @@ fn main() {
             Ok(e) => e,
             Err(e) => {
                 eprintln!("nidara-shell: {e}");
+                drop(polkit.take());
                 std::process::exit(1);
             }
         };
@@ -385,6 +398,7 @@ fn main() {
                 }
                 OutputEvent::Lost(why) => {
                     eprintln!("nidara-shell: the compositor went away: {why}");
+                    drop(polkit.take());
                     std::process::exit(1);
                 }
             }

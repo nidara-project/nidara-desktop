@@ -3,15 +3,41 @@ use super::*;
 use crate::{Placed, Role, TextCache};
 
 /// An application-only password payload. It cannot be serialized or printed.
-#[derive(Clone, PartialEq)]
+#[derive(Clone, Default, PartialEq)]
 pub struct Secret(String);
 
 impl Secret {
-    pub(super) fn new(value: String) -> Self {
-        Self(value)
-    }
     pub fn as_str(&self) -> &str {
         &self.0
+    }
+
+    pub(super) fn replace_range(&mut self, range: std::ops::Range<usize>, text: &str) {
+        let mut next = String::with_capacity(self.0.len() - range.len() + text.len());
+        next.push_str(&self.0[..range.start]);
+        next.push_str(text);
+        next.push_str(&self.0[range.end..]);
+        *self = Self(next);
+    }
+
+    /// Pass a temporary C string for a synchronous FFI call, then wipe it.
+    pub fn with_c_str(&self, call: impl FnOnce(&std::ffi::CStr)) {
+        let mut bytes = String::with_capacity(self.0.len() + 1);
+        bytes.push_str(&self.0);
+        bytes.push('\0');
+        let bytes = Self(bytes);
+        if let Ok(text) = std::ffi::CStr::from_bytes_with_nul(bytes.0.as_bytes()) {
+            call(text);
+        }
+    }
+}
+
+impl Drop for Secret {
+    fn drop(&mut self) {
+        // SAFETY: writing zero bytes preserves UTF-8. Volatile stores prevent
+        // dead-store elimination of the wipe before the allocation is freed.
+        for byte in unsafe { self.0.as_bytes_mut() } {
+            unsafe { std::ptr::write_volatile(byte, 0) };
+        }
     }
 }
 

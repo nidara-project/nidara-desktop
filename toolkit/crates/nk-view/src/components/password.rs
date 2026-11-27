@@ -9,7 +9,7 @@ pub struct PasswordEntry;
 
 #[derive(Default)]
 struct State {
-    secret: String,
+    secret: Secret,
     caret: usize,
     anchor: usize,
     revision: u64,
@@ -30,9 +30,10 @@ impl State {
 
     fn boundaries(&self) -> Vec<usize> {
         self.secret
+            .as_str()
             .grapheme_indices(true)
             .map(|(at, _)| at)
-            .chain(std::iter::once(self.secret.len()))
+            .chain(std::iter::once(self.secret.as_str().len()))
             .collect()
     }
 
@@ -64,7 +65,8 @@ impl State {
     }
 
     fn replace(&mut self, range: std::ops::Range<usize>, text: &str) -> bool {
-        if text.chars().any(char::is_control) || self.secret.len() - range.len() + text.len() > 4096
+        if text.chars().any(char::is_control)
+            || self.secret.as_str().len() - range.len() + text.len() > 4096
         {
             return false;
         }
@@ -74,7 +76,7 @@ impl State {
             .boundaries()
             .into_iter()
             .find(|offset| *offset >= end)
-            .unwrap_or(self.secret.len());
+            .unwrap_or(self.secret.as_str().len());
         self.move_to(next, false);
         true
     }
@@ -95,7 +97,7 @@ impl PasswordEntry {
         cx.effects.handled = true;
         if changed {
             cx.effects.activate = true;
-            cx.effects.value = Some(Value::Secret(Secret::new(state.secret.clone())));
+            cx.effects.value = Some(Value::Secret(state.secret.clone()));
         }
         if let Some(read) = cx.context {
             cx.effects.host.push(HostRequest::Rebuild {
@@ -184,7 +186,7 @@ impl Component for PasswordEntry {
             let first = state.first_visible(&boundaries);
             let at = offset
                 .and_then(|at| boundaries.get(first + at).copied())
-                .unwrap_or(state.secret.len());
+                .unwrap_or(state.secret.as_str().len());
             state.move_to(at, false);
             false
         });
@@ -227,11 +229,11 @@ impl Component for PasswordEntry {
                 .iter()
                 .copied()
                 .find(|at| *at > state.caret)
-                .unwrap_or(state.secret.len());
+                .unwrap_or(state.secret.as_str().len());
             match key.sym {
                 0x61 | 0x41 if key.ctrl => {
                     state.anchor = 0;
-                    state.caret = state.secret.len();
+                    state.caret = state.secret.as_str().len();
                 }
                 0xff51 => state.move_to(
                     if !key.shift && !range.is_empty() {
@@ -250,7 +252,7 @@ impl Component for PasswordEntry {
                     key.shift,
                 ),
                 0xff50 => state.move_to(0, key.shift),
-                0xff57 => state.move_to(state.secret.len(), key.shift),
+                0xff57 => state.move_to(state.secret.as_str().len(), key.shift),
                 0xff08 => {
                     return state.replace(
                         if range.is_empty() {

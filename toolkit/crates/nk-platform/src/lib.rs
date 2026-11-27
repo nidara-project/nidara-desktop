@@ -23,3 +23,4 @@ pub mod styles;
 
 /// Target of compositor activation grants for session authentication and consent.
 pub const SESSION_PROMPT_APP_ID: &str = "nidara-session-prompt";
+pub const POLKIT_PROMPT_APP_ID: &str = "nidara-polkit-prompt";

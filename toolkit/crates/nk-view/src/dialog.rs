@@ -102,6 +102,10 @@ impl Dialog {
 pub trait DialogContent {
     fn content(&mut self, host: &AppWindow) -> Node;
     fn activated(&mut self, action: Activated) -> Result<()>;
+    /// Called once after the first painted frame is committed to the compositor.
+    fn opened(&mut self) -> Result<()> {
+        Ok(())
+    }
     /// Current response eligibility. Signal later changes with `content_changed`.
     fn buttons(&self) -> Option<Vec<DialogButton>> {
         None
@@ -124,6 +128,10 @@ pub struct DialogUpdate {
     pub appearance: Option<(WindowLook, bool)>,
     pub content_changed: bool,
     pub parent_changed: bool,
+    /// Move focus to a newly built control without taking the window's focus.
+    pub focus: Option<Key>,
+    /// A status change for assistive technology.
+    pub announcement: Option<String>,
 }
 #[derive(Clone, Debug)]
 pub struct Alert {
@@ -297,6 +305,7 @@ pub(super) struct ModalFrame {
     pub(super) parent: Option<Rc<RefCell<Tree>>>,
     pub(super) close_label: String,
     countdown: Option<Countdown>,
+    announcement: Option<String>,
 }
 impl ModalFrame {
     pub(super) fn request(&self, request: Request) -> Option<Request> {
@@ -316,7 +325,8 @@ impl ModalFrame {
         root.announcement = self
             .countdown
             .as_ref()
-            .and_then(|timer| timer.announcement.clone());
+            .and_then(|timer| timer.announcement.clone())
+            .or_else(|| self.announcement.clone());
         root.states.modal = true;
         if !active {
             for node in tree.nodes.values_mut() {
@@ -453,6 +463,8 @@ struct Runner<'a> {
     answer: &'a mut Option<DialogAnswer>,
     limits: ((u32, u32), (u32, u32)),
     first_focus: bool,
+    pending_focus: Option<Key>,
+    opened: bool,
     dirty: bool,
 }
 impl Runner<'_> {
@@ -524,6 +536,9 @@ impl Runner<'_> {
                 *self.answer = Some(answer);
                 window.close();
             } else {
+                if let Some(frame) = &mut self.child.modal_frame {
+                    frame.announcement = None;
+                }
                 // Disable or refresh responses before another queued action is handled.
                 self.rebuild()?;
             }
@@ -569,6 +584,12 @@ impl Runner<'_> {
             self.dirty = true;
         }
         self.dirty |= update.content_changed;
+        if let Some(announcement) = update.announcement
+            && let Some(frame) = &mut self.child.modal_frame
+        {
+            frame.announcement = Some(announcement);
+            self.child.changed = true;
+        }
         if let Some(parent) = &mut self.parent {
             parent.dirty |= update.parent_changed;
         }
@@ -577,8 +598,23 @@ impl Runner<'_> {
             self.rebuild()?;
             self.dirty = false;
         }
+        if let Some(key) = update.focus {
+            self.pending_focus = Some(key);
+        }
+        if !self.first_focus {
+            self.apply_pending_focus();
+        }
         Ok(())
     }
+    fn apply_pending_focus(&mut self) {
+        if self.child.active
+            && let Some(key) = self.pending_focus.take()
+        {
+            self.child.state.request(&key, false);
+            self.child.changed = true;
+        }
+    }
+
     fn focus(&mut self) {
         let modal = self.child.modal_frame.as_ref().expect("modal host");
         if !modal.alert && self.child.state.focus_first_under(&"dialog/content".into()) {
@@ -616,6 +652,7 @@ impl Runner<'_> {
             self.first_focus = false;
             self.child.changed = true;
         }
+        self.apply_pending_focus();
         let model = &mut self.model;
         self.child.commit(window, |host| Page {
             sidebar: Node::spacer("dialog/unused-sidebar"),
@@ -658,6 +695,10 @@ impl nk_wayland::Application for Runner<'_> {
             self.activated(action, window)?;
         }
         if !window.is_closed() {
+            if window.commits() > 1 && !self.opened {
+                self.opened = true;
+                self.model.opened()?;
+            }
             self.tick_countdown(window)?;
         }
         self.commit(window)
@@ -900,6 +941,8 @@ impl AppWindow {
                 answer: &mut answer,
                 limits,
                 first_focus: true,
+                pending_focus: None,
+                opened: false,
                 dirty: true,
             },
             window,
@@ -965,6 +1008,7 @@ fn prepare(
         namespace: Namespace::new()?,
         parent,
         countdown: countdown.map(Countdown::new),
+        announcement: None,
     });
     let maximum = (
         f64::from(available.0).min(child.look.frame.content),
@@ -1065,6 +1109,8 @@ fn run_parentless(
             answer: &mut answer,
             limits,
             first_focus: true,
+            pending_focus: None,
+            opened: false,
             dirty: false,
         },
         nk_wayland::Options {
@@ -1088,6 +1134,13 @@ struct AlertContent<'a> {
     body: AlertBody<'a>,
 }
 impl DialogContent for AlertContent<'_> {
+    fn opened(&mut self) -> Result<()> {
+        match &mut self.body {
+            AlertBody::Content(body) => body.opened(),
+            AlertBody::Updates(_) => Ok(()),
+        }
+    }
+
     fn poll(&mut self) -> Result<DialogUpdate> {
         match &mut self.body {
             AlertBody::Content(body) => body.poll(),
@@ -1308,6 +1361,7 @@ mod tests {
             parent: None,
             close_label: String::new(),
             countdown: None,
+            announcement: None,
         };
         let mut root = nk_a11y::Node::new(1, nk_a11y::Role::Window, "System alert");
         root.children.push(2);

@@ -76,7 +76,7 @@ depends=(
   # a preference — the README states the same number.
   # QUOTED, and it must stay that way: unquoted, bash reads `>` as a redirection,
   # the depends=() array never closes and the whole PKGBUILD stops sourcing.
-  'hyprland>=0.56' hypridle hyprsunset uwsm greetd power-profiles-daemon polkit-gnome
+  'hyprland>=0.56' hypridle hyprsunset uwsm greetd power-profiles-daemon polkit
   # keyring: the Secret Service (org.freedesktop.secrets) the built-in Assistant
   # stores its API key in; libsecret provides the Secret-1 typelib the shell +
   # nidara-agent import (gi://Secret)
@@ -347,7 +347,8 @@ package_nidara-desktop() {
           etc/pam.d/nidara-lock)
   # Installed by bin/nidara-language when the system language needs it (#703),
   # not by pacman for everybody — see the input-method note in depends.
-  optdepends=('fcitx5-chinese-addons: typing Chinese (installed with Chinese as the system language)')
+  optdepends=('fcitx5-chinese-addons: typing Chinese (installed with Chinese as the system language)'
+              'polkit-gnome: graphical authentication in the legacy Hyprland session')
   # The rename dance, and all three are load-bearing:
   #   replaces  — an existing install migrates on the next `pacman -Syu`, with no
   #               instruction to anybody. This is the only one that touches
