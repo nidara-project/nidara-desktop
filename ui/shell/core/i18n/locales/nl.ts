@@ -936,6 +936,8 @@ export default {
     "lock.title": "Vergrendelscherm",
     "lock.password": "Wachtwoord",
     "lock.unlock": "Ontgrendelen",
+    "lock.show-password": "Wachtwoord tonen",
+    "lock.hide-password": "Wachtwoord verbergen",
     "lock.wrong-password": "Onjuist wachtwoord",
     "lock.account-unavailable": "Account niet beschikbaar",
     "lock.password-expired": "Wachtwoord verlopen",

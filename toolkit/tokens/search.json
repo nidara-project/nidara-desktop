@@ -15,7 +15,9 @@
     "selection": "--nidara-accent-30",
     "selectionText": "--nidara-text",
     "clearIcon": "nd-window-close",
-    "submitIcon": "nd-pan-end"
+    "submitIcon": "nd-pan-end",
+    "revealIcon": "nd-view-reveal",
+    "concealIcon": "nd-view-conceal"
   },
   "variants": []
 }

@@ -1650,6 +1650,11 @@ in #952: the toolkit's window glyphs 3–9 % off Hyalo's, with another hover).
   focus ring share ONE outline. Never wrap a control in an `nk::Pane` to make it glass: that
   is two outlines with the ring on the inner one (the lock screen's field did it). A `Pane` is
   for a card that holds things. `toolkit/VIEW.md` → "Glass is a property".
+- 🔑 **A text field's caret blinks only where its host wakes for it** (`ViewState::set_caret_blink`
+  + a wake at `caret_deadline`; the lock screen does). Off, it is drawn steady. Never turn it
+  on in a host that does not wake on time: the caret would be left hidden. A centred or
+  end-aligned text is laid out again across its widest line, so its box and its drawing agree
+  (before, a centred label in a narrower column was drawn off centre).
 - **The window controls are Hyalo's entirely** — glyphs, clicks, which buttons show and on
   which side (`nidara-window-controls-v1`). An app with its own header reserves the room the
   layout gives it and says where; it draws none of them.

@@ -457,14 +457,30 @@ impl Layouter<'_> {
                 self.measure_frame(&d.child, width, d.part.component().frame(self.look))
             }
             Kind::Text(t) => {
-                let (w, h, first) = match self.cache.fit(
-                    self.text,
-                    &n.key,
-                    &t.text,
-                    &t.style,
-                    t.lines,
-                    width as f32,
-                ) {
+                // A centred or end-aligned text laid out across more room than its lines
+                // take is aligned within that room, while its box is narrower: placed, it
+                // was drawn off its box's centre (#1195, the lock's message). So it is laid
+                // out again across its widest line, which breaks it the same way.
+                let mut fit_width = width as f32;
+                if matches!(
+                    t.style.alignment,
+                    nk_text::Alignment::Center | nk_text::Alignment::End
+                ) && let Some(f) = self
+                    .cache
+                    .fit(self.text, &n.key, &t.text, &t.style, t.lines, fit_width)
+                {
+                    let widest = f
+                        .layout
+                        .lines()
+                        .iter()
+                        .map(|l| l.bounds.width)
+                        .fold(0., f32::max);
+                    fit_width = fit_width.min(widest.ceil() + 1.);
+                }
+                let (w, h, first) = match self
+                    .cache
+                    .fit(self.text, &n.key, &t.text, &t.style, t.lines, fit_width)
+                {
                     Some(f) => {
                         let size = f.layout.measured_size();
                         let line = f.layout.lines().first().map(|l| l.bounds);

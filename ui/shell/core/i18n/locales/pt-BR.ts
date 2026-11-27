@@ -936,6 +936,8 @@ export default {
     "lock.title": "Tela de bloqueio",
     "lock.password": "Senha",
     "lock.unlock": "Desbloquear",
+    "lock.show-password": "Mostrar senha",
+    "lock.hide-password": "Ocultar senha",
     "lock.wrong-password": "Senha incorreta",
     "lock.account-unavailable": "Conta indisponível",
     "lock.password-expired": "Senha expirada",

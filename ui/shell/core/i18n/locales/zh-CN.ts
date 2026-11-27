@@ -936,6 +936,8 @@ export default {
     "lock.title": "锁屏",
     "lock.password": "密码",
     "lock.unlock": "解锁",
+    "lock.show-password": "显示密码",
+    "lock.hide-password": "隐藏密码",
     "lock.wrong-password": "密码错误",
     "lock.account-unavailable": "账户不可用",
     "lock.password-expired": "密码已过期",

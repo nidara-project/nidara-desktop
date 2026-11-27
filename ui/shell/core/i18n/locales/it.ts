@@ -936,6 +936,8 @@ export default {
     "lock.title": "Schermata di blocco",
     "lock.password": "Password",
     "lock.unlock": "Sblocca",
+    "lock.show-password": "Mostra password",
+    "lock.hide-password": "Nascondi password",
     "lock.wrong-password": "Password errata",
     "lock.account-unavailable": "Account non disponibile",
     "lock.password-expired": "Password scaduta",

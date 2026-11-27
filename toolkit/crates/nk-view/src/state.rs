@@ -153,6 +153,12 @@ pub(crate) struct FocusLease {
 }
 
 pub struct ViewState {
+    /// The text cursor blinks (`set_caret_blink`); off, it is drawn steady.
+    caret_blink: bool,
+    /// When the cursor last had to be seen: the last key, press or focus.
+    caret_since: Instant,
+    /// Whether this frame draws the cursor, from `frame`'s time.
+    caret_on: bool,
     profile: bool,
     metrics: LayoutMetrics,
     placed: Vec<Placed>,
@@ -222,6 +228,9 @@ impl ViewState {
     /// others on the same material.
     pub fn new(id_base: u32) -> Self {
         Self {
+            caret_blink: false,
+            caret_since: Instant::now(),
+            caret_on: true,
             profile: false,
             metrics: LayoutMetrics::default(),
             placed: vec![],
@@ -988,6 +997,7 @@ impl ViewState {
         self.respond(&target.owner, request)
     }
     pub fn key_event(&mut self, key: &nk_wayland::Key) -> (bool, Option<Activated>) {
+        self.wake_caret();
         if let Some(i) = self
             .focus
             .as_ref()
@@ -1004,6 +1014,7 @@ impl ViewState {
         }
     }
     pub fn ime(&mut self, batch: &nk_wayland::ImeBatch) -> Option<Activated> {
+        self.wake_caret();
         let i = self
             .focus
             .as_ref()
@@ -1381,6 +1392,7 @@ impl ViewState {
     /// off past the dismiss distance or settles it back, and activates nothing then (`tick`
     /// reports the fling), except with reduced motion, where the fling lands at once.
     pub fn button(&mut self, pressed: bool, now: Instant) -> Option<Activated> {
+        self.wake_caret();
         self.button_with_modifiers(pressed, now, nk_wayland::PointerModifiers::default())
     }
     pub fn button_with_modifiers(
@@ -1869,6 +1881,7 @@ impl ViewState {
     /// shown washes by priority (press, hover, fading, markers), never more than eight, then
     /// every other control at rest (alpha 0, so a hover fades in).
     pub fn frame(&mut self, tokens: &Tokens, now: Instant) -> Frame {
+        self.caret_on = self.caret_phase(now).0;
         let washes = &tokens.washes;
         let fade = Duration::from_millis(washes.fade_ms as u64);
         self.fading.retain(|_, until| *until > now);
@@ -2148,6 +2161,55 @@ impl ViewState {
         self.focus.is_some() && self.focus_visible
     }
     /// The focus stays where it is without its ring, as when the pointer put it there.
+    /// Blink the text cursor, as GTK does: on for two thirds of `CARET_BLINK`, off for the
+    /// rest, and steady again `CARET_BLINK_FOR` after the last key. Only a host that wakes
+    /// at `caret_deadline` turns it on; one that does not would leave it hidden.
+    pub fn set_caret_blink(&mut self, on: bool) {
+        self.caret_blink = on;
+    }
+
+    /// When the cursor next shows or hides, while it blinks; a host wakes then and draws a
+    /// frame.
+    pub fn caret_deadline(&self, now: Instant) -> Option<Instant> {
+        self.caret_phase(now).1
+    }
+
+    #[cfg(test)]
+    pub(crate) fn caret_since_for_tests(&self) -> Instant {
+        self.caret_since
+    }
+
+    pub(crate) fn wake_caret(&mut self) {
+        self.caret_since = Instant::now();
+        self.caret_on = true;
+    }
+
+    pub(crate) fn caret_phase(&self, now: Instant) -> (bool, Option<Instant>) {
+        if !self.caret_blink || !self.text_input().focused {
+            return (true, None);
+        }
+        let since = now.saturating_duration_since(self.caret_since);
+        if since >= CARET_BLINK_FOR {
+            return (true, None);
+        }
+        let cycle = CARET_BLINK.as_millis() as u64;
+        let at = since.as_millis() as u64;
+        let start = at - at % cycle;
+        let shown = at % cycle < cycle * 2 / 3;
+        let next = if shown {
+            start + cycle * 2 / 3
+        } else {
+            start + cycle
+        };
+        let next = self.caret_since + Duration::from_millis(next).min(CARET_BLINK_FOR);
+        (shown, Some(next))
+    }
+
+    /// Whether the focus ring is showing: the keyboard brought the focus.
+    pub fn ring_shown(&self) -> bool {
+        self.focus_visible
+    }
+
     pub fn hide_ring(&mut self) {
         self.focus_visible = false;
     }
@@ -2155,6 +2217,7 @@ impl ViewState {
     /// A reader's request on a control: focus moves to it (scrolled into view, its ring
     /// shown), or it is activated. A disabled or absent control does nothing.
     pub fn request(&mut self, key: &Key, activate: bool) -> Option<Activated> {
+        self.wake_caret();
         let i = self
             .index(key)
             .filter(|&i| matches!(self.placed[i].what, What::Control(_)) && self.enabled(i))?;
@@ -2415,6 +2478,7 @@ impl ViewState {
                         progress: p.progress,
                         corner,
                         state: self.components.get(&p.key),
+                        caret: self.caret_on,
                         read: Read {
                             look,
                             ..self.context(i)
@@ -2516,6 +2580,7 @@ impl ViewState {
                         progress: p.progress,
                         corner,
                         state: self.components.get(&p.key),
+                        caret: self.caret_on,
                         read: Read {
                             look,
                             ..self.context(i)
@@ -2592,3 +2657,8 @@ fn overlaps(a: Rect, b: Rect) -> bool {
 #[cfg(test)]
 #[path = "focus_tests.rs"]
 mod focus_tests;
+
+/// GTK's `gtk-cursor-blink-time`: one whole blink, shown then hidden.
+const CARET_BLINK: Duration = Duration::from_millis(1200);
+/// GTK's `gtk-cursor-blink-timeout`: after this long without a key the cursor stays.
+const CARET_BLINK_FOR: Duration = Duration::from_secs(10);
