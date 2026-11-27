@@ -165,7 +165,9 @@ export const ICON_NAMES = [
     "nd-value-decrease",
     "nd-value-increase",
     "nd-video-display",
+    "nd-view-conceal",
     "nd-view-grid",
+    "nd-view-reveal",
     "nd-window-close",
     "nd-window-floating",
     "nd-window-tiling",
@@ -197,7 +199,7 @@ const THEME_KEY = "interface-icon-theme"
  * names added since simply fall back to ours; a newer one is used too, and the
  * names we do not know are never asked for. Bump this when `SPEC.md` gains names.
  */
-export const ICON_SPEC_VERSION = 5
+export const ICON_SPEC_VERSION = 6
 const SPEC_KEY = "X-Nidara-Icon-Spec"
 
 /**

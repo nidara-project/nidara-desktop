@@ -522,7 +522,7 @@ fn owner_edited_secret_field_cannot_enter_the_retained_editor_or_input_method() 
         "Password",
         "secret-edit",
         Field {
-            shown: "•••".into(),
+            shown: "●●●".into(),
             caret: 9,
             anchor: 9,
             secret: true,

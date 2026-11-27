@@ -22,6 +22,7 @@ use std::time::Instant;
 /// The view's keys and actions.
 const SECRET: &str = "secret";
 const SUBMIT: &str = "submit";
+const PEEK: &str = "peek";
 const SUSPEND: &str = "suspend";
 const PREVIOUS: &str = "media-previous";
 const PLAY_PAUSE: &str = "media-play-pause";
@@ -236,6 +237,10 @@ struct Surface {
     field: Key,
     secret: Option<nk::Secret>,
     caps: bool,
+    /// When the field's cursor next shows or hides (`ViewState::caret_deadline`).
+    blink_at: Option<Instant>,
+    /// The password is drawn as typed, from the eye inside the field.
+    revealed: bool,
     clock: String,
     pointer_here: bool,
     a11y: Option<nk_a11y::bridge::Bridge>,
@@ -254,6 +259,7 @@ impl Surface {
             .ok();
         let mut state = ViewState::new(1);
         state.set_reduced_motion(false);
+        state.set_caret_blink(true);
         Ok(Self {
             id,
             world,
@@ -269,6 +275,8 @@ impl Surface {
             field: "lock/password/0".into(),
             secret: None,
             caps: false,
+            blink_at: None,
+            revealed: false,
             clock: String::new(),
             pointer_here: false,
             a11y: None,
@@ -359,6 +367,8 @@ impl Surface {
                 nk::PasswordEntry::new(self.field.clone(), text("lock.password"), SECRET)
                     .enabled(!shared.checking)
                     .submit(text("lock.unlock"), SUBMIT)
+                    .peek(text("lock.show-password"), text("lock.hide-password"), PEEK)
+                    .revealed(self.revealed)
                     .glass()
                     .into();
             children.push(entry.width(m.field));
@@ -450,7 +460,9 @@ impl Surface {
         if self.closing {
             return;
         }
-        self.last = self.state.frame(&self.kit.look.tokens, Instant::now());
+        let now = Instant::now();
+        self.last = self.state.frame(&self.kit.look.tokens, now);
+        self.blink_at = self.state.caret_deadline(now);
         w.set_text_input(self.state.text_input());
         w.redraw();
     }
@@ -464,6 +476,17 @@ impl Surface {
                 }
             }
             SUBMIT => self.submit(),
+            PEEK => {
+                self.revealed = !self.revealed;
+                self.relayout();
+                // The eye is GTK's peek icon: pressing it leaves the typing in the field.
+                let input: Key = format!("{}/input", self.field.0).into();
+                let ring = self.state.ring_shown();
+                self.state.request(&input, false);
+                if !ring {
+                    self.state.hide_ring();
+                }
+            }
             PREVIOUS => {
                 let _ = self.world.tx.send(Msg::Press("SelectedPrevious"));
             }
@@ -480,10 +503,11 @@ impl Surface {
         }
     }
 
+    /// An empty field is an attempt too: an account without a password (`nullok` in
+    /// system-auth) unlocks with Enter alone, and PAM says no to one that has a password.
     fn submit(&mut self) {
-        if let Some(s) = self.secret.clone() {
-            let _ = self.world.tx.send(Msg::Submit(s));
-        }
+        let s = self.secret.clone().unwrap_or_default();
+        let _ = self.world.tx.send(Msg::Submit(s));
     }
 
     fn publish_semantics(&mut self) {
@@ -550,6 +574,12 @@ impl Application for Surface {
         if self.state.animating() {
             return 16;
         }
+        // The cursor blinks on time; the clock's own wake can be a minute away.
+        let blink = self.blink_at.map(|at| {
+            at.saturating_duration_since(Instant::now())
+                .as_millis()
+                .clamp(1, 60_000) as u32
+        });
         // Wake at the next second or minute so the clock turns on time.
         let now = glib::DateTime::now_local().ok();
         let ms_into = now.map_or(0, |n| {
@@ -565,7 +595,8 @@ impl Application for Surface {
         } else {
             60_000
         };
-        (period - ms_into % period).clamp(16, period)
+        let clock = (period - ms_into % period).clamp(16, period);
+        blink.map_or(clock, |b| b.min(clock))
     }
 
     fn idle(&mut self, w: &mut Window) -> nk_wayland::Result<()> {
@@ -582,6 +613,9 @@ impl Application for Surface {
             for a in t.activated {
                 self.route(a);
             }
+            self.refresh(w);
+        }
+        if self.blink_at.is_some_and(|at| Instant::now() >= at) {
             self.refresh(w);
         }
         if self.size.0 > 0 && self.moment().1 != self.clock {
@@ -661,12 +695,19 @@ impl Application for Surface {
                 self.refresh(w);
             }
             Event::Key(k) => {
-                let (handled, activated) = self.state.key_event(&k);
-                if let Some(a) = activated {
-                    self.route(a);
-                } else if !handled && k.serial.is_some() && matches!(k.sym, ENTER | KP_ENTER) {
-                    // Enter is the host's for a single-line field: here it unlocks.
+                let input: Key = format!("{}/input", self.field.0).into();
+                if k.serial.is_some()
+                    && matches!(k.sym, ENTER | KP_ENTER)
+                    && !k.ctrl
+                    && !k.alt
+                    && self.state.focus() == Some(&input)
+                {
+                    // Enter is the host's for a single-line field, as a dialog's default
+                    // response is (dialog.rs): here it unlocks. It is taken before the kit
+                    // sees it, which would read it as activating the field and drop it.
                     self.submit();
+                } else if let (_, Some(a)) = self.state.key_event(&k) {
+                    self.route(a);
                 }
                 // What a key changed (the field's dots) is laid out anew,
                 // as the kit's window host does after every key it handles.

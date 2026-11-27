@@ -4,11 +4,20 @@ use super::*;
 use nk_text::Point;
 use unicode_segmentation::UnicodeSegmentation;
 
+/// What each character of a password is drawn as: GTK's own choice for its password
+/// entries (U+25CF BLACK CIRCLE, `gtk_text` invisible char), large enough to count.
+/// U+2022 BULLET, before, is a text-sized dot, hard to tell apart at body size.
+pub(crate) const DOT: char = '●';
+
 #[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
 pub struct PasswordEntry {
     /// Inside a `PasswordSubmit`, which draws the chrome around it and its button.
     #[serde(default)]
     pub bare: bool,
+    /// The characters are drawn as typed instead of as dots (`PasswordEntry::revealed`).
+    /// Readers and the input method still get a password with no text.
+    #[serde(default)]
+    pub revealed: bool,
 }
 
 #[derive(Default)]
@@ -49,19 +58,39 @@ impl State {
             .min(boundaries.len().saturating_sub(VISIBLE + 1))
     }
 
-    fn shown(&self) -> crate::view::Field {
+    /// What each of the graphemes from `first` on is drawn as: a dot each, or itself.
+    fn drawn(
+        &self,
+        boundaries: &[usize],
+        first: usize,
+        count: usize,
+        revealed: bool,
+    ) -> Vec<String> {
+        (first..first + count)
+            .map(|g| {
+                if revealed {
+                    self.secret.as_str()[boundaries[g]..boundaries[g + 1]].to_string()
+                } else {
+                    DOT.to_string()
+                }
+            })
+            .collect()
+    }
+
+    fn shown(&self, revealed: bool) -> crate::view::Field {
         let boundaries = self.boundaries();
         let first = self.first_visible(&boundaries);
         let count = (boundaries.len() - 1 - first).min(16);
+        let drawn = self.drawn(&boundaries, first, count, revealed);
         let offset = |at| {
-            boundaries
+            let g = boundaries
                 .partition_point(|boundary| *boundary < at)
                 .saturating_sub(first)
-                .min(count)
-                * '•'.len_utf8()
+                .min(count);
+            drawn[..g].iter().map(String::len).sum()
         };
         crate::view::Field {
-            shown: "•".repeat(count),
+            shown: drawn.concat(),
             caret: offset(self.caret),
             anchor: offset(self.anchor),
             secret: true,
@@ -110,10 +139,10 @@ impl PasswordEntry {
         }
     }
 
-    fn display(read: &Read<'_>) -> Option<super::field::DisplayField> {
+    fn display(&self, read: &Read<'_>) -> Option<super::field::DisplayField> {
         let state = read.state?.downcast_ref::<State>()?;
         Some(super::field::DisplayField {
-            field: state.shown(),
+            field: state.shown(self.revealed),
             style: read
                 .look
                 .types
@@ -148,7 +177,7 @@ impl Component for PasswordEntry {
         let text = cx
             .state
             .and_then(|s| s.downcast_ref::<State>())
-            .map_or_else(String::new, |state| state.shown().shown);
+            .map_or_else(String::new, |state| state.shown(self.revealed).shown);
         let mut style = cx
             .look
             .types
@@ -198,13 +227,27 @@ impl Component for PasswordEntry {
                     y: (at.1 - part.rect[1]) as f32,
                 })
                 .ok()
-                .map(|hit| hit.offset / '•'.len_utf8())
+                .map(|hit| hit.offset)
         });
+        let revealed = self.revealed;
         self.update(cx, |state| {
             let boundaries = state.boundaries();
             let first = state.first_visible(&boundaries);
+            let count = (boundaries.len() - 1 - first).min(16);
+            // The byte the pointer hit in what is drawn, back to the grapheme it belongs to.
             let at = offset
-                .and_then(|at| boundaries.get(first + at).copied())
+                .map(|hit| {
+                    let mut end = 0;
+                    let g = state
+                        .drawn(&boundaries, first, count, revealed)
+                        .iter()
+                        .take_while(|d| {
+                            end += d.len();
+                            end <= hit
+                        })
+                        .count();
+                    boundaries[first + g]
+                })
                 .unwrap_or(state.secret.as_str().len());
             state.move_to(at, false);
             false
@@ -316,7 +359,7 @@ impl Component for PasswordEntry {
     }
 
     fn text_input(&self, cx: &Read<'_>) -> Option<nk_wayland::TextInput> {
-        let rect = Self::display(cx)?.caret(cx).unwrap_or_else(|| {
+        let rect = self.display(cx)?.caret(cx).unwrap_or_else(|| {
             let entry = &cx.look.tokens.entry;
             [cx.rect[0] + entry.padding_x, cx.rect[1], 1., cx.rect[3]]
         });
@@ -346,7 +389,7 @@ impl Component for PasswordEntry {
             if !self.bare {
                 super::editable::chrome(cx);
             }
-            if let Some(field) = Self::display(&cx.read) {
+            if let Some(field) = self.display(&cx.read) {
                 field.paint(cx, phase);
             }
         }
@@ -364,6 +407,20 @@ pub struct PasswordSubmit {
     pub submit_label: String,
     pub submit: String,
     pub disabled: bool,
+    /// A button before the submit one that shows or hides the characters (GTK's
+    /// `show-peek-icon`): its action, and its names for readers while they are hidden and
+    /// while they are shown. The app keeps whether they are shown (`revealed`).
+    #[serde(default)]
+    pub peek: Option<Peek>,
+    #[serde(default)]
+    pub revealed: bool,
+}
+
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+pub struct Peek {
+    pub action: String,
+    pub show_label: String,
+    pub hide_label: String,
 }
 impl PasswordSubmit {
     pub(crate) fn node(self, key: impl Into<Key>) -> Node {
@@ -385,8 +442,34 @@ impl Component for PasswordSubmit {
         .enabled(!self.disabled)
         .grow();
         if let Kind::Control(c) = &mut input.kind {
-            c.part = Some(Box::new(Part::Password(PasswordEntry { bare: true })));
+            c.part = Some(Box::new(Part::Password(PasswordEntry {
+                bare: true,
+                revealed: self.revealed,
+            })));
         }
+        let peek = self.peek.as_ref().map(|p| {
+            let mut peek = Node::control(
+                cx.key("peek"),
+                if self.revealed {
+                    p.hide_label.clone()
+                } else {
+                    p.show_label.clone()
+                },
+                p.action.clone(),
+                Node::spacer(cx.key("peek/body")),
+            )
+            .enabled(!self.disabled);
+            if let Kind::Control(c) = &mut peek.kind {
+                c.part = Some(Box::new(Part::SubmitButton(SubmitButton {
+                    glyph: if self.revealed {
+                        Glyph::Conceal
+                    } else {
+                        Glyph::Reveal
+                    },
+                })));
+            }
+            peek
+        });
         let mut submit = Node::control(
             cx.key("submit"),
             self.submit_label.clone(),
@@ -395,9 +478,10 @@ impl Component for PasswordSubmit {
         )
         .enabled(!self.disabled);
         if let Kind::Control(c) = &mut submit.kind {
-            c.part = Some(Box::new(Part::SubmitButton(SubmitButton)));
+            c.part = Some(Box::new(Part::SubmitButton(SubmitButton::default())));
         }
-        Node::row(cx.key("body"), vec![input, submit]).align(crate::Align::Center)
+        let children = std::iter::once(input).chain(peek).chain([submit]).collect();
+        Node::row(cx.key("body"), children).align(crate::Align::Center)
     }
     fn frame(&self, look: ComponentLook<'_>) -> FrameSpec {
         let t = &look.tokens.entry;
@@ -415,10 +499,24 @@ impl Component for PasswordSubmit {
     }
 }
 
-/// The button inside a `PasswordSubmit`: a glyph in a round hover wash, as Search's clear
-/// button; activating it reports the field's submit action.
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
-pub struct SubmitButton;
+/// A button inside a `PasswordSubmit`: a glyph in a round hover wash, as Search's clear
+/// button. Activating it reports its action: the field's submit, or showing or hiding.
+#[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
+pub struct SubmitButton {
+    #[serde(default)]
+    pub glyph: Glyph,
+}
+
+/// What a button inside a password field draws.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Serialize, Deserialize)]
+pub enum Glyph {
+    #[default]
+    Submit,
+    /// Show the characters: they are hidden now.
+    Reveal,
+    /// Hide them again.
+    Conceal,
+}
 impl SubmitButton {
     fn visible(&self, cx: &Read<'_>) -> Rect {
         let r = cx.rect;
@@ -461,7 +559,12 @@ impl Component for SubmitButton {
     }
     fn body(&self, cx: &Build<'_>) -> Node {
         let t = &cx.look.tokens.entry;
-        Node::icon(cx.key("glyph"), t.submit_icon.clone(), t.icon_size)
+        let icon = match self.glyph {
+            Glyph::Submit => &t.submit_icon,
+            Glyph::Reveal => &t.reveal_icon,
+            Glyph::Conceal => &t.conceal_icon,
+        };
+        Node::icon(cx.key("glyph"), icon.clone(), t.icon_size)
     }
     fn frame(&self, look: ComponentLook<'_>) -> FrameSpec {
         let t = &look.tokens.entry;

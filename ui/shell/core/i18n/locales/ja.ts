@@ -936,6 +936,8 @@ export default {
     "lock.title": "ロック画面",
     "lock.password": "パスワード",
     "lock.unlock": "ロック解除",
+    "lock.show-password": "パスワードを表示",
+    "lock.hide-password": "パスワードを隠す",
     "lock.wrong-password": "パスワードが違います",
     "lock.account-unavailable": "アカウントを利用できません",
     "lock.password-expired": "パスワードの有効期限が切れています",

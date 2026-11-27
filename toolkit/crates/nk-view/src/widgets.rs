@@ -672,8 +672,52 @@ impl PasswordEntry {
             submit_label: label.into(),
             submit: action.into(),
             disabled: !control.enabled,
+            peek: None,
+            revealed: control
+                .part
+                .as_deref()
+                .is_some_and(|p| matches!(p, Part::Password(e) if e.revealed)),
         };
         Self(part.node(self.0.key.clone()))
+    }
+    /// Draw the characters as typed instead of as dots. The app keeps this, as it keeps a
+    /// switch's state, and changes it on the `peek` action.
+    pub fn revealed(mut self, on: bool) -> Self {
+        match &mut self.0.kind {
+            Kind::Control(c) => {
+                if let Some(Part::Password(e)) = c.part.as_deref_mut() {
+                    e.revealed = on;
+                }
+            }
+            Kind::Drawing(d) => {
+                if let Part::PasswordSubmit(p) = d.part.as_mut() {
+                    p.revealed = on;
+                }
+            }
+            _ => {}
+        }
+        self
+    }
+    /// A button inside the field, before the submit one, that shows the characters or
+    /// hides them again (GTK's `show-peek-icon`); it reports `action`, and the app flips
+    /// `revealed`. `show` and `hide` are its names for readers in each state. It goes with
+    /// `submit`, whose row it shares; call it after.
+    pub fn peek(
+        mut self,
+        show: impl Into<String>,
+        hide: impl Into<String>,
+        action: impl Into<String>,
+    ) -> Self {
+        if let Kind::Drawing(d) = &mut self.0.kind
+            && let Part::PasswordSubmit(p) = d.part.as_mut()
+        {
+            p.peek = Some(crate::components::Peek {
+                action: action.into(),
+                show_label: show.into(),
+                hide_label: hide.into(),
+            });
+        }
+        self
     }
     control_setters!();
 }

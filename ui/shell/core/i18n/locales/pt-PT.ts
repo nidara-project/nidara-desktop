@@ -936,6 +936,8 @@ export default {
     "lock.title": "Ecrã de bloqueio",
     "lock.password": "Palavra-passe",
     "lock.unlock": "Desbloquear",
+    "lock.show-password": "Mostrar palavra-passe",
+    "lock.hide-password": "Ocultar palavra-passe",
     "lock.wrong-password": "Palavra-passe incorreta",
     "lock.account-unavailable": "Conta indisponível",
     "lock.password-expired": "Palavra-passe expirada",

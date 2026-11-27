@@ -397,10 +397,12 @@ fn page(id: &str, m: &Model, cat: &Catalogue, t: &TypeScale, k: &Measures) -> Ve
                     .submit("Unlock", "noop")
                     .into(),
             );
-            // The same field made of glass, as the lock screen has it (#1195).
+            // The same field made of glass, as the lock screen has it (#1195), with the eye
+            // that shows the characters.
             nodes.push(
                 nk::PasswordEntry::new("e/password-glass", "Password", "noop")
                     .submit("Unlock", "noop")
+                    .peek("Show password", "Hide password", "noop")
                     .glass()
                     .into(),
             );
@@ -1475,7 +1477,7 @@ fn fields(t: &TypeScale) -> Vec<Node> {
         .align(Align::Center)
     };
     let text = "Nidara";
-    let dots = "••••••";
+    let dots = "●●●●●●";
     let states = nk::Column::new(
         "f/states",
         vec![

@@ -132,7 +132,9 @@ impl Component for DisplayField {
                     cx.ink(sel.with_alpha(sel.components[3] * 0.3)),
                 );
             }
-            if let Some(r) = self.caret(&cx.read) {
+            if cx.caret
+                && let Some(r) = self.caret(&cx.read)
+            {
                 cx.canvas.rounded_rect(
                     rect(&r),
                     0.,

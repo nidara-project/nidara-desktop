@@ -1,6 +1,6 @@
 # Nidara icon spec
 
-**Version 5.** How to make an icon theme that changes Nidara's interface icons — the bar,
+**Version 6.** How to make an icon theme that changes Nidara's interface icons — the bar,
 the menus, the Control Centre, Settings, the login and lock screens.
 
 Nidara's interface asks for its own icon names, all starting with `nd-`. Only a theme that
@@ -179,7 +179,9 @@ check your drawing in place; it is not part of the contract and may grow.
 | `nd-value-decrease` | Less (slider end) | Sliders |
 | `nd-value-increase` | More; add (slider end, add button) | Sliders, Autostart |
 | `nd-video-display` | Displays | Settings → Display |
+| `nd-view-conceal` | Hide what a field shows (a crossed-out eye) | Password fields, lock screen |
 | `nd-view-grid` | Applications | Settings → Apps |
+| `nd-view-reveal` | Show what a field hides (an eye) | Password fields, lock screen |
 | `nd-window-close` | Close / dismiss | Windows, notifications |
 | `nd-window-floating` | Floating windows mode | Workspace mode control, Settings → Desktop |
 | `nd-window-tiling` | Tiling windows mode | Workspace mode control |
@@ -188,6 +190,7 @@ check your drawing in place; it is not part of the contract and may grow.
 
 ## Changes
 
+- **6** — add `nd-view-reveal` and `nd-view-conceal` (show and hide a password).
 - **4** — add `nd-dialog-warning` (the installer's partition table marks a row that fails a rule).
 - **3** — add `nd-globe` (the installer's Region page, split from `nd-preferences-system-network`).
 - **2** — add `nd-clipboard-list` and `nd-rocket` (installer summary and run steps).

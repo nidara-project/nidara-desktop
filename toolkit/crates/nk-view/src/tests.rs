@@ -2614,7 +2614,7 @@ fn a_fields_caret_stands_after_the_text_it_follows() {
 
 #[test]
 fn a_reader_hears_a_secret_field_as_a_password_with_no_text() {
-    let mut s = laid(&field_view("•••", 9, 9, true), (360., 400.), 1.);
+    let mut s = laid(&field_view("●●●", 9, 9, true), (360., 400.), 1.);
     let tree = s.semantics(nk_a11y::Node::new(1, nk_a11y::Role::Panel, "root"), 10);
     let n = tree.nodes.values().find(|n| n.name == "Password").unwrap();
     assert_eq!(n.role, nk_a11y::Role::Password);
@@ -5650,7 +5650,7 @@ fn row_and_tile_sliders_paint_their_track_thumb_and_fill() {
 fn semantic_keys_bind_the_actual_component_role_and_retire_old_bindings() {
     let owner = Key::from("pw");
     let root = || nk_a11y::Node::new(1, nk_a11y::Role::Window, "W");
-    let mut s = laid(&field_view("•••", 9, 9, true), (360., 100.), 1.);
+    let mut s = laid(&field_view("●●●", 9, 9, true), (360., 100.), 1.);
     let tree = s.semantics(root(), 2);
     let password = tree
         .nodes
@@ -6540,4 +6540,50 @@ fn a_glass_button_is_glass_in_its_own_shape_and_paints_no_rest_of_its_own() {
     );
     // The glass is no panel to a reader: the button is.
     assert!(placed(&s, "g/glass").presentation);
+}
+
+#[test]
+fn a_centred_text_in_a_narrower_column_is_drawn_on_the_columns_centre() {
+    let mut centred = style(13.);
+    centred.alignment = nk_text::Alignment::Center;
+    let view = Node::column(
+        "c",
+        vec![
+            Node::text("t", "Wrong password", centred)
+                .lines(4)
+                .reserve(2),
+        ],
+    )
+    .align(Align::Center)
+    .width(300.);
+    let mut s = laid(&view, (300., 200.), 1.);
+    let r = rect(&s, "t");
+    let line = s.text().get(&Key::from("t")).unwrap().layout.lines()[0].bounds;
+    let drawn = r[0] + f64::from(line.x) + f64::from(line.width) / 2.;
+    assert!(
+        (drawn - 150.).abs() < 1.5,
+        "drawn centre {drawn}, rect {r:?}, line {line:?}"
+    );
+}
+
+#[test]
+fn a_focused_cursor_blinks_as_gtks_and_stays_after_ten_seconds_without_a_key() {
+    let view: Node = crate::PasswordEntry::new("pw", "Password", "typed").into();
+    let mut s = laid(&view, (360., 100.), 1.);
+    s.request(&Key::from("pw"), false);
+    let t0 = s.caret_since_for_tests();
+    let at = |ms: u64| t0 + Duration::from_millis(ms);
+    // Off, a host that never wakes for it keeps it steady.
+    assert_eq!(s.caret_phase(at(900)), (true, None));
+    s.set_caret_blink(true);
+    assert_eq!(s.caret_phase(at(100)), (true, Some(at(800))));
+    assert_eq!(s.caret_phase(at(900)), (false, Some(at(1200))));
+    assert_eq!(s.caret_phase(at(1300)), (true, Some(at(2000))));
+    assert_eq!(s.caret_phase(at(9500)), (false, Some(at(9600))));
+    // The last stretch ends where the blinking does.
+    assert_eq!(s.caret_phase(at(9900)), (true, Some(at(10_000))));
+    assert_eq!(s.caret_phase(at(10_000)), (true, None));
+    // Nothing focused that takes text: no cursor to blink.
+    s.blur();
+    assert_eq!(s.caret_phase(at(900)), (true, None));
 }

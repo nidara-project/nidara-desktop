@@ -1106,6 +1106,9 @@ pub struct EntryStyle {
     pub clear_icon: String,
     /// The button inside a field that submits it (a password's "Unlock").
     pub submit_icon: String,
+    /// The buttons inside a password field that show its characters and hide them again.
+    pub reveal_icon: String,
+    pub conceal_icon: String,
     /// Visible icon button follows header.navigation; the hit frame is unchanged.
     pub clear_button: f64,
     pub clear_edge: f64,
@@ -1157,6 +1160,8 @@ pub fn entry_from(
         icon: name("icon")?,
         clear_icon: name("clearIcon")?,
         submit_icon: name("submitIcon")?,
+        reveal_icon: name("revealIcon")?,
+        conceal_icon: name("concealIcon")?,
         clear_button: navigation["button"]
             .as_f64()
             .filter(|v| v.is_finite() && *v > 0.)

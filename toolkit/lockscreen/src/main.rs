@@ -193,7 +193,7 @@ fn converse(
         };
         match msg {
             Msg::Submit(secret) => {
-                if world.shared.lock().unwrap().checking || secret.as_str().is_empty() {
+                if world.shared.lock().unwrap().checking {
                     continue;
                 }
                 let login = world.shared.lock().unwrap().user.login.clone();

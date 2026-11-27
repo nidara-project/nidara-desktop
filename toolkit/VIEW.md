@@ -567,6 +567,11 @@ the CC does not rewrite them.
   `TextInput`.
 - **Look.** The caret is drawn while the field holds the focus, in the primary ink, 1 px wide and
   a line tall; the selection in the accent at 30 %, as the `search` component has it.
+- **Blinking.** A host that turns it on (`ViewState::set_caret_blink`) gets GTK's blink:
+  shown for two thirds of 1.2 s, hidden for the rest, steady again 10 s after the last key,
+  press or focus. It must wake at `ViewState::caret_deadline` and draw a frame; a host that
+  does not leaves it off, and the caret is drawn steady, never stuck hidden. The lock screen
+  has it on.
 
 ### 12.3 Painted slot
 
@@ -1425,7 +1430,13 @@ primary/destructive records; ordinary button and shared focus recipes are preser
 
 ### Password entry
 
-`nk::PasswordEntry` keeps the secret in retained state and lays out bullets.
+`nk::PasswordEntry` keeps the secret in retained state and lays out a dot per character,
+"●" (U+25CF), GTK's own choice for its password entries; "•" was too small to count.
+`.submit(label, action)` puts a submit button inside it, at its end, and `.peek(show, hide,
+action)` an eye before it (GTK's `show-peek-icon`): it reports `action`, the app flips
+`.revealed(bool)`, and the characters are then drawn as typed. Readers and the input method
+still get a password with no text. The app gives the focus back to the field after the eye
+(the lock screen does), as GTK's peek icon never takes it.
 The input method receives the password hint and an empty surrounding text.
 The reader gets the password role and focus action. Paste replies are bound to
 the current control and revision. Copy and cut are unavailable. The app
