@@ -942,4 +942,7 @@ export default {
     "lock.password-expired-how": "Zmień je przy następnym logowaniu.",
     "lock.suspend": "Uśpij",
     "lock.caps-lock": "Caps Lock włączony",
+    "lock.media.previous": "Poprzedni",
+    "lock.media.play-pause": "Odtwórz lub wstrzymaj",
+    "lock.media.next": "Następny",
 }

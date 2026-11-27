@@ -942,4 +942,7 @@ export default {
     "lock.password-expired-how": "Wijzig het bij de volgende aanmelding.",
     "lock.suspend": "Slaapstand",
     "lock.caps-lock": "Caps Lock staat aan",
+    "lock.media.previous": "Vorige",
+    "lock.media.play-pause": "Afspelen of pauzeren",
+    "lock.media.next": "Volgende",
 }

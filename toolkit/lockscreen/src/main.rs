@@ -11,6 +11,7 @@
 //! and the field are on the one the pointer is on, and the clock alone on the others (D6).
 //! This thread holds the lock, the attempt and the shared state they read.
 mod auth;
+mod media;
 mod surface;
 mod user;
 
@@ -33,6 +34,8 @@ pub struct Shared {
     /// A new attempt starts with an empty field.
     pub clear: u64,
     pub user: user::User,
+    /// What is playing, when the user lets the lock screen show it (D5).
+    pub media: Option<media::Now>,
     /// Unlocked: every surface closes.
     pub done: bool,
 }
@@ -43,6 +46,10 @@ pub enum Msg {
     /// The field changed: what the last attempt said goes (the TS lock screen's rule).
     Typed,
     Suspend,
+    /// What the session's media service now says is playing.
+    Media(Option<media::Now>),
+    /// A transport button: Media1's `SelectedPrevious`, `SelectedPlayPause`, `SelectedNext`.
+    Press(&'static str),
     /// The pointer moved onto this output.
     Pointer(OutputId),
     Said(auth::Said),
@@ -107,6 +114,7 @@ fn run() -> Result<(), String> {
         wakers: Mutex::new(Vec::new()),
         threads: Mutex::new(Vec::new()),
     });
+    media::watch(tx.clone());
     let first = watch.current().first().map(|o| o.id);
     world.update(|s| s.active = first);
     // The outputs' thread: one surface per output, now and as screens come and go.
@@ -120,19 +128,24 @@ fn run() -> Result<(), String> {
             .map_err(|e| e.to_string())?;
     }
     // The compositor confirms once every output shows a lock surface; until then nothing
-    // here may unlock.
+    // here may unlock. What else arrives meanwhile (the surfaces' wakers, what is playing)
+    // is kept for after, never dropped: a surface whose waker is lost is never told again.
+    let mut early = Vec::new();
     loop {
         match lock.wait(Some(Duration::from_secs(1)))? {
             LockStatus::Locked => break,
             LockStatus::Finished => return Err("the compositor refused the lock".into()),
             LockStatus::Pending => {}
         }
-        if let Ok(Msg::Failed(e)) = rx.try_recv() {
-            return Err(e);
+        while let Ok(msg) = rx.try_recv() {
+            match msg {
+                Msg::Failed(e) => return Err(e),
+                msg => early.push(msg),
+            }
         }
     }
     eprintln!("nidara-lock: locked");
-    let expired = converse(&world, &rx, &mut lock, look.measures.error_seconds)?;
+    let expired = converse(&world, early, &rx, &mut lock, look.measures.error_seconds)?;
     lock.unlock()?;
     eprintln!("nidara-lock: unlocked");
     // The surfaces close; the compositor already shows the session.
@@ -150,18 +163,24 @@ fn run() -> Result<(), String> {
 /// Attempts until one succeeds. Returns whether the password has expired.
 fn converse(
     world: &Arc<World>,
+    early: Vec<Msg>,
     rx: &Receiver<Msg>,
     lock: &mut nk_wayland::SessionLock,
     error_seconds: f64,
 ) -> Result<bool, String> {
     // When a refusal was shown: it goes after `error_seconds` on a screen nobody touches.
     let mut refused: Option<std::time::Instant> = None;
+    let mut early = early.into_iter();
     loop {
         if refused.is_some_and(|t| t.elapsed().as_secs_f64() >= error_seconds) {
             refused = None;
             world.update(|s| s.lines.clear());
         }
-        let msg = match rx.recv_timeout(Duration::from_secs(1)) {
+        let next = match early.next() {
+            Some(m) => Ok(m),
+            None => rx.recv_timeout(Duration::from_secs(1)),
+        };
+        let msg = match next {
             Ok(m) => m,
             Err(std::sync::mpsc::RecvTimeoutError::Timeout) => {
                 // The compositor may take the lock back (another client took it over).
@@ -226,6 +245,12 @@ fn converse(
                 });
             }
             Msg::Suspend => suspend(),
+            Msg::Media(now) => {
+                if world.shared.lock().unwrap().media != now {
+                    world.update(|s| s.media = now);
+                }
+            }
+            Msg::Press(method) => media::press(method),
             Msg::Pointer(id) => {
                 if world.shared.lock().unwrap().active != Some(id) {
                     world.update(|s| s.active = Some(id));

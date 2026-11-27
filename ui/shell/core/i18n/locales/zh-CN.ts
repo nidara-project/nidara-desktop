@@ -942,4 +942,7 @@ export default {
     "lock.password-expired-how": "请在下次登录时更改。",
     "lock.suspend": "睡眠",
     "lock.caps-lock": "大写锁定已打开",
+    "lock.media.previous": "上一首",
+    "lock.media.play-pause": "播放或暂停",
+    "lock.media.next": "下一首",
 }

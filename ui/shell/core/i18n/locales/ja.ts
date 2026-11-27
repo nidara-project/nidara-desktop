@@ -942,4 +942,7 @@ export default {
     "lock.password-expired-how": "次回のログイン時に変更してください。",
     "lock.suspend": "スリープ",
     "lock.caps-lock": "Caps Lock がオンです",
+    "lock.media.previous": "前へ",
+    "lock.media.play-pause": "再生または一時停止",
+    "lock.media.next": "次へ",
 }

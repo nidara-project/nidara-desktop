@@ -23,6 +23,9 @@ use std::time::Instant;
 const SECRET: &str = "secret";
 const SUBMIT: &str = "submit";
 const SUSPEND: &str = "suspend";
+const PREVIOUS: &str = "media-previous";
+const PLAY_PAUSE: &str = "media-play-pause";
+const NEXT: &str = "media-next";
 const AVATAR: &str = "lock/avatar";
 const ROOT: nk_a11y::NodeId = 1;
 const ENTER: u32 = 0xff0d;
@@ -324,8 +327,14 @@ impl Surface {
             )
             .into(),
             nk::Label::new("lock/clock", time, types.display()).into(),
-            nk::Spacer::new("lock/above").into(),
         ];
+        // D5: what is playing, under the clock of the screen that has the field, with its
+        // three buttons. No cover, no card: the text and the glyphs on the veil.
+        if let (true, Some(now)) = (self.active, shared.media.as_ref()) {
+            children.push(strut("lock/media-gap", m.field_gap));
+            children.push(media_view(now, types, m.field));
+        }
+        children.push(nk::Spacer::new("lock/above").into());
         if self.active {
             let avatar: Node = if self.kit.picture.is_some() {
                 nk::Slot::new(AVATAR, m.avatar).into()
@@ -455,6 +464,15 @@ impl Surface {
                 }
             }
             SUBMIT => self.submit(),
+            PREVIOUS => {
+                let _ = self.world.tx.send(Msg::Press("SelectedPrevious"));
+            }
+            PLAY_PAUSE => {
+                let _ = self.world.tx.send(Msg::Press("SelectedPlayPause"));
+            }
+            NEXT => {
+                let _ = self.world.tx.send(Msg::Press("SelectedNext"));
+            }
             SUSPEND => {
                 let _ = self.world.tx.send(Msg::Suspend);
             }
@@ -715,6 +733,74 @@ impl Application for Surface {
         }
         self.kit.look.glass(&self.last)
     }
+}
+
+/// What is playing: the title, the artist, and previous / play or pause / next as the kit's
+/// icon buttons (the gallery's "Icon only"), each named for readers.
+fn media_view(now: &crate::media::Now, types: &nk::TypeScale, width: f64) -> Node {
+    let line = |key: &str, text: &str, weight: Weight| -> Node {
+        nk::Label::new(key, text.to_owned(), types.style(Type::Body, weight))
+            .ink(Ink::Primary)
+            .lines(1)
+            .into()
+    };
+    let button = |key: &str, name: &str, action: &str, glyph: &str, on: bool| -> Node {
+        nk::Button::with_child(
+            key,
+            text(name),
+            action,
+            nk::Row::new(
+                format!("{key}/row"),
+                vec![nk::Image::new(format!("{key}/glyph"), glyph, 16.).into()],
+            )
+            .padding(nk::Padding::all(Space::S2)),
+        )
+        .enabled(on)
+        .into()
+    };
+    let play = if now.playing {
+        "nd-media-playback-pause"
+    } else {
+        "nd-media-playback-start"
+    };
+    let mut lines = vec![line("lock/media/title", &now.title, Weight::Semibold)];
+    if !now.artist.is_empty() {
+        lines.push(line("lock/media/artist", &now.artist, Weight::Regular));
+    }
+    let controls = nk::Row::new(
+        "lock/media/controls",
+        vec![
+            button(
+                "lock/media/previous",
+                "lock.media.previous",
+                PREVIOUS,
+                "nd-media-skip-backward",
+                now.can_control && now.can_previous,
+            ),
+            button(
+                "lock/media/play",
+                "lock.media.play-pause",
+                PLAY_PAUSE,
+                play,
+                now.can_control,
+            ),
+            button(
+                "lock/media/next",
+                "lock.media.next",
+                NEXT,
+                "nd-media-skip-forward",
+                now.can_control && now.can_next,
+            ),
+        ],
+    )
+    .gap(Space::S3)
+    .align(Align::Center);
+    lines.push(controls.into());
+    nk::Column::new("lock/media", lines)
+        .gap(Space::S1)
+        .align(Align::Center)
+        .width(width)
+        .into()
 }
 
 /// A themed glyph for the kit, by name and logical size.

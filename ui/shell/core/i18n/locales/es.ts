@@ -1177,4 +1177,7 @@ export default {
     "lock.password-expired-how": "Cámbiala en el próximo inicio de sesión.",
     "lock.suspend": "Suspender",
     "lock.caps-lock": "Bloq Mayús activado",
+    "lock.media.previous": "Anterior",
+    "lock.media.play-pause": "Reproducir o pausar",
+    "lock.media.next": "Siguiente",
 }

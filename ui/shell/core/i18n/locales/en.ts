@@ -1203,4 +1203,7 @@ export default {
     "lock.password-expired-how": "Change it at your next login.",
     "lock.suspend": "Sleep",
     "lock.caps-lock": "Caps Lock is on",
+    "lock.media.previous": "Previous",
+    "lock.media.play-pause": "Play or pause",
+    "lock.media.next": "Next",
 }

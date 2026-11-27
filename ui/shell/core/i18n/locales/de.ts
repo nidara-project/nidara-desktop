@@ -942,4 +942,7 @@ export default {
     "lock.password-expired-how": "Ändern Sie es bei der nächsten Anmeldung.",
     "lock.suspend": "Ruhezustand",
     "lock.caps-lock": "Feststelltaste aktiv",
+    "lock.media.previous": "Zurück",
+    "lock.media.play-pause": "Wiedergabe oder Pause",
+    "lock.media.next": "Weiter",
 }

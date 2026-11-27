@@ -949,4 +949,7 @@ export default {
     "lock.password-expired-how": "Измените его при следующем входе.",
     "lock.suspend": "Спящий режим",
     "lock.caps-lock": "Включён Caps Lock",
+    "lock.media.previous": "Предыдущий",
+    "lock.media.play-pause": "Воспроизвести или приостановить",
+    "lock.media.next": "Следующий",
 }
