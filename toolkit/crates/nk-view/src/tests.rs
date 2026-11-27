@@ -6556,7 +6556,7 @@ fn a_centred_text_in_a_narrower_column_is_drawn_on_the_columns_centre() {
     )
     .align(Align::Center)
     .width(300.);
-    let mut s = laid(&view, (300., 200.), 1.);
+    let s = laid(&view, (300., 200.), 1.);
     let r = rect(&s, "t");
     let line = s.text().get(&Key::from("t")).unwrap().layout.lines()[0].bounds;
     let drawn = r[0] + f64::from(line.x) + f64::from(line.width) / 2.;
