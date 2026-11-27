@@ -1197,6 +1197,7 @@ export default {
     "lock.title": "Lock screen",
     "lock.password": "Password",
     "lock.unlock": "Unlock",
+    "lock.log-in": "Log in",
     "lock.show-password": "Show password",
     "lock.hide-password": "Hide password",
     "lock.wrong-password": "Wrong password",

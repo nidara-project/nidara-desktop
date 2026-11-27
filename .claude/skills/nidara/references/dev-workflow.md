@@ -243,6 +243,37 @@ strings), then `nidara-hyalo msg lock` and `msg screenshot`. Three traps, each c
   PAM stack and counts against the real account in faillock. The PAM path is checked by the
   owner on the installed system.
 
+### The login manager `nidara-login` and Hyalo's login mode (#1195 D8, step 1)
+
+`session/login` (`nidara-login`, root, `nidara-login.service`, aliased to
+`display-manager.service`) replaces greetd. It ships **not enabled** until step 4 removes
+greetd. The pieces:
+- **The manager** (`daemon.rs`) opens the login screen's own session (PAM `nidara-greeter`,
+  logind class `greeter`, the `greeter` user) on the configured VT, and runs
+  `nidara-hyalo --login -c <client>` in it. It talks to the screen over
+  `/run/nidara-login/greeter.sock` (only the login user may connect; the protocol is in
+  `proto.rs`).
+- **PAM runs in a worker per session** (`nidara-login --worker`, fd 3), as gdm-session-worker
+  does: a module that crashes takes down one worker, never the manager. After `start`, the
+  user's session opens on the same VT once the login screen's Hyalo has exited (the handover
+  #1195 L6 measures). A user with an open session is switched to it with logind's
+  `ActivateSession` (L3).
+- **Hyalo `--login`** (`main::login_mode`): only the system config, the system wallpaper, no
+  autostart and no Xwayland. The `-c` client is held as a LOCK client from the first frame
+  (`lock.rs` → `start_login`). It is started again only once its PROCESS is gone, never after
+  a deadline: a slow first start must not race a second client for the lock. When the client
+  unlocks, Hyalo exits.
+- **The client**, until step 2 brings `nidara-greeter`, is `nidara-lock`: with
+  `NIDARA_LOGIN_SOCKET` set it authenticates through the manager (`login.rs`), offers the
+  last user (`/var/lib/nidara-login/last-user`) and says "Log in".
+
+Testing, without root: a cage headless runs `nidara-hyalo --winit --login -c nidara-lock`
+with a stand-in manager on `NIDARA_LOGIN_SOCKET`. 🔴 **Give the nested Hyalo its own
+`XDG_RUNTIME_DIR`** (and an absolute `WAYLAND_DISPLAY` for cage's socket): otherwise
+`nidara-hyalo msg` reaches the LIVE session through the inherited `HYALO_SOCKET`, and a
+"screenshot of the test" is a screenshot of the owner's screen. The manager itself needs
+root, a VT and logind: that is the VM, or the owner.
+
 **`bin/nidara-greeter` still has no dev branch.** It hardcodes
 `/usr/share/nidara/ui/greeter/build/nidara-greeter` and `exec`s it or dies. Whenever you touch
 `ui/greeter/`, the change is not testable until it is installed:

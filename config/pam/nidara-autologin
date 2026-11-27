@@ -1,0 +1,10 @@
+#%PAM-1.0
+# Automatic login (#1195 L7): the user configured in /etc/nidara/login.toml, at boot, without
+# a password. Installed to /etc/pam.d/nidara-autologin.
+#
+# Nothing is asked (pam_permit). The account is still checked: an expired or locked account
+# is not logged in automatically either.
+auth       required     pam_permit.so
+account    include      system-local-login
+password   required     pam_deny.so
+session    include      system-local-login

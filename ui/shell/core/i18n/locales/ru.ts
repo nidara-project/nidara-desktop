@@ -943,6 +943,7 @@ export default {
     "lock.title": "Экран блокировки",
     "lock.password": "Пароль",
     "lock.unlock": "Разблокировать",
+    "lock.log-in": "Войти",
     "lock.show-password": "Показать пароль",
     "lock.hide-password": "Скрыть пароль",
     "lock.wrong-password": "Неверный пароль",

@@ -936,6 +936,7 @@ export default {
     "lock.title": "Écran de verrouillage",
     "lock.password": "Mot de passe",
     "lock.unlock": "Déverrouiller",
+    "lock.log-in": "Se connecter",
     "lock.show-password": "Afficher le mot de passe",
     "lock.hide-password": "Masquer le mot de passe",
     "lock.wrong-password": "Mot de passe incorrect",

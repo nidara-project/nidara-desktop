@@ -1171,6 +1171,7 @@ export default {
     "lock.title": "Pantalla de bloqueo",
     "lock.password": "Contraseña",
     "lock.unlock": "Desbloquear",
+    "lock.log-in": "Iniciar sesión",
     "lock.show-password": "Mostrar contraseña",
     "lock.hide-password": "Ocultar contraseña",
     "lock.wrong-password": "Contraseña incorrecta",

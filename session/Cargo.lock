@@ -885,6 +885,18 @@ dependencies = [
 ]
 
 [[package]]
+name = "nidara-login"
+version = "0.1.0"
+dependencies = [
+ "libc",
+ "serde",
+ "serde_json",
+ "tokio",
+ "toml",
+ "zbus",
+]
+
+[[package]]
 name = "nidara-sessiond"
 version = "0.1.0"
 dependencies = [

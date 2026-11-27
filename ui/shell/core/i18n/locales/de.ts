@@ -936,6 +936,7 @@ export default {
     "lock.title": "Sperrbildschirm",
     "lock.password": "Passwort",
     "lock.unlock": "Entsperren",
+    "lock.log-in": "Anmelden",
     "lock.show-password": "Passwort anzeigen",
     "lock.hide-password": "Passwort verbergen",
     "lock.wrong-password": "Falsches Passwort",

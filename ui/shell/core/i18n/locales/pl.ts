@@ -936,6 +936,7 @@ export default {
     "lock.title": "Ekran blokady",
     "lock.password": "Hasło",
     "lock.unlock": "Odblokuj",
+    "lock.log-in": "Zaloguj",
     "lock.show-password": "Pokaż hasło",
     "lock.hide-password": "Ukryj hasło",
     "lock.wrong-password": "Nieprawidłowe hasło",

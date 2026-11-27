@@ -4,6 +4,8 @@
 //!     nidara-hyalo --winit         a window inside the current compositor (development)
 //!     nidara-hyalo --session       the session entry's way: also runs the config's autostart
 //!     nidara-hyalo -c CMD          also run CMD once the socket is up
+//!     nidara-hyalo --login -c CMD  the login screen (#1195): CMD is the login client, shown
+//!                                  as a lock, and Hyalo exits once it unlocks
 //!     nidara-hyalo msg …           talk to the running compositor (see `msg --help`)
 
 mod a11y;
@@ -39,6 +41,24 @@ mod xwayland;
 use smithay::reexports::{calloop::EventLoop, wayland_server::Display};
 
 pub use state::Hyalo;
+
+/// Login mode (#1195, `--login`): Hyalo runs the login screen for `nidara-login`, as the login
+/// user, before anyone has logged in. Set once in `main`, before anything reads it.
+///
+/// - Only the system configuration is read: there is no user yet, and the login user's home
+///   is not anybody's choice.
+/// - The wallpaper is the system's (#1195 L5): a user's look arrives with their session.
+/// - The login client (`-c`) is held as a LOCK client: nothing else can be drawn or reached,
+///   only the `locked` bindings run, and a client that dies is started again, all by lock.rs
+///   as for the lock screen.
+/// - No autostart, no Xwayland, no logind sleep lock: there is no session to keep.
+/// - When the client unlocks, the login is done: Hyalo exits, so the user's Hyalo can take the
+///   screens.
+static LOGIN: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
+
+pub fn login_mode() -> bool {
+    LOGIN.load(std::sync::atomic::Ordering::Relaxed)
+}
 
 fn main() {
     let args: Vec<String> = std::env::args().skip(1).collect();
@@ -77,7 +97,22 @@ fn main() {
         .position(|a| a == "-c" || a == "--command")
         .and_then(|i| args.get(i + 1).cloned());
     let session = args.iter().any(|a| a == "--session");
+    let login = args.iter().any(|a| a == "--login");
+    if login {
+        if session {
+            eprintln!("--login and --session are two different things: pick one");
+            std::process::exit(2);
+        }
+        if command.is_none() {
+            eprintln!("--login needs the login client: --login -c COMMAND");
+            std::process::exit(2);
+        }
+        LOGIN.store(true, std::sync::atomic::Ordering::Relaxed);
+    }
 
+    if login {
+        lock::set_login_client(command.clone().unwrap_or_default());
+    }
     if let Err(err) = run(winit, session, command) {
         tracing::error!("{err}");
         crash::write_report(&format!("startup failed: {err}"));
@@ -89,14 +124,18 @@ const USAGE: &str = r#"
 nidara-hyalo — the Nidara desktop's compositor
 
   nidara-hyalo [--tty | --winit] [--session] [-c COMMAND]
+  nidara-hyalo [--tty | --winit] --login -c CLIENT
   nidara-hyalo msg <request> [args]     (nidara-hyalo msg --help)
 
   --tty      run on the hardware: DRM/KMS, libinput, libseat (what the session does)
   --winit    run in a window of the current compositor (development)
   --session  a real session: run the config's autostart (uwsm finalize, the shell…)
   -c CMD     run CMD once Hyalo is up
+  --login    the login screen: CLIENT is held as a lock client, and Hyalo exits once it
+             unlocks (nidara-login starts it this way)
 
-Configuration: /usr/share/nidara/hyalo/hyalo.toml, then ~/.config/nidara/hyalo.toml on top.
+Configuration: /usr/share/nidara/hyalo/hyalo.toml, then ~/.config/nidara/hyalo.toml on top
+(--login: the first only).
 "#;
 
 fn run(winit: bool, session: bool, command: Option<String>) -> Result<(), Box<dyn std::error::Error>> {
@@ -154,8 +193,11 @@ fn start(state: &mut Hyalo, session: bool, command: Option<String>) {
         std::env::set_var("XDG_SESSION_TYPE", "wayland");
         std::env::remove_var("DISPLAY");
     }
-    // Before the autostart: `uwsm finalize` exports DISPLAY to the session's services.
-    xwayland::start(state);
+    // Before the autostart: `uwsm finalize` exports DISPLAY to the session's services. The
+    // login screen runs no X client.
+    if !login_mode() {
+        xwayland::start(state);
+    }
     tracing::info!(socket = ?state.socket_name, "listening");
     // The wallpaper (render/wallpaper.rs): the saved one from the first frame, and a frame
     // asked for whenever a later one has been decoded.
@@ -190,7 +232,11 @@ fn start(state: &mut Hyalo, session: bool, command: Option<String>) {
     } else if !state.config.autostart.is_empty() {
         tracing::info!("not a session (--session): autostart skipped");
     }
-    if let Some(cmd) = command {
+    if login_mode() {
+        // The login client is the lock client: lock.rs holds the screens, starts it, and
+        // starts it again if it dies.
+        state.start_login();
+    } else if let Some(cmd) = command {
         spawn(&cmd);
     }
 }

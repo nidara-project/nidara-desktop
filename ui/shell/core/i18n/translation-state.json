@@ -1081,6 +1081,7 @@
     "lock.title": "6e2b667a",
     "lock.password": "8be3c943",
     "lock.unlock": "1526a17e",
+    "lock.log-in": "f7c400ed",
     "lock.show-password": "044b852f",
     "lock.hide-password": "e40123b4",
     "lock.wrong-password": "fc2066fe",
@@ -1095,8 +1096,8 @@
   },
   "locales": {
     "de": {
-      "translated": 850,
-      "of": 1091,
+      "translated": 851,
+      "of": 1092,
       "untranslated": [
         "bar.edit.done",
         "bar.edit.hint",
@@ -1343,14 +1344,14 @@
       "stale": []
     },
     "es": {
-      "translated": 1091,
-      "of": 1091,
+      "translated": 1092,
+      "of": 1092,
       "untranslated": [],
       "stale": []
     },
     "fr": {
-      "translated": 850,
-      "of": 1091,
+      "translated": 851,
+      "of": 1092,
       "untranslated": [
         "bar.edit.done",
         "bar.edit.hint",
@@ -1597,8 +1598,8 @@
       "stale": []
     },
     "it": {
-      "translated": 850,
-      "of": 1091,
+      "translated": 851,
+      "of": 1092,
       "untranslated": [
         "bar.edit.done",
         "bar.edit.hint",
@@ -1845,8 +1846,8 @@
       "stale": []
     },
     "ja": {
-      "translated": 850,
-      "of": 1091,
+      "translated": 851,
+      "of": 1092,
       "untranslated": [
         "bar.edit.done",
         "bar.edit.hint",
@@ -2093,8 +2094,8 @@
       "stale": []
     },
     "nl": {
-      "translated": 850,
-      "of": 1091,
+      "translated": 851,
+      "of": 1092,
       "untranslated": [
         "bar.edit.done",
         "bar.edit.hint",
@@ -2341,8 +2342,8 @@
       "stale": []
     },
     "pl": {
-      "translated": 850,
-      "of": 1091,
+      "translated": 851,
+      "of": 1092,
       "untranslated": [
         "bar.edit.done",
         "bar.edit.hint",
@@ -2589,8 +2590,8 @@
       "stale": []
     },
     "pt-BR": {
-      "translated": 850,
-      "of": 1091,
+      "translated": 851,
+      "of": 1092,
       "untranslated": [
         "bar.edit.done",
         "bar.edit.hint",
@@ -2837,8 +2838,8 @@
       "stale": []
     },
     "pt-PT": {
-      "translated": 850,
-      "of": 1091,
+      "translated": 851,
+      "of": 1092,
       "untranslated": [
         "bar.edit.done",
         "bar.edit.hint",
@@ -3085,8 +3086,8 @@
       "stale": []
     },
     "ru": {
-      "translated": 850,
-      "of": 1091,
+      "translated": 851,
+      "of": 1092,
       "untranslated": [
         "bar.edit.done",
         "bar.edit.hint",
@@ -3333,8 +3334,8 @@
       "stale": []
     },
     "zh-CN": {
-      "translated": 850,
-      "of": 1091,
+      "translated": 851,
+      "of": 1092,
       "untranslated": [
         "bar.edit.done",
         "bar.edit.hint",

@@ -633,6 +633,8 @@ package_nidara-hyalo() {
   # and most games — with Hyalo as their window manager (xwayland.rs, #683).
   depends=("nidara-desktop=$pkgver-$pkgrel" uwsm libinput seatd libdisplay-info libxkbcommon mesa
            systemd-libs pango cairo xorg-xwayland)
+  # A PAM file edited on the machine survives an upgrade.
+  backup=(etc/pam.d/nidara-login etc/pam.d/nidara-greeter etc/pam.d/nidara-autologin)
 
   cd "$srcdir/nidara-desktop-$pkgver"
   install -Dm755 hyalo/target/release/nidara-hyalo "$pkgdir/usr/bin/nidara-hyalo"
@@ -640,6 +642,12 @@ package_nidara-hyalo() {
   install -Dm755 toolkit/target/release/nidara-shell "$pkgdir/usr/bin/nidara-shell"
   install -Dm755 toolkit/target/release/nidara-file-chooser "$pkgdir/usr/lib/nidara/nidara-file-chooser"
   install -Dm755 toolkit/target/release/nidara-lock "$pkgdir/usr/lib/nidara/nidara-lock"
+  # The login manager (#1195 D8), shipped but not enabled while greetd logs in (step 4).
+  install -Dm755 session/target/release/nidara-login "$pkgdir/usr/lib/nidara/nidara-login"
+  install -Dm644 session/login/nidara-login.service "$pkgdir/usr/lib/systemd/system/nidara-login.service"
+  for p in nidara-login nidara-greeter nidara-autologin; do
+    install -Dm644 config/pam/$p "$pkgdir/etc/pam.d/$p"
+  done
   install -Dm755 toolkit/target/release/nidara-kit-gallery "$pkgdir/usr/bin/nidara-kit-gallery"
   install -Dm644 toolkit/gallery/nidara-kit-gallery.desktop "$pkgdir/usr/share/applications/nidara-kit-gallery.desktop"
   install -Dm644 bin/nidara-rust-shell.service "$pkgdir/usr/lib/systemd/user/nidara-rust-shell.service"

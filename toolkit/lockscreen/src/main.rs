@@ -11,6 +11,7 @@
 //! and the field are on the one the pointer is on, and the clock alone on the others (D6).
 //! This thread holds the lock, the attempt and the shared state they read.
 mod auth;
+mod login;
 mod media;
 mod surface;
 mod user;
@@ -100,7 +101,13 @@ fn main() {
 }
 
 fn run() -> Result<(), String> {
-    let user = user::User::current();
+    // The login screen (#1195): Hyalo in login mode runs this same screen for nidara-login.
+    let login = login::socket().is_some();
+    let user = if login {
+        user::User::for_login()
+    } else {
+        user::User::current()
+    };
     let look = Arc::new(surface::Kit::load(&user)?);
     let watch = nk_wayland::outputs(Duration::from_secs(5))?;
     let mut lock = nk_wayland::lock_session(Duration::from_secs(5))?;
@@ -114,7 +121,10 @@ fn run() -> Result<(), String> {
         wakers: Mutex::new(Vec::new()),
         threads: Mutex::new(Vec::new()),
     });
-    media::watch(tx.clone());
+    // The login user has no session of anybody's to play from.
+    if !login {
+        media::watch(tx.clone());
+    }
     let first = watch.current().first().map(|o| o.id);
     world.update(|s| s.active = first);
     // The outputs' thread: one surface per output, now and as screens come and go.
@@ -146,6 +156,11 @@ fn run() -> Result<(), String> {
     }
     eprintln!("nidara-lock: locked");
     let expired = converse(&world, early, &rx, &mut lock, look.measures.error_seconds)?;
+    if login {
+        // The manager starts the session once this screen's Hyalo has let go of the screens,
+        // which it does when the lock goes (login mode).
+        login::start()?;
+    }
     lock.unlock()?;
     eprintln!("nidara-lock: unlocked");
     // The surfaces close; the compositor already shows the session.
@@ -212,7 +227,11 @@ fn converse(
                         }
                     }
                 });
-                auth::attempt(&login, secret, said_tx);
+                if login::socket().is_some() {
+                    login::attempt(&login, secret, said_tx);
+                } else {
+                    auth::attempt(&login, secret, said_tx);
+                }
             }
             Msg::Typed => {
                 let shown = {

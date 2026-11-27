@@ -366,7 +366,14 @@ impl Surface {
             let entry: Node =
                 nk::PasswordEntry::new(self.field.clone(), text("lock.password"), SECRET)
                     .enabled(!shared.checking)
-                    .submit(text("lock.unlock"), SUBMIT)
+                    .submit(
+                        text(if crate::login::socket().is_some() {
+                            "lock.log-in"
+                        } else {
+                            "lock.unlock"
+                        }),
+                        SUBMIT,
+                    )
                     .peek(text("lock.show-password"), text("lock.hide-password"), PEEK)
                     .revealed(self.revealed)
                     .glass()
