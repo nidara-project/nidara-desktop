@@ -113,9 +113,11 @@ fn run(user: &str, secret: nk::Secret, said: &Sender<Said>) -> Result<(), String
     let expired = std::rc::Rc::new(std::cell::Cell::new(false));
     let denied = std::rc::Rc::new(std::cell::Cell::new(false));
     let secret = std::rc::Rc::new(std::cell::RefCell::new(Some(secret)));
+    // Every handler is disconnected on this thread before `pam` goes (see the end).
+    let mut handlers = Vec::new();
     {
         let secret = secret.clone();
-        pam.connect_local("auth-prompt-hidden", false, move |_| {
+        handlers.push(pam.connect_local("auth-prompt-hidden", false, move |_| {
             // Every hidden prompt gets the password the user typed, as the TS lock did.
             let s = secret.borrow();
             let answer = s.as_ref().map(|s| s.as_str()).unwrap_or("");
@@ -125,9 +127,9 @@ fn run(user: &str, secret: nk::Secret, said: &Sender<Said>) -> Result<(), String
                 wipe(c);
             }
             None
-        });
+        }));
     }
-    pam.connect_local("auth-prompt-visible", false, move |v| {
+    handlers.push(pam.connect_local("auth-prompt-visible", false, move |v| {
         // A username prompt cannot happen (pam_start has it) and the lock screen has no
         // second field: answer so the attempt cannot hang, and say so in the log.
         eprintln!(
@@ -136,62 +138,70 @@ fn run(user: &str, secret: nk::Secret, said: &Sender<Said>) -> Result<(), String
         );
         unsafe { (lib.supply)(raw, c"".as_ptr()) };
         None
-    });
+    }));
     {
         let said = said.clone();
-        pam.connect_local("auth-info", false, move |v| {
+        handlers.push(pam.connect_local("auth-info", false, move |v| {
             let _ = said.send(Said::Info(text(v)));
             None
-        });
+        }));
     }
     {
         let said = said.clone();
-        pam.connect_local("auth-error", false, move |v| {
+        handlers.push(pam.connect_local("auth-error", false, move |v| {
             let _ = said.send(Said::Error(text(v)));
             None
-        });
+        }));
     }
     {
         let expired = expired.clone();
-        pam.connect_local("password-expired", false, move |_| {
+        handlers.push(pam.connect_local("password-expired", false, move |_| {
             expired.set(true);
             None
-        });
+        }));
     }
     {
         let denied = denied.clone();
-        pam.connect_local("account-denied", false, move |v| {
+        handlers.push(pam.connect_local("account-denied", false, move |v| {
             eprintln!("nidara-lock: the account stack refused: {}", text(v));
             denied.set(true);
             None
-        });
+        }));
     }
     {
         let (said, finished, expired) = (said.clone(), finished.clone(), expired.clone());
-        pam.connect_local("success", false, move |_| {
+        handlers.push(pam.connect_local("success", false, move |_| {
             let _ = said.send(Said::Success {
                 expired: expired.get(),
             });
             finished.set(true);
             None
-        });
+        }));
     }
     {
         let (said, finished, denied) = (said.clone(), finished.clone(), denied.clone());
-        pam.connect_local("fail", false, move |v| {
+        handlers.push(pam.connect_local("fail", false, move |v| {
             eprintln!("nidara-lock: authentication failed: {}", text(v));
             let _ = said.send(Said::Fail {
                 denied: denied.get(),
             });
             finished.set(true);
             None
-        });
+        }));
     }
     unsafe { (lib.start)(raw) };
     while !finished.get() {
         context.iteration(true);
     }
     secret.borrow_mut().take();
+    // The library's worker thread holds a reference of its own and lets go of it there
+    // (nidara-auth.c, at the end of `auth_worker_func`). If that is the last one, the object
+    // is finalized on the worker, and with it these closures, which glib only allows on the
+    // thread that made them: a panic on a C thread, so the lock client aborted. Disconnected
+    // here, they are dropped here, whoever finalizes the object.
+    for id in handlers {
+        pam.disconnect(id);
+    }
     Ok(())
 }
 
