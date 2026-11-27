@@ -2776,7 +2776,8 @@ Config1 writes `LANG` and `LANGUAGE` next to the format's `LC_*` assignments in
 preserves the other key's assignments. Native Settings applies its Language
 dropdown through Config1. It runs `pkexec nidara-language ensure-engine` only
 when the selected language needs a missing input engine, and applies the
-selection only once that succeeds. `/etc/locale.conf` supplies the system
+selection only once that succeeds. Config1 checks the same engine map and
+refuses the change while the required package is missing. `/etc/locale.conf` supplies the system
 language for the login screen and new accounts.
 
 ## Native toolkit range values

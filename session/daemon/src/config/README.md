@@ -131,7 +131,8 @@ leaks in.
   A write sets `LANG` and `LANGUAGE` for the next login. Both writers preserve the other
   key's assignments. Config1 announces its writes and watches the file for external changes.
   The shell follows `region.language` live. Settings installs a required missing input engine
-  before applying the selection.
+  before applying the selection. Config1 checks the engine package at the
+  write boundary and refuses the change when it is missing.
 
 ## Top bar (#1103 8e)
 

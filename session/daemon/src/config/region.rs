@@ -238,11 +238,44 @@ fn languages(st: &Store) -> Vec<String> {
     values
 }
 
+/// Query the same engine map as Settings and the installer. A Config1 caller
+/// can choose a language once its engine is present.
+fn require_engine(lang: &str) -> Result<(), String> {
+    use std::process::Command;
+
+    let engine = Command::new("nidara-language")
+        .args(["engine", lang])
+        .output()
+        .map_err(|error| format!("could not check the input engine for {lang}: {error}"))?;
+    if !engine.status.success() {
+        return Err(format!(
+            "could not check the input engine for {lang}: {}",
+            engine.status
+        ));
+    }
+    let package = std::str::from_utf8(&engine.stdout)
+        .map_err(|error| error.to_string())?
+        .trim();
+    if package.is_empty() {
+        return Ok(());
+    }
+    let installed = Command::new("pacman")
+        .args(["-Qq", "--", package])
+        .output()
+        .map_err(|error| format!("could not check for {package}: {error}"))?;
+    if installed.status.success() {
+        Ok(())
+    } else {
+        Err(format!("{lang} requires the input engine {package}"))
+    }
+}
+
 fn put_language(st: &Store, value: &Value) -> Result<(), String> {
     let lang = text(value);
     if language(st) == lang {
         return Ok(());
     }
+    require_engine(lang)?;
     let (locale, modifier) = lang.split_once('@').unwrap_or((lang, ""));
     let name = locale.split_once('.').map_or(locale, |(name, _)| name);
     let language = if modifier.is_empty() {

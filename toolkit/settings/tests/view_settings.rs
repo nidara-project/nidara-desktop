@@ -332,7 +332,7 @@ fn the_region_page_writes_the_zone_of_the_city_chosen_and_its_format() {
     // The page builds with its strings: the zone in force as city and area, the matches
     // of what is typed under the search, and the language row.
     let appearance = nk_platform::portal::Appearance {
-        accent: [0.2, 0.4, 0.9],
+        accent: [0., 136. / 255., 1.],
         dark: true,
         reduce_transparency: false,
         window_background: "tinted".into(),
