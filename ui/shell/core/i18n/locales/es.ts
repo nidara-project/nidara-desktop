@@ -442,7 +442,6 @@ export default {
     "shell.prompt.polkit.account": "Cuenta",
     "shell.prompt.polkit.details": "Detalles",
     "shell.prompt.polkit.retry": "No se pudo autenticar. Inténtalo de nuevo.",
-    "shell.prompt.polkit.failed": "No se pudo completar la autenticación.",
     "settings.widgets.tooltip.no-space": "Sin espacio suficiente — quita un control primero",
     "settings.widgets.tooltip.cc-fixed": "Siempre en el Centro de control — se puede mover y cambiar de tamaño, no quitar",
     "settings.display.error.no-monitors": "No se detectaron monitores.",

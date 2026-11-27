@@ -398,7 +398,6 @@
     "shell.prompt.polkit.account": "85dfa32c",
     "shell.prompt.polkit.details": "dc3decbb",
     "shell.prompt.polkit.retry": "85ce679b",
-    "shell.prompt.polkit.failed": "d70e690b",
     "settings.widgets.tooltip.no-space": "4b49accd",
     "settings.widgets.tooltip.cc-fixed": "114dc78d",
     "settings.widgets.tooltip.no-hardware": "51f7da74",
@@ -1024,7 +1023,7 @@
   "locales": {
     "de": {
       "translated": 836,
-      "of": 1019,
+      "of": 1018,
       "untranslated": [
         "bar.edit.done",
         "bar.edit.hint",
@@ -1202,7 +1201,6 @@
         "shell.prompt.polkit.account",
         "shell.prompt.polkit.authenticate",
         "shell.prompt.polkit.details",
-        "shell.prompt.polkit.failed",
         "shell.prompt.polkit.retry",
         "shell.prompt.polkit.title",
         "shell.prompt.wifi.title",
@@ -1213,14 +1211,14 @@
       "stale": []
     },
     "es": {
-      "translated": 1019,
-      "of": 1019,
+      "translated": 1018,
+      "of": 1018,
       "untranslated": [],
       "stale": []
     },
     "fr": {
       "translated": 836,
-      "of": 1019,
+      "of": 1018,
       "untranslated": [
         "bar.edit.done",
         "bar.edit.hint",
@@ -1398,7 +1396,6 @@
         "shell.prompt.polkit.account",
         "shell.prompt.polkit.authenticate",
         "shell.prompt.polkit.details",
-        "shell.prompt.polkit.failed",
         "shell.prompt.polkit.retry",
         "shell.prompt.polkit.title",
         "shell.prompt.wifi.title",
@@ -1410,7 +1407,7 @@
     },
     "it": {
       "translated": 836,
-      "of": 1019,
+      "of": 1018,
       "untranslated": [
         "bar.edit.done",
         "bar.edit.hint",
@@ -1588,7 +1585,6 @@
         "shell.prompt.polkit.account",
         "shell.prompt.polkit.authenticate",
         "shell.prompt.polkit.details",
-        "shell.prompt.polkit.failed",
         "shell.prompt.polkit.retry",
         "shell.prompt.polkit.title",
         "shell.prompt.wifi.title",
@@ -1600,7 +1596,7 @@
     },
     "ja": {
       "translated": 836,
-      "of": 1019,
+      "of": 1018,
       "untranslated": [
         "bar.edit.done",
         "bar.edit.hint",
@@ -1778,7 +1774,6 @@
         "shell.prompt.polkit.account",
         "shell.prompt.polkit.authenticate",
         "shell.prompt.polkit.details",
-        "shell.prompt.polkit.failed",
         "shell.prompt.polkit.retry",
         "shell.prompt.polkit.title",
         "shell.prompt.wifi.title",
@@ -1790,7 +1785,7 @@
     },
     "nl": {
       "translated": 836,
-      "of": 1019,
+      "of": 1018,
       "untranslated": [
         "bar.edit.done",
         "bar.edit.hint",
@@ -1968,7 +1963,6 @@
         "shell.prompt.polkit.account",
         "shell.prompt.polkit.authenticate",
         "shell.prompt.polkit.details",
-        "shell.prompt.polkit.failed",
         "shell.prompt.polkit.retry",
         "shell.prompt.polkit.title",
         "shell.prompt.wifi.title",
@@ -1980,7 +1974,7 @@
     },
     "pl": {
       "translated": 836,
-      "of": 1019,
+      "of": 1018,
       "untranslated": [
         "bar.edit.done",
         "bar.edit.hint",
@@ -2158,7 +2152,6 @@
         "shell.prompt.polkit.account",
         "shell.prompt.polkit.authenticate",
         "shell.prompt.polkit.details",
-        "shell.prompt.polkit.failed",
         "shell.prompt.polkit.retry",
         "shell.prompt.polkit.title",
         "shell.prompt.wifi.title",
@@ -2170,7 +2163,7 @@
     },
     "pt-BR": {
       "translated": 836,
-      "of": 1019,
+      "of": 1018,
       "untranslated": [
         "bar.edit.done",
         "bar.edit.hint",
@@ -2348,7 +2341,6 @@
         "shell.prompt.polkit.account",
         "shell.prompt.polkit.authenticate",
         "shell.prompt.polkit.details",
-        "shell.prompt.polkit.failed",
         "shell.prompt.polkit.retry",
         "shell.prompt.polkit.title",
         "shell.prompt.wifi.title",
@@ -2360,7 +2352,7 @@
     },
     "pt-PT": {
       "translated": 836,
-      "of": 1019,
+      "of": 1018,
       "untranslated": [
         "bar.edit.done",
         "bar.edit.hint",
@@ -2538,7 +2530,6 @@
         "shell.prompt.polkit.account",
         "shell.prompt.polkit.authenticate",
         "shell.prompt.polkit.details",
-        "shell.prompt.polkit.failed",
         "shell.prompt.polkit.retry",
         "shell.prompt.polkit.title",
         "shell.prompt.wifi.title",
@@ -2550,7 +2541,7 @@
     },
     "ru": {
       "translated": 836,
-      "of": 1019,
+      "of": 1018,
       "untranslated": [
         "bar.edit.done",
         "bar.edit.hint",
@@ -2728,7 +2719,6 @@
         "shell.prompt.polkit.account",
         "shell.prompt.polkit.authenticate",
         "shell.prompt.polkit.details",
-        "shell.prompt.polkit.failed",
         "shell.prompt.polkit.retry",
         "shell.prompt.polkit.title",
         "shell.prompt.wifi.title",
@@ -2740,7 +2730,7 @@
     },
     "zh-CN": {
       "translated": 836,
-      "of": 1019,
+      "of": 1018,
       "untranslated": [
         "bar.edit.done",
         "bar.edit.hint",
@@ -2918,7 +2908,6 @@
         "shell.prompt.polkit.account",
         "shell.prompt.polkit.authenticate",
         "shell.prompt.polkit.details",
-        "shell.prompt.polkit.failed",
         "shell.prompt.polkit.retry",
         "shell.prompt.polkit.title",
         "shell.prompt.wifi.title",

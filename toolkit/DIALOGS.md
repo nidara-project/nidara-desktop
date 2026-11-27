@@ -65,9 +65,11 @@ immediately so Settings can cancel the preview lease.
 The dialog starts `PolkitAgentSession` once its first frame is committed. It
 focuses the credential field as soon as PAM asks for input. A method that
 requires no input may complete on its own. A failure announces the error and
-starts a fresh conversation while attempts remain, so the next field is empty
-and gains focus as soon as PAM asks again. At the attempt limit the dialog leaves
-Cancel available. The dialog displays only identities offered by polkit.
+reopens a fresh conversation after a submitted response. If PAM refuses
+before the user responds, the dialog waits for an explicit retry. PAM owns
+attempt counting. The dialog shows and announces all PAM messages for the
+attempt, including any remaining lockout time supplied by pam_faillock.
+The dialog displays only identities offered by polkit.
 Account labels use the NSS real name and login, with a login fallback.
 AccountsService avatars are a follow-up. The library owns the distribution
 helper and PAM policy. The shell keeps PAM input masked, including

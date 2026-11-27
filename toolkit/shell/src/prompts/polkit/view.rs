@@ -1,5 +1,9 @@
 // SPDX-License-Identifier: LGPL-3.0-or-later
-use super::{Error, Request, cancelled, conversation, plain};
+use super::{
+    Error, Request, cancelled,
+    conversation::{self, Event},
+    plain,
+};
 use crate::{
     prompts::surface::{dialog_host, dialog_options},
     shell1::Status,
@@ -13,13 +17,61 @@ use nk_platform::{POLKIT_PROMPT_APP_ID, exports::Exports, portal::Portal};
 use nk_wayland::Result;
 use zbus::blocking::Connection;
 
-const RETRIES: u8 = 3;
 const LOCK_ICON: &str = "nd-system-lock-screen";
 
 enum Step {
     Waiting,
     Input(String),
-    Exhausted,
+    Retry,
+}
+
+#[derive(Default)]
+struct Feedback {
+    previous: Vec<String>,
+    current: Vec<String>,
+    failed: bool,
+}
+
+impl Feedback {
+    /// A single PAM callback may contain several lines. Preserve their order
+    /// together with any lines already received in the conversation.
+    fn observe(&mut self, event: &Event) -> Option<String> {
+        match event {
+            Event::Info(text) | Event::Error(text) => {
+                let message = text
+                    .lines()
+                    .map(|line| plain(line, 320))
+                    .filter(|line| !line.trim().is_empty())
+                    .collect::<Vec<_>>()
+                    .join("\n");
+                if message.is_empty() {
+                    return None;
+                }
+                self.current.push(message.clone());
+                Some(message)
+            }
+            Event::Completed(false) => {
+                if !self.current.is_empty() {
+                    self.previous = std::mem::take(&mut self.current);
+                }
+                self.failed = true;
+                None
+            }
+            _ => None,
+        }
+    }
+
+    fn lines(&self) -> impl Iterator<Item = &str> {
+        self.previous
+            .iter()
+            .chain(&self.current)
+            .map(String::as_str)
+    }
+
+    fn acknowledge(&mut self) {
+        self.previous.clear();
+        self.failed = false;
+    }
 }
 
 struct View<'a> {
@@ -32,11 +84,11 @@ struct View<'a> {
     portal: Portal,
     names: Vec<String>,
     user: usize,
-    attempts: u8,
+    answered: bool,
     prompt: usize,
     step: Step,
     value: Option<nk::Secret>,
-    notice: Option<String>,
+    feedback: Feedback,
     expanded: bool,
     withdrawn: bool,
     granted: bool,
@@ -60,8 +112,7 @@ impl View<'_> {
         }
         let uid = self.request.identities[self.user];
         self.value = None;
-        self.notice = None;
-        self.attempts += 1;
+        self.answered = false;
         self.step = Step::Waiting;
         self.session = Some(
             conversation::Session::start(self.library, uid, &self.request.ticket.cookie)
@@ -73,7 +124,7 @@ impl View<'_> {
 
 impl DialogContent for View<'_> {
     fn opened(&mut self) -> Result<()> {
-        if self.attempts == 0 {
+        if self.session.is_none() && matches!(self.step, Step::Waiting) {
             self.start_attempt()?;
         }
         Ok(())
@@ -116,7 +167,6 @@ impl DialogContent for View<'_> {
                     self.names.clone(),
                     self.user,
                 )
-                .enabled(self.attempts < RETRIES)
                 .into(),
             );
         } else {
@@ -132,8 +182,14 @@ impl DialogContent for View<'_> {
                     .into(),
             );
         }
-        if let Some(notice) = &self.notice {
-            fields.push(label("polkit/status", notice.clone()));
+        for (index, line) in self.feedback.lines().flat_map(str::lines).enumerate() {
+            fields.push(label(&format!("polkit/status/{index}"), line.into()));
+        }
+        if self.feedback.failed {
+            fields.push(label(
+                "polkit/retry",
+                self.text("shell.prompt.polkit.retry"),
+            ));
         }
         let mut details = vec![label("polkit/action", self.request.action.clone())];
         for (i, (key, value)) in self.request.details.iter().enumerate() {
@@ -171,7 +227,7 @@ impl DialogContent for View<'_> {
                 default: true,
                 cancel: false,
                 destructive: false,
-                enabled: matches!(self.step, Step::Input(_)),
+                enabled: matches!(self.step, Step::Input(_) | Step::Retry),
             },
         ])
     }
@@ -183,10 +239,11 @@ impl DialogContent for View<'_> {
             }
             ("details", Some(Value::Bool(open))) => self.expanded = open,
             ("account", Some(Value::Index(index)))
-                if index < self.names.len() && index != self.user && self.attempts < RETRIES =>
+                if index < self.names.len() && index != self.user =>
             {
                 self.session = None;
                 self.user = index;
+                self.feedback = Feedback::default();
                 self.start_attempt()?;
             }
             _ => {}
@@ -204,12 +261,16 @@ impl DialogContent for View<'_> {
             self.value = None;
             return Ok(true);
         }
-        if matches!(self.step, Step::Input(_))
+        if matches!(self.step, Step::Retry) {
+            self.feedback.acknowledge();
+            self.start_attempt()?;
+        } else if matches!(self.step, Step::Input(_))
             && let Some(session) = &self.session
         {
             session.respond(self.value.take());
+            self.answered = true;
             self.step = Step::Waiting;
-            self.notice = None;
+            self.feedback.acknowledge();
         }
         Ok(false)
     }
@@ -233,10 +294,14 @@ impl DialogContent for View<'_> {
                 break;
             }
         }
+        let mut announcements = Vec::new();
         while let Some(event) = self.session.as_mut().and_then(conversation::Session::pop) {
             update.content_changed = true;
+            if let Some(message) = self.feedback.observe(&event) {
+                announcements.push(message);
+            }
             match event {
-                conversation::Event::Request(text, _echo_on) => {
+                Event::Request(text, _echo_on) => {
                     // Keep PAM input out of the text layout and assistive-technology
                     // tree even when a module enables terminal echo.
                     self.value = None;
@@ -249,32 +314,29 @@ impl DialogContent for View<'_> {
                     });
                     update.focus = Some(format!("polkit/input/{}", self.prompt).into());
                 }
-                conversation::Event::Info(text) | conversation::Event::Error(text) => {
-                    let notice = plain(&text, 320);
-                    update.announcement = Some(notice.clone());
-                    self.notice = Some(notice);
-                }
-                conversation::Event::Completed(granted) => {
+                Event::Info(_) | Event::Error(_) => {}
+                Event::Completed(granted) => {
                     self.session = None;
                     self.value = None;
                     if granted {
                         self.granted = true;
                         self.withdrawn = true;
                     } else {
-                        let label = if self.attempts < RETRIES {
+                        announcements.push(self.text("shell.prompt.polkit.retry"));
+                        if self.answered {
                             self.start_attempt()?;
-                            "shell.prompt.polkit.retry"
                         } else {
-                            self.step = Step::Exhausted;
-                            "shell.prompt.polkit.failed"
-                        };
-                        let notice = self.text(label);
-                        update.announcement = Some(notice.clone());
-                        self.notice = Some(notice);
+                            // A preauth refusal may finish without a prompt.
+                            // Let the user choose when to check again.
+                            self.step = Step::Retry;
+                        }
                     }
                     break;
                 }
             }
+        }
+        if !announcements.is_empty() {
+            update.announcement = Some(announcements.join("\n"));
         }
         if !self.withdrawn && self.portal.changed() {
             let mut appearance = self.portal.read()?;
@@ -340,11 +402,11 @@ pub(super) fn run(
         portal,
         names,
         user,
-        attempts: 0,
+        answered: false,
         prompt: 0,
         step: Step::Waiting,
         value: None,
-        notice: None,
+        feedback: Feedback::default(),
         expanded: false,
         withdrawn: false,
         granted: false,
@@ -371,4 +433,35 @@ pub(super) fn run(
     } else {
         Err(cancelled())
     })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn polkit_feedback_preserves_lockout_lines_across_a_failed_conversation() {
+        let mut feedback = Feedback::default();
+        let events = [
+            Event::Error("The account is locked due to failed logins.".into()),
+            Event::Info("(7 minutes left to unlock)".into()),
+            Event::Request("Password:".into(), false),
+        ];
+        let spoken: Vec<_> = events
+            .iter()
+            .filter_map(|event| feedback.observe(event))
+            .collect();
+        assert_eq!(
+            spoken,
+            [
+                "The account is locked due to failed logins.",
+                "(7 minutes left to unlock)"
+            ]
+        );
+        // Submitting input must not remove any lines from the current attempt.
+        feedback.acknowledge();
+        assert!(feedback.observe(&Event::Completed(false)).is_none());
+        assert!(feedback.failed);
+        assert_eq!(feedback.lines().collect::<Vec<_>>(), spoken);
+    }
 }
