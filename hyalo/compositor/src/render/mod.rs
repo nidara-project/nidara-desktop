@@ -21,6 +21,7 @@ pub mod snapshot;
 pub mod stats;
 pub mod timing;
 pub mod title_bar;
+pub mod unlocking;
 pub mod wallpaper;
 pub mod window;
 
@@ -492,6 +493,8 @@ fn scene_elements<R: HyaloRenderer>(
         push_wallpaper(&mut out, renderer);
         return with_overlay(out, output);
     }
+    // Just unlocked (#1195 D9): what the lock screen showed dissolves over the session.
+    unlocking::push(&mut out, output, output_geo.size, scale, state.when);
     let (above, below) = windows_front_to_back(state.space, state.wm, output);
     // Hyalo's own animations, as they are when this frame shows (render/timing.rs).
     let now = state.when;

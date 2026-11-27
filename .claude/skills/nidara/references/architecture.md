@@ -1240,9 +1240,16 @@ client of `ext-session-lock-v1` built from the kit (`nk::ViewState`, `nk-wayland
 - the compositor sends `wl_keyboard.modifiers` AFTER the key that changed them, so Caps Lock
   is read on `Event::Modifiers`, never on the key event.
 
-The design decisions (one stage, no notifications, no card — the only glass is the field's —
-and who fades on unlock) are in #1195's approved comment; switching user waits for our own
-login manager.
+- **What is playing** (D5) comes from the session's `org.nidara.Media1`, the player the bar
+  and the Control Center show: title, artist and previous / play-pause / next under the clock
+  of the field's output, nothing when the user turned `media.lock-screen-controls` off.
+- **Unlocking** (D9): the client destroys its surfaces as it unlocks, so Hyalo keeps each
+  output's last lock picture and glass and dissolves them and the veil over the session
+  (`render/unlocking.rs`), in GNOME Shell's time and curve (250 ms, ease-out-quad, read from
+  its `screenShield.js`). With Hyalo's animations off it just goes.
+
+The design decisions (one stage, no notifications, no card — the only glass is the field's)
+are in #1195's approved comment; switching user waits for our own login manager.
 
 ## Directory map (`ui/shell/`)
 

@@ -6,6 +6,8 @@
 //! pointer reach the lock surfaces only; of the bindings, only those marked `locked` run
 //! (volume, brightness), plus the two built in (VT switch, Ctrl+Alt+Backspace).
 //!
+//! Unlocking, what each output showed dissolves over the session (render/unlocking.rs, D9).
+//!
 //! The lock surface is an ordinary surface to the rest of Hyalo, so it declares its glass
 //! through `nidara-material-v1` like the shell's panels. There is no card (#1195): the clock,
 //! the name and the messages sit straight on the VEIL Hyalo draws over the wallpaper, and the
@@ -463,6 +465,16 @@ impl SessionLockHandler for Hyalo {
 
     fn unlock(&mut self) {
         tracing::info!("session unlocked");
+        // D9: what each output showed goes in a fade over the session (render/unlocking.rs),
+        // taken now, while the client's lock surfaces still exist.
+        if self.config.animations.enabled {
+            let going: Vec<_> = self
+                .space
+                .outputs()
+                .map(|o| (o.clone(), self.lock.surface_for(o).cloned()))
+                .collect();
+            crate::backend::keep_lock_going(self, &going);
+        }
         self.lock.mode = Mode::Unlocked;
         self.lock.flag.store(false, Ordering::Release);
         self.lock.surfaces.clear();

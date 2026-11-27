@@ -53,11 +53,12 @@ pub fn lens(coming: bool, c: f64) -> f32 {
     if coming { LENS_IN * k } else { LENS_OUT * k }
 }
 
-/// Frames are wanted until then: a menu is coming or going. Read by `Hyalo::step_motions`; a
+/// Frames are wanted until then: a menu is coming or going, or the lock screen is going
+/// (unlocking.rs). Read by `Hyalo::step_motions`; a
 /// menu's motion lives on its surface, which the motion loop does not walk.
 static UNTIL: Mutex<Option<Instant>> = Mutex::new(None);
 
-fn want_frames_until(until: Instant) {
+pub(crate) fn want_frames_until(until: Instant) {
     let mut u = UNTIL.lock().unwrap();
     if u.is_none_or(|x| x < until) {
         *u = Some(until);
