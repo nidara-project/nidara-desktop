@@ -79,7 +79,8 @@ const RELAUNCH: &str = "nidara-lock";
 /// 4.5:1 (AA) over the brightest wallpaper there is, a white one, which takes the veiled white
 /// down to a luminance of 1.05 / 4.5 − 0.05 = 0.183, sRGB 0.465. Hyalo blends in sRGB, so the
 /// veil must cover at least 1 − 0.465 = 0.535 of it; the shipped wallpaper is darker and is
-/// then far past AA. Read back from a frame over a white wallpaper (#1195's PR).
+/// then far past AA. Read back from a frame over a white wallpaper (2026-11-27): 117/255 grey,
+/// 4.61:1 against white.
 pub const VEIL: f32 = 0.54;
 
 pub fn lock_command() -> String {

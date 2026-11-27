@@ -11,7 +11,7 @@
 //! kit's (`nk::ViewState`); this says what the view is and acts on what is activated.
 use crate::{Msg, World};
 use nk::{
-    Activated, Align, Corner, Ink, Key, Node, Padding, Space, Type, ViewState, Weight, Widget,
+    Activated, Align, Ink, Key, Node, Space, Type, ViewState, Weight, Widget,
     WindowLook,
 };
 use nk_platform::clock::{self, Order, Region};
@@ -27,7 +27,6 @@ const SECRET: &str = "secret";
 const SUBMIT: &str = "submit";
 const SUSPEND: &str = "suspend";
 const AVATAR: &str = "lock/avatar";
-const FIELD_PANE: &str = "lock/field";
 const ROOT: nk_a11y::NodeId = 1;
 const ENTER: u32 = 0xff0d;
 const KP_ENTER: u32 = 0xff8d;
@@ -347,22 +346,13 @@ impl Surface {
                 .into(),
             );
             children.push(strut("lock/field-gap", m.field_gap));
+            // The kit's field as the gallery shows it: its own shape, its own focus ring.
             let entry: Node =
                 nk::PasswordEntry::new(self.field.clone(), text("lock.password"), SECRET)
                     .enabled(!shared.checking)
                     .submit(text("lock.unlock"), SUBMIT)
                     .into();
-            children.push(
-                nk::Pane::new(
-                    FIELD_PANE,
-                    Corner::Pill,
-                    nk::Row::new("lock/field/row", vec![entry.grow()])
-                        .align(Align::Center)
-                        .padding(Padding::symmetric(Space::S1, Space::S3)),
-                )
-                .width(m.field)
-                .into(),
-            );
+            children.push(entry.width(m.field));
             let body = types.style(Type::Body, Weight::Regular);
             // What the attempt said and the Caps Lock warning keep their room when empty, so
             // the avatar, the name and the field never move when one comes or goes.
