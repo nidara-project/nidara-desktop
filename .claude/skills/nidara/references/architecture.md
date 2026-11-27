@@ -2765,12 +2765,11 @@ Use the shipped settings-data catalogue for every shell-owned visible or spoken
 label. Add English and Spanish keys to the shell locales and sync the translation
 ledger. Keep action IDs, service protocol values and diagnostics in English.
 Application-provided names and messages pass through as application data.
-The native shell starts with the session's LANG, including an override from
-`~/.config/locale.conf`. It watches locale1 for subsequent system language changes made through Settings'
-existing localectl path. When locale1 restarts, the shell reads the new owner's
-Locale and compares it with the previous system value. A language change wakes
-existing surfaces and rebuilds their labels, including those for assistive
-technology. Missing catalogue keys are logged and shown by key.
+The native shell starts with the session's `LANG`. It listens to the session
+bus for Config1 `Changed` signals carrying `region.language`; it starts from
+`LANG` even when the daemon does not yet provide the key. A language change
+wakes existing surfaces and rebuilds their labels, including those for
+assistive technology. Missing catalogue keys are logged and shown by key.
 Regional date formatting continues to use the session's regional format.
 
 ## Native toolkit range values
