@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
-//! #1103 8b: Settings → Region's two keys, each in the home that decides it (#573 in
+//! #1103 8b: Settings → Region's keys, each in the home that decides it (#573 in
 //! `ui/shell/core/RegionConfig.ts`):
 //!
 //! - `region.timezone`: the SYSTEM's, `/etc/localtime`, changed through systemd-timedated's
@@ -8,12 +8,15 @@
 //!   old one) and the new one is announced when timedated has set it. A cancelled prompt
 //!   changes nothing and says nothing, as `timedatectl` cancelled did in TS.
 //! - `region.regionalFormat`: THIS user's, `~/.config/environment.d/nidara-locale.conf`, the
-//!   file the systemd user manager reads at login; "" (no file) means the language's format.
+//!   file the systemd user manager reads at login; "" means the language's format.
 //!   It takes effect at the next login.
+//! - `region.language`: the same file, via LANG and LANGUAGE. The shell also follows
+//!   the Config1 change live.
 use super::*;
 
 const TIMEZONE: &str = "region.timezone";
 const FORMAT: &str = "region.regionalFormat";
+const LANGUAGE: &str = "region.language";
 const TIMEDATED: &str = "org.freedesktop.timedate1";
 const TIMEDATED_PATH: &str = "/org/freedesktop/timedate1";
 const ZONEINFO: &str = "/usr/share/zoneinfo";
@@ -154,18 +157,40 @@ pub(super) fn watch(changed: impl Fn() + Clone + 'static) {
     SUBSCRIPTIONS.with(|s| s.borrow_mut().push(props));
 }
 
-pub(super) fn format_file(st: &Store) -> PathBuf {
+pub(super) fn locale_file(st: &Store) -> PathBuf {
     st.config.join("environment.d/nidara-locale.conf")
 }
-/// The saved regional format: the file's `LC_TIME`, "" without one.
-fn format(st: &Store) -> String {
-    format_of(&std::fs::read_to_string(format_file(st)).unwrap_or_default())
+
+fn assignment(line: &str) -> Option<(&str, &str)> {
+    let (key, value) = line.trim().split_once('=')?;
+    Some((key.trim_end(), value.trim().trim_matches(['"', '\''])))
 }
-fn format_of(text: &str) -> String {
-    text.lines()
-        .find_map(|l| l.trim().strip_prefix("LC_TIME="))
-        .map(|v| v.trim().trim_matches('"').to_owned())
-        .unwrap_or_default()
+
+fn saved_value<'a>(file: &'a str, key: &str) -> Option<&'a str> {
+    file.lines()
+        .rev()
+        .filter_map(assignment)
+        .find_map(|(name, value)| (name == key).then_some(value))
+}
+
+fn format(st: &Store) -> String {
+    let file = std::fs::read_to_string(locale_file(st)).unwrap_or_default();
+    saved_value(&file, "LC_TIME").unwrap_or_default().to_owned()
+}
+
+fn language(st: &Store) -> String {
+    let file = std::fs::read_to_string(locale_file(st)).unwrap_or_default();
+    saved_value(&file, "LANG")
+        .filter(|lang| !lang.is_empty())
+        .map_or_else(
+            || {
+                std::env::var("LANG")
+                    .ok()
+                    .filter(|lang| !lang.is_empty())
+                    .unwrap_or_else(|| "C".into())
+            },
+            str::to_owned,
+        )
 }
 /// The locales a regional format can be: `locale -a`'s, without the C/POSIX family, spelled
 /// as `locale.conf` spells them (`.UTF-8`).
@@ -204,25 +229,71 @@ fn formats(st: &Store) -> Vec<String> {
     }
     values
 }
-fn put_format(st: &Store, v: &Value) -> Result<(), String> {
-    let locale = text(v);
-    let path = format_file(st);
-    if locale.is_empty() {
-        return match std::fs::remove_file(&path) {
-            Err(e) if e.kind() != std::io::ErrorKind::NotFound => Err(e.to_string()),
+fn languages(st: &Store) -> Vec<String> {
+    let mut values = locales().clone();
+    let current = language(st);
+    if !values.contains(&current) {
+        values.push(current);
+    }
+    values
+}
+
+fn put_language(st: &Store, value: &Value) -> Result<(), String> {
+    let lang = text(value);
+    if language(st) == lang {
+        return Ok(());
+    }
+    let (locale, modifier) = lang.split_once('@').unwrap_or((lang, ""));
+    let name = locale.split_once('.').map_or(locale, |(name, _)| name);
+    let language = if modifier.is_empty() {
+        name.to_owned()
+    } else {
+        format!("{name}@{modifier}")
+    };
+    write_locale(&locale_file(st), &[("LANG", lang), ("LANGUAGE", &language)])
+}
+
+fn put_format(st: &Store, value: &Value) -> Result<(), String> {
+    let format = text(value);
+    let assignments: Vec<_> = FORMAT_VARS.iter().map(|&key| (key, format)).collect();
+    write_locale(&locale_file(st), &assignments)
+}
+
+/// The Config1 store serializes both writers. Replace the file in one rename so a
+/// reader never sees a mix of the old and new variables.
+fn write_locale(path: &Path, updates: &[(&str, &str)]) -> Result<(), String> {
+    use std::io::ErrorKind;
+    let original = match std::fs::read_to_string(path) {
+        Ok(file) => file,
+        Err(error) if error.kind() == ErrorKind::NotFound => String::new(),
+        Err(error) => return Err(error.to_string()),
+    };
+    let mut content = String::new();
+    for line in original.lines() {
+        if assignment(line).is_some_and(|(name, _)| updates.iter().any(|(key, _)| *key == name)) {
+            continue;
+        }
+        content.push_str(line);
+        content.push('\n');
+    }
+    for &(key, value) in updates.iter().filter(|(_, value)| !value.is_empty()) {
+        content.push_str(&format!("{key}={value}\n"));
+    }
+    if content.trim().is_empty() {
+        return match std::fs::remove_file(path) {
+            Err(error) if error.kind() != ErrorKind::NotFound => Err(error.to_string()),
             _ => Ok(()),
         };
     }
-    if let Some(dir) = path.parent() {
-        std::fs::create_dir_all(dir).map_err(|e| e.to_string())?;
+    if content == original {
+        return Ok(());
     }
-    let content: String = FORMAT_VARS
-        .iter()
-        .map(|v| format!("{v}={locale}\n"))
-        .collect();
+    if let Some(dir) = path.parent() {
+        std::fs::create_dir_all(dir).map_err(|error| error.to_string())?;
+    }
     let tmp = path.with_extension("conf.tmp");
-    std::fs::write(&tmp, content).map_err(|e| e.to_string())?;
-    std::fs::rename(&tmp, &path).map_err(|e| e.to_string())
+    std::fs::write(&tmp, content).map_err(|error| error.to_string())?;
+    std::fs::rename(&tmp, path).map_err(|error| error.to_string())
 }
 
 pub(super) fn keys() -> Vec<Key> {
@@ -249,6 +320,33 @@ pub(super) fn keys() -> Vec<Key> {
             set: Some(put_zone),
             // Drawn by the Region page's own city search, not by a generic control.
             ui: Some(|_| json!({"i18n": "settings.region.tz.change"})),
+            watch: &[],
+            file: false,
+        },
+        Key {
+            name: LANGUAGE,
+            desc: "This user's language as a generated locale ('es_ES.UTF-8'). The shell \
+                   updates immediately. Other apps use it from the next login.",
+            kind: Kind::Enum,
+            writable: true,
+            needs: &[],
+            values: Some(languages),
+            catalogue: None,
+            validate: None,
+            get: |st| Value::Text(language(st)),
+            set: Some(put_language),
+            ui: Some(|st| {
+                let options: Vec<Json> = languages(st)
+                    .into_iter()
+                    .map(|value| json!({"value": value, "label": value}))
+                    .collect();
+                json!({
+                    "i18n": "settings.region.locale.lang",
+                    "subtitleI18n": "settings.region.locale.lang.user-desc",
+                    "control": "dropdown",
+                    "options": options
+                })
+            }),
             watch: &[],
             file: false,
         },
@@ -284,7 +382,7 @@ pub(super) fn keys() -> Vec<Key> {
 }
 
 pub(super) fn is_key(name: &str) -> bool {
-    name == TIMEZONE || name == FORMAT
+    matches!(name, TIMEZONE | FORMAT | LANGUAGE)
 }
 pub(super) fn available(name: &str) -> bool {
     if name == TIMEZONE {
@@ -295,6 +393,7 @@ pub(super) fn available(name: &str) -> bool {
 }
 pub(super) const TIMEZONE_KEY: &str = TIMEZONE;
 pub(super) const FORMAT_KEY: &str = FORMAT;
+pub(super) const LANGUAGE_KEY: &str = LANGUAGE;
 
 #[cfg(test)]
 mod tests {
@@ -332,9 +431,9 @@ mod tests {
     #[test]
     fn the_saved_format_is_the_files_lc_time() {
         assert_eq!(
-            format_of("LC_TIME=es_ES.UTF-8\nLC_NUMERIC=es_ES.UTF-8\n"),
-            "es_ES.UTF-8"
+            saved_value("LC_TIME=es_ES.UTF-8\nLC_NUMERIC=es_ES.UTF-8\n", "LC_TIME"),
+            Some("es_ES.UTF-8")
         );
-        assert_eq!(format_of(""), "");
+        assert_eq!(saved_value("", "LC_TIME"), None);
     }
 }

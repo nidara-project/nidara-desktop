@@ -1347,14 +1347,15 @@ pub fn watch_profile(changed: impl Fn() + Clone + 'static) {
     profile::watch(changed)
 }
 /// The region's keys: the zone, announced by timedated and by our own write when it lands;
-/// the regional format, by its file.
+/// and the language and regional format, announced together from the locale file.
 pub const TIMEZONE_KEY: &str = region::TIMEZONE_KEY;
 pub const FORMAT_KEY: &str = region::FORMAT_KEY;
+pub const LANGUAGE_KEY: &str = region::LANGUAGE_KEY;
 pub fn watch_timezone(changed: impl Fn() + Clone + 'static) {
     region::watch(changed)
 }
-pub fn format_file(st: &Store) -> PathBuf {
-    region::format_file(st)
+pub fn locale_file(st: &Store) -> PathBuf {
+    region::locale_file(st)
 }
 pub fn refresh_profile(st: &Store) {
     *st.profile.borrow_mut() = profile::read();

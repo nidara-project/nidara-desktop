@@ -181,7 +181,8 @@ impl Config1 {
                     .filter(|k| registry::available(st, k))
                     .map(|k| registry::get(st, k));
                 let result = registry::set(st, &key, &raw);
-                if registry::compositor_key(&key)
+                if (registry::compositor_key(&key)
+                    || matches!(key.as_str(), registry::LANGUAGE_KEY | registry::FORMAT_KEY))
                     && let Some(k) = registry::find(&key)
                     && registry::available(st, k)
                 {

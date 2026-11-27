@@ -122,6 +122,7 @@ export default {
     "settings.region.locale.group": "Language & formats",
     "settings.region.locale.lang": "Language (locale)",
     "settings.region.locale.lang.desc": "System-wide, not just your account. Takes effect on the next login.",
+    "settings.region.locale.lang.user-desc": "For your account. The shell switches now and other apps switch at your next login.",
     "settings.region.locale.lang.installing": "Installing Chinese input…",
     "settings.region.locale.lang.failed": "Couldn't apply",
     "settings.region.locale.regional": "Regional format",

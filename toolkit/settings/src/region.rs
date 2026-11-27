@@ -5,19 +5,18 @@
 //! - The time zone is the computer's (Config1 `region.timezone`, timedated behind polkit).
 //!   It is chosen by city: a search with its matches under it, "Madrid — Europe"; choosing
 //!   one applies it, and the system asks for the password (owner, #1103 8b decisions).
-//! - The language is the computer's too (`/etc/locale.conf`), through `pkexec nidara-language
-//!   set`, which installs the input engine a language needs first (#703). A password prompt
-//!   that opened as the selection moved would be a trap, so it keeps an Apply button.
-//! - The regional format is this user's (Config1 `region.regionalFormat`), an ordinary row.
+//! - Language and regional format are ordinary Config1 rows. A language that needs a
+//!   missing input engine goes through the package install before it is applied (#703).
 use crate::{Value, exports::Exports, session::Session};
-use nk::{Ink, Node, Space, Type, TypeScale, Weight};
+use nk::{Ink, Node, Type, TypeScale, Weight};
 use std::process::Command;
-use std::sync::mpsc::{Receiver, Sender, TryRecvError, channel};
+use std::sync::mpsc::{Receiver, TryRecvError, channel};
 
 pub const TIMEZONE: &str = "region.timezone";
 pub const FORMAT: &str = "region.regionalFormat";
+pub const LANGUAGE: &str = "region.language";
 /// The Config1 keys this page writes; no other key is editable from it.
-pub const KEYS: &[&str] = &[TIMEZONE, FORMAT];
+pub const KEYS: &[&str] = &[TIMEZONE, FORMAT, LANGUAGE];
 /// How many matches are offered at once: a list to choose from, not one to scroll.
 const MATCHES: usize = 8;
 /// The areas a city is shown under. tzdata's other names (`US/Pacific`, `GB`, `Etc/GMT+3`)
@@ -109,33 +108,31 @@ pub fn matches<'a>(query: &str, zones: impl IntoIterator<Item = &'a str>) -> Vec
     found.into_iter().take(MATCHES).map(|(_, p)| p).collect()
 }
 
-/// What a worker brings back.
 enum Answer {
-    /// The languages the system can switch to, and the one in force.
-    Languages(Vec<String>, String),
-    /// The language needs its input engine, and it is being installed.
     Installing,
-    Applied(Outcome),
+    Prepared(Outcome),
 }
+
 #[derive(Clone, Copy, Debug, PartialEq)]
 enum Outcome {
     Done,
-    /// The password prompt was dismissed: nothing failed, nothing changed.
     Cancelled,
     Failed,
+}
+
+struct LanguageRequest {
+    epoch: u64,
+    previous: Value,
+    language: String,
+    answers: Receiver<Answer>,
 }
 
 #[derive(Default)]
 pub struct Region {
     query: String,
-    /// The languages and the one in force; None until read.
-    languages: Option<(Vec<String>, String)>,
-    /// The language picked and not applied yet.
-    picked: Option<usize>,
-    applying: bool,
-    /// The language row's status, an i18n key: installing, or why it failed.
+    pending: Option<LanguageRequest>,
+    /// The language row's status, an i18n key.
     status: Option<&'static str>,
-    answers: Option<(Sender<Answer>, Receiver<Answer>)>,
 }
 
 /// What the page asks the window to do.
@@ -148,52 +145,77 @@ pub enum Effect {
 }
 
 impl Region {
-    fn sender(&mut self) -> Sender<Answer> {
-        self.answers.get_or_insert_with(channel).0.clone()
-    }
-
-    /// The page is shown: read the languages (they change only by an Apply, or by hand).
-    pub fn visit(&mut self) {
-        if self.languages.is_some() {
+    pub fn choose_language(&mut self, language: String, session: &Session) {
+        let (Some(store), Some(previous)) = (session.store(), session.shown(LANGUAGE)) else {
+            return;
+        };
+        if self.waiting()
+            || session.pending(LANGUAGE)
+            || previous.as_text() == Some(language.as_str())
+        {
             return;
         }
-        let tx = self.sender();
-        let _ = std::thread::Builder::new()
-            .name("region-languages".into())
-            .spawn(move || {
-                let _ = tx.send(read_languages());
-            });
-    }
 
-    /// Takes what the workers brought; true when the page changed.
-    pub fn poll(&mut self) -> bool {
-        let Some((_, rx)) = &self.answers else {
-            return false;
-        };
-        let mut changed = false;
-        loop {
-            match rx.try_recv() {
-                Ok(Answer::Languages(list, current)) => {
-                    self.languages = Some((list, current));
-                    self.picked = None;
-                }
-                Ok(Answer::Installing) => {
-                    self.status = Some("settings.region.locale.lang.installing");
-                }
-                Ok(Answer::Applied(outcome)) => {
-                    self.applying = false;
-                    self.status = (outcome == Outcome::Failed)
-                        .then_some("settings.region.locale.lang.failed");
-                }
-                Err(TryRecvError::Empty | TryRecvError::Disconnected) => return changed,
+        let (send, answers) = channel();
+        let requested = language.clone();
+        self.status = None;
+        match std::thread::Builder::new()
+            .name("region-language".into())
+            .spawn(move || {
+                let outcome = prepare_language(&requested, || {
+                    let _ = send.send(Answer::Installing);
+                });
+                let _ = send.send(Answer::Prepared(outcome));
+            }) {
+            Ok(_) => {
+                self.pending = Some(LanguageRequest {
+                    epoch: store.epoch,
+                    previous: previous.clone(),
+                    language,
+                    answers,
+                })
             }
-            changed = true;
+            Err(error) => {
+                eprintln!("[region] could not start language change: {error}");
+                self.status = Some("settings.region.locale.lang.failed");
+            }
         }
     }
 
-    /// Whether a worker has yet to answer (the window looks again soon).
+    /// Returns whether to repaint and a language whose engine is ready.
+    pub fn poll(&mut self, session: &Session) -> (bool, Option<Value>) {
+        let mut changed = false;
+        while let Some(request) = &self.pending {
+            let outcome = match request.answers.try_recv() {
+                Ok(Answer::Installing) => {
+                    self.status = Some("settings.region.locale.lang.installing");
+                    changed = true;
+                    continue;
+                }
+                Ok(Answer::Prepared(outcome)) => outcome,
+                Err(TryRecvError::Empty) => break,
+                Err(TryRecvError::Disconnected) => Outcome::Failed,
+            };
+            let request = self.pending.take().expect("pending language request");
+            self.status =
+                (outcome == Outcome::Failed).then_some("settings.region.locale.lang.failed");
+            let apply = outcome == Outcome::Done
+                && session.available()
+                && session
+                    .store()
+                    .is_some_and(|store| store.epoch == request.epoch)
+                && session.shown(LANGUAGE) == Some(&request.previous);
+            return (true, apply.then_some(Value::Text(request.language)));
+        }
+        (changed, None)
+    }
+
     pub fn waiting(&self) -> bool {
-        self.applying || self.answers.is_some() && self.languages.is_none()
+        self.pending.is_some()
+    }
+
+    pub fn language_status(&self) -> Option<&'static str> {
+        self.status
     }
 
     /// An action of this page (`region:…`).
@@ -210,39 +232,8 @@ impl Region {
                 self.query.clear();
                 Effect::Apply(TIMEZONE, Value::Text(place.zone))
             }
-            ("lang-pick", Some(nk::Value::Index(i))) => {
-                self.picked = Some(i);
-                self.status = None;
-                Effect::Redraw
-            }
-            ("lang-apply", _) => {
-                let Some(lang) = self.picked_language().filter(|_| !self.applying) else {
-                    return Effect::None;
-                };
-                self.applying = true;
-                self.status = None;
-                let tx = self.sender();
-                let _ = std::thread::Builder::new()
-                    .name("region-language".into())
-                    .spawn(move || {
-                        let outcome = apply_language(&lang, || {
-                            let _ = tx.send(Answer::Installing);
-                        });
-                        let _ = tx.send(Answer::Applied(outcome));
-                        if outcome == Outcome::Done {
-                            let _ = tx.send(read_languages());
-                        }
-                    });
-                Effect::Redraw
-            }
             _ => Effect::None,
         }
-    }
-
-    /// The language picked, when it is not the one in force.
-    fn picked_language(&self) -> Option<String> {
-        let (list, current) = self.languages.as_ref()?;
-        list.get(self.picked?).filter(|l| *l != current).cloned()
     }
 
     /// The time zone's group: the zone in force, the city search and its matches.
@@ -358,50 +349,6 @@ impl Region {
         Ok(nodes)
     }
 
-    /// The language row: the languages, and Apply for the one picked.
-    pub fn language(&self, e: &Exports, types: &TypeScale) -> Result<Node, String> {
-        let body = || types.style(Type::Body, Weight::Regular);
-        let small = || types.style(Type::Small, Weight::Regular);
-        let title = e.text("settings.region.locale.lang")?;
-        let subtitle = e.text(self.status.unwrap_or("settings.region.locale.lang.desc"))?;
-        let mut row = nk::ListRow::new("region/lang", title, body()).subtitle(subtitle, small());
-        if let Some((list, current)) = &self.languages {
-            let chosen = self
-                .picked
-                .or_else(|| list.iter().position(|l| l == current))
-                .unwrap_or(0);
-            row = row.trailing(
-                nk::Row::new(
-                    "region/lang/controls",
-                    vec![
-                        nk::DropDown::new(
-                            "region/lang/list",
-                            title,
-                            "region:lang-pick",
-                            list.clone(),
-                            chosen,
-                        )
-                        .enabled(!self.applying)
-                        .description(subtitle)
-                        .into(),
-                        nk::Button::new(
-                            "region/lang/apply",
-                            e.text("settings.region.tz.apply")?,
-                            "region:lang-apply",
-                            body(),
-                        )
-                        .appearance(nk::ButtonAppearance::Default)
-                        .enabled(!self.applying && self.picked_language().is_some())
-                        .into(),
-                    ],
-                )
-                .gap(Space::S2)
-                .align(nk::Align::Center),
-            );
-        }
-        Ok(row.into())
-    }
-
     /// "Madrid — Europe", the area in the session's language.
     fn label(&self, e: &Exports, p: &Place) -> Result<String, String> {
         Ok(match &p.area {
@@ -429,60 +376,29 @@ fn run(program: &str, args: &[&str]) -> Option<String> {
         .then(|| String::from_utf8_lossy(&out.stdout).into_owned())
 }
 
-/// `localectl`'s generated locales without the C/POSIX family (no language), and LANG; a
-/// LANG not in the list is added, so the row shows the truth rather than a neighbour.
-fn read_languages() -> Answer {
-    let (mut list, current) = parse_languages(
-        &run("localectl", &["list-locales"]).unwrap_or_default(),
-        &run("localectl", &["status"]).unwrap_or_default(),
-    );
-    if !current.is_empty() && !list.contains(&current) {
-        list.push(current.clone());
+/// Installs only a missing input engine. The caller can persist the language after Done.
+fn prepare_language(lang: &str, installing: impl FnOnce()) -> Outcome {
+    let Some(engine) = run("nidara-language", &["engine", lang]) else {
+        return Outcome::Failed;
+    };
+    let engine = engine.trim();
+    if engine.is_empty() || run("pacman", &["-Qq", engine]).is_some() {
+        return Outcome::Done;
     }
-    Answer::Languages(list, current)
-}
-fn parse_languages(listed: &str, status: &str) -> (Vec<String>, String) {
-    let list = listed
-        .lines()
-        .map(str::trim)
-        .filter(|l| {
-            !l.is_empty()
-                && !["C", "POSIX"]
-                    .iter()
-                    .any(|c| *l == *c || l.starts_with(&format!("{c}.")))
-        })
-        .map(str::to_owned)
-        .collect();
-    let current = status
-        .lines()
-        .find_map(|l| l.trim().strip_prefix("System Locale:"))
-        .and_then(|v| v.trim().strip_prefix("LANG="))
-        .map(|v| v.split_whitespace().next().unwrap_or_default().to_owned())
-        .unwrap_or_default();
-    (list, current)
-}
 
-/// Sets the language, its input engine first when it needs one it lacks (#703): one password
-/// prompt for both, and no language change if the engine cannot be installed.
-fn apply_language(lang: &str, installing: impl FnOnce()) -> Outcome {
-    let engine = run("nidara-language", &["engine", lang])
-        .map(|p| p.trim().to_owned())
-        .unwrap_or_default();
-    if !engine.is_empty() && run("pacman", &["-Qq", &engine]).is_none() {
-        installing();
-    }
+    installing();
     match Command::new("pkexec")
-        .args(["nidara-language", "set", lang])
+        .args(["nidara-language", "ensure-engine", lang])
         .status()
     {
         Ok(s) if s.success() => Outcome::Done,
         Ok(s) if s.code() == Some(126) => Outcome::Cancelled,
         Ok(s) => {
-            eprintln!("[region] nidara-language set {lang}: {s}");
+            eprintln!("[region] nidara-language ensure-engine {lang}: {s}");
             Outcome::Failed
         }
         Err(err) => {
-            eprintln!("[region] nidara-language set {lang}: {err}");
+            eprintln!("[region] nidara-language ensure-engine {lang}: {err}");
             Outcome::Failed
         }
     }
@@ -542,13 +458,60 @@ mod tests {
     }
 
     #[test]
-    fn languages_drop_c_and_posix_and_lang_is_read() {
-        let (list, current) = parse_languages(
-            "C.UTF-8\nen_US.UTF-8\nes_ES.UTF-8\nPOSIX\n",
-            "   System Locale: LANG=es_ES.UTF-8\n       VC Keymap: es\n",
+    fn commits_only_after_the_engine_is_ready_for_the_same_config_session() {
+        use crate::session::Raw;
+
+        let session = |epoch| {
+            let (mut session, _) = Session::start();
+            let schema = serde_json::json!({"schemaVersion": 1, "keys": {
+                (LANGUAGE): {"type": "enum", "value": "en_US.UTF-8", "available": true, "writable": true}
+            }});
+            session.handle(Raw::Snapshot(Ok((epoch, 1, schema.to_string()))));
+            session
+        };
+        let session_a = session(9);
+        let session_b = session(10);
+        let previous = Value::Text("en_US.UTF-8".into());
+        let pick = |region: &mut Region| {
+            let (send, answers) = channel();
+            region.pending = Some(LanguageRequest {
+                epoch: 9,
+                previous: previous.clone(),
+                language: "zh_CN.UTF-8".into(),
+                answers,
+            });
+            send
+        };
+        let mut region = Region::default();
+        let send = pick(&mut region);
+        send.send(Answer::Installing).unwrap();
+        assert_eq!(region.poll(&session_a), (true, None));
+        assert!(region.waiting());
+
+        send.send(Answer::Prepared(Outcome::Cancelled)).unwrap();
+        assert_eq!(region.poll(&session_a), (true, None));
+        assert!(region.language_status().is_none());
+
+        pick(&mut region)
+            .send(Answer::Prepared(Outcome::Failed))
+            .unwrap();
+        assert_eq!(region.poll(&session_a), (true, None));
+        assert_eq!(
+            region.language_status(),
+            Some("settings.region.locale.lang.failed")
         );
-        assert_eq!(list, ["en_US.UTF-8", "es_ES.UTF-8"]);
-        assert_eq!(current, "es_ES.UTF-8");
-        assert_eq!(parse_languages("", "").1, "");
+
+        pick(&mut region)
+            .send(Answer::Prepared(Outcome::Done))
+            .unwrap();
+        assert_eq!(region.poll(&session_b), (true, None));
+
+        pick(&mut region)
+            .send(Answer::Prepared(Outcome::Done))
+            .unwrap();
+        assert_eq!(
+            region.poll(&session_a),
+            (true, Some(Value::Text("zh_CN.UTF-8".into())))
+        );
     }
 }

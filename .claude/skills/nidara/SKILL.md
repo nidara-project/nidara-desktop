@@ -600,7 +600,8 @@ A page module writes only the Config1 keys it names (Region: `region::KEYS`, che
 `Model::editable`); its own actions are `region:…`, and an ordinary key on it is drawn by
 `Model::items` like any other row. Region (8b) picks the zone by city: a `SearchEntry` with
 its suggestions `ListBox` (cities under their area, tzdata aliases left out), and choosing one
-applies it. The language keeps Apply because it opens a password prompt.
+applies it. Language is a per-user Config1 dropdown (#1193). Settings waits for a
+missing input engine to install before applying the language.
 Appearance (8c) is a page module too (`appearance.rs`): its schema-control keys are ordinary
 rows; the accent is `nk::Swatches` in Config1's value order with the exported colours, the night
 schedule two `nk::TimeField`s, each font an `nk::FontButton` whose press asks the window
@@ -652,7 +653,9 @@ Its secret is never part of the view declaration, reader text or IME context.
 `power.profile` is PPD's ActiveProfile on the system bus, announced by PPD's own
 signals; Config1 tests set `DBUS_SYSTEM_BUS_ADDRESS` to their private bus.
 `region.timezone` is timedated's, set asynchronously behind polkit: `Apply` answers the old zone and the new one is
-announced when set. `region.regionalFormat` is the user's environment.d file (next login). Step 7c adds the six Desktop workspace-mode keys in Hyalo's `[workspaces]` layer; a
+announced when set. `region.language` and `region.regionalFormat` share the user's environment.d file.
+The shell follows language changes live; apps inherit it at the next login.
+Step 7c adds the six Desktop workspace-mode keys in Hyalo's `[workspaces]` layer; a
 write also clears runtime modes so Settings wins, as TS did.
 Read session/daemon/src/config/README.md for homes, followers, keyboard catalogue and
 physical-session limits. A dropdown reserves its widest option only within its available

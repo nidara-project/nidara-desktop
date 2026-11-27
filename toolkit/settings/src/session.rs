@@ -99,8 +99,9 @@ fn localize(entry: &mut serde_json::Value) {
     {
         ui["title"] = title.into();
     }
+    let default_subtitle = format!("{i18n}.desc");
     if ui["subtitle"].is_null()
-        && let Some(subtitle) = t(&format!("{i18n}.desc"))
+        && let Some(subtitle) = t(ui["subtitleI18n"].as_str().unwrap_or(&default_subtitle))
     {
         ui["subtitle"] = subtitle.into();
     }
