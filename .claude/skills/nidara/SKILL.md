@@ -1,6 +1,6 @@
 ---
 name: nidara
-description: "Authoritative reference for working on the Nidara desktop environment codebase — a full Wayland session for Arch Linux built with TypeScript/TSX → GJS on GTK4 + Hyprland (no AGS, no Astal). Use this skill whenever the user mentions Nidara, nidara-project, the shell bar, dock, control center, notification center, prism/search, app grid, overview, system menu, settings window, lockscreen, or greeter; asks to edit files under `ui/shell/`, `ui/greeter/`, `ui/lockscreen/`, or `ui/lib/nidara-kit/`; wants to modify `hyprland.lua`, SCSS in `styles/`, a `core/` service, or run `install.sh`. Also trigger on questions about reloading the UI (Super+Shift+R), `nidara-ipc` IPC, `Status.ts`, the five build bundles, or the Nidara design system. ALWAYS consult this skill BEFORE editing files in this repo — strict conventions (no `Adw.OverlaySplitView`, no transform scale on clickables, no hardcoded colors, scoped CSS only, IPC via `ShellActions` not `globalThis`) are easy to violate without it."
+description: "Authoritative reference for working on the Nidara desktop environment codebase — a full Wayland session for Arch Linux built with TypeScript/TSX → GJS on GTK4 + Hyprland (no AGS, no Astal). Use this skill whenever the user mentions Nidara, nidara-project, the shell bar, dock, control center, notification center, prism/search, app grid, overview, system menu, settings window, lockscreen, or greeter; asks to edit files under `ui/shell/`, `ui/greeter/`, `toolkit/lockscreen/`, or `ui/lib/nidara-kit/`; wants to modify `hyprland.lua`, SCSS in `styles/`, a `core/` service, or run `install.sh`. Also trigger on questions about reloading the UI (Super+Shift+R), `nidara-ipc` IPC, `Status.ts`, the five build bundles, or the Nidara design system. ALWAYS consult this skill BEFORE editing files in this repo — strict conventions (no `Adw.OverlaySplitView`, no transform scale on clickables, no hardcoded colors, scoped CSS only, IPC via `ShellActions` not `globalThis`) are easy to violate without it."
 ---
 
 # Nidara
@@ -107,10 +107,10 @@ This is the single most important fact to internalize before touching anything:
 | **Shell** | `ui/shell/` | `build/nidara` | Desktop: bar, dock, overlays |
 | **Settings** | `ui/settings/` | `build/nidara-settings` | Independent settings application (#571) |
 | **Greeter** | `ui/greeter/` | `build/nidara-greeter` | Login (greetd, spoken directly — no AstalGreet) |
-| **Lockscreen** | `ui/lockscreen/` | `build/nidara-lock` | Lock via `Gtk4SessionLock` (OVERLAY-layer fallback) |
+| ~~Lockscreen~~ | — | — | **Rust since #1195**: `toolkit/lockscreen/` → `/usr/lib/nidara/nidara-lock`, an ext-session-lock-v1 client of the kit, started by Hyalo through `bin/nidara-lock` (`references/dev-workflow.md` → "The lock screen") |
 | **Installer** | `ui/installer/` | `build/nidara-installer` | The live medium's installer — a GTK4 front-end over `archinstall` |
 
-Each has its own `app.ts`, its own `package.json`, its own `scripts/bundle.sh` invocation. Code shared between the greeter and the lockscreen is currently duplicated (see `references/tech-debt.md`).
+Each has its own `app.ts`, its own `package.json`, its own `scripts/bundle.sh` invocation. The lock screen left the TS bundles for Rust in #1195; the greeter follows in its second round.
 
 ⚠️ **The installer does not ship with the desktop.** `packaging/nidara/PKGBUILD` is a SPLIT
 package (since 2026-08-25): it builds `nidara-desktop`, `nidara-kit` (the platform library the

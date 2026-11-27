@@ -931,4 +931,18 @@ export default {
     "cc.action.move-left": "Sposta a sinistra",
     "cc.action.move-right": "Sposta a destra",
     "cc.action.resize": "Ridimensiona",
+
+    // The lock screen (toolkit/lockscreen, #1195).
+    "lock.title": "Schermata di blocco",
+    "lock.password": "Password",
+    "lock.unlock": "Sblocca",
+    "lock.wrong-password": "Password errata",
+    "lock.account-unavailable": "Account non disponibile",
+    "lock.password-expired": "Password scaduta",
+    "lock.password-expired-how": "Cambiala al prossimo accesso.",
+    "lock.suspend": "Sospendi",
+    "lock.caps-lock": "Bloc Maiusc attivo",
+    "lock.media.previous": "Precedente",
+    "lock.media.play-pause": "Riproduci o metti in pausa",
+    "lock.media.next": "Successivo",
 }

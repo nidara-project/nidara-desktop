@@ -4,8 +4,12 @@ use super::*;
 use nk_text::Point;
 use unicode_segmentation::UnicodeSegmentation;
 
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
-pub struct PasswordEntry;
+#[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
+pub struct PasswordEntry {
+    /// Inside a `PasswordSubmit`, which draws the chrome around it and its button.
+    #[serde(default)]
+    pub bare: bool,
+}
 
 #[derive(Default)]
 struct State {
@@ -154,7 +158,12 @@ impl Component for PasswordEntry {
     }
 
     fn focus_outline(&self, cx: &Read<'_>) -> Option<FocusOutline> {
-        let bounds = self.silhouette(cx);
+        let mut bounds = self.silhouette(cx);
+        // Inside a field with a button, one outline goes round both, as Search's does.
+        if self.bare {
+            let owner = cx.key.0.rsplit_once('/')?.0;
+            bounds = cx.placed.iter().find(|p| p.key.0 == owner)?.rect;
+        }
         Some(FocusOutline::rounded(
             bounds,
             cx.look.tokens.entry.radius.min(bounds[3] / 2.),
@@ -163,6 +172,16 @@ impl Component for PasswordEntry {
 
     fn frame(&self, look: ComponentLook<'_>) -> FrameSpec {
         let style = &look.tokens.entry;
+        if self.bare {
+            return FrameSpec {
+                inset: (0., 0.),
+                least: (
+                    style.min_height * 4.,
+                    (style.min_height - 2. * style.border).max(0.),
+                ),
+                body: BodyPlacement::FillWidth,
+            };
+        }
         FrameSpec {
             inset: (style.padding_x + style.border, style.border),
             least: (style.min_height * 5., style.min_height),
@@ -324,10 +343,146 @@ impl Component for PasswordEntry {
 
     fn paint(&self, cx: &mut Paint<'_>, phase: PaintPhase) {
         if phase == PaintPhase::Under {
-            super::editable::chrome(cx);
+            if !self.bare {
+                super::editable::chrome(cx);
+            }
             if let Some(field) = Self::display(&cx.read) {
                 field.paint(cx, phase);
             }
+        }
+    }
+}
+
+/// A password field with its submit button inside it, at its end: the pointer's way to do
+/// what Enter does (#1195: "Unlock" on the lock screen, "Log in" on the login screen). The
+/// field reports `changed` with the secret, as `PasswordEntry`; the button reports `submit`.
+/// Enter itself is the host's, as for every single-line field.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+pub struct PasswordSubmit {
+    pub name: String,
+    pub changed: String,
+    pub submit_label: String,
+    pub submit: String,
+    pub disabled: bool,
+}
+impl PasswordSubmit {
+    pub(crate) fn node(self, key: impl Into<Key>) -> Node {
+        Node::drawing(key, Part::PasswordSubmit(self))
+    }
+}
+impl Component for PasswordSubmit {
+    fn contains_controls(&self) -> bool {
+        true
+    }
+    fn body(&self, cx: &Build<'_>) -> Node {
+        let mut input = Node::control(
+            cx.key("input"),
+            self.name.clone(),
+            self.changed.clone(),
+            Node::spacer(cx.key("input/body")),
+        )
+        .role(crate::Role::Field)
+        .enabled(!self.disabled)
+        .grow();
+        if let Kind::Control(c) = &mut input.kind {
+            c.part = Some(Box::new(Part::Password(PasswordEntry { bare: true })));
+        }
+        let mut submit = Node::control(
+            cx.key("submit"),
+            self.submit_label.clone(),
+            self.submit.clone(),
+            Node::spacer(cx.key("submit/body")),
+        )
+        .enabled(!self.disabled);
+        if let Kind::Control(c) = &mut submit.kind {
+            c.part = Some(Box::new(Part::SubmitButton(SubmitButton)));
+        }
+        Node::row(cx.key("body"), vec![input, submit]).align(crate::Align::Center)
+    }
+    fn frame(&self, look: ComponentLook<'_>) -> FrameSpec {
+        let t = &look.tokens.entry;
+        FrameSpec {
+            // The button sits at the end, as close to the edge as Search's clear button.
+            inset: (t.padding_x + t.border, t.border),
+            least: (0., t.min_height),
+            body: BodyPlacement::FillWidth,
+        }
+    }
+    fn paint(&self, cx: &mut Paint<'_>, phase: PaintPhase) {
+        if phase == PaintPhase::Under {
+            super::editable::chrome(cx);
+        }
+    }
+}
+
+/// The button inside a `PasswordSubmit`: a glyph in a round hover wash, as Search's clear
+/// button; activating it reports the field's submit action.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+pub struct SubmitButton;
+impl SubmitButton {
+    fn visible(&self, cx: &Read<'_>) -> Rect {
+        let r = cx.rect;
+        let side = cx.look.tokens.entry.clear_button.min(r[2]).min(r[3]);
+        [
+            r[0] + (r[2] - side) / 2.,
+            r[1] + (r[3] - side) / 2.,
+            side,
+            side,
+        ]
+    }
+}
+impl Component for SubmitButton {
+    fn silhouette(&self, cx: &Read<'_>) -> Rect {
+        self.visible(cx)
+    }
+    /// On glass (its field made of glass, or in a pane) its hover and press are Hyalo's.
+    fn glass(&self, cx: &Read<'_>) -> Glass {
+        if !cx.over_glass() {
+            return Glass::default();
+        }
+        let washes = &cx.look.tokens.washes;
+        let rest = [washes.hover[0], washes.hover[1], washes.hover[2], 0.];
+        let lit = if !cx.interaction.enabled {
+            (4, rest)
+        } else if cx.interaction.pressed {
+            (0, washes.press)
+        } else if cx.interaction.hover {
+            (1, washes.hover)
+        } else if cx.fading {
+            (2, rest)
+        } else {
+            (4, rest)
+        };
+        Glass { lit: Some(lit) }
+    }
+    fn focus_outline(&self, cx: &Read<'_>) -> Option<FocusOutline> {
+        let bounds = self.silhouette(cx);
+        Some(FocusOutline::rounded(bounds, bounds[3] / 2.))
+    }
+    fn body(&self, cx: &Build<'_>) -> Node {
+        let t = &cx.look.tokens.entry;
+        Node::icon(cx.key("glyph"), t.submit_icon.clone(), t.icon_size)
+    }
+    fn frame(&self, look: ComponentLook<'_>) -> FrameSpec {
+        let t = &look.tokens.entry;
+        let side = (t.min_height - 2. * t.border).max(t.icon_size);
+        FrameSpec {
+            inset: (0., 0.),
+            least: (side, side),
+            body: BodyPlacement::NaturalCentered,
+        }
+    }
+    fn paint(&self, cx: &mut Paint<'_>, phase: PaintPhase) {
+        if phase != PaintPhase::Under {
+            return;
+        }
+        if cx.read.over_glass() {
+            return;
+        }
+        let r = self.visible(&cx.read);
+        if cx.interaction.enabled && (cx.interaction.hover || cx.interaction.pressed) {
+            cx.canvas
+                .rounded_rect(rect(&r), r[3] / 2., cx.ink(cx.look.tokens.button.hover));
         }
     }
 }

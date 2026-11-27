@@ -56,8 +56,8 @@
  *   · a duplicate key inside one catalog (the second silently wins at runtime)
  *   · an orphan key — present in a locale, gone from en.ts — i.e. dead weight
  *   · a key in en.ts missing from es.ts (those two are hand-synced per the workflow)
- *   · the greeter/lockscreen mini-catalogs missing a language or a key (they are
- *     duplicated per bundle by hand, so parity there is guarded, not assumed)
+ *   · the greeter/installer mini-catalogs missing a language or a key (they are
+ *     kept per bundle by hand, so parity there is guarded, not assumed)
  */
 import { createHash } from "node:crypto"
 import { readFileSync, writeFileSync, readdirSync } from "node:fs"
@@ -66,7 +66,6 @@ const LOCALE_DIR = "ui/shell/core/i18n/locales"
 const STATE_PATH = "ui/shell/core/i18n/translation-state.json"
 const MINI_CATALOGS = [
     "ui/greeter/lib/i18n.ts",
-    "ui/lockscreen/lib/i18n.ts",
     "ui/installer/lib/i18n.ts",
 ]
 const SOURCE = "en"
@@ -118,9 +117,9 @@ if (!locales[SOURCE]) {
 const en = locales[SOURCE]
 const others = Object.keys(locales).filter(l => l !== SOURCE)
 
-/* ── the mini-catalogs (greeter + lockscreen) ─────────────────────────────────
- * A different shape: one nested object per language. They are duplicated between the
- * two bundles by hand, which is the whole reason parity is checked instead of trusted.
+/* ── the mini-catalogs (greeter, installer) ───────────────────────────────────
+ * A different shape: one nested object per language, kept by hand per bundle, which is
+ * the whole reason parity is checked instead of trusted.
  */
 function checkMiniCatalog(path) {
     const src = readFileSync(path, "utf8")

@@ -145,6 +145,9 @@ ellipsis. Its full text stays in the semantics. A weight the fonts have no face 
 installed) falls back to the regular weight, as the shell's own text does; a text is never
 dropped for its weight. A text may `reserve(n)` lines: it is that tall however few it fills, so
 cards of one kind share a height (TS reserved a notification body's two lines).
+An EMPTY reserved text still takes its lines (the style's size × line height), so a message
+that comes and goes moves nothing around it (#1195's lock screen). `TypeScale::display()` is the
+one size above Title1: `$fs-display`/`$fw-display`, for a clock that is the whole surface.
 
 **Pixel snapping.** Every placed edge is rounded to the output's device-pixel grid once, at
 placement. A size is the difference between two snapped edges. Sums of rounded sizes are never
@@ -183,6 +186,16 @@ The surface receives only the effect: `Activated(key, action)`.
   from the same tokens and with the same fade. It declares nothing to Hyalo and spends no
   budget. This is not imitating the compositor: there is no glass there for it to draw on, and
   the protocol is not to be extended for it.
+- **Glass is a property** (owner, 2026-11-27, #1195). Any component can be made of glass,
+  as it is: `nk::Button::new(…).glass()`, `nk::PasswordEntry::new(…).glass()`, a row. The kit
+  puts a pane in the component's own shape under it when it expands the tree (key
+  `<key>/glass`, presentational, taking the component's place in its stack: grow, width,
+  height); the component sees `Read::is_glass()` and stops painting its rest (fill, border:
+  the glass is that), its hover and press are Hyalo's states on that glass, and its focus ring
+  follows the same outline, because there is one. A part inside it (`Read::over_glass()`, a
+  field's submit button) takes Hyalo's states too. A default button keeps its accent fill on
+  the glass. Wrapping a control in a `Pane` by hand to get glass is the mistake this replaces:
+  two outlines, and the ring on the inner one. A `Pane` is for a card that holds things.
 - **Disabled is content.** An enabled-`false` control that has an action draws its text and
   glyphs in `--nidara-text-disabled`. One with no action is a marker (the NC's today), drawn as
   it is.
@@ -854,7 +867,7 @@ decides the rest. Each component has three layers, kept apart:
 
 | Component | Mechanism | Properties | Tokens |
 |---|---|---|---|
-| Button | its shape; release activates | in content (`nk::Button`) or over content (glass); destructive; default | `button` |
+| Button | its shape; release activates | in content (`nk::Button`) or made of glass (`.glass()`); destructive; default | `button` |
 | Toggle button | each click flips; on = white glass, accent ink | — | glass `states` |
 | Checkbox | the box and its text; Space | checked / unchecked / mixed | `choices` |
 | Radio | the circle and its text; the group is one Tab stop, arrows choose | chosen | `choices` |
@@ -1419,6 +1432,13 @@ the current control and revision. Copy and cut are unavailable. The app
 receives a `Value::Secret` when the value changes. This payload is redacted
 in Debug and excluded from serialization. The gallery's Text field page
 demonstrates the control.
+
+`.submit(label, action)` puts a button inside the field, at its end (#1195): the pointer's
+way to do what Enter does, as the lock and login screens need ("Unlock", "Log in"). The field
+still reports its `changed` action with the secret; the button reports `action` with no
+value, and the reader hears it as a button named `label`. One outline goes round the field
+and its button. Enter itself stays the host's, as for every single-line field. Its glyph is
+the `submitIcon` of `tokens/search.json`.
 
 ### External data in an AppWindow choice context (#1103 7a)
 

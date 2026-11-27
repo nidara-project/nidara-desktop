@@ -400,6 +400,23 @@ pub fn keep_menu_going(state: &mut Hyalo, surface: &smithay::reexports::wayland_
     }
 }
 
+/// The session was unlocked: each output's lock screen kept for its fade (render/unlocking.rs).
+pub fn keep_lock_going(state: &mut Hyalo, going: &[(smithay::output::Output, Option<smithay::reexports::wayland_server::protocol::wl_surface::WlSurface>)]) {
+    let now = std::time::Instant::now();
+    let take = |gles: &mut smithay::backend::renderer::gles::GlesRenderer| {
+        for (output, surface) in going {
+            crate::render::unlocking::take(gles, output, surface.as_ref(), now);
+        }
+    };
+    match &mut state.backend {
+        Backend::Winit(w) => take(w.renderer()),
+        Backend::Tty(t) => match t.primary_renderer() {
+            Ok(mut renderer) => take(renderer.as_mut()),
+            Err(err) => tracing::debug!(%err, "no renderer for the lock screen going"),
+        },
+    }
+}
+
 /// Draws every output with a redraw queued (`Hyalo::queue_redraw`).
 pub fn redraw_queued(state: &mut Hyalo) {
     match &state.backend {

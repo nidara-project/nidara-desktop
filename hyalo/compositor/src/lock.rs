@@ -1,15 +1,17 @@
 //! ext-session-lock-v1: the lock screen (`nidara-lock`).
 //!
 //! **While the session is locked nothing of it is drawn or reachable**: an output shows its
-//! lock surface over the wallpaper (the BACKGROUND layers) and nothing else, windows and the
-//! shell's layers included — not covered, not drawn. The keyboard and the pointer reach the
-//! lock surfaces only; of the bindings, only those marked `locked` run (volume, brightness),
-//! plus the two built in (VT switch, Ctrl+Alt+Backspace).
+//! lock surface over the veil and the wallpaper (the BACKGROUND layers) and nothing else,
+//! windows and the shell's layers included — not covered, not drawn. The keyboard and the
+//! pointer reach the lock surfaces only; of the bindings, only those marked `locked` run
+//! (volume, brightness), plus the two built in (VT switch, Ctrl+Alt+Backspace).
+//!
+//! Unlocking, what each output showed dissolves over the session (render/unlocking.rs, D9).
 //!
 //! The lock surface is an ordinary surface to the rest of Hyalo, so it declares its glass
-//! through `nidara-material-v1` like the shell's panels: the card's glass is Hyalo's,
-//! refracting the real wallpaper. (On Hyprland the lock surface is drawn over an opaque
-//! sheet, so `nidara-lock` painted its own copy of the wallpaper and imitated the glass on it.)
+//! through `nidara-material-v1` like the shell's panels. There is no card (#1195): the clock,
+//! the name and the messages sit straight on the VEIL Hyalo draws over the wallpaper, and the
+//! only glass is the password field's, refracting the veiled wallpaper.
 //!
 //! **A new lock comes in over the desktop, not over the bare wallpaper.** From the request on,
 //! the keyboard and the pointer reach the lock surfaces only; but an output goes on showing the
@@ -73,6 +75,15 @@ use crate::state::Hyalo;
 /// The lock client Hyalo starts again when the one holding the lock dies. `HYALO_LOCK_RELAUNCH`
 /// replaces it (the lock check points it at its own probe client: scripts/ci/hyalo-lock-check.sh).
 const RELAUNCH: &str = "nidara-lock";
+
+/// The veil's black, over the wallpaper while locked (#1195 D7): uniform, so the lock screen's
+/// white text reads the same anywhere on any wallpaper. Measured, not chosen: white text needs
+/// 4.5:1 (AA) over the brightest wallpaper there is, a white one, which takes the veiled white
+/// down to a luminance of 1.05 / 4.5 − 0.05 = 0.183, sRGB 0.465. Hyalo blends in sRGB, so the
+/// veil must cover at least 1 − 0.465 = 0.535 of it; the shipped wallpaper is darker and is
+/// then far past AA. Read back from a frame over a white wallpaper (2026-11-27): 117/255 grey,
+/// 4.61:1 against white.
+pub const VEIL: f32 = 0.54;
 
 pub fn lock_command() -> String {
     std::env::var("HYALO_LOCK_RELAUNCH").ok().filter(|c| !c.trim().is_empty()).unwrap_or_else(|| RELAUNCH.into())
@@ -454,6 +465,16 @@ impl SessionLockHandler for Hyalo {
 
     fn unlock(&mut self) {
         tracing::info!("session unlocked");
+        // D9: what each output showed goes in a fade over the session (render/unlocking.rs),
+        // taken now, while the client's lock surfaces still exist.
+        if self.config.animations.enabled {
+            let going: Vec<_> = self
+                .space
+                .outputs()
+                .map(|o| (o.clone(), self.lock.surface_for(o).cloned()))
+                .collect();
+            crate::backend::keep_lock_going(self, &going);
+        }
         self.lock.mode = Mode::Unlocked;
         self.lock.flag.store(false, Ordering::Release);
         self.lock.surfaces.clear();

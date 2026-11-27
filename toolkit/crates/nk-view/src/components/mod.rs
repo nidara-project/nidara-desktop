@@ -26,7 +26,7 @@ pub use slider::SliderControl;
 mod field;
 mod password;
 pub use field::DisplayField;
-pub(crate) use password::PasswordEntry;
+pub(crate) use password::{PasswordEntry, PasswordSubmit, SubmitButton};
 mod time_field;
 pub use time_field::{TimeField, parse_time};
 mod dropdown;
@@ -327,6 +327,8 @@ pub enum Part {
     Disclosure(Disclosure),
     Editable(EditableField),
     Password(PasswordEntry),
+    PasswordSubmit(PasswordSubmit),
+    SubmitButton(SubmitButton),
     Time(TimeField),
     Search(Search),
     SearchClear(Clear),
@@ -364,6 +366,8 @@ impl Part {
             Self::Disclosure(c) => c,
             Self::Editable(c) => c,
             Self::Password(c) => c,
+            Self::PasswordSubmit(c) => c,
+            Self::SubmitButton(c) => c,
             Self::Time(c) => c,
             Self::Search(c) => c,
             Self::SearchClear(c) => c,
@@ -495,6 +499,29 @@ impl StateStore {
             live: &mut HashSet<Key>,
             text: &mut dyn nk_text::TextBackend,
         ) {
+            if n.glass {
+                // Its own glass: a pane in its shape, holding it, where it stood in its stack.
+                // The pane takes its place's sizing; the component fills the pane, so the glass,
+                // the washes and the focus ring all have one outline. Readers get the
+                // component, not a panel around it.
+                let corner = part(n).map_or(Corner::Pill, |p| p.component().corner());
+                let mut inner = std::mem::replace(n, Node::spacer(Key(String::new())));
+                inner.glass = false;
+                let mut pane = Node::pane(
+                    Key(format!("{}/glass", inner.key.0)),
+                    corner,
+                    Node::spacer(Key(String::new())),
+                );
+                pane.grow = std::mem::take(&mut inner.grow);
+                pane.width = inner.width.take();
+                pane.height = inner.height.take();
+                pane.row_floor = std::mem::take(&mut inner.row_floor);
+                pane.presentation = true;
+                if let Kind::Pane(p) = &mut pane.kind {
+                    *p.child = inner;
+                }
+                *n = pane;
+            }
             let part = match &n.kind {
                 Kind::Control(c) => c.part.as_deref(),
                 Kind::Drawing(d) => Some(d.part.as_ref()),

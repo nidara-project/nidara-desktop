@@ -7,7 +7,7 @@
 # Gates here:
 #   - styles: the SCSS stylesheet compiles (catches CSS syntax errors). Pure JS,
 #     no system libraries needed.
-#   - typecheck: `tsc --noEmit` over ui/shell, ui/installer, ui/greeter and ui/lockscreen. The GI typings it needs (@girs/,
+#   - typecheck: `tsc --noEmit` over ui/shell, ui/installer and ui/greeter. The GI typings it needs (@girs/,
 #     ~58 MB generated, git-ignored) can't be produced on a runner —
 #     scripts/gen-types.sh reads the system's .gir files, which means a machine
 #     with the whole GI stack installed. Instead a maintainer publishes a ~4 MB
@@ -58,7 +58,7 @@
 #     Logic and its self-test in scripts/ci/ci-scope.sh.
 #   - smoke: in an Arch container with ONLY official Arch packages, compile the
 #     gsettings schemas, build the in-repo C libraries (and check the signals the
-#     lockscreen connects to), and bundle the shell with scripts/bundle.sh. It no
+#     lock screen connects to), and bundle the shell with scripts/bundle.sh. It no
 #     longer boots Hyprland or the TS shell (owner, 2026-11-16); the boot that
 #     counts is the hyalo job's. All logic lives in scripts/ci/headless-smoke.sh.
 #   - hyalo: Hyalo, the compositor of our own (#681) — cargo build --locked, clippy -D
@@ -231,7 +231,7 @@ jobs:
         working-directory: ui/shell
         run: npx --yes sass@1.97.3 --no-charset ../lib/nidara-kit/styles/kit.scss /tmp/kit.css
 
-      # The greeter/lockscreen sheet (one file, both bundles) was compiled by
+      # The greeter's sheet was compiled by
       # nothing here until 2026-08-10, and it is the one that could least afford
       # it: those two surfaces have NO dev mode — they load a fixed
       # /usr/share path, so a break shows up only when someone boots a VM.
@@ -539,10 +539,10 @@ jobs:
       # catches that class too.)
       - name: tsc --noEmit on independent Settings (must succeed)
         run: npx --yes -p typescript@5.7.3 tsc --noEmit -p ui/settings/tsconfig.json
-      - name: tsc --noEmit on installer / greeter / lockscreen (must succeed)
+      - name: tsc --noEmit on installer / greeter (must succeed)
         run: |
           fail=0
-          for b in installer greeter lockscreen; do
+          for b in installer greeter; do
             echo "── ui/$b"
             (cd "ui/$b" && npx --yes -p typescript@5.7.3 tsc --noEmit -p tsconfig.json) || fail=1
           done
@@ -557,7 +557,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       # No Hyprland and no shell boot since 2026-11-16 (owner's decision): the job builds
-      # the C libraries, checks the lockscreen's signals and bundles. It keeps its name
+      # the C libraries, checks the lock screen's signals and bundles. It keeps its name
       # because it is a required check. See the header of headless-smoke.sh.
       - name: Libraries + bundle (Arch container)
         run: |

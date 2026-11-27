@@ -931,4 +931,18 @@ export default {
     "cc.action.move-left": "Przenieś w lewo",
     "cc.action.move-right": "Przenieś w prawo",
     "cc.action.resize": "Zmień rozmiar",
+
+    // The lock screen (toolkit/lockscreen, #1195).
+    "lock.title": "Ekran blokady",
+    "lock.password": "Hasło",
+    "lock.unlock": "Odblokuj",
+    "lock.wrong-password": "Nieprawidłowe hasło",
+    "lock.account-unavailable": "Konto niedostępne",
+    "lock.password-expired": "Hasło wygasło",
+    "lock.password-expired-how": "Zmień je przy następnym logowaniu.",
+    "lock.suspend": "Uśpij",
+    "lock.caps-lock": "Caps Lock włączony",
+    "lock.media.previous": "Poprzedni",
+    "lock.media.play-pause": "Odtwórz lub wstrzymaj",
+    "lock.media.next": "Następny",
 }

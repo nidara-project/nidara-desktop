@@ -931,4 +931,18 @@ export default {
     "cc.action.move-left": "Naar links verplaatsen",
     "cc.action.move-right": "Naar rechts verplaatsen",
     "cc.action.resize": "Formaat wijzigen",
+
+    // The lock screen (toolkit/lockscreen, #1195).
+    "lock.title": "Vergrendelscherm",
+    "lock.password": "Wachtwoord",
+    "lock.unlock": "Ontgrendelen",
+    "lock.wrong-password": "Onjuist wachtwoord",
+    "lock.account-unavailable": "Account niet beschikbaar",
+    "lock.password-expired": "Wachtwoord verlopen",
+    "lock.password-expired-how": "Wijzig het bij de volgende aanmelding.",
+    "lock.suspend": "Slaapstand",
+    "lock.caps-lock": "Caps Lock staat aan",
+    "lock.media.previous": "Vorige",
+    "lock.media.play-pause": "Afspelen of pauzeren",
+    "lock.media.next": "Volgende",
 }

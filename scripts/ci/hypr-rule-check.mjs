@@ -92,7 +92,7 @@ const fail = (msg) => { bad++; console.error(`  FAIL  ${msg}`) }
 // BIRTH: the process app-id GTK stamps on the toplevel at creation. This is what a
 // STATIC rule is matched against, always.
 const BIRTH = new Map()   // app-id → bundle
-for (const bundle of ["shell", "greeter", "lockscreen", "installer"]) {
+for (const bundle of ["shell", "greeter", "installer"]) {
     const entry = `ui/${bundle}/app.ts`
     if (!existsSync(entry)) continue
     const m = readFileSync(entry, "utf8").match(/applicationId:\s*"([^"]+)"/)

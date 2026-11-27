@@ -23,6 +23,8 @@ mod capture;
 pub use capture::{CaptureFailure, CaptureId, Image};
 mod connect;
 mod layer_shell;
+mod session_lock;
+pub use session_lock::{LockBinder, LockOutput, LockStatus, SessionLock, lock_session};
 mod outputs;
 pub use outputs::{BindFailure, OutputEvent, OutputInfo, OutputWatch, outputs};
 mod token;
@@ -143,6 +145,9 @@ pub enum Event {
         result: std::result::Result<Image, CaptureFailure>,
     },
     Focus(bool),
+    /// The keyboard's modifiers changed; `Window::caps_lock` says the locked ones. The
+    /// compositor sends them after the key that changed them.
+    Modifiers,
     Key(Key),
     Motion(f64, f64),
     PointerLeave,
@@ -376,6 +381,7 @@ pub struct Window {
     toplevel: Option<xdg_toplevel::XdgToplevel>,
     layer_shell: Option<layer_shell::zwlr_layer_shell_v1::ZwlrLayerShellV1>,
     layer_surface: Option<layer_shell::zwlr_layer_surface_v1::ZwlrLayerSurfaceV1>,
+    lock_surface: Option<session_lock::ext_session_lock_surface_v1::ExtSessionLockSurfaceV1>,
     popup: Option<xdg_popup::XdgPopup>,
     positioner: Option<xdg_positioner::XdgPositioner>,
     shm: Option<wl_shm::WlShm>,
@@ -504,6 +510,10 @@ impl Window {
             .then_some(self.pointer_position)
     }
     /// Physical pixels per logical pixel on the window's current output.
+    /// Whether Caps Lock is on, as the keyboard last said (the lock screen warns of it).
+    pub fn caps_lock(&self) -> bool {
+        self.keyboard.caps_lock()
+    }
     pub fn scale(&self) -> f64 {
         f64::from(self.scale) / 120.
     }
@@ -1241,7 +1251,16 @@ pub fn run_layer(
     if layer.namespace.is_empty() || layer.namespace.contains('\0') {
         return Err("layer namespace must be nonempty text".into());
     }
-    run_inner(app, options, start, None, None, Some((layer, wake)), None).map(|_| ())
+    run_inner(
+        app,
+        options,
+        start,
+        None,
+        None,
+        Some(Root::Layer(layer, wake)),
+        None,
+    )
+    .map(|_| ())
 }
 /// A modal xdg toplevel on the SAME connection; set_parent cannot name a
 /// surface from another connection. The parent event queue resumes on close.
@@ -1301,19 +1320,52 @@ pub fn run_foreign_dialog(
     .map(|_| ())
 }
 
+/// The roots that are neither xdg toplevels nor popups.
+enum Root {
+    Layer(LayerSpec, Option<WakeSource>),
+    Lock(LockOutput, Option<WakeSource>),
+}
+/// One lock surface (`session_lock.rs`) for `output`, on the lock's connection and its own
+/// event queue; run it on its own thread when there are several outputs. `options.map` and
+/// `options.title` are unused: the compositor configures a lock surface unasked, at its
+/// output's size. Ends on `Window::close`, which the client reaches through `wake` once it
+/// has unlocked (`SessionLock::unlock`).
+pub fn run_lock_surface(
+    app: impl Application,
+    options: Options<'_>,
+    output: LockOutput,
+    wake: Option<WakeSource>,
+    start: Instant,
+) -> Result<()> {
+    run_inner(
+        app,
+        options,
+        start,
+        None,
+        None,
+        Some(Root::Lock(output, wake)),
+        None,
+    )
+    .map(|_| ())
+}
+
 fn run_inner(
     mut app: impl Application,
-    options: Options<'_>,
+    mut options: Options<'_>,
     start: Instant,
     mut parent: Option<&mut Window>,
     popup_options: Option<(PopupPlacement, Option<u32>)>,
-    layer: Option<(LayerSpec, Option<WakeSource>)>,
+    mut root: Option<Root>,
     foreign_dialog: Option<(Option<&str>, bool)>,
 ) -> Result<u32> {
-    let own = layer
-        .as_ref()
-        .and_then(|(spec, _)| spec.output.as_ref())
-        .map(|o| o.connection.clone());
+    let own = match &root {
+        Some(Root::Layer(spec, _)) => spec.output.as_ref().map(|o| o.connection.clone()),
+        Some(Root::Lock(output, _)) => Some(output.output.connection.clone()),
+        None => None,
+    };
+    if matches!(root, Some(Root::Lock(..))) {
+        options.map = false;
+    }
     let conn = if let Some(parent) = parent.as_deref() {
         parent.connection.clone()
     } else if let Some(own) = own {
@@ -1361,6 +1413,7 @@ fn run_inner(
         toplevel: None,
         layer_shell: None,
         layer_surface: None,
+        lock_surface: None,
         popup: None,
         positioner: None,
         shm: None,
@@ -1461,7 +1514,7 @@ fn run_inner(
         let output: wl_output::WlOutput = registry.bind(*id, (*v).min(4), &qh, ());
         w.outputs.insert(output.id(), 1);
     }
-    if layer.is_some() {
+    if matches!(root, Some(Root::Layer(..))) {
         // Window capture is the shell's: only layer roots list the compositor's windows.
         use wayland_protocols::ext::{
             foreign_toplevel_list::v1::client::ext_foreign_toplevel_list_v1 as list,
@@ -1489,7 +1542,10 @@ fn run_inner(
     );
     let surface = compositor.create_surface(&qh, ());
     let mut xdg = None;
-    if let Some((spec, wake)) = layer {
+    if let Some(Root::Lock(output, wake)) = &mut root {
+        w.wake = wake.take();
+        w.make_lock_surface(&surface, output);
+    } else if let Some(Root::Layer(spec, wake)) = root {
         w.wake = wake;
         // Bound by `OutputWatch::bind_output` and checked against the watcher: exactly
         // the instance it reported, never a newer output that reused the number.
@@ -1846,6 +1902,9 @@ impl Window {
         if let Some(l) = self.layer_surface.take() {
             l.destroy();
         }
+        if let Some(l) = self.lock_surface.take() {
+            l.destroy();
+        }
         if let Some(l) = self.layer_shell.take() {
             l.destroy();
         }
@@ -2133,6 +2192,7 @@ impl Dispatch<wl_keyboard::WlKeyboard, ()> for Window {
                 }
                 // Modifiers change the repeated symbol without ending the hold.
                 w.keyboard.refresh_repeat();
+                w.events.push(Event::Modifiers);
             }
             wl_keyboard::Event::Key {
                 serial, key, state, ..

@@ -43,6 +43,11 @@ pub trait Widget: Into<Node> + Sized {
     fn presentational(self) -> Self {
         self.map(Node::presentational)
     }
+    /// Made of glass, in its own shape (`Node::glass`): `nk::Button::new(…).glass()` is the
+    /// glass button, `nk::Button::new(…)` the one for content.
+    fn glass(self) -> Self {
+        self.map(Node::glass)
+    }
 }
 
 /// A type holding a built node, with the setters that apply to it.
@@ -649,9 +654,26 @@ impl PasswordEntry {
         )
         .role(Role::Field);
         if let Kind::Control(control) = &mut node.kind {
-            control.part = Some(Box::new(Part::Password(crate::components::PasswordEntry)));
+            control.part = Some(Box::new(Part::Password(
+                crate::components::PasswordEntry::default(),
+            )));
         }
         Self(node)
+    }
+    /// A button inside the field, at its end, that reports `action` (#1195): the pointer's
+    /// way to do what Enter does. `label` is its name for readers ("Unlock", "Log in").
+    pub fn submit(self, label: impl Into<String>, action: impl Into<String>) -> Self {
+        let Kind::Control(control) = &self.0.kind else {
+            return self;
+        };
+        let part = crate::components::PasswordSubmit {
+            name: control.name.clone(),
+            changed: control.action.clone(),
+            submit_label: label.into(),
+            submit: action.into(),
+            disabled: !control.enabled,
+        };
+        Self(part.node(self.0.key.clone()))
     }
     control_setters!();
 }

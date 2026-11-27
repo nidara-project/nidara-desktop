@@ -36,6 +36,31 @@ impl Component for Button {
     fn corner(&self) -> Corner {
         self.corner
     }
+    /// A glass button (`Node::glass`): its hover and press are Hyalo's, on its own glass; a
+    /// destructive one takes the destructive washes. A button for content declares nothing.
+    fn glass(&self, cx: &Read<'_>) -> Glass {
+        if !cx.is_glass() {
+            return Glass::default();
+        }
+        let washes = &cx.look.tokens.washes;
+        let (hover, press) = if self.appearance == ButtonAppearance::Destructive {
+            (washes.destructive_hover, washes.destructive_press)
+        } else {
+            (washes.hover, washes.press)
+        };
+        let lit = if !cx.interaction.enabled {
+            (4, [hover[0], hover[1], hover[2], 0.])
+        } else if cx.interaction.pressed {
+            (0, press)
+        } else if cx.interaction.hover {
+            (1, hover)
+        } else if cx.fading {
+            (2, [hover[0], hover[1], hover[2], 0.])
+        } else {
+            (4, [hover[0], hover[1], hover[2], 0.])
+        };
+        Glass { lit: Some(lit) }
+    }
     fn configure(&self, p: Configure) -> Option<Part> {
         let mut next = self.clone();
         match p {
@@ -86,7 +111,15 @@ impl Component for Button {
             ButtonAppearance::Default => Some(&b.primary),
             ButtonAppearance::Destructive => Some(&b.destructive),
         };
-        let fill = if interaction.pressed {
+        // Glass itself: the glass is its rest and Hyalo its hover and press. Only the default
+        // button keeps its accent fill on it, the glass tinted as the action the page is for.
+        let glass = cx.read.is_glass();
+        if glass && self.appearance != ButtonAppearance::Default {
+            return;
+        }
+        let fill = if glass {
+            b.primary.background
+        } else if interaction.pressed {
             appearance.map_or(b.pressed, |a| a.pressed)
         } else if interaction.hover {
             appearance.map_or(b.hover, |a| a.hover)
@@ -105,7 +138,7 @@ impl Component for Button {
         canvas.clip(rect(&visible));
         // Each tone replaces the rest one, as the stylesheet's do.
         canvas.rounded_rect(rect(&r), radius, faded(fill));
-        if b.border > 0. {
+        if b.border > 0. && !glass {
             canvas.rounded_ring(
                 rect(&r),
                 radius,

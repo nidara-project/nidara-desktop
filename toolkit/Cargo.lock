@@ -1273,6 +1273,25 @@ dependencies = [
 ]
 
 [[package]]
+name = "nidara-lock"
+version = "0.1.0"
+dependencies = [
+ "gio",
+ "glib",
+ "libc",
+ "libloading",
+ "nidara-kit",
+ "nk-a11y",
+ "nk-icons",
+ "nk-platform",
+ "nk-render",
+ "nk-text",
+ "nk-wayland",
+ "serde_json",
+ "zbus",
+]
+
+[[package]]
 name = "nidara-shell"
 version = "0.1.0"
 dependencies = [

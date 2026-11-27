@@ -219,8 +219,7 @@ build_local_nidara_pkg() {
         --exclude='./lib/nidara-host/build' --exclude='./build/nidara-host' \
         --exclude='./ui/shell/node_modules' --exclude='./ui/shell/@girs' \
         --exclude='./ui/settings/build' --exclude='./ui/shell/build' --exclude='./ui/greeter/build' \
-        --exclude='./ui/greeter/node_modules' --exclude='./ui/lockscreen/build' \
-        --exclude='./ui/lockscreen/node_modules' \
+        --exclude='./ui/greeter/node_modules' \
         --exclude='./packaging/nidara/src' --exclude='./packaging/nidara/pkg' \
         --exclude='./packaging/nidara/*.tar.*' \
         --transform "s|^\.|nidara-desktop-$pkgver|SH" .
@@ -486,11 +485,6 @@ mkdir -p build
 "$REPO_DIR/scripts/bundle.sh" app.ts build/nidara-greeter --native-host=nidara-greeter --kit-external=/usr/share/nidara-kit/js
 echo "  [OK] Greeter bundle: $REPO_DIR/ui/greeter/build/nidara-greeter"
 
-echo "  Building lockscreen..."
-cd "$REPO_DIR/ui/lockscreen"
-mkdir -p build
-"$REPO_DIR/scripts/bundle.sh" app.ts build/nidara-lock --native-host=nidara-lock --kit-external=/usr/share/nidara-kit/js
-echo "  [OK] Lockscreen bundle: $REPO_DIR/ui/lockscreen/build/nidara-lock"
 
 # ─────────────────────────────────────────────────────────────────────────────
 # 4. Install system files
@@ -611,9 +605,8 @@ sudo cp "$REPO_DIR/ui/greeter/style.css" /usr/share/nidara/ui/greeter/
 sudo rm -rf /usr/share/themes/nidara
 sudo rm -rf /usr/share/themes/crystal-shell
 
-# Lockscreen bundle (shares greeter's style.css)
-sudo mkdir -p /usr/share/nidara/ui/lockscreen/build
-sudo cp "$REPO_DIR/ui/lockscreen/build/nidara-lock" /usr/share/nidara/ui/lockscreen/build/
+# The TS lock screen is gone (#1195): the Rust client is installed with the toolkit below.
+sudo rm -rf /usr/share/nidara/ui/lockscreen
 
 # Session wrapper scripts
 sudo cp "$REPO_DIR/bin/nidara"     /usr/bin/nidara
@@ -748,11 +741,12 @@ fi
 # The factory Super+P action launches this Rust toplevel. Build/install only the
 # selector; this does not install or take over the native Settings application.
 echo "  Building nidara-display-selector, the Rust shell and the kit gallery..."
-(cd "$REPO_DIR/toolkit" && run_user env CARGO_TARGET_DIR=target RUSTUP_TOOLCHAIN=stable cargo build --release --locked -p nk-settings --bin nidara-display-selector -p nidara-shell --bin nidara-shell -p nk-gallery --bin nidara-kit-gallery -p nidara-file-chooser --bin nidara-file-chooser)
+(cd "$REPO_DIR/toolkit" && run_user env CARGO_TARGET_DIR=target RUSTUP_TOOLCHAIN=stable cargo build --release --locked -p nk-settings --bin nidara-display-selector -p nidara-shell --bin nidara-shell -p nk-gallery --bin nidara-kit-gallery -p nidara-file-chooser --bin nidara-file-chooser -p nidara-lock --bin nidara-lock)
 sudo install -Dm755 "$REPO_DIR/toolkit/target/release/nidara-display-selector" /usr/bin/nidara-display-selector
 sudo install -Dm755 "$REPO_DIR/toolkit/target/release/nidara-shell" /usr/bin/nidara-shell
 # The kit's gallery (#1079), an application Apps lists like any other.
 sudo install -Dm755 "$REPO_DIR/toolkit/target/release/nidara-file-chooser" /usr/lib/nidara/nidara-file-chooser
+sudo install -Dm755 "$REPO_DIR/toolkit/target/release/nidara-lock" /usr/lib/nidara/nidara-lock
 sudo install -Dm755 "$REPO_DIR/toolkit/target/release/nidara-kit-gallery" /usr/bin/nidara-kit-gallery
 sudo install -Dm644 "$REPO_DIR/toolkit/gallery/nidara-kit-gallery.desktop" /usr/share/applications/nidara-kit-gallery.desktop
 sudo install -Dm644 "$REPO_DIR/config/wireplumber/nidara-audio.lua" /usr/share/wireplumber/scripts/nidara/audio.lua

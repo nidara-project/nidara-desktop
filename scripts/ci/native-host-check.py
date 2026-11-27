@@ -12,7 +12,8 @@ hosts = Path(sys.argv[1]).resolve()
 # The one list of runners (lib/nidara-host/hosts): bundles first, then bin/ helpers.
 names = [l.strip() for l in (repo/"lib/nidara-host/hosts").read_text().splitlines() if l.strip() and not l.lstrip().startswith("#")]
 # A helper is a bin/ script the kernel starts through its runner; bin/nidara-settings,
-# -greeter and -lock are bash launchers of bundles that carry the same name.
+# -greeter is a bash launcher of the bundle of the same name (bin/nidara-lock starts a Rust
+# binary since #1195 and has no runner).
 first_line = lambda n: (repo/"bin"/n).read_text().splitlines()[0] if (repo/"bin"/n).is_file() else ""
 helpers = [n for n in names if first_line(n).startswith("#!/usr/lib/nidara/")]
 bundles = [n for n in names if n not in helpers]

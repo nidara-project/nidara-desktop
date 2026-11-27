@@ -4288,7 +4288,8 @@ pub(crate) fn types_with(size: f32) -> TypeScale {
         &json!({"scss": {"fse-mini": "0.75em", "fse-caption": "0.8em", "fse-small": "0.93em",
             "fse-body": "1em", "fse-subtitle": "1.1em", "fse-title-3": "1.2em",
             "fse-title-2": "1.4em", "fse-title-1": "1.7em", "fw-regular": "400",
-            "fw-medium": "500", "fw-semibold": "600", "fw-bold": "700"}}),
+            "fw-medium": "500", "fw-semibold": "600", "fw-bold": "700",
+            "fs-display": "88px", "fw-display": "200"}}),
         style(size),
     )
     .unwrap()
@@ -6473,4 +6474,70 @@ fn arrangement_has_pointer_states_and_a_keyboard_choice_group() {
         assert_ne!(hover, press);
         view.button(false, Instant::now()).unwrap();
     }
+}
+
+#[test]
+fn a_glass_button_is_glass_in_its_own_shape_and_paints_no_rest_of_its_own() {
+    // The same button twice: made of glass, and for content.
+    let view = Node::row(
+        "r",
+        vec![
+            Node::button("g", "Glass", "go", style(14.)).glass(),
+            Node::button("c", "Content", "go", style(14.)),
+        ],
+    );
+    let mut s = laid(&view, (400., 80.), 1.);
+    let tk = tokens();
+    let g = rect(&s, "g");
+    let f = s.frame(&tk, Instant::now());
+    assert_eq!(f.panes.len(), 1, "one glass, the glass button's");
+    let p = &f.panes[0].pane;
+    assert_eq!(
+        [p.x, p.y, p.width, p.height],
+        g,
+        "the glass has the button's outline"
+    );
+    let radius = p.radius;
+    assert_eq!(
+        f.states.len(),
+        1,
+        "only the glass button has a state on glass"
+    );
+    assert_eq!(f.states[0].wash[3], 0., "at rest");
+    // Its hover and press are Hyalo's.
+    s.pointer_motion(g[0] + 4., g[1] + g[3] / 2.);
+    let f = s.frame(&tk, Instant::now());
+    assert_eq!(f.states[0].wash, tk.washes.hover);
+    assert_eq!(
+        [
+            f.states[0].bounds.x,
+            f.states[0].bounds.y,
+            f.states[0].bounds.width,
+            f.states[0].bounds.height
+        ],
+        g
+    );
+    assert_eq!(
+        f.states[0].radius, radius,
+        "the wash has the glass's corners"
+    );
+    s.pointer_motion(399., 79.);
+    // It paints neither fill nor border; the content button paints both.
+    let mut c = nk_render::Canvas::new(400, 80, 1.);
+    s.paint(&mut c, tk.with_types(&types()), &mut |_, _| None, None)
+        .unwrap();
+    let px = c.finish();
+    let alpha = |x: f64, y: f64| px[((y as usize) * 400 + x as usize) * 4 + 3];
+    let c_rect = rect(&s, "c");
+    assert_eq!(
+        alpha(g[0] + 2., g[1] + g[3] / 2.),
+        0,
+        "nothing at the glass button's edge"
+    );
+    assert!(
+        alpha(c_rect[0] + 2., c_rect[1] + c_rect[3] / 2.) > 0,
+        "the content button's own"
+    );
+    // The glass is no panel to a reader: the button is.
+    assert!(placed(&s, "g/glass").presentation);
 }

@@ -469,7 +469,12 @@ impl Layouter<'_> {
                         let size = f.layout.measured_size();
                         let line = f.layout.lines().first().map(|l| l.bounds);
                         let first = line.map(|l| (l.y + l.height / 2.) as f64);
-                        let reserved = line.map_or(0., |l| (l.height as f64) * t.reserve as f64);
+                        // An empty label keeps its room too: a line of its style.
+                        let line_height = line.map_or(
+                            f64::from(t.style.size) * f64::from(t.style.line_height),
+                            |l| l.height as f64,
+                        );
+                        let reserved = line_height * t.reserve as f64;
                         let h = (size.height as f64).max(reserved);
                         (natural_width(&f.layout).max(0.), h, first)
                     }

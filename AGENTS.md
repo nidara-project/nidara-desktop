@@ -51,7 +51,7 @@ their own desktop — and propose globally useful improvements back upstream.
 | `ui/shell/` | The desktop bundle → `build/nidara` (bar, dock, overlays) |
 | `ui/settings/` | Settings, its own process → `build/nidara-settings` |
 | `ui/greeter/` | The login bundle → `build/nidara-greeter` |
-| `ui/lockscreen/` | The lock bundle → `build/nidara-lock` |
+| `toolkit/lockscreen/` | The lock screen in Rust → `nidara-lock` (#1195) |
 | `ui/installer/` | The live medium's installer → `build/nidara-installer` (not shipped with the desktop) |
 | `ui/lib/` | Shared code + `nidara-kit/`, the reusable widget kit (frozen: #818) |
 | `toolkit/` | The new toolkit in Rust (#818) — phase 0; start at `toolkit/CONTRACT.md` |

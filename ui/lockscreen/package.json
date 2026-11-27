@@ -1,9 +1,0 @@
-{
-  "scripts": {
-    "build": "mkdir -p build && ../../scripts/bundle.sh app.ts build/nidara-lock"
-  },
-  "prettier": {
-    "semi": false,
-    "tabWidth": 2
-  }
-}

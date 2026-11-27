@@ -5,7 +5,7 @@
 # What this proves on every PR, with no GPU and no display:
 #   1. The desktop's gsettings schemas compile, strictly.
 #   2. The in-repo C libraries build from PLAIN ARCH PACKAGES: libnidara-wl,
-#      libnidara-auth (and the eight signals the lockscreen connects to are in
+#      libnidara-auth (and the eight signals the lock screen connects to are in
 #      its GIR), and the native hosts.
 #   3. scripts/bundle.sh still produces the shell and Settings bundles, and the
 #      SCSS compiles (CI's other jobs don't bundle).
@@ -84,7 +84,7 @@ phase_bundle() {
     # at `connect()` time, so a renamed or dropped signal is not a compile error
     # anywhere — it is an exception thrown the first time someone locks their
     # screen, on a surface no automated boot visits. These eight are the ones
-    # ui/lockscreen/widget/LockCard.ts connects to.
+    # the lock screen connects to (toolkit/lockscreen/src/auth.rs).
     log "libnidara-auth…"
     local auth_build="$REPO/build/nidara-auth"
     "$REPO/lib/nidara-auth/build.sh" "$auth_build" >/dev/null

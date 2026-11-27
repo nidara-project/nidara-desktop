@@ -1104,6 +1104,8 @@ pub struct EntryStyle {
     pub icon_gap: f64,
     pub icon: String,
     pub clear_icon: String,
+    /// The button inside a field that submits it (a password's "Unlock").
+    pub submit_icon: String,
     /// Visible icon button follows header.navigation; the hit frame is unchanged.
     pub clear_button: f64,
     pub clear_edge: f64,
@@ -1154,6 +1156,7 @@ pub fn entry_from(
         icon_gap: n("iconGap")?,
         icon: name("icon")?,
         clear_icon: name("clearIcon")?,
+        submit_icon: name("submitIcon")?,
         clear_button: navigation["button"]
             .as_f64()
             .filter(|v| v.is_finite() && *v > 0.)

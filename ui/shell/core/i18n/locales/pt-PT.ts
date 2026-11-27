@@ -931,4 +931,18 @@ export default {
     "cc.action.move-left": "Mover para a esquerda",
     "cc.action.move-right": "Mover para a direita",
     "cc.action.resize": "Redimensionar",
+
+    // The lock screen (toolkit/lockscreen, #1195).
+    "lock.title": "Ecrã de bloqueio",
+    "lock.password": "Palavra-passe",
+    "lock.unlock": "Desbloquear",
+    "lock.wrong-password": "Palavra-passe incorreta",
+    "lock.account-unavailable": "Conta indisponível",
+    "lock.password-expired": "Palavra-passe expirada",
+    "lock.password-expired-how": "Altere-a no próximo início de sessão.",
+    "lock.suspend": "Suspender",
+    "lock.caps-lock": "Caps Lock ativado",
+    "lock.media.previous": "Anterior",
+    "lock.media.play-pause": "Reproduzir ou pausar",
+    "lock.media.next": "Seguinte",
 }

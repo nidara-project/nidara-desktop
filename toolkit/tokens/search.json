@@ -14,7 +14,8 @@
     "dim": "--nidara-text-dim",
     "selection": "--nidara-accent-30",
     "selectionText": "--nidara-text",
-    "clearIcon": "nd-window-close"
+    "clearIcon": "nd-window-close",
+    "submitIcon": "nd-pan-end"
   },
   "variants": []
 }

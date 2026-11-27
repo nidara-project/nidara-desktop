@@ -222,48 +222,47 @@ cd ui/shell && npm run build            # SCSS + the kit's modules + scripts/bun
 nidara-ipc toggleAppGrid                # send an IPC command
 ```
 
-### ⚠️ The lockscreen has a dev mode now; the GREETER still has none
+### The lock screen (Rust, #1195); the GREETER still has no dev mode
 
-`--dev` makes the SHELL run from the source tree (`bin/nidara-ui` sets
-`NIDARA_SHELL_ROOT` to `repo/ui/shell`), which is why `Super+Shift+R` is enough for it.
+The lock screen is `toolkit/lockscreen` (`nidara-lock`), a client of ext-session-lock-v1
+built from the kit; Hyalo owns the lock itself (`hyalo/compositor/src/lock.rs`: what is hidden,
+the veil, saying "locked", relaunching the client). Hyalo starts `bin/nidara-lock`, which holds
+the one-client-per-session lock and `exec`s `/usr/lib/nidara/nidara-lock` — or, on a `--dev`
+install (`~/.config/nidara/.dev`), `toolkit/target/{release,debug}/nidara-lock` of that tree.
 
-**`bin/nidara-lock` grew the same branch** (2026-08-19, commit `25681ad6`): it reads
-`~/.config/nidara/.dev`, and if that path holds a `ui/lockscreen/app.ts` it `cd`s there and
-runs `scripts/run.sh app.ts` instead of the installed bundle. So on a `--dev` install the
-lockscreen you get from `loginctl lock-session` IS your working tree — no install step, and
-the crash-watchdog loop wraps the dev path exactly as it wraps the installed one.
+🔴 **Test it in a nested Hyalo, never by locking the live session.** A cage headless runs
+`nidara-hyalo --winit -c <driver>` with `HYALO_CONTROL` (a fifo: `key <evdev>`, `move X Y`) and
+`HYALO_LOCK_RELAUNCH=true`; the driver starts the client with `NK_SETTINGS_DATA` pointing at a
+fresh `scripts/export-settings-data.mjs` + `export-tokens.mjs` (the installed copy lacks new
+strings), then `nidara-hyalo msg lock` and `msg screenshot`. Three traps, each cost a round:
+- the run directory needs a SHORT path (`~/.cache/nl.XXXX`): the Wayland socket's path is
+  limited to 108 bytes;
+- send several keys in ONE write to the fifo (`printf 'key 30\nkey 31\n'`): separate writes
+  in a row lose some;
+- never type a password there, wrong ones included: a failed attempt goes through the real
+  PAM stack and counts against the real account in faillock. The PAM path is checked by the
+  owner on the installed system.
 
-**`bin/nidara-greeter` still has no such branch.** It hardcodes
-`/usr/share/nidara/ui/greeter/build/nidara-greeter` and `exec`s it or dies; the lockscreen
-still reads its CSS from the greeter's *installed* `style.css`, so **a greeter SCSS edit is
-invisible to a dev lockscreen too**. For those, `npm run build` produces a perfectly good
-artifact that the running system never looks at.
-
-The failure mode is silent and reads as "my change didn't work": the bundle builds, the SCSS
-compiles, `git status` shows the edit, and the screen is identical (2026-08-09 — cost a round
-trip on the design-system pass). **Whenever you touch `ui/greeter/`, or any `style.scss` the
-lockscreen inherits from it, the change is not testable until it is installed.** The
-three files `install.sh` copies (its lines ~505/506/518) are:
+**`bin/nidara-greeter` still has no dev branch.** It hardcodes
+`/usr/share/nidara/ui/greeter/build/nidara-greeter` and `exec`s it or dies. Whenever you touch
+`ui/greeter/`, the change is not testable until it is installed:
 
 ```bash
-cd ui/greeter && npm run build && cd ../lockscreen && npm run build && cd ../..
+cd ui/greeter && npm run build && cd ../..
 sudo cp ui/greeter/style.css            /usr/share/nidara/ui/greeter/
 sudo cp ui/greeter/build/nidara-greeter /usr/share/nidara/ui/greeter/build/
-sudo cp ui/lockscreen/build/nidara-lock /usr/share/nidara/ui/lockscreen/build/
 ```
 
-Then: **the lockscreen** is seen by locking the session (`loginctl lock-session`) — cheap and
-reversible with your password. ⚠️ **And only with your password — killing the lock client is not
-a way out.** `ext-session-lock` is designed so a client that dies without unlocking leaves the session
-locked — that is the security property, not a crash — so `pkill nidara-lock` gets you a locked
-screen with nothing drawing on it. In a VM where nobody knows the password (or after a
-`faillock`), the only exit is restarting greetd from another TTY or over SSH; and if that greetd
-already consumed its `initial_session`, `sudo rm -f /run/greetd.run` first or you land on the
-greeter instead of the session. **The greeter** is not cheap either: seeing it means logging out or
-restarting `greetd`, which kills the session you are working in. Don't restart greetd to
-check a style change; look at it on the next login, in the VM, or offscreen with
-`scripts/dev/lock-probe.js` (which needs neither an install nor a session — it reads
-`ui/greeter/style.css` straight from the repo).
+Then: **the greeter** is not cheap: seeing it means logging out or restarting `greetd`, which
+kills the session you are working in. Don't restart greetd to check a style change; look at it on
+the next login, in the VM, or offscreen with `scripts/dev/lock-probe.js` (which needs neither an
+install nor a session — it reads `ui/greeter/style.css` straight from the repo). ⚠️ **On an
+installed system, a lock is left only with your password — killing the client is not a way
+out.** `ext-session-lock` keeps a session whose client died locked (the security property, not
+a crash), and Hyalo starts the client again. In a VM where nobody knows the password (or after
+a `faillock`), the only exit is restarting greetd from another TTY or over SSH; and if that
+greetd already consumed its `initial_session`, `sudo rm -f /run/greetd.run` first or you land on
+the greeter instead of the session.
 
 **What the greeter says is readable again (#614, 2026-09-21): `journalctl -t nidara-greeter -b`.**
 `nidara-greeter-session` used to open with `exec 1>/dev/null 2>&1` — greetd hands the session the
@@ -275,8 +274,8 @@ bundle and anything they spawn — Hyprland's children inherit the descriptors.
 GLib's `Gjs-Console` domain, which puts it on **stderr**. Redirecting stdout alone captures the
 shell and loses the greeter — which is the line you are looking for.
 
-Note the asymmetry this creates in a review: the greeter and the lockscreen **share one
-stylesheet**, so every greeter-visible change ships whether or not anyone looked at it.
+Note the asymmetry this creates in a review: every greeter-visible change ships whether or not
+anyone looked at it.
 
 ### ⛔ The `assets` branch is a published URL, not stale work — never merge or delete it
 

@@ -43,6 +43,10 @@ pub struct Node {
     /// (`list.separator`), and hidden next to one that is lit (#1156).
     #[serde(default, skip_serializing_if = "std::ops::Not::not")]
     pub rule: bool,
+    /// Made of glass (`Node::glass`): Hyalo's glass in its own shape under it, instead of what
+    /// it paints for itself.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub glass: bool,
     pub kind: Kind,
 }
 
@@ -563,8 +567,19 @@ impl Node {
             presentation: false,
             list_row: false,
             rule: false,
+            glass: false,
             kind,
         }
+    }
+    /// Made of glass: any component, as it is, on Hyalo's glass in its own shape — a button,
+    /// a field, a row. The glass replaces what it paints for itself at rest (its fill and its
+    /// border), its hover and press become Hyalo's states on that glass, and its focus ring
+    /// goes round the same shape, because there is only one. Without it the component is
+    /// drawn for content, as it was. A `Pane` is for a card that holds things; this is for a
+    /// thing that is glass itself (VIEW.md "Glass is a property").
+    pub fn glass(mut self) -> Self {
+        self.glass = true;
+        self
     }
     pub fn presentational(mut self) -> Self {
         self.presentation = true;

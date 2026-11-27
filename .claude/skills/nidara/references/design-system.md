@@ -1643,6 +1643,13 @@ in #952: the toolkit's window glyphs 3–9 % off Hyalo's, with another hover).
   `add_state_region` per button id with its `set_state_levels`, `add_ink_coverage`) and never
   paints a wash, tint, blur, rim or shadow over glass itself. A state changes the glass's own
   levels (`levels` in `toolkit/tokens/control.json`); its `wash` is only the D5 fallback's paint.
+- 🔑 **In the Rust kit, glass is a PROPERTY of any component** (owner, 2026-11-27, #1195):
+  `nk::Button::new(…).glass()` is the glass button, `nk::Button::new(…)` the content one; a
+  field, a row, anything takes `.glass()` the same way. The kit puts the glass in the
+  component's own shape and the component stops painting its rest, so glass, washes and
+  focus ring share ONE outline. Never wrap a control in an `nk::Pane` to make it glass: that
+  is two outlines with the ring on the inner one (the lock screen's field did it). A `Pane` is
+  for a card that holds things. `toolkit/VIEW.md` → "Glass is a property".
 - **The window controls are Hyalo's entirely** — glyphs, clicks, which buttons show and on
   which side (`nidara-window-controls-v1`). An app with its own header reserves the room the
   layout gives it and says where; it draws none of them.

@@ -1,0 +1,28 @@
+# SPDX-License-Identifier: LGPL-3.0-or-later
+[package]
+name = "nidara-lock"
+description = "The lock screen, a client of ext-session-lock-v1 built from the kit (#1195)"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+publish.workspace = true
+
+[[bin]]
+name = "nidara-lock"
+path = "src/main.rs"
+
+[dependencies]
+gio = "0.22"
+glib = "0.22"
+libc = "0.2"
+libloading = "0.8"
+serde_json = "1"
+zbus = "5.19"
+nk-a11y = { path = "../crates/nk-a11y" }
+nk-icons = { path = "../crates/nk-icons" }
+nk-render = { path = "../crates/nk-render" }
+nidara-kit = { path = "../crates/nidara-kit" }
+nk-platform = { path = "../crates/nk-platform" }
+nk-text = { path = "../crates/nk-text", features = ["system-fonts"] }
+nk-wayland = { path = "../crates/nk-wayland" }

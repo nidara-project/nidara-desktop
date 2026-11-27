@@ -6,7 +6,6 @@
 nidara-shell
 nidara-settings
 nidara-greeter
-nidara-lock
 nidara-installer
 # Helper scripts in bin/ (their shebang is #!/usr/lib/nidara/<name>):
 nidara-a11y
