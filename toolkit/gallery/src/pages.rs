@@ -340,13 +340,6 @@ fn content_button(key: &str, text: &str, action: &str, t: &TypeScale) -> nk::But
     nk::Button::new(key, text, action, t.style(Type::Small, Weight::Medium))
 }
 
-/// A button over content is glass (VIEW.md §13.2): a pill of it around the control, so
-/// Hyalo draws its hover, press and on.
-fn on_glass(control: nk::Button) -> Node {
-    let control: Node = control.corner(Corner::Pill).into();
-    nk::Pane::new(format!("{}/glass", control.key.0), Corner::Pill, control).into()
-}
-
 /// A text button as the NC builds one today (VIEW.md §13: the kit's own button function is
 /// #1079 step 3).
 fn button(key: &str, text: &str, action: &str, t: &TypeScale) -> nk::Button {
@@ -402,6 +395,13 @@ fn page(id: &str, m: &Model, cat: &Catalogue, t: &TypeScale, k: &Measures) -> Ve
             nodes.push(
                 nk::PasswordEntry::new("e/password-submit", "Password", "noop")
                     .submit("Unlock", "noop")
+                    .into(),
+            );
+            // The same field made of glass, as the lock screen has it (#1195).
+            nodes.push(
+                nk::PasswordEntry::new("e/password-glass", "Password", "noop")
+                    .submit("Unlock", "noop")
+                    .glass()
                     .into(),
             );
             nodes.extend(fields(t));
@@ -615,12 +615,39 @@ fn buttons(m: &Model, t: &TypeScale) -> Vec<Node> {
             ),
         ],
     );
+    // The same three, made of glass: one component, two materials (`.glass()`).
+    let glass_kind = |k: &str, text: &str, label: &str, a: nk::ButtonAppearance| {
+        sample(
+            &format!("b/g/{k}"),
+            label,
+            t,
+            content_button(&format!("b/g/{k}"), text, "noop", t)
+                .appearance(a)
+                .glass()
+                .into(),
+        )
+    };
+    let glass_appearances = row(
+        "b/glass-appearances",
+        vec![
+            glass_kind("normal", "Cancel", "Normal", nk::ButtonAppearance::Normal),
+            glass_kind("default", "Save", "Default", nk::ButtonAppearance::Default),
+            glass_kind(
+                "destructive",
+                "Delete",
+                "Destructive",
+                nk::ButtonAppearance::Destructive,
+            ),
+        ],
+    );
     let state = |k: &str, label: &str, f: &dyn Fn(nk::Button) -> nk::Button| {
         sample(
             &format!("b/{k}"),
             label,
             t,
-            on_glass(f(button(&format!("b/{k}"), "Button", "noop", t))),
+            f(button(&format!("b/{k}"), "Button", "noop", t))
+                .glass()
+                .into(),
         )
     };
     let states = row(
@@ -645,7 +672,7 @@ fn buttons(m: &Model, t: &TypeScale) -> Vec<Node> {
                 "b/icon",
                 "Icon only",
                 t,
-                on_glass(nk::Button::with_child(
+                nk::Button::with_child(
                     "b/icon",
                     "Search",
                     "noop",
@@ -654,7 +681,9 @@ fn buttons(m: &Model, t: &TypeScale) -> Vec<Node> {
                         vec![nk::Image::new("b/icon/glyph", "nd-system-search", 16.).into()],
                     )
                     .padding(Padding::all(Space::S2)),
-                )),
+                )
+                .glass()
+                .into(),
             ),
         ],
     );
@@ -675,11 +704,11 @@ fn buttons(m: &Model, t: &TypeScale) -> Vec<Node> {
                     "Toggle: off"
                 },
                 t,
-                on_glass(
-                    button("b/toggle", "Toggle", "toggle", t)
-                        .role(Role::Toggle)
-                        .marked(m.toggle),
-                ),
+                button("b/toggle", "Toggle", "toggle", t)
+                    .role(Role::Toggle)
+                    .marked(m.toggle)
+                    .glass()
+                    .into(),
             ),
         ],
     );
@@ -690,6 +719,12 @@ fn buttons(m: &Model, t: &TypeScale) -> Vec<Node> {
             "In a page: what it does (.appearance)",
             t,
             appearances,
+        ),
+        section(
+            "b-glass",
+            "The same buttons made of glass (.glass())",
+            t,
+            glass_appearances,
         ),
         section(
             "b-states",

@@ -735,6 +735,10 @@ impl Component for EditableField {
     }
 }
 pub(super) fn chrome(cx: &mut Paint<'_>) {
+    // A field that is glass itself (`Node::glass`) has the glass for its fill and border.
+    if cx.read.is_glass() {
+        return;
+    }
     let t = &cx.look.tokens.entry;
     let r = cx.rect;
     let radius = t.radius.min(r[3] / 2.);

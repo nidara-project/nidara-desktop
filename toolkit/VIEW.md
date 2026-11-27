@@ -186,6 +186,16 @@ The surface receives only the effect: `Activated(key, action)`.
   from the same tokens and with the same fade. It declares nothing to Hyalo and spends no
   budget. This is not imitating the compositor: there is no glass there for it to draw on, and
   the protocol is not to be extended for it.
+- **Glass is a property** (owner, 2026-11-27, #1195). Any component can be made of glass,
+  as it is: `nk::Button::new(…).glass()`, `nk::PasswordEntry::new(…).glass()`, a row. The kit
+  puts a pane in the component's own shape under it when it expands the tree (key
+  `<key>/glass`, presentational, taking the component's place in its stack: grow, width,
+  height); the component sees `Read::is_glass()` and stops painting its rest (fill, border:
+  the glass is that), its hover and press are Hyalo's states on that glass, and its focus ring
+  follows the same outline, because there is one. A part inside it (`Read::over_glass()`, a
+  field's submit button) takes Hyalo's states too. A default button keeps its accent fill on
+  the glass. Wrapping a control in a `Pane` by hand to get glass is the mistake this replaces:
+  two outlines, and the ring on the inner one. A `Pane` is for a card that holds things.
 - **Disabled is content.** An enabled-`false` control that has an action draws its text and
   glyphs in `--nidara-text-disabled`. One with no action is a marker (the NC's today), drawn as
   it is.
@@ -857,7 +867,7 @@ decides the rest. Each component has three layers, kept apart:
 
 | Component | Mechanism | Properties | Tokens |
 |---|---|---|---|
-| Button | its shape; release activates | in content (`nk::Button`) or over content (glass); destructive; default | `button` |
+| Button | its shape; release activates | in content (`nk::Button`) or made of glass (`.glass()`); destructive; default | `button` |
 | Toggle button | each click flips; on = white glass, accent ink | — | glass `states` |
 | Checkbox | the box and its text; Space | checked / unchecked / mixed | `choices` |
 | Radio | the circle and its text; the group is one Tab stop, arrows choose | chosen | `choices` |

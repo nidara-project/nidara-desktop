@@ -119,6 +119,30 @@ pub struct Read<'a> {
     pub text: &'a TextCache,
 }
 impl Read<'_> {
+    /// It lies on glass: a pane holds it, so its hover and press are Hyalo's states there and
+    /// it paints none of its own.
+    pub fn over_glass(&self) -> bool {
+        self.placed
+            .iter()
+            .find(|p| &p.key == self.key)
+            .is_some_and(|p| p.pane.is_some())
+    }
+    /// It is glass itself (`Node::glass`): the pane it lies in has its very outline, so the
+    /// glass stands for its fill and its border at rest.
+    pub fn is_glass(&self) -> bool {
+        let Some(me) = self.placed.iter().find(|p| &p.key == self.key) else {
+            return false;
+        };
+        let Some(pane) = me.pane.and_then(|q| self.placed.get(q)) else {
+            return false;
+        };
+        matches!(pane.what, crate::layout::What::Pane(_))
+            && pane
+                .rect
+                .iter()
+                .zip(self.rect)
+                .all(|(a, b)| (a - b).abs() < 0.5)
+    }
     /// A node in this component's own expanded body, in surface coordinates.
     pub fn part(&self, suffix: &str) -> Option<&Placed> {
         let key = self.key(suffix);

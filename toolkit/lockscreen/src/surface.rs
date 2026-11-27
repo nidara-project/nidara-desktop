@@ -10,10 +10,7 @@
 //! Layout, hover, focus, Tab, the field's editing and input methods and the reader are the
 //! kit's (`nk::ViewState`); this says what the view is and acts on what is activated.
 use crate::{Msg, World};
-use nk::{
-    Activated, Align, Ink, Key, Node, Space, Type, ViewState, Weight, Widget,
-    WindowLook,
-};
+use nk::{Activated, Align, Ink, Key, Node, Space, Type, ViewState, Weight, Widget, WindowLook};
 use nk_platform::clock::{self, Order, Region};
 use nk_platform::exports::Exports;
 use nk_render::{Canvas, ImageFit, Raster};
@@ -346,11 +343,14 @@ impl Surface {
                 .into(),
             );
             children.push(strut("lock/field-gap", m.field_gap));
-            // The kit's field as the gallery shows it: its own shape, its own focus ring.
+            // D7: the one thing of glass here is the field, made of glass in its own shape
+            // (`.glass()`), so its glass, its button's washes and its focus ring share one
+            // outline.
             let entry: Node =
                 nk::PasswordEntry::new(self.field.clone(), text("lock.password"), SECRET)
                     .enabled(!shared.checking)
                     .submit(text("lock.unlock"), SUBMIT)
+                    .glass()
                     .into();
             children.push(entry.width(m.field));
             let body = types.style(Type::Body, Weight::Regular);

@@ -435,6 +435,26 @@ impl Component for SubmitButton {
     fn silhouette(&self, cx: &Read<'_>) -> Rect {
         self.visible(cx)
     }
+    /// On glass (its field made of glass, or in a pane) its hover and press are Hyalo's.
+    fn glass(&self, cx: &Read<'_>) -> Glass {
+        if !cx.over_glass() {
+            return Glass::default();
+        }
+        let washes = &cx.look.tokens.washes;
+        let rest = [washes.hover[0], washes.hover[1], washes.hover[2], 0.];
+        let lit = if !cx.interaction.enabled {
+            (4, rest)
+        } else if cx.interaction.pressed {
+            (0, washes.press)
+        } else if cx.interaction.hover {
+            (1, washes.hover)
+        } else if cx.fading {
+            (2, rest)
+        } else {
+            (4, rest)
+        };
+        Glass { lit: Some(lit) }
+    }
     fn focus_outline(&self, cx: &Read<'_>) -> Option<FocusOutline> {
         let bounds = self.silhouette(cx);
         Some(FocusOutline::rounded(bounds, bounds[3] / 2.))
@@ -454,6 +474,9 @@ impl Component for SubmitButton {
     }
     fn paint(&self, cx: &mut Paint<'_>, phase: PaintPhase) {
         if phase != PaintPhase::Under {
+            return;
+        }
+        if cx.read.over_glass() {
             return;
         }
         let r = self.visible(&cx.read);

@@ -43,6 +43,11 @@ pub trait Widget: Into<Node> + Sized {
     fn presentational(self) -> Self {
         self.map(Node::presentational)
     }
+    /// Made of glass, in its own shape (`Node::glass`): `nk::Button::new(…).glass()` is the
+    /// glass button, `nk::Button::new(…)` the one for content.
+    fn glass(self) -> Self {
+        self.map(Node::glass)
+    }
 }
 
 /// A type holding a built node, with the setters that apply to it.
