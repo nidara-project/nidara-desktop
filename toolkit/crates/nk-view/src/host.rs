@@ -256,6 +256,8 @@ pub struct TypeScale {
     base: nk_text::TextStyle,
     sizes: [f32; 8],
     weights: [f32; 4],
+    /// `$fs-display` (px) and `$fw-display`: the hero clock's register, outside the ramp.
+    display: (f32, f32),
 }
 /// The line height of interface text.
 const LINE_HEIGHT: f32 = 1.3;
@@ -299,11 +301,24 @@ impl TypeScale {
         {
             weights[i] = read(w.token(), "")?;
         }
+        let display = (read("fs-display", "px")?, read("fw-display", "")?);
         Ok(Self {
             base,
             sizes,
             weights,
+            display,
         })
+    }
+    /// The DISPLAY register (`_tokens.scss`): the lock and login screens' hero clock, the one
+    /// text deliberately outside the type scale, in the user's font at a fixed size and its
+    /// own hairline weight, with titles' tight line height.
+    pub fn display(&self) -> nk_text::TextStyle {
+        nk_text::TextStyle {
+            size: self.display.0,
+            weight: self.display.1,
+            line_height: 1.2,
+            ..self.base.clone()
+        }
     }
     pub fn style(&self, t: Type, w: Weight) -> nk_text::TextStyle {
         let i = Type::ALL.iter().position(|x| *x == t).unwrap_or(3);

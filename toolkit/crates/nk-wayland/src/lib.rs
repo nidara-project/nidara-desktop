@@ -145,6 +145,9 @@ pub enum Event {
         result: std::result::Result<Image, CaptureFailure>,
     },
     Focus(bool),
+    /// The keyboard's modifiers changed; `Window::caps_lock` says the locked ones. The
+    /// compositor sends them after the key that changed them.
+    Modifiers,
     Key(Key),
     Motion(f64, f64),
     PointerLeave,
@@ -2189,6 +2192,7 @@ impl Dispatch<wl_keyboard::WlKeyboard, ()> for Window {
                 }
                 // Modifiers change the repeated symbol without ending the hold.
                 w.keyboard.refresh_repeat();
+                w.events.push(Event::Modifiers);
             }
             wl_keyboard::Event::Key {
                 serial, key, state, ..

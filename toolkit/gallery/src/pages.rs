@@ -2874,7 +2874,8 @@ mod tests {
         let statics: serde_json::Value = serde_json::json!({"scss": {
             "fse-mini": "0.77em", "fse-caption": "0.85em", "fse-small": "0.92em", "fse-body": "1em",
             "fse-subtitle": "1.08em", "fse-title-3": "1.23em", "fse-title-2": "1.54em", "fse-title-1": "2em",
-            "fw-regular": "400", "fw-medium": "500", "fw-semibold": "600", "fw-bold": "700"}});
+            "fw-regular": "400", "fw-medium": "500", "fw-semibold": "600", "fw-bold": "700",
+            "fs-display": "88px", "fw-display": "200"}});
         TypeScale::from_static(&statics, nk_text::TextStyle::default()).unwrap()
     }
 

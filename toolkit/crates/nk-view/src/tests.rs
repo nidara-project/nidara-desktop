@@ -4288,7 +4288,8 @@ pub(crate) fn types_with(size: f32) -> TypeScale {
         &json!({"scss": {"fse-mini": "0.75em", "fse-caption": "0.8em", "fse-small": "0.93em",
             "fse-body": "1em", "fse-subtitle": "1.1em", "fse-title-3": "1.2em",
             "fse-title-2": "1.4em", "fse-title-1": "1.7em", "fw-regular": "400",
-            "fw-medium": "500", "fw-semibold": "600", "fw-bold": "700"}}),
+            "fw-medium": "500", "fw-semibold": "600", "fw-bold": "700",
+            "fs-display": "88px", "fw-display": "200"}}),
         style(size),
     )
     .unwrap()

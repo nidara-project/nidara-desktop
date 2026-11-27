@@ -931,4 +931,15 @@ export default {
     "cc.action.move-left": "Déplacer vers la gauche",
     "cc.action.move-right": "Déplacer vers la droite",
     "cc.action.resize": "Redimensionner",
+
+    // The lock screen (toolkit/lockscreen, #1195).
+    "lock.title": "Écran de verrouillage",
+    "lock.password": "Mot de passe",
+    "lock.unlock": "Déverrouiller",
+    "lock.wrong-password": "Mot de passe incorrect",
+    "lock.account-unavailable": "Compte indisponible",
+    "lock.password-expired": "Mot de passe expiré",
+    "lock.password-expired-how": "Changez-le à votre prochaine connexion.",
+    "lock.suspend": "Veille",
+    "lock.caps-lock": "Verr. Maj activé",
 }

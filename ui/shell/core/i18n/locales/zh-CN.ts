@@ -931,4 +931,15 @@ export default {
     "cc.action.move-left": "左移",
     "cc.action.move-right": "右移",
     "cc.action.resize": "调整大小",
+
+    // The lock screen (toolkit/lockscreen, #1195).
+    "lock.title": "锁屏",
+    "lock.password": "密码",
+    "lock.unlock": "解锁",
+    "lock.wrong-password": "密码错误",
+    "lock.account-unavailable": "账户不可用",
+    "lock.password-expired": "密码已过期",
+    "lock.password-expired-how": "请在下次登录时更改。",
+    "lock.suspend": "睡眠",
+    "lock.caps-lock": "大写锁定已打开",
 }

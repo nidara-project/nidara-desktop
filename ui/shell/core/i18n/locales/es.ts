@@ -1166,4 +1166,15 @@ export default {
     "shell.cc.screenshot-failed": "No se pudo hacer la captura",
     "shell.prompt.pin": "PIN",
     "shell.bar.workspace-short": "Escr.",
+
+    // The lock screen (toolkit/lockscreen, #1195).
+    "lock.title": "Pantalla de bloqueo",
+    "lock.password": "Contraseña",
+    "lock.unlock": "Desbloquear",
+    "lock.wrong-password": "Contraseña incorrecta",
+    "lock.account-unavailable": "Cuenta no disponible",
+    "lock.password-expired": "Contraseña caducada",
+    "lock.password-expired-how": "Cámbiala en el próximo inicio de sesión.",
+    "lock.suspend": "Suspender",
+    "lock.caps-lock": "Bloq Mayús activado",
 }

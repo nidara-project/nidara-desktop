@@ -2,7 +2,7 @@
 //! Diagnostic only: the ext-session-lock-v1 role (#1195). Locks the session with one lock
 //! surface per output, each on its own thread and queue on the lock's connection, prints
 //! LOCKED when the compositor says so, and unlocks on the first key press (UNLOCKED).
-use nk_wayland::{Application, Event, Frame, LockStatus, Material, Options, Window, Waker};
+use nk_wayland::{Application, Event, Frame, LockStatus, Material, Options, Waker, Window};
 use std::sync::mpsc;
 use std::time::{Duration, Instant};
 type Result<T> = std::result::Result<T, String>;

@@ -938,4 +938,15 @@ export default {
     "cc.action.move-left": "Переместить влево",
     "cc.action.move-right": "Переместить вправо",
     "cc.action.resize": "Изменить размер",
+
+    // The lock screen (toolkit/lockscreen, #1195).
+    "lock.title": "Экран блокировки",
+    "lock.password": "Пароль",
+    "lock.unlock": "Разблокировать",
+    "lock.wrong-password": "Неверный пароль",
+    "lock.account-unavailable": "Учётная запись недоступна",
+    "lock.password-expired": "Срок действия пароля истёк",
+    "lock.password-expired-how": "Измените его при следующем входе.",
+    "lock.suspend": "Спящий режим",
+    "lock.caps-lock": "Включён Caps Lock",
 }

@@ -931,4 +931,15 @@ export default {
     "cc.action.move-left": "左に移動",
     "cc.action.move-right": "右に移動",
     "cc.action.resize": "サイズ変更",
+
+    // The lock screen (toolkit/lockscreen, #1195).
+    "lock.title": "ロック画面",
+    "lock.password": "パスワード",
+    "lock.unlock": "ロック解除",
+    "lock.wrong-password": "パスワードが違います",
+    "lock.account-unavailable": "アカウントを利用できません",
+    "lock.password-expired": "パスワードの有効期限が切れています",
+    "lock.password-expired-how": "次回のログイン時に変更してください。",
+    "lock.suspend": "スリープ",
+    "lock.caps-lock": "Caps Lock がオンです",
 }

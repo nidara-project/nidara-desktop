@@ -931,4 +931,15 @@ export default {
     "cc.action.move-left": "Nach links bewegen",
     "cc.action.move-right": "Nach rechts bewegen",
     "cc.action.resize": "Größe ändern",
+
+    // The lock screen (toolkit/lockscreen, #1195).
+    "lock.title": "Sperrbildschirm",
+    "lock.password": "Passwort",
+    "lock.unlock": "Entsperren",
+    "lock.wrong-password": "Falsches Passwort",
+    "lock.account-unavailable": "Konto nicht verfügbar",
+    "lock.password-expired": "Passwort abgelaufen",
+    "lock.password-expired-how": "Ändern Sie es bei der nächsten Anmeldung.",
+    "lock.suspend": "Ruhezustand",
+    "lock.caps-lock": "Feststelltaste aktiv",
 }

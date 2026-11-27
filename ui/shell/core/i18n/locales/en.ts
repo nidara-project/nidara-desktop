@@ -1192,4 +1192,15 @@ export default {
     "shell.cc.screenshot-failed": "Could not take the screenshot",
     "shell.prompt.pin": "PIN",
     "shell.bar.workspace-short": "Desk.",
+
+    // The lock screen (toolkit/lockscreen, #1195).
+    "lock.title": "Lock screen",
+    "lock.password": "Password",
+    "lock.unlock": "Unlock",
+    "lock.wrong-password": "Wrong password",
+    "lock.account-unavailable": "Account unavailable",
+    "lock.password-expired": "Password expired",
+    "lock.password-expired-how": "Change it at your next login.",
+    "lock.suspend": "Sleep",
+    "lock.caps-lock": "Caps Lock is on",
 }
