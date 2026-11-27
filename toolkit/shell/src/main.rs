@@ -187,6 +187,12 @@ fn main() {
         }
     }
     let (hub_tx, hub_rx) = channel();
+    let locale_events = hub_tx.clone();
+    spawn("language", move || {
+        nidara_shell::i18n::watch(move || {
+            let _ = locale_events.send(hub::HubEvent::Language);
+        });
+    });
     let tokens = material::load()
         .map(Arc::new)
         .map_err(|e| eprintln!("nidara-shell: no glass tokens: {e}"))

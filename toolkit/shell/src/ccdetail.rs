@@ -315,7 +315,10 @@ impl Detail {
             ));
         }
         if !self.error.is_empty() {
-            rows.insert(0, Row::new("error", Label::Text(self.error.clone()), None));
+            rows.insert(
+                0,
+                Row::new("error", Label::Key("shell.cc.action-failed"), None),
+            );
         }
         let mut back = Row::key("cc.detail.back", Action::Back);
         back.prefix = Some(name_key(self.page));
@@ -889,20 +892,9 @@ fn rows(page: &str, s: &Status, mode: &'static str, audio: bool) -> Vec<Row> {
                     Label::Text(format!("{:.0}%", b.fraction * 100.)),
                     None,
                 ));
-                let state = match s.battery_state {
-                    1 | 5 => "Charging",
-                    2 | 6 => "Discharging",
-                    4 => "Fully charged",
-                    3 => "Empty",
-                    _ => "Unknown",
-                };
-                let time = s
-                    .battery_time
-                    .map(|seconds| format!(" · {}h {:02}m", seconds / 3600, seconds % 3600 / 60))
-                    .unwrap_or_default();
                 out.push(Row::new(
                     "battery-state",
-                    Label::Text(format!("{state}{time}")),
+                    Label::Text(super::battery_text(s, None)),
                     None,
                 ));
             }
@@ -913,7 +905,7 @@ fn rows(page: &str, s: &Status, mode: &'static str, audio: bool) -> Vec<Row> {
                 let mut row = Row::button(
                     format!("clip:{}:{}", s.aux.clip_revision, entry.id),
                     if entry.image {
-                        format!("Image · {}", entry.label)
+                        crate::i18n::format("shell.cc.clip-image", &[("format", &entry.label)])
                     } else {
                         entry.label.clone()
                     },
@@ -953,27 +945,34 @@ fn rows(page: &str, s: &Status, mode: &'static str, audio: bool) -> Vec<Row> {
                 );
                 for (key, value) in [
                     (
-                        "Status",
+                        "shell.cc.network-status",
                         if d["state"] == 100 {
-                            "Connected".into()
+                            crate::i18n::text("settings.network.status.connected")
                         } else {
-                            "Disconnected".into()
+                            crate::i18n::text("settings.network.status.disconnected")
                         },
                     ),
-                    ("Interface", text(d, "interface")),
+                    ("shell.cc.network-interface", text(d, "interface")),
                     (
-                        "IP",
+                        "shell.cc.network-ip",
                         d["ip4"]["addresses"][0]["address"]
                             .as_str()
                             .unwrap_or("—")
                             .into(),
                     ),
                     (
-                        "Gateway",
+                        "shell.cc.network-gateway",
                         d["ip4"]["gateway"].as_str().unwrap_or("—").into(),
                     ),
                 ] {
-                    out.push(Row::new(key, Label::Text(format!("{key} · {value}")), None));
+                    out.push(Row::new(
+                        key,
+                        Label::Text(crate::i18n::format(
+                            "shell.cc.detail-value",
+                            &[("label", &crate::i18n::text(key)), ("value", &value)],
+                        )),
+                        None,
+                    ));
                 }
             }
         }
@@ -1290,7 +1289,7 @@ fn rows(page: &str, s: &Status, mode: &'static str, audio: bool) -> Vec<Row> {
             if !s.capture.screenshot.error.is_empty() {
                 out.push(Row::new(
                     "screenshot-error",
-                    Label::Text(s.capture.screenshot.error.clone()),
+                    Label::Key("shell.cc.screenshot-failed"),
                     None,
                 ));
             }
@@ -1342,7 +1341,7 @@ fn rows(page: &str, s: &Status, mode: &'static str, audio: bool) -> Vec<Row> {
             if !s.capture.error.is_empty() {
                 out.push(Row::new(
                     "capture-error",
-                    Label::Text(s.capture.error.clone()),
+                    Label::Key("widget.screenrecord.failed"),
                     None,
                 ));
             }

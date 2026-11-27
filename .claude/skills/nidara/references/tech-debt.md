@@ -312,9 +312,11 @@ width − `gaps_out` each side. When that's built it should read effective `gaps
 `HyprlandState.getOptionInt("general:gaps_out")` and refresh on `config-reloaded`, and replace
 the hardcoded `BAR_HEIGHT = 40` with the bar's real exclusive zone.
 
-### 5. i18n has no hot-reload
-`detectLanguage()` runs once at startup; a locale change needs `Super+Shift+R`. Out of scope
-for most PRs, but know it when testing locale changes.
+### 5. Legacy TS i18n has no hot-reload
+The legacy TS shell still detects its language at startup. The native Rust shell
+uses the settings-data catalogue and observes the system language from locale1,
+which Settings changes through localectl. See the native shell entry in
+`architecture.md`.
 
 ### 6. Where architectural decisions get recorded — ⚠️ this item was STALE, corrected 2026-08-23
 It used to say "architecture/skill docs are intentionally git-ignored", naming

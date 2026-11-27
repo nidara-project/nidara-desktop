@@ -477,7 +477,7 @@ As built:
   has minimized windows, not installed, cannot be opened now), disabled when a click
   would do nothing, the roving focus as `focused`. Activate does what a click does, with
   no activation token (there is no input event behind it). Requests made against an
-  older tree are dropped. The strings are English until the Rust shell has i18n.
+  older tree are dropped. The dock uses the shared settings-data translation catalogue.
 - The skin stays dark whatever the system mode (owner's decision). Reduce transparency
   (`org.nidara.appearance`) picks the tokens' solid variant.
 

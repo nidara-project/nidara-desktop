@@ -31,6 +31,7 @@ const RIGHT_BUTTON: u32 = 0x111;
 const MIDDLE_BUTTON: u32 = 0x112;
 
 pub struct Dock {
+    locale_generation: u64,
     icon_start: Instant,
     icons_presented: bool,
     metrics_commit: u64,
@@ -209,6 +210,7 @@ impl Dock {
         let layout = Self::lay(&frame, output_size);
         let hide = crate::autohide::Hide::new(frame.prefs.auto_hide);
         Self {
+            locale_generation: crate::i18n::generation(),
             icon_start: Instant::now(),
             icons_presented: false,
             metrics_commit: 0,
@@ -443,6 +445,12 @@ impl Dock {
             }
         }
         let Some(frame) = latest else { return Ok(()) };
+        let generation = crate::i18n::generation();
+        if self.locale_generation != generation {
+            self.locale_generation = generation;
+            self.close_popup(w);
+            self.close_tooltip(w);
+        }
         if let Some(size) = frame.output_sizes.get(&self.output_name) {
             self.output_size = *size;
         }
@@ -847,7 +855,10 @@ impl Dock {
                 }
             }
         };
-        let title = item.map_or("Dock", |i| i.label.as_str()).to_string();
+        let title = item.map_or_else(
+            || crate::i18n::text("settings.dock.title"),
+            |i| i.label.clone(),
+        );
         let anchor = item.map(|i| i.key.clone());
         let side = self.side();
         self.popups += 1;

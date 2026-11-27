@@ -203,15 +203,10 @@ pub struct Strings {
 }
 impl Strings {
     pub fn of(look: &Look) -> Self {
-        let t = |k: &str, fallback: &str| {
-            look.exports
-                .text(k)
-                .map(str::to_string)
-                .unwrap_or_else(|_| fallback.into())
-        };
+        let t = |k: &str| crate::i18n::text_for(&look.exports, k);
         Self {
-            empty: t("nc.empty", "No notifications"),
-            clear_all: t("nc.clear-all", "Clear notifications"),
+            empty: t("nc.empty"),
+            clear_all: t("nc.clear-all"),
         }
     }
 }
@@ -483,19 +478,36 @@ impl View {
                 nk::Label::new("cal/month", m.month_name, style(m.text, 15., 700.))
                     .grow()
                     .into(),
-                nav("previous", "Previous month", "nd-pan-start").into(),
+                nav(
+                    "previous",
+                    &crate::i18n::text("shell.nc.previous-month"),
+                    "nd-pan-start",
+                )
+                .into(),
                 nk::Button::with_child(
                     "cal/today",
-                    "Today",
+                    crate::i18n::text("shell.nc.today"),
                     "today",
                     nk::Row::new(
                         "cal/today/pad",
-                        vec![nk::Label::new("cal/today/text", "Today", body.clone()).into()],
+                        vec![
+                            nk::Label::new(
+                                "cal/today/text",
+                                crate::i18n::text("shell.nc.today"),
+                                body.clone(),
+                            )
+                            .into(),
+                        ],
                     )
                     .padding(Padding::symmetric(Space::S1, Space::S2)),
                 )
                 .into(),
-                nav("next", "Next month", "nd-pan-end").into(),
+                nav(
+                    "next",
+                    &crate::i18n::text("shell.nc.next-month"),
+                    "nd-pan-end",
+                )
+                .into(),
             ],
         )
         .gap(Space::S1)
@@ -537,7 +549,7 @@ impl View {
                 cells.push(match day {
                     Some(d) if m.today == Some(d) => nk::Button::with_child(
                         format!("{key}/today"),
-                        format!("Today, {d}"),
+                        crate::i18n::format("shell.nc.today-date", &[("date", &d.to_string())]),
                         "",
                         cell(key, d.to_string(), Ink::Primary),
                     )
@@ -572,7 +584,10 @@ impl View {
             Corner::Token(Radius::Md),
             nk::Button::with_child(
                 format!("g:{key}/toggle"),
-                format!("{name}, {} notifications, collapse", list.len()),
+                crate::i18n::format(
+                    "shell.nc.collapse",
+                    &[("name", &name), ("count", &list.len().to_string())],
+                ),
                 format!("group:{key}"),
                 nk::Row::new(
                     format!("g:{key}/row"),
@@ -590,7 +605,10 @@ impl View {
                         .into(),
                         nk::Button::with_child(
                             format!("g:{key}/clear"),
-                            format!("Clear {}", list[0].notice.app_name),
+                            crate::i18n::format(
+                                "shell.nc.clear-app",
+                                &[("name", &list[0].notice.app_name)],
+                            ),
                             format!("clear-group:{key}"),
                             nk::Row::new(
                                 format!("g:{key}/clear/pad"),
@@ -656,11 +674,15 @@ impl View {
             .collect();
         // What a reader hears after the title: the age, the body and any error, which are
         // inside the card's control and so are not labels of their own.
-        let said = [nc::age(b.notice.time, m.now), body.clone(), b.error.clone()]
-            .into_iter()
-            .filter(|t| !t.is_empty())
-            .collect::<Vec<_>>()
-            .join(", ");
+        let said = [
+            nc::age(b.notice.time, m.now),
+            body.clone(),
+            crate::i18n::text(&b.error),
+        ]
+        .into_iter()
+        .filter(|t| !t.is_empty())
+        .collect::<Vec<_>>()
+        .join(", ");
         let expanded = group.is_none() && self.items_open.contains(&i);
         let hero = group.is_none().then(|| self.hero(b)).flatten();
         let expandable =
@@ -680,7 +702,7 @@ impl View {
             m.text,
         )
         .body(body)
-        .error(b.error.clone())
+        .error(crate::i18n::text(&b.error))
         .description(said)
         .open(
             match group {
@@ -688,15 +710,20 @@ impl View {
                 None => format!("open:{i}:{c}"),
             },
             match group {
-                Some((_, n)) => format!("{title}, {n} notifications, expand"),
+                Some((_, n)) => crate::i18n::format(
+                    "shell.nc.expand",
+                    &[("name", &title), ("count", &n.to_string())],
+                ),
                 None => title,
             },
         )
         .close(
             close_action,
             match group {
-                Some(_) => format!("Clear {}", b.notice.app_name),
-                None => "Close notification".into(),
+                Some(_) => {
+                    crate::i18n::format("shell.nc.clear-app", &[("name", &b.notice.app_name)])
+                }
+                None => crate::i18n::text("shell.nc.close-notification"),
             },
         )
         .actions(
@@ -1167,7 +1194,11 @@ impl View {
 
     /// The semantics, under a panel named for the centre; its ids start at `first_id`.
     pub fn semantics(&mut self, first_id: u64) -> nk_a11y::Tree {
-        let mut root = nk_a11y::Node::new(nc::PANEL, nk_a11y::Role::Panel, "Notification Center");
+        let mut root = nk_a11y::Node::new(
+            nc::PANEL,
+            nk_a11y::Role::Panel,
+            crate::i18n::text("shell.nc.title"),
+        );
         root.description = self.error.clone();
         root.bounds = nk_a11y::Bounds {
             x: self.bounds[0],

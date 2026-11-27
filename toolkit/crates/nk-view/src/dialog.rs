@@ -126,6 +126,10 @@ pub trait DialogContent {
 #[derive(Default)]
 pub struct DialogUpdate {
     pub appearance: Option<(WindowLook, bool)>,
+    pub title: Option<String>,
+    pub close_label: Option<String>,
+    pub message: Option<String>,
+    pub countdown_text: Option<String>,
     pub content_changed: bool,
     pub parent_changed: bool,
     /// Move focus to a newly built control without taking the window's focus.
@@ -581,6 +585,27 @@ impl Runner<'_> {
                 parent.dirty = true;
             }
             self.child.set_look(look, reduced);
+            self.dirty = true;
+        }
+        let frame = self.child.modal_frame.as_mut().expect("modal host");
+        if let Some(title) = update.title {
+            self.child.name.clone_from(&title);
+            window.set_title(&title)?;
+            frame.spec.title = title;
+            self.dirty = true;
+        }
+        if let Some(label) = update.close_label {
+            frame.close_label = label;
+            self.dirty = true;
+        }
+        if let Some(message) = update.message {
+            frame.description = message;
+            self.dirty = true;
+        }
+        if let Some(text) = update.countdown_text
+            && let Some(countdown) = &mut frame.countdown
+        {
+            countdown.config.text = text;
             self.dirty = true;
         }
         self.dirty |= update.content_changed;
@@ -1142,10 +1167,14 @@ impl DialogContent for AlertContent<'_> {
     }
 
     fn poll(&mut self) -> Result<DialogUpdate> {
-        match &mut self.body {
+        let update = match &mut self.body {
             AlertBody::Content(body) => body.poll(),
             AlertBody::Updates(updates) => updates(),
+        }?;
+        if let Some(message) = &update.message {
+            self.message.clone_from(message);
         }
+        Ok(update)
     }
     fn content(&mut self, host: &AppWindow) -> Node {
         let message = host

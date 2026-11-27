@@ -55,6 +55,10 @@ impl Exports {
     }
 
     pub fn load(root: &Path) -> Result<Self, String> {
+        Self::load_for(root, std::env::var("LANG").ok().as_deref())
+    }
+
+    pub fn load_for(root: &Path, lang: Option<&str>) -> Result<Self, String> {
         let version = std::fs::read_to_string(root.join("version"))
             .map_err(|e| format!("{}: {e}", root.join("version").display()))?;
         if version.trim() != VERSION {
@@ -64,7 +68,7 @@ impl Exports {
             ));
         }
         let read = |p: &str| read(root, p);
-        let locale = locale(std::env::var("LANG").ok().as_deref());
+        let locale = locale(lang);
         let english = read("i18n/en.json")?;
         let (strings, locale) = match read(&format!("i18n/{locale}.json")) {
             Ok(s) => (s, locale.to_owned()),

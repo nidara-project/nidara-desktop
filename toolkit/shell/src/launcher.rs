@@ -144,6 +144,7 @@ struct Layers {
 
 /// One Apps layer: opened by the hub, closed by itself or by the hub.
 pub struct Launcher {
+    locale_generation: u64,
     metrics_id: i64,
     hub: Sender<HubEvent>,
     epoch: u64,
@@ -212,6 +213,7 @@ impl Launcher {
         };
         let shown = (0..all.len()).collect();
         Self {
+            locale_generation: crate::i18n::generation(),
             metrics_id,
             hub,
             epoch,
@@ -391,11 +393,16 @@ impl Launcher {
             ],
         );
         let list = nk::Scroll::new(LIST, content).floating_top(top);
-        let entry: Node =
-            nk::SearchEntry::new(SEARCH, "Search", QUERY, self.query.clone(), "Clear")
-                .placeholder(text("app-grid.search.placeholder"))
-                .submit(SUBMIT)
-                .into();
+        let entry: Node = nk::SearchEntry::new(
+            SEARCH,
+            crate::i18n::text("bar.tooltip.search"),
+            QUERY,
+            self.query.clone(),
+            crate::i18n::text("shell.search.clear"),
+        )
+        .placeholder(text("app-grid.search.placeholder"))
+        .submit(SUBMIT)
+        .into();
         let search = nk::Pane::new(
             SEARCH_PANE,
             Corner::Pill,
@@ -873,7 +880,11 @@ impl Launcher {
     }
 
     fn publish_semantics(&mut self) {
-        let mut root = nk_a11y::Node::new(ROOT, nk_a11y::Role::Window, "Apps");
+        let mut root = nk_a11y::Node::new(
+            ROOT,
+            nk_a11y::Role::Window,
+            crate::i18n::text("settings.apps.section"),
+        );
         root.states.active = true;
         let tree = self.state.semantics(root, ROOT + 1);
         self.ids = self.state.semantic_keys();
@@ -1058,7 +1069,9 @@ impl Application for Launcher {
         if !self.icons_presented && !self.waiting_for_icons() {
             w.redraw();
         }
-        if std::mem::take(&mut self.refresh_pending) {
+        let generation = crate::i18n::generation();
+        if std::mem::take(&mut self.refresh_pending) || self.locale_generation != generation {
+            self.locale_generation = generation;
             self.refresh(w);
         }
         self.tick(w);
@@ -1359,7 +1372,7 @@ pub fn run(mut launcher: Launcher, wake: (Waker, WakeSource)) -> nk_wayland::Res
             material: true,
             map: true,
             app_id: NAMESPACE,
-            title: "Apps",
+            title: &crate::i18n::text("settings.apps.section"),
             size: (0, 0),
             require_material: None,
         },

@@ -50,44 +50,44 @@ pub struct Input<'a> {
 fn state(item: &Item, click: Option<&Click>, trash: Option<crate::trash::TrashState>) -> String {
     let mut words: Vec<String> = vec![];
     match &item.kind {
-        Kind::Trash => words.push(
-            match trash {
-                Some(t) if t.full => "contains items",
-                Some(t) if t.partial => "empty in the home folder",
-                Some(_) => "empty",
-                None => "cannot tell whether it holds items",
-            }
-            .into(),
-        ),
-        Kind::Minimized { .. } => words.push("minimized window".into()),
-        Kind::MissingApp { .. } => words.push("not installed".into()),
+        Kind::Trash => words.push(match trash {
+            Some(t) if t.full => crate::i18n::text("shell.dock.trash.full"),
+            Some(t) if t.partial => crate::i18n::text("shell.dock.trash.partial"),
+            Some(_) => crate::i18n::text("shell.dock.trash.empty"),
+            None => crate::i18n::text("shell.dock.trash.unknown"),
+        }),
+        Kind::Minimized { .. } => words.push(crate::i18n::text("shell.dock.minimized")),
+        Kind::MissingApp { .. } => words.push(crate::i18n::text("shell.dock.missing")),
         _ => {
             if item.running() {
-                words.push("running".into());
+                words.push(crate::i18n::text("shell.dock.running"));
             }
             if !item.minimized.is_empty() {
-                words.push("has minimized windows".into());
+                words.push(crate::i18n::text("shell.dock.has-minimized"));
             }
         }
     }
     // What the app signals (DOCK.md §6): said, not only painted.
     if let Some(n) = item.signal.count {
-        words.push(format!("{n} pending"));
+        words.push(crate::i18n::count("shell.dock.pending", n));
     }
     if let Some(p) = item.signal.progress {
-        words.push(format!("{}% done", (p * 100.).round()));
+        words.push(crate::i18n::format(
+            "shell.dock.progress",
+            &[("percent", &(p * 100.).round().to_string())],
+        ));
     }
     if item.signal.attention {
-        words.push("wants attention".into());
+        words.push(crate::i18n::text("shell.dock.attention"));
     }
     if matches!(click, Some(Click::Unavailable)) {
-        words.push("cannot be opened now".into());
+        words.push(crate::i18n::text("shell.dock.unavailable"));
     }
     words.join(", ")
 }
 
 pub fn tree(ids: &mut Ids, input: &Input) -> Tree {
-    let mut root = Node::new(ROOT, Role::Window, "Dock");
+    let mut root = Node::new(ROOT, Role::Window, crate::i18n::text("settings.dock.title"));
     root.states.active = input.focus.is_some();
     root.states.hidden = input.hidden;
     root.bounds = Bounds {
@@ -103,7 +103,11 @@ pub fn tree(ids: &mut Ids, input: &Input) -> Tree {
         let mut node = if item.kind == Kind::Separator {
             // The separator is the dock's size adjuster (resize.rs): dragged, stepped by
             // the arrows across the dock, or set by a reader.
-            let mut node = Node::new(id, Role::Slider, "Icon size");
+            let mut node = Node::new(
+                id,
+                Role::Slider,
+                crate::i18n::text("settings.dock.icon-size"),
+            );
             node.value = Some(nk_a11y::ValueInfo {
                 min: crate::resize::MIN as f64,
                 max: crate::resize::MAX as f64,
@@ -111,16 +115,19 @@ pub fn tree(ids: &mut Ids, input: &Input) -> Tree {
                     .icon_size
                     .clamp(crate::resize::MIN, crate::resize::MAX)) as f64,
                 step: crate::resize::STEP as f64,
-                text: format!("{} px", input.icon_size),
+                text: crate::i18n::format(
+                    "shell.dock.size-px",
+                    &[("size", &input.icon_size.to_string())],
+                ),
             });
             node.states.focused = input.focus == Some(n);
             node.actions = vec![Action::Focus, Action::SetValue];
             node
         } else {
             let label = if item.kind == Kind::Trash {
-                "Trash"
+                crate::i18n::text("dock.special.trash.name")
             } else {
-                item.label.as_str()
+                item.label.clone()
             };
             let mut node = Node::new(id, Role::Button, label);
             let mut click = primary(item, input.focused_window, input.can_launch);

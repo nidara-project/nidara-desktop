@@ -19,6 +19,7 @@ use std::{
 };
 use zbus::blocking::Connection;
 
+#[derive(Clone, Copy)]
 pub(crate) enum Kind {
     Display { deadline: Instant },
     Power(System),
@@ -48,6 +49,9 @@ impl Drop for Slot {
 
 struct Content<'a> {
     exports: &'a Exports,
+    kind: Kind,
+    buttons: Vec<DialogButton>,
+    locale_generation: u64,
     portal: &'a Portal,
     status: &'a Status,
     lock_generation: usize,
@@ -64,24 +68,35 @@ impl DialogContent for Content<'_> {
         Ok(())
     }
 
+    fn buttons(&self) -> Option<Vec<DialogButton>> {
+        Some(self.buttons.clone())
+    }
+
     fn withdrawn(&self) -> bool {
         self.revoked
     }
 
     fn poll(&mut self) -> Result<DialogUpdate> {
         self.revoked = !self.still_unlocked() || self.answer.is_closed();
+        let mut update = DialogUpdate::default();
+        let generation = crate::i18n::generation();
+        if self.locale_generation != generation && !self.revoked {
+            self.locale_generation = generation;
+            let labels = alert(self.exports, self.kind)?;
+            self.buttons = labels.buttons;
+            update.title = Some(labels.title);
+            update.countdown_text = labels.countdown.map(|countdown| countdown.text);
+            update.content_changed = true;
+        }
         if self.portal.changed() && !self.revoked {
             let mut appearance = self.portal.read()?;
             appearance.dark = true;
-            return Ok(DialogUpdate {
-                appearance: Some((
-                    WindowLook::load(self.exports, &appearance)?,
-                    appearance.reduced_motion,
-                )),
-                ..Default::default()
-            });
+            update.appearance = Some((
+                WindowLook::load(self.exports, &appearance)?,
+                appearance.reduced_motion,
+            ));
         }
-        Ok(DialogUpdate::default())
+        Ok(update)
     }
 }
 
@@ -115,13 +130,13 @@ fn alert(exports: &Exports, kind: Kind) -> Result<Alert> {
         }
     };
     Ok(Alert {
-        title: exports.text(title)?.into(),
+        title: crate::i18n::text_for(exports, title),
         message: String::new(),
         detail: None,
         buttons: vec![
             DialogButton {
                 id: "cancel".into(),
-                label: exports.text(cancel)?.into(),
+                label: crate::i18n::text_for(exports, cancel),
                 default: false,
                 cancel: true,
                 destructive: false,
@@ -129,7 +144,7 @@ fn alert(exports: &Exports, kind: Kind) -> Result<Alert> {
             },
             DialogButton {
                 id: "accept".into(),
-                label: exports.text(accept)?.into(),
+                label: crate::i18n::text_for(exports, accept),
                 default: true,
                 cancel: false,
                 destructive: false,
@@ -138,7 +153,7 @@ fn alert(exports: &Exports, kind: Kind) -> Result<Alert> {
         ],
         countdown: Some(AlertCountdown {
             deadline,
-            text: exports.text(text)?.into(),
+            text: crate::i18n::text_for(exports, text),
             response,
         }),
     })
@@ -187,6 +202,9 @@ pub(crate) fn open(
                 )?;
                 let mut model = Content {
                     exports: &exports,
+                    kind,
+                    buttons: alert.buttons.clone(),
+                    locale_generation: crate::i18n::generation(),
                     portal: &portal,
                     status: &slot.0,
                     lock_generation: generation,

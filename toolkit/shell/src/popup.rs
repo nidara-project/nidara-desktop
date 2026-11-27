@@ -129,14 +129,7 @@ impl Look {
     pub fn text_of(&self, label: &Label) -> String {
         match label {
             Label::Text(t) => t.clone(),
-            Label::Key(k) => self
-                .exports
-                .text(k)
-                .map(str::to_string)
-                .unwrap_or_else(|e| {
-                    eprintln!("nidara-shell: {e}");
-                    k.to_string()
-                }),
+            Label::Key(k) => crate::i18n::text_for(&self.exports, k),
         }
     }
 }
@@ -216,7 +209,10 @@ impl Popup {
             look.styles.text.clone(),
             look.style.clone(),
             &rows,
-            ["Scroll up", "Scroll down"],
+            [
+                &crate::i18n::text("shell.menu.scroll-up"),
+                &crate::i18n::text("shell.menu.scroll-down"),
+            ],
             first,
         )?;
         tree.set_active(true);
