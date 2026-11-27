@@ -102,6 +102,10 @@ impl Dialog {
 pub trait DialogContent {
     fn content(&mut self, host: &AppWindow) -> Node;
     fn activated(&mut self, action: Activated) -> Result<()>;
+    /// Called once after the first painted frame is committed to the compositor.
+    fn opened(&mut self) -> Result<()> {
+        Ok(())
+    }
     /// Current response eligibility. Signal later changes with `content_changed`.
     fn buttons(&self) -> Option<Vec<DialogButton>> {
         None
@@ -459,6 +463,8 @@ struct Runner<'a> {
     answer: &'a mut Option<DialogAnswer>,
     limits: ((u32, u32), (u32, u32)),
     first_focus: bool,
+    pending_focus: Option<Key>,
+    opened: bool,
     dirty: bool,
 }
 impl Runner<'_> {
@@ -589,14 +595,23 @@ impl Runner<'_> {
             self.rebuild()?;
             self.dirty = false;
         }
-        if let Some(key) = update.focus
-            && self.child.active
+        if let Some(key) = update.focus {
+            self.pending_focus = Some(key);
+        }
+        if !self.first_focus {
+            self.apply_pending_focus();
+        }
+        Ok(())
+    }
+    fn apply_pending_focus(&mut self) {
+        if self.child.active
+            && let Some(key) = self.pending_focus.take()
         {
             self.child.state.request(&key, false);
             self.child.changed = true;
         }
-        Ok(())
     }
+
     fn focus(&mut self) {
         let modal = self.child.modal_frame.as_ref().expect("modal host");
         if !modal.alert && self.child.state.focus_first_under(&"dialog/content".into()) {
@@ -634,6 +649,7 @@ impl Runner<'_> {
             self.first_focus = false;
             self.child.changed = true;
         }
+        self.apply_pending_focus();
         let model = &mut self.model;
         self.child.commit(window, |host| Page {
             sidebar: Node::spacer("dialog/unused-sidebar"),
@@ -676,6 +692,10 @@ impl nk_wayland::Application for Runner<'_> {
             self.activated(action, window)?;
         }
         if !window.is_closed() {
+            if window.commits() > 1 && !self.opened {
+                self.opened = true;
+                self.model.opened()?;
+            }
             self.tick_countdown(window)?;
         }
         self.commit(window)
@@ -918,6 +938,8 @@ impl AppWindow {
                 answer: &mut answer,
                 limits,
                 first_focus: true,
+                pending_focus: None,
+                opened: false,
                 dirty: true,
             },
             window,
@@ -1084,6 +1106,8 @@ fn run_parentless(
             answer: &mut answer,
             limits,
             first_focus: true,
+            pending_focus: None,
+            opened: false,
             dirty: false,
         },
         nk_wayland::Options {
@@ -1107,6 +1131,13 @@ struct AlertContent<'a> {
     body: AlertBody<'a>,
 }
 impl DialogContent for AlertContent<'_> {
+    fn opened(&mut self) -> Result<()> {
+        match &mut self.body {
+            AlertBody::Content(body) => body.opened(),
+            AlertBody::Updates(_) => Ok(()),
+        }
+    }
+
     fn poll(&mut self) -> Result<DialogUpdate> {
         match &mut self.body {
             AlertBody::Content(body) => body.poll(),

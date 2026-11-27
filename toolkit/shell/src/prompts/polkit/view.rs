@@ -17,7 +17,6 @@ const RETRIES: u8 = 3;
 const LOCK_ICON: &str = "nd-system-lock-screen";
 
 enum Step {
-    Confirm,
     Waiting,
     Input(String),
     Retry,
@@ -73,7 +72,7 @@ impl View<'_> {
 
     fn submit(&mut self) -> Result<()> {
         match &self.step {
-            Step::Confirm | Step::Retry if self.attempts < RETRIES => self.start_attempt()?,
+            Step::Retry if self.attempts < RETRIES => self.start_attempt()?,
             Step::Input(_) if self.valid() => {
                 if let Some(session) = &self.session {
                     session.respond(self.value.take());
@@ -88,6 +87,13 @@ impl View<'_> {
 }
 
 impl DialogContent for View<'_> {
+    fn opened(&mut self) -> Result<()> {
+        if self.attempts == 0 {
+            self.start_attempt()?;
+        }
+        Ok(())
+    }
+
     fn content(&mut self, host: &AppWindow) -> Node {
         let body = host.look().types.style(Type::Body, Weight::Regular);
         let label = |key: &str, text: String| -> Node {
@@ -181,7 +187,7 @@ impl DialogContent for View<'_> {
                 cancel: false,
                 destructive: false,
                 enabled: match self.step {
-                    Step::Confirm | Step::Retry => self.attempts < RETRIES,
+                    Step::Retry => self.attempts < RETRIES,
                     Step::Input(_) => true,
                     Step::Waiting => false,
                 },
@@ -196,13 +202,11 @@ impl DialogContent for View<'_> {
             }
             ("details", Some(Value::Bool(open))) => self.expanded = open,
             ("account", Some(Value::Index(index)))
-                if index < self.names.len() && index != self.user =>
+                if index < self.names.len() && index != self.user && self.attempts < RETRIES =>
             {
                 self.session = None;
-                self.value = None;
-                self.notice = None;
                 self.user = index;
-                self.step = Step::Confirm;
+                self.start_attempt()?;
             }
             _ => {}
         }
@@ -348,7 +352,7 @@ pub(super) fn run(
         user,
         attempts: 0,
         prompt: 0,
-        step: Step::Confirm,
+        step: Step::Waiting,
         value: None,
         notice: None,
         expanded: false,

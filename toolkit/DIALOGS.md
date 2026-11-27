@@ -62,8 +62,10 @@ confirmation requested during authentication waits for the slot and is discarded
 on lock. A display preview requested during authentication returns Revert
 immediately so Settings can cancel the preview lease.
 
-The dialog uses an explicit confirmation before starting `PolkitAgentSession`
-and displays only the identities offered by polkit. Account labels use the NSS
+The dialog starts `PolkitAgentSession` once its first frame is committed. It
+focuses the credential field as soon as PAM asks for input. A method that
+requires no input may complete on its own. The dialog displays only identities
+offered by polkit. Account labels use the NSS
 real name and login, with a login fallback. AccountsService avatars are a
 follow-up. The library owns the
 distribution helper and PAM policy. The shell keeps PAM input masked, including
