@@ -536,6 +536,9 @@ impl Runner<'_> {
                 *self.answer = Some(answer);
                 window.close();
             } else {
+                if let Some(frame) = &mut self.child.modal_frame {
+                    frame.announcement = None;
+                }
                 // Disable or refresh responses before another queued action is handled.
                 self.rebuild()?;
             }

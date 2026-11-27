@@ -19,7 +19,7 @@ const LOCK_ICON: &str = "nd-system-lock-screen";
 enum Step {
     Waiting,
     Input(String),
-    Retry,
+    Exhausted,
 }
 
 struct View<'a> {
@@ -67,21 +67,6 @@ impl View<'_> {
             conversation::Session::start(self.library, uid, &self.request.ticket.cookie)
                 .ok_or("polkit could not start the PAM conversation")?,
         );
-        Ok(())
-    }
-
-    fn submit(&mut self) -> Result<()> {
-        match &self.step {
-            Step::Retry if self.attempts < RETRIES => self.start_attempt()?,
-            Step::Input(_) if self.valid() => {
-                if let Some(session) = &self.session {
-                    session.respond(self.value.take());
-                    self.step = Step::Waiting;
-                    self.notice = None;
-                }
-            }
-            _ => {}
-        }
         Ok(())
     }
 }
@@ -186,11 +171,7 @@ impl DialogContent for View<'_> {
                 default: true,
                 cancel: false,
                 destructive: false,
-                enabled: match self.step {
-                    Step::Retry => self.attempts < RETRIES,
-                    Step::Input(_) => true,
-                    Step::Waiting => false,
-                },
+                enabled: matches!(self.step, Step::Input(_)),
             },
         ])
     }
@@ -223,7 +204,13 @@ impl DialogContent for View<'_> {
             self.value = None;
             return Ok(true);
         }
-        self.submit()?;
+        if matches!(self.step, Step::Input(_))
+            && let Some(session) = &self.session
+        {
+            session.respond(self.value.take());
+            self.step = Step::Waiting;
+            self.notice = None;
+        }
         Ok(false)
     }
 
@@ -274,15 +261,18 @@ impl DialogContent for View<'_> {
                         self.granted = true;
                         self.withdrawn = true;
                     } else {
-                        self.step = Step::Retry;
-                        let notice = self.text(if self.attempts < RETRIES {
+                        let label = if self.attempts < RETRIES {
+                            self.start_attempt()?;
                             "shell.prompt.polkit.retry"
                         } else {
+                            self.step = Step::Exhausted;
                             "shell.prompt.polkit.failed"
-                        });
+                        };
+                        let notice = self.text(label);
                         update.announcement = Some(notice.clone());
                         self.notice = Some(notice);
                     }
+                    break;
                 }
             }
         }

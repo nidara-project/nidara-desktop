@@ -64,11 +64,13 @@ immediately so Settings can cancel the preview lease.
 
 The dialog starts `PolkitAgentSession` once its first frame is committed. It
 focuses the credential field as soon as PAM asks for input. A method that
-requires no input may complete on its own. The dialog displays only identities
-offered by polkit. Account labels use the NSS
-real name and login, with a login fallback. AccountsService avatars are a
-follow-up. The library owns the
-distribution helper and PAM policy. The shell keeps PAM input masked, including
+requires no input may complete on its own. A failure announces the error and
+starts a fresh conversation while attempts remain, so the next field is empty
+and gains focus as soon as PAM asks again. At the attempt limit the dialog leaves
+Cancel available. The dialog displays only identities offered by polkit.
+Account labels use the NSS real name and login, with a login fallback.
+AccountsService avatars are a follow-up. The library owns the distribution
+helper and PAM policy. The shell keeps PAM input masked, including
 when a module requests terminal echo. Its editor and transient FFI response
 wipe their owned buffers. The action identifier is in Details. A caller name
 with no verified source is omitted.
