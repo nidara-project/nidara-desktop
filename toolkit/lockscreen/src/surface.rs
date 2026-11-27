@@ -432,6 +432,8 @@ impl Surface {
         if active && (became_active || new_field) {
             let input: Key = format!("{}/input", self.field.0).into();
             self.state.request(&input, false);
+            // Put there by the screen, not by the keyboard: no ring until Tab brings one.
+            self.state.hide_ring();
         }
     }
 
