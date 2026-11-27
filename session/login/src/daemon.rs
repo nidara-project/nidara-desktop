@@ -87,6 +87,10 @@ struct Manager {
     sessions: HashMap<WorkerId, String>,
     greeter_ends: Vec<Instant>,
     bus: Option<zbus::Connection>,
+    /// The last login switched to an open session: the login screen that ends now is not
+    /// started again, or it would take the screen back from that session. It comes back when
+    /// a session ends.
+    switched: bool,
 }
 
 pub async fn run(config: Config) -> i32 {
@@ -134,6 +138,7 @@ pub async fn run(config: Config) -> i32 {
         sessions: HashMap::new(),
         greeter_ends: Vec::new(),
         bus,
+        switched: false,
     };
     match m.config.autologin.clone() {
         Some(user) => m.autologin(&user),
@@ -375,10 +380,14 @@ impl Manager {
                     let worker = login.worker;
                     self.login = None;
                     self.kill_session(worker);
-                    if let Some(bus) = &self.bus
-                        && let Err(err) = crate::logind::activate(bus, &open).await
-                    {
-                        eprintln!("nidara-login: switching to session {open}: {err}");
+                    let switched = match &self.bus {
+                        Some(bus) => crate::logind::activate(bus, &open).await,
+                        None => Err(zbus::Error::Failure("no system bus".into())),
+                    };
+                    match switched {
+                        Ok(()) => self.switched = true,
+                        // The login screen ends and comes back: better than a dead VT.
+                        Err(err) => eprintln!("nidara-login: switching to session {open}: {err}"),
                     }
                     return;
                 }
@@ -455,6 +464,8 @@ impl Manager {
             self.greeter_out = None;
             if self.login.as_ref().is_some_and(|l| l.starting) {
                 self.open_login().await;
+            } else if std::mem::take(&mut self.switched) {
+                // To an open session (L3): the login screen stays away until it is needed.
             } else {
                 self.drop_login();
                 self.greeter_ended();
@@ -472,6 +483,7 @@ impl Manager {
         }
         if let Some(user) = self.sessions.remove(&id) {
             eprintln!("nidara-login: {user}'s session ended");
+            self.switched = false;
             if self.greeter.is_none() && self.login.is_none() {
                 self.start_greeter();
             }
