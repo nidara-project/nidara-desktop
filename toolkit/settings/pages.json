@@ -417,16 +417,10 @@
    },
    {
     "i18n": "settings.region.locale.group",
-    "note": "This group holds TWO DIFFERENT SCOPES: Language writes /etc/locale.conf (system-wide), Regional format writes ~/.config/environment.d/nidara-locale.conf (user only). Greeter has its own picker; /etc/locale.conf is only its fallback.",
+    "note": "Language and regional format are per-user settings.",
     "items": [
-     {
-      "custom": "systemLanguage",
-      "i18n": "settings.region.locale.lang"
-     },
-     {
-      "custom": "regionalFormat",
-      "i18n": "settings.region.locale.regional"
-     }
+     "region.language",
+     "region.regionalFormat"
     ]
    }
   ]

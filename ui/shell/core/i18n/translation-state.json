@@ -111,6 +111,7 @@
     "settings.region.locale.group": "8187e4cb",
     "settings.region.locale.lang": "c6248055",
     "settings.region.locale.lang.desc": "530a9d74",
+    "settings.region.locale.lang.user-desc": "8f8cc909",
     "settings.region.locale.lang.installing": "d7096bbb",
     "settings.region.locale.lang.failed": "4ffd2d53",
     "settings.region.locale.regional": "ccd2b35a",
@@ -1081,7 +1082,7 @@
   "locales": {
     "de": {
       "translated": 836,
-      "of": 1076,
+      "of": 1077,
       "untranslated": [
         "bar.edit.done",
         "bar.edit.hint",
@@ -1233,6 +1234,7 @@
         "settings.network.native.needs-password",
         "settings.network.native.needs-profile",
         "settings.network.native.saved",
+        "settings.region.locale.lang.user-desc",
         "settings.region.tz.area.africa",
         "settings.region.tz.area.america",
         "settings.region.tz.area.antarctica",
@@ -1327,14 +1329,14 @@
       "stale": []
     },
     "es": {
-      "translated": 1076,
-      "of": 1076,
+      "translated": 1077,
+      "of": 1077,
       "untranslated": [],
       "stale": []
     },
     "fr": {
       "translated": 836,
-      "of": 1076,
+      "of": 1077,
       "untranslated": [
         "bar.edit.done",
         "bar.edit.hint",
@@ -1486,6 +1488,7 @@
         "settings.network.native.needs-password",
         "settings.network.native.needs-profile",
         "settings.network.native.saved",
+        "settings.region.locale.lang.user-desc",
         "settings.region.tz.area.africa",
         "settings.region.tz.area.america",
         "settings.region.tz.area.antarctica",
@@ -1581,7 +1584,7 @@
     },
     "it": {
       "translated": 836,
-      "of": 1076,
+      "of": 1077,
       "untranslated": [
         "bar.edit.done",
         "bar.edit.hint",
@@ -1733,6 +1736,7 @@
         "settings.network.native.needs-password",
         "settings.network.native.needs-profile",
         "settings.network.native.saved",
+        "settings.region.locale.lang.user-desc",
         "settings.region.tz.area.africa",
         "settings.region.tz.area.america",
         "settings.region.tz.area.antarctica",
@@ -1828,7 +1832,7 @@
     },
     "ja": {
       "translated": 836,
-      "of": 1076,
+      "of": 1077,
       "untranslated": [
         "bar.edit.done",
         "bar.edit.hint",
@@ -1980,6 +1984,7 @@
         "settings.network.native.needs-password",
         "settings.network.native.needs-profile",
         "settings.network.native.saved",
+        "settings.region.locale.lang.user-desc",
         "settings.region.tz.area.africa",
         "settings.region.tz.area.america",
         "settings.region.tz.area.antarctica",
@@ -2075,7 +2080,7 @@
     },
     "nl": {
       "translated": 836,
-      "of": 1076,
+      "of": 1077,
       "untranslated": [
         "bar.edit.done",
         "bar.edit.hint",
@@ -2227,6 +2232,7 @@
         "settings.network.native.needs-password",
         "settings.network.native.needs-profile",
         "settings.network.native.saved",
+        "settings.region.locale.lang.user-desc",
         "settings.region.tz.area.africa",
         "settings.region.tz.area.america",
         "settings.region.tz.area.antarctica",
@@ -2322,7 +2328,7 @@
     },
     "pl": {
       "translated": 836,
-      "of": 1076,
+      "of": 1077,
       "untranslated": [
         "bar.edit.done",
         "bar.edit.hint",
@@ -2474,6 +2480,7 @@
         "settings.network.native.needs-password",
         "settings.network.native.needs-profile",
         "settings.network.native.saved",
+        "settings.region.locale.lang.user-desc",
         "settings.region.tz.area.africa",
         "settings.region.tz.area.america",
         "settings.region.tz.area.antarctica",
@@ -2569,7 +2576,7 @@
     },
     "pt-BR": {
       "translated": 836,
-      "of": 1076,
+      "of": 1077,
       "untranslated": [
         "bar.edit.done",
         "bar.edit.hint",
@@ -2721,6 +2728,7 @@
         "settings.network.native.needs-password",
         "settings.network.native.needs-profile",
         "settings.network.native.saved",
+        "settings.region.locale.lang.user-desc",
         "settings.region.tz.area.africa",
         "settings.region.tz.area.america",
         "settings.region.tz.area.antarctica",
@@ -2816,7 +2824,7 @@
     },
     "pt-PT": {
       "translated": 836,
-      "of": 1076,
+      "of": 1077,
       "untranslated": [
         "bar.edit.done",
         "bar.edit.hint",
@@ -2968,6 +2976,7 @@
         "settings.network.native.needs-password",
         "settings.network.native.needs-profile",
         "settings.network.native.saved",
+        "settings.region.locale.lang.user-desc",
         "settings.region.tz.area.africa",
         "settings.region.tz.area.america",
         "settings.region.tz.area.antarctica",
@@ -3063,7 +3072,7 @@
     },
     "ru": {
       "translated": 836,
-      "of": 1076,
+      "of": 1077,
       "untranslated": [
         "bar.edit.done",
         "bar.edit.hint",
@@ -3215,6 +3224,7 @@
         "settings.network.native.needs-password",
         "settings.network.native.needs-profile",
         "settings.network.native.saved",
+        "settings.region.locale.lang.user-desc",
         "settings.region.tz.area.africa",
         "settings.region.tz.area.america",
         "settings.region.tz.area.antarctica",
@@ -3310,7 +3320,7 @@
     },
     "zh-CN": {
       "translated": 836,
-      "of": 1076,
+      "of": 1077,
       "untranslated": [
         "bar.edit.done",
         "bar.edit.hint",
@@ -3462,6 +3472,7 @@
         "settings.network.native.needs-password",
         "settings.network.native.needs-profile",
         "settings.network.native.saved",
+        "settings.region.locale.lang.user-desc",
         "settings.region.tz.area.africa",
         "settings.region.tz.area.america",
         "settings.region.tz.area.antarctica",

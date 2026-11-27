@@ -12,6 +12,7 @@ use zbus::zvariant::OwnedValue;
 
 static CATALOGUE: OnceLock<RwLock<Option<Exports>>> = OnceLock::new();
 static GENERATION: AtomicU64 = AtomicU64::new(0);
+const CONFIG_NAME: &str = "org.nidara.Config";
 const CONFIG1: &str = "org.nidara.Config1";
 const CONFIG_PATH: &str = "/org/nidara/Config";
 const LANGUAGE: &str = "region.language";
@@ -124,7 +125,7 @@ fn language_changed(lang: &str) -> Result<bool, String> {
 
 fn language_changes(bus: &Connection) -> zbus::Result<SignalIterator<'static>> {
     // The proxy tracks Config1's owner even if it appears after startup.
-    Proxy::new(bus, CONFIG1, CONFIG_PATH, CONFIG1)?.receive_signal("Changed")
+    Proxy::new(bus, CONFIG_NAME, CONFIG_PATH, CONFIG1)?.receive_signal("Changed")
 }
 
 fn observe_language(changes: SignalIterator<'_>, mut changed: impl FnMut(&str) -> bool) {
@@ -232,7 +233,7 @@ mod tests {
         };
         let string = |value: &str| OwnedValue::from(zbus::zvariant::Str::from(value));
         let config = connect();
-        config.request_name(CONFIG1).unwrap();
+        config.request_name("org.nidara.Config").unwrap();
         emit(&connect(), LANGUAGE, string("de_DE.UTF-8"));
         emit(&config, "region.regionalFormat", string("it_IT.UTF-8"));
         emit(&config, LANGUAGE, OwnedValue::from(true));
@@ -240,9 +241,9 @@ mod tests {
         let wait = Duration::from_secs(3);
         assert_eq!(languages.recv_timeout(wait).unwrap(), "es");
 
-        config.release_name(CONFIG1).unwrap();
+        config.release_name("org.nidara.Config").unwrap();
         let replacement = connect();
-        replacement.request_name(CONFIG1).unwrap();
+        replacement.request_name("org.nidara.Config").unwrap();
         emit(&config, LANGUAGE, string("pt_BR.UTF-8"));
         emit(&replacement, LANGUAGE, string("fr_FR.UTF-8"));
         assert_eq!(languages.recv_timeout(wait).unwrap(), "fr");

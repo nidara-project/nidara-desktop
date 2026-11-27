@@ -253,6 +253,13 @@ impl Model {
         }
         Ok(())
     }
+    pub fn poll_region(&mut self, editor: &mut dyn Editor, e: &Exports) -> Result<bool, String> {
+        let (changed, value) = self.region.poll(editor.session());
+        if let Some(value) = value {
+            self.send(crate::region::LANGUAGE, value, editor, e)?;
+        }
+        Ok(changed)
+    }
     pub fn flush(
         &mut self,
         editor: &mut dyn Editor,
@@ -433,7 +440,14 @@ impl Model {
             }
             _ => return Ok(false),
         };
-        self.send(&key, value, editor, e)?;
+        if key == crate::region::LANGUAGE {
+            if let Value::Text(language) = value {
+                self.errors.remove(&key);
+                self.region.choose_language(language, editor.session());
+            }
+        } else {
+            self.send(&key, value, editor, e)?;
+        }
         Ok(false)
     }
     fn editable(&self, key: &str, s: &Session, e: &Exports) -> bool {
@@ -604,19 +618,12 @@ impl Model {
             }
         } else if let Some(p) = page.filter(|p| p.id == "region") {
             content.extend(self.region.timezone(e, types, session)?);
-            let format = Item::Key {
-                key: crate::region::FORMAT.into(),
+            let items = [crate::region::LANGUAGE, crate::region::FORMAT].map(|key| Item::Key {
+                key: key.into(),
                 visible_when: None,
                 sensitive_when: None,
-            };
-            let mut rows = vec![self.region.language(e, types)?];
-            rows.extend(self.items(
-                std::slice::from_ref(&format),
-                &format!("{}/format", p.id),
-                host,
-                session,
-                e,
-            )?);
+            });
+            let rows = self.items(&items, &format!("{}/locale", p.id), host, session, e)?;
             content.push(
                 nk::Label::new(
                     "region/locale/title",
@@ -810,17 +817,25 @@ impl Model {
                     if !entry.available || visible_when.as_ref().is_some_and(|p| !p.holds(s)) {
                         continue;
                     }
+                    let language = key == crate::region::LANGUAGE;
                     let disabled = !s.available()
                         || !entry.writable()
+                        || language && (self.region.waiting() || s.pending(key))
                         || sensitive_when.as_ref().is_some_and(|p| !p.holds(s));
                     let ui = &entry.entry["ui"];
                     let title = ui["title"]
                         .as_str()
                         .ok_or_else(|| format!("{key}: no title"))?;
-                    let subtitle = self
-                        .errors
-                        .get(key)
-                        .map(String::as_str)
+                    let language_status = if language {
+                        self.region
+                            .language_status()
+                            .map(|status| e.text(status))
+                            .transpose()?
+                    } else {
+                        None
+                    };
+                    let subtitle = language_status
+                        .or_else(|| self.errors.get(key).map(String::as_str))
                         .or(ui["subtitle"].as_str());
                     let shown = self
                         .held

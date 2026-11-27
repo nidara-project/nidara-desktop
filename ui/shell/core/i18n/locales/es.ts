@@ -144,6 +144,7 @@ export default {
     "settings.region.locale.group": "Idioma y formatos",
     "settings.region.locale.lang": "Idioma (locale)",
     "settings.region.locale.lang.desc": "Para todo el sistema, no solo tu cuenta. Se aplica al volver a entrar.",
+    "settings.region.locale.lang.user-desc": "Para tu cuenta. El escritorio cambia ahora y las demás aplicaciones, al volver a iniciar sesión.",
     "settings.region.locale.lang.installing": "Instalando la escritura en chino…",
     "settings.region.locale.lang.failed": "No se pudo aplicar",
     "settings.region.locale.regional": "Formato regional",

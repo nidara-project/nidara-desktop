@@ -2766,11 +2766,19 @@ label. Add English and Spanish keys to the shell locales and sync the translatio
 ledger. Keep action IDs, service protocol values and diagnostics in English.
 Application-provided names and messages pass through as application data.
 The native shell starts with the session's `LANG`. It listens to the session
-bus for Config1 `Changed` signals carrying `region.language`; it starts from
-`LANG` even when the daemon does not yet provide the key. A language change
-wakes existing surfaces and rebuilds their labels, including those for
-assistive technology. Missing catalogue keys are logged and shown by key.
-Regional date formatting continues to use the session's regional format.
+bus for Config1 `Changed` signals carrying `region.language` from
+`org.nidara.Config`. A language change wakes existing surfaces and rebuilds their
+labels, including those for assistive technology. Missing catalogue keys are
+logged and shown by key. Regional date formatting uses the session's format.
+
+Config1 writes `LANG` and `LANGUAGE` next to the format's `LC_*` assignments in
+`~/.config/environment.d/nidara-locale.conf` for the next login. Each writer
+preserves the other key's assignments. Native Settings applies its Language
+dropdown through Config1. It runs `pkexec nidara-language ensure-engine` only
+when the selected language needs a missing input engine, and applies the
+selection only once that succeeds. Config1 checks the same engine map and
+refuses the change while the required package is missing. `/etc/locale.conf` supplies the system
+language for the login screen and new accounts.
 
 ## Native toolkit range values
 

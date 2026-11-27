@@ -51,7 +51,6 @@ impl Settings {
                 Some(nk_settings::audio::PAGE) => self.model.audio.visit(),
                 Some("display") => self.model.display.visit(),
                 Some("about") => self.model.about.visit(),
-                Some("region") => self.model.region.visit(),
                 _ => {}
             }
             self.shown = selected;
@@ -270,7 +269,7 @@ impl Application for Settings {
             );
         }
         self.dirty |= self.model.about.poll();
-        self.dirty |= self.model.region.poll();
+        self.dirty |= self.model.poll_region(&mut self.client, &self.exports)?;
         self.dirty |= self.model.audio.poll();
         self.dirty |= self.model.network.poll();
         if self.model.display.poll() {

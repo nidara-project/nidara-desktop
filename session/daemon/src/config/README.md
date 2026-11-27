@@ -114,7 +114,7 @@ leaks in.
 
 ## Region (#1103 8b)
 
-`region.rs` serves two keys, each in the home that decides it:
+`region.rs` serves these keys:
 
 - `region.timezone` is the system's, systemd-timedated's `Timezone`. When timedated cannot
   be asked, it falls back to `/etc/localtime`'s link. A write is `SetTimezone` with
@@ -124,9 +124,15 @@ leaks in.
   Valid zones are `timedatectl list-timezones`' (tzdata.zi's zones and links), offered as
   `catalogue`. There is no generic control for it: the Region page draws its own city search.
 - `region.regionalFormat` is this user's `~/.config/environment.d/nidara-locale.conf`. It
-  sets the seven format `LC_*` variables (never `LANG`) for the next login. "" removes the
-  file and follows the language. Values come from `locale -a` spelled `.UTF-8`, plus a saved
-  one the system stopped listing. A file monitor announces any writer's change.
+  sets the seven format `LC_*` variables for the next login. "" removes those assignments
+  and follows the language. Values come from `locale -a` spelled `.UTF-8`, plus a saved one
+  the system stopped listing.
+- `region.language` reads `LANG` in the same file and falls back to the session environment.
+  A write sets `LANG` and `LANGUAGE` for the next login. Both writers preserve the other
+  key's assignments. Config1 announces its writes and watches the file for external changes.
+  The shell follows `region.language` live. Settings installs a required missing input engine
+  before applying the selection. Config1 checks the engine package at the
+  write boundary and refuses the change when it is missing.
 
 ## Top bar (#1103 8e)
 

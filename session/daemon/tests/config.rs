@@ -125,11 +125,14 @@ impl Env {
             .env("XDG_STATE_HOME", self.dir.join("state"))
             .env("XDG_CACHE_HOME", self.dir.join("cache"));
     }
-    fn start(&mut self) {
+    fn daemon_command(&self) -> Command {
         let mut cmd = Command::new(env!("CARGO_BIN_EXE_nidara-sessiond"));
         cmd.arg("--config");
         self.vars(&mut cmd);
-        self.daemon = Some(cmd.spawn().expect("nidara-sessiond"));
+        cmd
+    }
+    fn start(&mut self) {
+        self.daemon = Some(self.daemon_command().spawn().expect("nidara-sessiond"));
     }
     /// Another writer: the gsettings tool on the same keyfile.
     fn gsettings_set(&self, schema: &str, key: &str, value: &str) {
@@ -1517,6 +1520,7 @@ impl Timedated {
 #[tokio::test(flavor = "multi_thread")]
 async fn the_region_keys_live_in_timedated_and_environment_d() {
     use futures_util::StreamExt;
+    use std::os::unix::fs::{PermissionsExt, symlink};
     const PATH: &str = "/org/freedesktop/timedate1";
     let mut env = setup();
     let timedated = connect(&env.address).await;
@@ -1529,7 +1533,38 @@ async fn the_region_keys_live_in_timedated_and_environment_d() {
         .request_name("org.freedesktop.timedate1")
         .await
         .unwrap();
-    env.start();
+    // Exercise the real engine map with a private locale catalogue and
+    // package query. The test never reads or changes the host package state.
+    let bin = env.dir.join("locale-bin");
+    std::fs::create_dir(&bin).unwrap();
+    symlink(
+        root().join("bin/nidara-language"),
+        bin.join("nidara-language"),
+    )
+    .unwrap();
+    for (name, script) in [
+        (
+            "locale",
+            "#!/bin/sh\nprintf '%s\\n' C en_US.utf8 zh_CN.utf8\n",
+        ),
+        (
+            "pacman",
+            "#!/bin/sh\n[ \"$*\" = '-Qq -- fcitx5-chinese-addons' ] && [ -f \"$HOME/engine-installed\" ]\n",
+        ),
+    ] {
+        let path = bin.join(name);
+        std::fs::write(&path, script).unwrap();
+        std::fs::set_permissions(path, std::fs::Permissions::from_mode(0o700)).unwrap();
+    }
+    let host_path = std::env::var_os("PATH").unwrap_or_default();
+    let path = std::env::join_paths(std::iter::once(bin).chain(std::env::split_paths(&host_path)))
+        .unwrap();
+    env.daemon = Some(
+        env.daemon_command()
+            .env("PATH", path)
+            .spawn()
+            .expect("nidara-sessiond"),
+    );
     let conn = connect(&env.address).await;
     wait_for_config(&conn).await;
     let get = |key: &'static str| {
@@ -1604,6 +1639,21 @@ async fn the_region_keys_live_in_timedated_and_environment_d() {
         assert_eq!(zone["available"], false);
     }
 
+    let language = &schema["keys"]["region.language"];
+    assert_eq!(
+        language["value"], "C",
+        "a new account inherits the session LANG"
+    );
+    assert_eq!(language["ui"]["control"], "dropdown");
+    assert_eq!(
+        error_name(
+            apply("region.language", "xx_YY.UTF-8".into())
+                .await
+                .unwrap_err()
+        ),
+        "org.nidara.Config1.Error.Invalid",
+    );
+
     // The regional format: "" is the language's, no file.
     let format = &schema["keys"]["region.regionalFormat"];
     assert_eq!(format["value"], "");
@@ -1630,8 +1680,37 @@ async fn the_region_keys_live_in_timedated_and_environment_d() {
         assert!(!written.contains("LANG="), "the language is not the format");
         assert_eq!(get("region.regionalFormat").await, locale);
         apply("region.regionalFormat", String::new()).await.unwrap();
-        assert!(!file.exists(), "the language's format is no file");
+        assert!(!file.exists(), "with neither override the file is absent");
+
+        apply("region.regionalFormat", locale.into()).await.unwrap();
+        let (_, canonical) = apply("region.language", locale.into()).await.unwrap();
+        assert_eq!(String::try_from(canonical).unwrap(), locale);
+        let written = std::fs::read_to_string(&file).unwrap();
+        assert!(written.lines().any(|line| line == format!("LANG={locale}")));
+        assert!(written.lines().any(|line| line.starts_with("LANGUAGE=")));
+        assert!(written.contains(&format!("LC_TIME={locale}\n")));
+        apply("region.regionalFormat", String::new()).await.unwrap();
+        let written = std::fs::read_to_string(&file).unwrap();
+        assert!(written.lines().any(|line| line == format!("LANG={locale}")));
+        assert!(!written.contains("LC_TIME="));
     }
+    let before = std::fs::read_to_string(&file).unwrap();
+    let missing = apply("region.language", "zh_CN.UTF-8".into())
+        .await
+        .unwrap_err();
+    assert_eq!(
+        error_name(missing.clone()),
+        "org.nidara.Config1.Error.Failed"
+    );
+    assert!(missing.to_string().contains("fcitx5-chinese-addons"));
+    assert_eq!(get("region.language").await, "en_US.UTF-8");
+    assert_eq!(std::fs::read_to_string(&file).unwrap(), before);
+    std::fs::write(env.dir.join("engine-installed"), "").unwrap();
+    apply("region.language", "zh_CN.UTF-8".into())
+        .await
+        .unwrap();
+    assert_eq!(get("region.language").await, "zh_CN.UTF-8");
+
     // Another writer (the TypeScript Settings): the file's monitor announces it.
     let proxy = zbus::Proxy::new(
         &conn,
@@ -1643,7 +1722,17 @@ async fn the_region_keys_live_in_timedated_and_environment_d() {
     .unwrap();
     let mut updated = proxy.receive_signal("Updated").await.unwrap();
     std::fs::create_dir_all(file.parent().unwrap()).unwrap();
-    std::fs::write(&file, "LC_TIME=de_DE.UTF-8\n").unwrap();
+    let mut changed = proxy.receive_signal("Changed").await.unwrap();
+    let external_language = if get("region.language").await == "es_MX.UTF-8" {
+        "fr_FR.UTF-8"
+    } else {
+        "es_MX.UTF-8"
+    };
+    std::fs::write(
+        &file,
+        format!("LANG={external_language}\nLC_TIME=de_DE.UTF-8\n"),
+    )
+    .unwrap();
     let announced = tokio::time::timeout(Duration::from_secs(5), async {
         while let Some(signal) = updated.next().await {
             let (_, _, values): Updated = signal.body().deserialize().unwrap();
@@ -1656,6 +1745,19 @@ async fn the_region_keys_live_in_timedated_and_environment_d() {
     .await
     .expect("an external format was never announced");
     assert_eq!(announced, "de_DE.UTF-8");
+    let announced = tokio::time::timeout(Duration::from_secs(5), async {
+        while let Some(signal) = changed.next().await {
+            let values: HashMap<String, OwnedValue> = signal.body().deserialize().unwrap();
+            if let Some(value) = values.get("region.language") {
+                return <&str>::try_from(value).unwrap().to_owned();
+            }
+        }
+        String::new()
+    })
+    .await
+    .expect("the shell's language signal");
+    assert_eq!(announced, external_language);
+    assert_eq!(get("region.language").await, external_language);
 }
 
 #[tokio::test(flavor = "multi_thread")]

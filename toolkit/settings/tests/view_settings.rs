@@ -263,6 +263,9 @@ fn the_region_page_writes_the_zone_of_the_city_chosen_and_its_format() {
         "switch":{"type":"boolean","value":false,"available":true,"writable":true,"ui":{"control":"toggle","title":"Toggle"}},
         "region.timezone":{"type":"string","value":"America/Managua","available":true,"writable":true,
             "catalogue":["America/Managua","Europe/Madrid","US/Pacific"],"ui":{"title":"Change timezone"}},
+        "region.language":{"type":"enum","value":"en_US.UTF-8","available":true,"writable":true,
+            "values":["en_US.UTF-8","es_ES.UTF-8"],"ui":{"control":"dropdown","title":"Language",
+            "options":[{"value":"en_US.UTF-8","label":"en_US.UTF-8"},{"value":"es_ES.UTF-8","label":"es_ES.UTF-8"}]}},
         "region.regionalFormat":{"type":"enum","value":"","available":true,"writable":true,
             "values":["","es_ES.UTF-8"],"ui":{"control":"dropdown","title":"Regional format",
             "options":[{"value":"","label":"Same as language"},{"value":"es_ES.UTF-8","label":"es_ES.UTF-8"}]}}
@@ -328,27 +331,43 @@ fn the_region_page_writes_the_zone_of_the_city_chosen_and_its_format() {
     );
     // The page builds with its strings: the zone in force as city and area, the matches
     // of what is typed under the search, and the language row.
-    let types = nk::TypeScale::load(
-        &e,
-        &nk_platform::portal::Appearance {
-            accent: [0.2, 0.4, 0.9],
-            dark: true,
-            reduce_transparency: false,
-            window_background: "tinted".into(),
-            reduced_motion: false,
-            font: "Inter 11".into(),
-            text_scale: 1.,
+    let appearance = nk_platform::portal::Appearance {
+        accent: [0., 136. / 255., 1.],
+        dark: true,
+        reduce_transparency: false,
+        window_background: "tinted".into(),
+        reduced_motion: false,
+        font: "Inter 11".into(),
+        text_scale: 1.,
+    };
+    let reference =
+        PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../ui/shell/assets/icons/nidara");
+    let host = nk::AppWindow::new(
+        nk::WindowLook::load(&e, &appearance).unwrap(),
+        nk::Labels {
+            show_sidebar: "Show sidebar".into(),
+            hide_sidebar: "Hide sidebar".into(),
+            back: "Back".into(),
+            forward: "Forward".into(),
         },
-    )
-    .unwrap();
+        "Settings",
+        Box::new(
+            nk_text::ParleyBackend::with_system_fonts(std::sync::Arc::new(
+                nk_text::FontSet::discover_required().unwrap(),
+            ))
+            .unwrap(),
+        ),
+        nk::Glyphs::new(nk_icons::Icons::new("", &[], &reference).unwrap()),
+        false,
+    );
     act(
         &mut m,
         &mut f,
         "region:tz-edit",
         Some(nk::Value::Text("ma".into())),
     );
-    let nodes = m.region.timezone(&e, &types, &f.session).unwrap();
-    let text = format!("{nodes:?}");
+    let page = m.page(&host, &f.session, &e).unwrap();
+    let text = format!("{:?}", page.content);
     assert!(
         text.contains("Madrid — "),
         "the zone just chosen, as a city under its area"
@@ -358,7 +377,11 @@ fn the_region_page_writes_the_zone_of_the_city_chosen_and_its_format() {
         "the matches under the search"
     );
     assert!(!text.contains("Pacific"), "an alias is not offered");
-    m.region.language(&e, &types).unwrap();
+    assert!(
+        text.contains("set:region.language"),
+        "the ordinary language row"
+    );
+    assert!(!text.contains("region:lang-apply"));
 }
 
 /// #1103 8c: Appearance draws its rows from the kit (swatches, time fields, font buttons)
