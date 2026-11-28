@@ -10,10 +10,18 @@
 //! Every output gets a lock surface on its own thread (`surface.rs`). The avatar, the name
 //! and the field are on the one the pointer is on, and the clock alone on the others (D6).
 //! This thread holds the lock, the attempt and the shared state they read.
+mod access;
 mod auth;
+mod keyboard;
+mod language;
+mod login;
 mod media;
+mod power;
+mod sessions;
 mod surface;
+mod switch;
 mod user;
+mod wifi;
 
 use nk_wayland::{LockStatus, OutputEvent, OutputId, Waker};
 use std::sync::mpsc::{Receiver, Sender, channel};
@@ -33,11 +41,41 @@ pub struct Shared {
     pub lines: Vec<String>,
     /// A new attempt starts with an empty field.
     pub clear: u64,
-    pub user: user::User,
+    /// Whose screen this is: the session's user on the lock screen; on the login screen every
+    /// person with an account (L1), `chosen` the one the field is for.
+    pub users: Vec<user::User>,
+    pub chosen: usize,
+    /// The logins whose session is open (L3), marked on their avatars on the login screen.
+    pub open: std::collections::BTreeSet<String>,
+    /// The login screen (`nidara-login` gave this process its socket).
+    pub login: bool,
+    /// The login screen's languages (L4) and the one it speaks now.
+    pub languages: Vec<language::Language>,
+    pub language: Option<usize>,
+    /// A language was chosen here: logging in makes it the person's.
+    pub language_chosen: bool,
+    pub battery: Option<power::Battery>,
+    /// The keyboard's layouts as Hyalo has them, and the one the field types with (L4).
+    pub layouts: Vec<String>,
+    pub layout: usize,
+    /// The Wi-Fi, on a machine that has it.
+    pub wifi: Option<wifi::Wifi>,
+    /// The accessibility menu's rows, and which are on.
+    pub access: Vec<access::Access>,
+    pub large_text: bool,
+    pub screen_reader: bool,
+    /// The login manager can put up a login screen: the lock screen offers Switch user (D8).
+    pub can_switch: bool,
     /// What is playing, when the user lets the lock screen show it (D5).
     pub media: Option<media::Now>,
     /// Unlocked: every surface closes.
     pub done: bool,
+}
+
+impl Shared {
+    pub fn user(&self) -> &user::User {
+        &self.users[self.chosen.min(self.users.len() - 1)]
+    }
 }
 
 /// To this thread, from the surfaces, the attempt and the output watch.
@@ -45,7 +83,30 @@ pub enum Msg {
     Submit(nk::Secret),
     /// The field changed: what the last attempt said goes (the TS lock screen's rule).
     Typed,
-    Suspend,
+    /// A command of the power menu, Suspend the lock screen's only one (D3).
+    Power(power::Power),
+    /// The login screen's language menu: row `n` of `Shared::languages`.
+    Language(usize),
+    /// What UPower now says of the battery.
+    Battery(Option<power::Battery>),
+    /// The keyboard menu: layout `n` of `Shared::layouts`.
+    Layout(usize),
+    /// What Hyalo says of the keyboard's layouts: them, and the one in use.
+    Layouts((Vec<String>, usize)),
+    /// What NetworkManager now says of the Wi-Fi.
+    Wifi(Option<wifi::Wifi>),
+    /// The Wi-Fi menu: network `n` of `Shared::wifi`.
+    Join(usize),
+    /// The accessibility menu: row `n` of `Shared::access`, turned on or off.
+    Access(usize),
+    /// Whether the login manager is there to switch user with.
+    CanSwitch(bool),
+    /// The lock screen's Switch user.
+    SwitchUser,
+    /// Another person on the login screen's row was chosen, by login.
+    Choose(String),
+    /// Whose sessions are open now (`sessions.rs`).
+    Open(std::collections::BTreeSet<String>),
     /// What the session's media service now says is playing.
     Media(Option<media::Now>),
     /// A transport button: Media1's `SelectedPrevious`, `SelectedPlayPause`, `SelectedNext`.
@@ -100,21 +161,47 @@ fn main() {
 }
 
 fn run() -> Result<(), String> {
-    let user = user::User::current();
-    let look = Arc::new(surface::Kit::load(&user)?);
+    // The login screen (#1195): Hyalo in login mode runs this same screen for nidara-login.
+    let login = login::socket().is_some();
+    let (users, chosen) = if login {
+        user::User::for_login()
+    } else {
+        (vec![user::User::current()], 0)
+    };
+    let look = Arc::new(surface::Kit::load(&users)?);
+    let languages = if login {
+        language::available(&nk_platform::exports::Exports::root())
+    } else {
+        Vec::new()
+    };
+    let language = language::current(&languages, std::env::var("LANG").ok().as_deref());
     let watch = nk_wayland::outputs(Duration::from_secs(5))?;
     let mut lock = nk_wayland::lock_session(Duration::from_secs(5))?;
     let (tx, rx) = channel();
     let world = Arc::new(World {
         shared: Mutex::new(Shared {
-            user,
+            users,
+            chosen,
+            login,
+            languages,
+            language,
+            access: if login { access::offered() } else { Vec::new() },
             ..Default::default()
         }),
         tx: tx.clone(),
         wakers: Mutex::new(Vec::new()),
         threads: Mutex::new(Vec::new()),
     });
-    media::watch(tx.clone());
+    // The login user has no session of anybody's to play from.
+    if login {
+        sessions::watch(tx.clone());
+        power::watch(tx.clone());
+        keyboard::ask(tx.clone(), None);
+        wifi::watch(tx.clone());
+    } else {
+        media::watch(tx.clone());
+        switch::ask(tx.clone());
+    }
     let first = watch.current().first().map(|o| o.id);
     world.update(|s| s.active = first);
     // The outputs' thread: one surface per output, now and as screens come and go.
@@ -146,6 +233,18 @@ fn run() -> Result<(), String> {
     }
     eprintln!("nidara-lock: locked");
     let expired = converse(&world, early, &rx, &mut lock, look.measures.error_seconds)?;
+    if login {
+        // The manager starts the session once this screen's Hyalo has let go of the screens,
+        // which it does when the lock goes (login mode).
+        let language = {
+            let s = world.shared.lock().unwrap();
+            s.language
+                .filter(|_| s.language_chosen)
+                .and_then(|n| s.languages.get(n))
+                .map(|l| l.locale.clone())
+        };
+        login::start(language.as_deref())?;
+    }
     lock.unlock()?;
     eprintln!("nidara-lock: unlocked");
     // The surfaces close; the compositor already shows the session.
@@ -171,6 +270,8 @@ fn converse(
     // When a refusal was shown: it goes after `error_seconds` on a screen nobody touches.
     let mut refused: Option<std::time::Instant> = None;
     let mut early = early.into_iter();
+    // Stopped when this returns: the person's session starts its own.
+    let mut reader = access::ScreenReader::default();
     loop {
         if refused.is_some_and(|t| t.elapsed().as_secs_f64() >= error_seconds) {
             refused = None;
@@ -196,7 +297,7 @@ fn converse(
                 if world.shared.lock().unwrap().checking {
                     continue;
                 }
-                let login = world.shared.lock().unwrap().user.login.clone();
+                let login = world.shared.lock().unwrap().user().login.clone();
                 refused = None;
                 world.update(|s| {
                     s.checking = true;
@@ -212,7 +313,11 @@ fn converse(
                         }
                     }
                 });
-                auth::attempt(&login, secret, said_tx);
+                if login::socket().is_some() {
+                    login::attempt(&login, secret, said_tx);
+                } else {
+                    auth::attempt(&login, secret, said_tx);
+                }
             }
             Msg::Typed => {
                 let shown = {
@@ -244,7 +349,96 @@ fn converse(
                     s.clear += 1;
                 });
             }
-            Msg::Suspend => suspend(),
+            Msg::Power(what) => power::run(what),
+            Msg::CanSwitch(there) => world.update(|s| s.can_switch = there),
+            Msg::SwitchUser => switch::switch(),
+            Msg::Language(n) => {
+                let locale = world
+                    .shared
+                    .lock()
+                    .unwrap()
+                    .languages
+                    .get(n)
+                    .map(|l| l.locale.clone());
+                // The screen speaks it at once; L4: logging in makes it the person's too.
+                if let Some(locale) = locale
+                    && surface::set_language(&locale)
+                {
+                    world.update(|s| {
+                        s.language = Some(n);
+                        s.language_chosen = true;
+                    });
+                }
+            }
+            Msg::Layout(n) => keyboard::ask(world.tx.clone(), Some(n)),
+            Msg::Layouts((layouts, layout)) => {
+                let s = world.shared.lock().unwrap();
+                let same = s.layouts == layouts && s.layout == layout;
+                drop(s);
+                if !same {
+                    world.update(|s| {
+                        s.layouts = layouts.clone();
+                        s.layout = layout;
+                    });
+                }
+            }
+            Msg::Wifi(w) => {
+                if world.shared.lock().unwrap().wifi != w {
+                    world.update(|s| s.wifi = w);
+                }
+            }
+            Msg::Join(n) => {
+                let w = world.shared.lock().unwrap().wifi.clone();
+                if let Some(w) = w {
+                    wifi::join(&w, n);
+                }
+            }
+            Msg::Access(n) => {
+                let row = world.shared.lock().unwrap().access.get(n).copied();
+                match row {
+                    Some(access::Access::LargeText) => {
+                        let on = !world.shared.lock().unwrap().large_text;
+                        surface::set_large_text(on);
+                        world.update(|s| s.large_text = on);
+                    }
+                    Some(access::Access::ScreenReader) => {
+                        reader.toggle();
+                        let on = reader.on();
+                        world.update(|s| s.screen_reader = on);
+                    }
+                    None => {}
+                }
+            }
+            Msg::Battery(b) => {
+                if world.shared.lock().unwrap().battery != b {
+                    world.update(|s| s.battery = b);
+                }
+            }
+            Msg::Choose(name) => {
+                let at = {
+                    let s = world.shared.lock().unwrap();
+                    if s.checking {
+                        None
+                    } else {
+                        s.users.iter().position(|u| u.login == name)
+                    }
+                };
+                // A new person: what was said to the last one goes, and their field starts
+                // empty with the keyboard in it (the new field key does both).
+                if let Some(at) = at {
+                    refused = None;
+                    world.update(|s| {
+                        s.chosen = at;
+                        s.lines.clear();
+                        s.clear += 1;
+                    });
+                }
+            }
+            Msg::Open(open) => {
+                if world.shared.lock().unwrap().open != open {
+                    world.update(|s| s.open = open);
+                }
+            }
             Msg::Media(now) => {
                 if world.shared.lock().unwrap().media != now {
                     world.update(|s| s.media = now);
@@ -257,6 +451,9 @@ fn converse(
                 }
             }
             Msg::Surface(id, waker) => {
+                // What changed before it could be told (an answer that came first) is
+                // shown now: woken once, it rebuilds if the state moved past its view.
+                let _ = waker.wake();
                 world.wakers.lock().unwrap().push((id, waker));
                 let missing = world.shared.lock().unwrap().active.is_none();
                 if missing {
@@ -334,27 +531,6 @@ fn outputs(
             }
         }
     }
-}
-
-/// Suspend only (D3): logind lets the active local session power off without a password, so
-/// what the lock screen offers, anyone at the keyboard can do. Suspending loses nothing.
-fn suspend() {
-    let call = || -> zbus::Result<()> {
-        let bus = zbus::blocking::Connection::system()?;
-        bus.call_method(
-            Some("org.freedesktop.login1"),
-            "/org/freedesktop/login1",
-            Some("org.freedesktop.login1.Manager"),
-            "Suspend",
-            &(false,),
-        )?;
-        Ok(())
-    };
-    std::thread::spawn(move || {
-        if let Err(e) = call() {
-            eprintln!("nidara-lock: could not suspend: {e}");
-        }
-    });
 }
 
 /// An expired password still unlocks (`nidara-auth.h`); the user is told by a notification

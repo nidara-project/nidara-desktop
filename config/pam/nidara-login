@@ -1,0 +1,14 @@
+#%PAM-1.0
+# A person logging in at Nidara's login screen (#1195), through nidara-login's worker.
+# Installed to /etc/pam.d/nidara-login.
+#
+# The same stacks every local login uses (system-local-login), so faillock, pam_env, the
+# logind session (pam_systemd) and the account checks are the system's, not ours. The keyring
+# is unlocked with the login password when gnome-keyring is installed (the leading `-` skips
+# the line when it is not).
+auth       include      system-local-login
+-auth      optional     pam_gnome_keyring.so
+account    include      system-local-login
+password   include      system-local-login
+session    include      system-local-login
+-session   optional     pam_gnome_keyring.so auto_start

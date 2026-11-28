@@ -120,6 +120,10 @@ pub fn saved() -> PathBuf {
     if let Some(path) = std::env::var_os("HYALO_WALLPAPER").map(PathBuf::from).filter(|p| p.is_absolute()) {
         return path;
     }
+    // The login screen shows the system's wallpaper, not the login user's (#1195 L5).
+    if crate::login_mode() {
+        return PathBuf::from(DEFAULT);
+    }
     let file = crate::config::user_config_path().with_file_name("wallpaper");
     std::fs::read_to_string(file)
         .ok()

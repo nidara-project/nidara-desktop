@@ -111,6 +111,10 @@ pub struct Model {
     pub choice: usize,
     /// The live dropdown's choice.
     pub speed: usize,
+    /// The menu button's last command, and the row it keeps ticked.
+    pub command: Option<usize>,
+    /// The toggles menu's rows that are on.
+    pub toggles: Vec<usize>,
     /// The live segmented choice's.
     pub size: usize,
     pub accent: usize,
@@ -152,6 +156,8 @@ impl Default for Model {
             profile: 1,
             choice: 1,
             speed: 1,
+            command: None,
+            toggles: Vec::new(),
             size: 1,
             accent: 0,
             toggle: false,
@@ -1029,6 +1035,76 @@ fn checks(m: &Model, t: &TypeScale) -> Vec<Node> {
 /// The live dropdown's options.
 pub const SPEEDS: [&str; 3] = ["Slow", "Normal", "Fast"];
 
+const COMMANDS: [&str; 3] = ["Suspend", "Restart", "Power off"];
+/// The toggles menu's rows: each on or off.
+pub const TOGGLES: [&str; 2] = ["Large text", "Screen reader"];
+fn menu_buttons(m: &Model, t: &TypeScale) -> nk::Column {
+    let commands = || COMMANDS.map(String::from).to_vec();
+    let one = |k: &str, shown: Option<Shown>, disabled: bool| -> Node {
+        let b = nk::MenuButton::new(
+            format!("mb/{k}"),
+            "Power",
+            "noop",
+            "nd-system-shutdown",
+            commands(),
+        )
+        .enabled(!disabled);
+        match shown {
+            Some(s) => b.shown(s).into(),
+            None => b.into(),
+        }
+    };
+    let states = nk::Row::new(
+        "mb/states",
+        vec![
+            one("rest", None, false),
+            one("hover", Some(Shown::Hover), false),
+            one("press", Some(Shown::Press), false),
+            one("focus", Some(Shown::Focus), false),
+            one("disabled", None, true),
+        ],
+    )
+    .gap(Space::S3);
+    let said = match m.command {
+        Some(n) => format!("Try it: chose {}", COMMANDS[n.min(COMMANDS.len() - 1)]),
+        None => "Try it: nothing chosen yet".into(),
+    };
+    nk::Column::new(
+        "mb",
+        vec![
+            states.into(),
+            nk::Row::new(
+                "mb/live",
+                vec![
+                    nk::MenuButton::new(
+                        "mb/live/b",
+                        "Power",
+                        "command",
+                        "nd-system-shutdown",
+                        commands(),
+                    )
+                    .ticked(m.command)
+                    .into(),
+                    nk::Label::new("mb/live/said", said, t.style(Type::Small, Weight::Regular))
+                        .ink(Ink::Secondary)
+                        .into(),
+                    nk::MenuButton::new(
+                        "mb/live/toggles",
+                        "Accessibility",
+                        "toggles",
+                        "nd-preferences-desktop-accessibility",
+                        TOGGLES.map(String::from).to_vec(),
+                    )
+                    .checks(m.toggles.clone())
+                    .into(),
+                ],
+            )
+            .gap(Space::S3)
+            .into(),
+        ],
+    )
+    .gap(Space::S3)
+}
 fn dropdowns(m: &Model, t: &TypeScale, dd: &DropdownStyle) -> Vec<Node> {
     let speeds = || SPEEDS.map(String::from).to_vec();
     let one =
@@ -1128,6 +1204,12 @@ fn dropdowns(m: &Model, t: &TypeScale, dd: &DropdownStyle) -> Vec<Node> {
             nk::Row::new("dd/list/row", vec![list.into()]).into(),
         ),
         section("dd-live", "Try it", t, live.into()),
+        section(
+            "dd-menu-button",
+            "Menu button (a glyph that opens commands; each row reports itself, every time)",
+            t,
+            menu_buttons(m, t).into(),
+        ),
     ]
 }
 
@@ -1730,6 +1812,34 @@ fn icons(t: &TypeScale) -> Vec<Node> {
             nk::Column::new("i/sizes", rows).gap(Space::S3).into(),
         ),
         section("i-inks", "Inks", t, inks),
+        section(
+            "i-avatars",
+            "Avatar: without a picture, and with the mark",
+            t,
+            row(
+                "i/avatars",
+                vec![
+                    sample(
+                        "i/avatar/plain",
+                        "80 px",
+                        t,
+                        nk::Avatar::new("i/avatar/80", 80.).into(),
+                    ),
+                    sample(
+                        "i/avatar/small",
+                        "48 px",
+                        t,
+                        nk::Avatar::new("i/avatar/48", 48.).into(),
+                    ),
+                    sample(
+                        "i/avatar/mark",
+                        "Marked",
+                        t,
+                        nk::Avatar::new("i/avatar/marked", 48.).mark(true).into(),
+                    ),
+                ],
+            ),
+        ),
     ]
 }
 

@@ -1,0 +1,25 @@
+# Nidara's login manager (#1195 D8): the login screen on logind, in place of greetd.
+#
+# Shipped but not enabled while greetd is the login manager. It takes over with
+# `systemctl enable nidara-login.service` (the alias makes it the display manager), which
+# the package does when greetd goes (#1195, step 4).
+[Unit]
+Description=Nidara login manager
+Documentation=https://github.com/nidara-project/nidara-desktop/issues/1195
+Conflicts=getty@tty1.service
+After=systemd-user-sessions.service getty@tty1.service plymouth-quit.service systemd-logind.service
+Wants=systemd-logind.service
+
+[Service]
+ExecStart=/usr/lib/nidara/nidara-login
+Restart=always
+RestartSec=1
+# The users' sessions are their own logind scopes; stopping the manager ends only the login
+# screen and the workers.
+KillMode=control-group
+IgnoreSIGPIPE=no
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+Alias=display-manager.service

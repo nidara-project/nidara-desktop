@@ -18,10 +18,47 @@ pub struct User {
 
 impl User {
     pub fn current() -> Self {
-        // SAFETY: getpwuid's static entry, copied out at once on this thread before any
-        // other passwd call.
+        // SAFETY: getpwuid's static entry, read at once on this thread.
+        Self::from_entry(unsafe { libc::getpwuid(libc::getuid()) })
+    }
+
+    /// The people the login screen offers (#1195 L1), in the order of their accounts, and
+    /// which of them is chosen: whoever logged in last on this machine (`nidara-login` keeps
+    /// the name, world-readable), else the first.
+    pub fn for_login() -> (Vec<Self>, usize) {
+        let mut people = Vec::new();
+        // SAFETY: the passwd walk, on this thread only, each entry copied before the next.
+        unsafe {
+            libc::setpwent();
+            loop {
+                let pw = libc::getpwent();
+                if pw.is_null() {
+                    break;
+                }
+                if is_person(&*pw) {
+                    people.push(((*pw).pw_uid, Self::from_entry(pw)));
+                }
+            }
+            libc::endpwent();
+        }
+        people.sort_by_key(|(uid, _)| *uid);
+        let mut people: Vec<Self> = people.into_iter().map(|(_, u)| u).collect();
+        let last = std::fs::read_to_string(LAST_USER)
+            .ok()
+            .map(|s| s.trim().to_owned())
+            .filter(|n| !n.is_empty());
+        let chosen = last
+            .as_ref()
+            .and_then(|name| people.iter().position(|u| &u.login == name));
+        if people.is_empty() {
+            people.push(Self::default());
+        }
+        (people, chosen.unwrap_or(0))
+    }
+
+    fn from_entry(pw: *mut libc::passwd) -> Self {
+        // SAFETY: a passwd entry from libc, copied out at once.
         let (login, gecos, home) = unsafe {
-            let pw = libc::getpwuid(libc::getuid());
             if pw.is_null() {
                 let login = std::env::var("USER").unwrap_or_default();
                 (
@@ -58,4 +95,18 @@ impl User {
             picture,
         }
     }
+}
+
+/// Where `nidara-login` keeps who logged in last.
+pub const LAST_USER: &str = "/var/lib/nidara-login/last-user";
+
+/// A person's account, not a system one: the uid range `useradd` gives people
+/// (/etc/login.defs's UID_MIN..UID_MAX on Arch) and a shell one can log in with.
+fn is_person(pw: &libc::passwd) -> bool {
+    if !(1000..60000).contains(&pw.pw_uid) || pw.pw_shell.is_null() {
+        return false;
+    }
+    // SAFETY: a NUL-terminated string of the entry.
+    let shell = unsafe { CStr::from_ptr(pw.pw_shell) }.to_string_lossy();
+    !(shell.ends_with("/nologin") || shell.ends_with("/false"))
 }

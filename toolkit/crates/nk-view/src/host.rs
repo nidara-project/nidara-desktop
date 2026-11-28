@@ -126,7 +126,9 @@ impl Glyphs {
         inner.own.insert(name.to_owned(), Arc::new(icon));
         Ok(())
     }
-    pub(crate) fn set_pictures(&mut self, pictures: HashMap<String, Arc<nk_render::Raster>>) {
+    /// Rasters an `nk::Image::picture` or an `nk::Avatar` names, by identifier: what a
+    /// surface that is not an `AppWindow` supplies itself (the lock screen's avatars).
+    pub fn set_pictures(&mut self, pictures: HashMap<String, Arc<nk_render::Raster>>) {
         self.inner.borrow_mut().pictures = pictures;
     }
     pub(crate) fn picture(&self, name: &str) -> Option<Arc<nk_render::Raster>> {

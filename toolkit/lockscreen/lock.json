@@ -1,7 +1,8 @@
 {
   "$comment": [
     "The lock screen's own measures (#1195), built into nidara-lock as Settings' pages are built into it. They are the TS lock screen's (ui/lib/auth-card.ts, ui/lockscreen/widget/Lock.ts): the clock 72 px from the top, an 80 px avatar, the name 10 px under it, the field 20 px under the name and 280 px wide, the power row 40 px from the bottom.",
-    "lineGap: between the field and what the attempt said (the TS button's 8 px margin). errorSeconds: how long a refusal stays on a screen nobody touches (auth-card.ts ERROR_TTL_MS, 8 s: a wrapped two-line message read without hurrying); typing clears it at once."
+    "lineGap: between the field and what the attempt said (the TS button's 8 px margin). errorSeconds: how long a refusal stays on a screen nobody touches (auth-card.ts ERROR_TTL_MS, 8 s: a wrapped two-line message read without hurrying); typing clears it at once.",
+    "others: the avatar of each other person in the login screen's row (L1), and its button as wide as othersWidth so a long name is cut the same for all; othersGap: between what the attempt said and that row. GDM's user list, smaller than the chosen one."
   ],
   "clockTop": 72,
   "avatar": 80,
@@ -10,5 +11,8 @@
   "field": 280,
   "lineGap": 8,
   "powerBottom": 40,
-  "errorSeconds": 8
+  "errorSeconds": 8,
+  "others": 48,
+  "othersWidth": 96,
+  "othersGap": 32
 }

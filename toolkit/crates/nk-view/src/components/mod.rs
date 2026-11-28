@@ -33,6 +33,8 @@ mod dropdown;
 pub use dropdown::Dropdown;
 mod menu_row;
 pub use menu_row::MenuRow;
+mod menu_button;
+pub use menu_button::MenuButton;
 mod surface;
 pub use surface::Surface;
 mod context;
@@ -326,6 +328,7 @@ pub enum Part {
     Field(DisplayField),
     Dropdown(Dropdown),
     MenuRow(MenuRow),
+    MenuButton(MenuButton),
     Disclosure(Disclosure),
     Editable(EditableField),
     Password(PasswordEntry),
@@ -365,6 +368,7 @@ impl Part {
             Self::Field(c) => c,
             Self::Dropdown(c) => c,
             Self::MenuRow(c) => c,
+            Self::MenuButton(c) => c,
             Self::Disclosure(c) => c,
             Self::Editable(c) => c,
             Self::Password(c) => c,

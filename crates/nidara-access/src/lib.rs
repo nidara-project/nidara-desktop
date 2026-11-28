@@ -240,6 +240,10 @@ impl Peer {
     }
     /// The compositor supplies a PID from the Wayland connection, never app-id/title
     /// or an X11 _NET_WM_PID. Legacy Settings may activate only its own native window.
+    /// The process, pinned for the connection.
+    pub fn pid(&self) -> u32 {
+        self.pid
+    }
     pub fn authorize_own_window(&self, owner_pid: Option<i32>) -> Result<(), String> {
         if owner_pid.and_then(|p| u32::try_from(p).ok()) != Some(self.pid) {
             return Err("AccessDenied: activation target does not belong to the caller".into());

@@ -348,6 +348,12 @@ pub struct Icon {
     /// Its ink's opacity on top of the ink's own (a slider's flanking glyphs).
     #[serde(default = "opaque")]
     pub alpha: f64,
+    /// A person's picture (`nk::Avatar`): cut to a circle and filled, never letterboxed.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub round: bool,
+    /// A dot on its lower right: the avatar's mark (a session already open, #1195 L3).
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub mark: bool,
 }
 fn opaque() -> f64 {
     1.
@@ -653,6 +659,8 @@ impl Node {
                 name: name.into(),
                 app_fallback: None,
                 picture: false,
+                round: false,
+                mark: false,
                 size,
                 ink: Ink::Primary,
                 alpha: 1.,
@@ -1056,6 +1064,27 @@ impl Node {
     }
     /// A row of a dropdown's open list: `label` and room for the tick after it, in the row's
     /// padding (`style`, the exported `dropdown.menu`). `chosen` ticks it.
+    /// A button with a glyph that opens a list of commands (`Gtk.MenuButton`): row `n`
+    /// chosen reports `action` with `Value::Index(n)`, every time.
+    pub(crate) fn menu_button(
+        key: impl Into<Key>,
+        name: impl Into<String>,
+        action: impl Into<String>,
+        b: crate::components::MenuButton,
+    ) -> Self {
+        let key = key.into();
+        let mut n = Self::control(
+            key.clone(),
+            name,
+            action,
+            Self::spacer(format!("{}/body", key.0)),
+        )
+        .role(Role::Button);
+        if let Kind::Control(c) = &mut n.kind {
+            c.part = Some(Box::new(crate::Part::MenuButton(b)));
+        }
+        n
+    }
     pub(crate) fn menu_row(
         key: impl Into<Key>,
         label: impl Into<String>,

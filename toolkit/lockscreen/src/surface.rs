@@ -7,16 +7,24 @@
 //! and Suspend at the bottom (D3). There is no card and no glass but the field's (D7): the
 //! text sits straight on the veil Hyalo draws over the wallpaper, in the shell's white ink.
 //!
+//! On the login screen (#1195 L1, L3) the same view is for the chosen person, whose session
+//! may be open (a mark on the avatar, and said under the name), with the other people in a
+//! row under the field, each a button that chooses them.
+//!
 //! Layout, hover, focus, Tab, the field's editing and input methods and the reader are the
 //! kit's (`nk::ViewState`); this says what the view is and acts on what is activated.
+use crate::power::Power;
 use crate::{Msg, World};
-use nk::{Activated, Align, Ink, Key, Node, Space, Type, ViewState, Weight, Widget, WindowLook};
+use nk::{
+    Activated, Align, Corner, HostRequest, Ink, Key, MenuKey, Node, Padding, Space, Type,
+    ViewState, Weight, Widget, WindowLook,
+};
 use nk_platform::clock::{self, Order, Region};
 use nk_platform::exports::Exports;
-use nk_render::{Canvas, ImageFit, Raster};
-use nk_text::{FontSet, ParleyBackend, Rect};
+use nk_render::{Canvas, Raster};
+use nk_text::{FontSet, ParleyBackend};
 use nk_wayland::{Application, Event, LockOutput, Material, Options, OutputId, Window};
-use std::sync::{Arc, OnceLock};
+use std::sync::{Arc, RwLock};
 use std::time::Instant;
 
 /// The view's keys and actions.
@@ -24,9 +32,16 @@ const SECRET: &str = "secret";
 const SUBMIT: &str = "submit";
 const PEEK: &str = "peek";
 const SUSPEND: &str = "suspend";
+const SWITCH_USER: &str = "switch-user";
+const POWER: &str = "power";
+const LANGUAGE: &str = "language";
+const LAYOUT: &str = "layout";
+const WIFI: &str = "wifi";
+const ACCESS: &str = "access";
 const PREVIOUS: &str = "media-previous";
 const PLAY_PAUSE: &str = "media-play-pause";
 const NEXT: &str = "media-next";
+const CHOOSE: &str = "choose";
 const AVATAR: &str = "lock/avatar";
 const ROOT: nk_a11y::NodeId = 1;
 const ENTER: u32 = 0xff0d;
@@ -44,6 +59,9 @@ pub struct Measures {
     pub line_gap: f64,
     pub power_bottom: f64,
     pub error_seconds: f64,
+    pub others: f64,
+    pub others_width: f64,
+    pub others_gap: f64,
 }
 impl Measures {
     fn load() -> Result<Self, String> {
@@ -63,34 +81,77 @@ impl Measures {
             line_gap: n("lineGap")?,
             power_bottom: n("powerBottom")?,
             error_seconds: n("errorSeconds")?,
+            others: n("others")?,
+            others_width: n("othersWidth")?,
+            others_gap: n("othersGap")?,
         })
     }
 }
 
-static EXPORTS: OnceLock<Exports> = OnceLock::new();
+static EXPORTS: RwLock<Option<Exports>> = RwLock::new(None);
 
-/// A string of the session's language (LANG, as the shell starts with); the key itself when
-/// there is no catalogue, so the screen still says something.
+/// A string of the screen's language (LANG, as the shell starts with, until the login
+/// screen's language menu changes it); the key itself when there is no catalogue, so the
+/// screen still says something.
 pub fn text(key: &str) -> String {
     EXPORTS
-        .get()
+        .read()
+        .unwrap()
+        .as_ref()
         .and_then(|e| e.text(key).ok())
         .map_or_else(|| key.to_owned(), str::to_owned)
 }
 
+/// The screen speaks `locale` from now on (L4); false when its strings cannot be read.
+pub fn set_language(locale: &str) -> bool {
+    match Exports::load_for(&Exports::root(), Some(locale)) {
+        Ok(e) => {
+            *EXPORTS.write().unwrap() = Some(e);
+            true
+        }
+        Err(e) => {
+            eprintln!("nidara-lock: no strings for {locale}: {e}");
+            false
+        }
+    }
+}
+
+static LARGE_TEXT: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
+
+/// The screen's text a quarter larger from now on, or not (the accessibility menu); the
+/// surfaces see it at their next rebuild.
+pub fn set_large_text(on: bool) {
+    LARGE_TEXT.store(on, std::sync::atomic::Ordering::Relaxed);
+}
+
 /// What every surface paints with, loaded once.
 pub struct Kit {
-    pub look: WindowLook,
+    look: WindowLook,
+    /// The same look with the text a quarter larger (the accessibility menu).
+    large: WindowLook,
     pub measures: Measures,
     pub region: Region,
     pub order: Order,
     pub fonts: Arc<FontSet>,
-    /// The user's picture, read once and shared.
-    pub picture: Option<Arc<Raster>>,
+    /// Each person's picture by its identifier (`picture_id`), read once and shared.
+    pub pictures: std::collections::HashMap<String, Arc<Raster>>,
+}
+
+/// What a person's picture is supplied to the view under.
+pub fn picture_id(login: &str) -> String {
+    format!("avatar/{login}")
 }
 
 impl Kit {
-    pub fn load(user: &crate::user::User) -> Result<Self, String> {
+    /// The look in force: with large text when it is on.
+    pub fn look(&self) -> &WindowLook {
+        if LARGE_TEXT.load(std::sync::atomic::Ordering::Relaxed) {
+            &self.large
+        } else {
+            &self.look
+        }
+    }
+    pub fn load(users: &[crate::user::User]) -> Result<Self, String> {
         let exports = Exports::load(&Exports::root())?;
         let appearance = appearance(&exports);
         // The shell's skin: always dark, white ink (owner's decision), over Hyalo's veil.
@@ -99,17 +160,27 @@ impl Kit {
             ..appearance
         };
         let look = WindowLook::load(&exports, &skin)?;
-        let _ = EXPORTS.set(exports);
+        let large = WindowLook::load(
+            &exports,
+            &nk_platform::portal::Appearance {
+                text_scale: skin.text_scale * crate::access::LARGE_TEXT,
+                ..skin.clone()
+            },
+        )?;
+        *EXPORTS.write().unwrap() = Some(exports);
         let measures = Measures::load()?;
         let side = (measures.avatar * 2.).round() as u32;
-        let picture = user.picture.as_ref().and_then(|p| {
-            let (w, h, rgba) = nk_icons::read_app_icon(p, side)?;
-            Raster::from_rgba(w as u16, h as u16, rgba)
-                .ok()
-                .map(Arc::new)
-        });
+        let pictures = users
+            .iter()
+            .filter_map(|u| {
+                let (w, h, rgba) = nk_icons::read_app_icon(u.picture.as_ref()?, side)?;
+                let raster = Raster::from_rgba(w as u16, h as u16, rgba).ok()?;
+                Some((picture_id(&u.login), Arc::new(raster)))
+            })
+            .collect();
         Ok(Self {
             look,
+            large,
             measures,
             region: region(),
             order: glib::DateTime::from_local(2001, 2, 3, 0, 0, 0.)
@@ -117,7 +188,7 @@ impl Kit {
                 .and_then(|d| d.format("%x").ok())
                 .map_or(Order::DayFirst, |s| clock::order_of(&s)),
             fonts: Arc::new(FontSet::discover_required()?),
-            picture,
+            pictures,
         })
     }
 }
@@ -225,7 +296,8 @@ struct Surface {
     world: Arc<World>,
     kit: Arc<Kit>,
     text: ParleyBackend,
-    icons: Option<nk_icons::Icons>,
+    /// The interface glyphs and the people's pictures.
+    glyphs: Option<nk::Glyphs>,
     state: ViewState,
     last: nk::Frame,
     size: (u32, u32),
@@ -243,6 +315,12 @@ struct Surface {
     revealed: bool,
     clock: String,
     pointer_here: bool,
+    /// The bar's open menu, on a layer of this surface: a lock surface has no popups.
+    menu: Option<nk::LayerMenu>,
+    /// The last input was a key, not the pointer: a menu opens with its row lit.
+    keys: bool,
+    /// A press outside the open menu closed it; its release goes nowhere.
+    swallow: bool,
     a11y: Option<nk_a11y::bridge::Bridge>,
     a11y_revision: u64,
     a11y_stopped: bool,
@@ -254,9 +332,14 @@ struct Surface {
 impl Surface {
     fn new(id: OutputId, world: Arc<World>, kit: Arc<Kit>) -> Result<Self, String> {
         let text = ParleyBackend::new(kit.fonts.clone())?;
-        let icons = nk_icons::Icons::new("", &[], &icon_reference())
+        let glyphs = nk_icons::Icons::new("", &[], &icon_reference())
             .map_err(|e| eprintln!("nidara-lock: no interface glyphs: {e}"))
-            .ok();
+            .ok()
+            .map(|icons| {
+                let mut g = nk::Glyphs::new(icons);
+                g.set_pictures(kit.pictures.clone());
+                g
+            });
         let mut state = ViewState::new(1);
         state.set_reduced_motion(false);
         state.set_caret_blink(true);
@@ -265,7 +348,7 @@ impl Surface {
             world,
             kit,
             text,
-            icons,
+            glyphs,
             state,
             last: nk::Frame::default(),
             size: (0, 0),
@@ -279,6 +362,9 @@ impl Surface {
             revealed: false,
             clock: String::new(),
             pointer_here: false,
+            menu: None,
+            keys: false,
+            swallow: false,
             a11y: None,
             a11y_revision: 0,
             a11y_stopped: false,
@@ -322,7 +408,7 @@ impl Surface {
 
     fn view(&self) -> Node {
         let m = &self.kit.measures;
-        let types = &self.kit.look.types;
+        let types = &self.kit.look().types;
         let shared = self.world.shared.lock().unwrap();
         let (date, time) = self.moment();
         let strut = |k: &str, px: f64| -> Node { nk::Slot::new(k, px).into() };
@@ -344,21 +430,36 @@ impl Surface {
         }
         children.push(nk::Spacer::new("lock/above").into());
         if self.active {
-            let avatar: Node = if self.kit.picture.is_some() {
-                nk::Slot::new(AVATAR, m.avatar).into()
-            } else {
-                nk::Image::new(AVATAR, "nd-avatar-default-symbolic", m.avatar).into()
-            };
-            children.push(avatar.presentational());
+            let user = shared.user();
+            // L3: on the login screen, a person whose session is open says so, on the
+            // picture and in words under the name.
+            let open = shared.login && shared.open.contains(&user.login);
+            children.push(
+                nk::Avatar::new(AVATAR, m.avatar)
+                    .picture(picture_id(&user.login))
+                    .mark(open)
+                    .into(),
+            );
             children.push(strut("lock/name-gap", m.name_gap));
             children.push(
                 nk::Label::new(
                     "lock/name",
-                    shared.user.name.clone(),
+                    user.name.clone(),
                     types.style(Type::Title3, Weight::Semibold),
                 )
                 .into(),
             );
+            if open {
+                children.push(
+                    nk::Label::new(
+                        "lock/open",
+                        text("lock.session-open"),
+                        types.style(Type::Body, Weight::Regular),
+                    )
+                    .ink(Ink::Secondary)
+                    .into(),
+                );
+            }
             children.push(strut("lock/field-gap", m.field_gap));
             // D7: the one thing of glass here is the field, made of glass in its own shape
             // (`.glass()`), so its glass, its button's washes and its focus ring share one
@@ -366,7 +467,14 @@ impl Surface {
             let entry: Node =
                 nk::PasswordEntry::new(self.field.clone(), text("lock.password"), SECRET)
                     .enabled(!shared.checking)
-                    .submit(text("lock.unlock"), SUBMIT)
+                    .submit(
+                        text(if shared.login {
+                            "lock.log-in"
+                        } else {
+                            "lock.unlock"
+                        }),
+                        SUBMIT,
+                    )
                     .peek(text("lock.show-password"), text("lock.hide-password"), PEEK)
                     .revealed(self.revealed)
                     .glass()
@@ -403,18 +511,61 @@ impl Surface {
                     .width(m.field)
                     .into(),
             );
+            // L1: the other people under the field, each their picture and name, a press away.
+            if shared.login && shared.users.len() > 1 {
+                children.push(strut("lock/others-gap", m.others_gap));
+                children.push(others(&shared, types, m));
+            }
             children.push(nk::Spacer::new("lock/below").into());
-            children
-                .push(nk::Button::new("lock/suspend", text("lock.suspend"), SUSPEND, body).into());
+            if !shared.login {
+                let suspend: Node =
+                    nk::Button::new("lock/suspend", text("lock.suspend"), SUSPEND, body.clone())
+                        .into();
+                // D8: Switch user beside it, while the login manager can put a login
+                // screen up.
+                children.push(if shared.can_switch {
+                    nk::Row::new(
+                        "lock/actions",
+                        vec![
+                            suspend,
+                            nk::Button::new(
+                                "lock/switch-user",
+                                text("lock.switch-user"),
+                                SWITCH_USER,
+                                body,
+                            )
+                            .into(),
+                        ],
+                    )
+                    .gap(Space::S3)
+                    .into()
+                } else {
+                    suspend
+                });
+            }
         } else {
             children.push(nk::Spacer::new("lock/below").into());
         }
         children.push(strut("lock/bottom", m.power_bottom));
-        nk::Column::new("lock", children)
+        let screen: Node = nk::Column::new("lock", children)
             .align(Align::Center)
             .width(f64::from(self.size.0))
             .height(f64::from(self.size.1))
-            .into()
+            .into();
+        // The login screen's bar (#1195): one capsule of glass at the top right, on the
+        // screen that has the field.
+        if shared.login && self.active {
+            nk::Overlay::new("lock/screen", screen)
+                .layer(
+                    Align::End,
+                    Align::Start,
+                    Padding::all(Space::S4),
+                    bar(&shared, types),
+                )
+                .into()
+        } else {
+            screen
+        }
     }
 
     /// Rebuild from the shared state and lay out across the output.
@@ -443,7 +594,7 @@ impl Surface {
             &view,
             rect,
             self.scale,
-            kit.look.tokens.with_types(&kit.look.types),
+            kit.look().tokens.with_types(&kit.look().types),
             &mut self.text,
             Instant::now(),
         );
@@ -461,9 +612,15 @@ impl Surface {
             return;
         }
         let now = Instant::now();
-        self.last = self.state.frame(&self.kit.look.tokens, now);
+        self.last = self.state.frame(&self.kit.look().tokens, now);
         self.blink_at = self.state.caret_deadline(now);
         w.set_text_input(self.state.text_input());
+        if let Some(m) = &mut self.menu {
+            let kit = self.kit.clone();
+            if let Err(e) = m.paint(w, kit.look(), &mut self.text, self.glyphs.as_mut()) {
+                eprintln!("nidara-lock: the menu was not painted: {e}");
+            }
+        }
         w.redraw();
     }
 
@@ -497,9 +654,131 @@ impl Surface {
                 let _ = self.world.tx.send(Msg::Press("SelectedNext"));
             }
             SUSPEND => {
-                let _ = self.world.tx.send(Msg::Suspend);
+                let _ = self.world.tx.send(Msg::Power(Power::Suspend));
+            }
+            SWITCH_USER => {
+                let _ = self.world.tx.send(Msg::SwitchUser);
+            }
+            POWER => {
+                if let Some(nk::Value::Index(n)) = a.value
+                    && let Some(&what) = Power::MENU.get(n)
+                {
+                    let _ = self.world.tx.send(Msg::Power(what));
+                }
+            }
+            LANGUAGE => {
+                if let Some(nk::Value::Index(n)) = a.value {
+                    let _ = self.world.tx.send(Msg::Language(n));
+                }
+            }
+            LAYOUT => {
+                if let Some(nk::Value::Index(n)) = a.value {
+                    let _ = self.world.tx.send(Msg::Layout(n));
+                }
+            }
+            WIFI => {
+                if let Some(nk::Value::Index(n)) = a.value {
+                    let _ = self.world.tx.send(Msg::Join(n));
+                }
+            }
+            ACCESS => {
+                if let Some(nk::Value::Index(n)) = a.value {
+                    let _ = self.world.tx.send(Msg::Access(n));
+                }
+            }
+            CHOOSE => {
+                if let Some(nk::Value::Text(login)) = a.value {
+                    let _ = self.world.tx.send(Msg::Choose(login));
+                }
             }
             _ => {}
+        }
+    }
+
+    /// What the kit asked of this surface: a menu button's list, opened on a layer (a lock
+    /// surface has no popups); the same button again closes it.
+    fn host(&mut self, w: &mut Window) {
+        for request in self.state.take_host_requests() {
+            match request {
+                HostRequest::OpenList { owner, list } => {
+                    let again = self.menu.as_ref().is_some_and(|m| m.owner() == &owner);
+                    self.close_menu(w);
+                    if again {
+                        continue;
+                    }
+                    let kit = self.kit.clone();
+                    let surface = (f64::from(self.size.0), f64::from(self.size.1));
+                    match nk::LayerMenu::open(
+                        w,
+                        &mut self.state,
+                        owner,
+                        &list,
+                        self.keys,
+                        surface,
+                        self.scale,
+                        kit.look(),
+                        &mut self.text,
+                    ) {
+                        Ok(menu) => self.menu = menu,
+                        Err(e) => eprintln!("nidara-lock: the menu did not open: {e}"),
+                    }
+                }
+                HostRequest::Respond { owner, request } => {
+                    if let Some(a) = self.state.respond(&owner, request) {
+                        self.route(a);
+                    }
+                }
+                _ => {}
+            }
+        }
+    }
+
+    /// Closes the open menu. Worked from the keyboard, the focus stays on its button, ring
+    /// and all; worked with the pointer, the keyboard goes back to the field (D2), so what is
+    /// typed next is the password and not a key on the button.
+    fn close_menu(&mut self, w: &mut Window) {
+        if let Some(m) = self.menu.take() {
+            m.close(w, &mut self.state, self.keys);
+            if !self.keys {
+                let input: Key = format!("{}/input", self.field.0).into();
+                self.state.request(&input, false);
+                self.state.hide_ring();
+            }
+        }
+    }
+
+    /// Row `n` of the open menu chosen: its owner hears it, and the menu closes.
+    fn choose(&mut self, n: usize, w: &mut Window) {
+        let Some(owner) = self.menu.as_ref().map(|m| m.owner().clone()) else {
+            return;
+        };
+        let a = nk::choose_from_list(&mut self.state, &owner, n);
+        self.close_menu(w);
+        if let Some(a) = a {
+            self.route(a);
+        }
+    }
+
+    /// A key while a menu is open is the menu's.
+    fn menu_key(&mut self, sym: u32, w: &mut Window) {
+        let Some(m) = &mut self.menu else {
+            return;
+        };
+        match m.key(sym) {
+            MenuKey::Ignored | MenuKey::Moved => {}
+            MenuKey::Choose(n) => self.choose(n, w),
+            MenuKey::Close => self.close_menu(w),
+            MenuKey::Tab(back) => {
+                self.close_menu(w);
+                let key = if back {
+                    nk::KeyInput::ShiftTab
+                } else {
+                    nk::KeyInput::Tab
+                };
+                if let Some(a) = self.state.key(key) {
+                    self.route(a);
+                }
+            }
         }
     }
 
@@ -571,7 +850,7 @@ impl Surface {
 
 impl Application for Surface {
     fn poll_interval_ms(&self) -> u32 {
-        if self.state.animating() {
+        if self.state.animating() || self.menu.as_ref().is_some_and(|m| m.animating()) {
             return 16;
         }
         // The cursor blinks on time; the clock's own wake can be a minute away.
@@ -606,13 +885,15 @@ impl Application for Surface {
         if self.state.animating() {
             let kit = self.kit.clone();
             let t = self.state.tick(
-                kit.look.tokens.with_types(&kit.look.types),
+                kit.look().tokens.with_types(&kit.look().types),
                 &mut self.text,
                 Instant::now(),
             );
             for a in t.activated {
                 self.route(a);
             }
+            self.refresh(w);
+        } else if self.menu.as_ref().is_some_and(|m| m.animating()) {
             self.refresh(w);
         }
         if self.blink_at.is_some_and(|at| Instant::now() >= at) {
@@ -658,7 +939,7 @@ impl Application for Surface {
                 if self.state.animating() {
                     let kit = self.kit.clone();
                     let t = self.state.tick(
-                        kit.look.tokens.with_types(&kit.look.types),
+                        kit.look().tokens.with_types(&kit.look().types),
                         &mut self.text,
                         Instant::now(),
                     );
@@ -689,12 +970,40 @@ impl Application for Surface {
                 pressed,
                 ..
             } => {
-                if let Some(a) = self.state.button(pressed, Instant::now()) {
-                    self.route(a);
+                self.keys = false;
+                // A press outside the open menu closes it and presses nothing (a popup's
+                // grab); the menu button pressed again closes it the same way.
+                if pressed && self.menu.is_some() {
+                    self.close_menu(w);
+                    self.swallow = true;
+                } else if !pressed && std::mem::take(&mut self.swallow) {
+                } else {
+                    if let Some(a) = self.state.button(pressed, Instant::now()) {
+                        self.route(a);
+                    }
+                    self.host(w);
                 }
                 self.refresh(w);
             }
+            Event::Layer { id, event } => {
+                if self.menu.as_ref().is_some_and(|m| m.layer() == id) {
+                    if matches!(event, nk_wayland::LayerEvent::Button { .. }) {
+                        self.keys = false;
+                    }
+                    let chosen = self.menu.as_mut().and_then(|m| m.event(event));
+                    if let Some(n) = chosen {
+                        self.choose(n, w);
+                    }
+                    self.refresh(w);
+                }
+            }
+            Event::Key(k) if self.menu.is_some() => {
+                self.keys = true;
+                self.menu_key(k.sym, w);
+                self.refresh(w);
+            }
             Event::Key(k) => {
+                self.keys = true;
                 let input: Key = format!("{}/input", self.field.0).into();
                 if k.serial.is_some()
                     && matches!(k.sym, ENTER | KP_ENTER)
@@ -709,6 +1018,7 @@ impl Application for Surface {
                 } else if let (_, Some(a)) = self.state.key_event(&k) {
                     self.route(a);
                 }
+                self.host(w);
                 // What a key changed (the field's dots) is laid out anew,
                 // as the kit's window host does after every key it handles.
                 self.relayout();
@@ -744,26 +1054,15 @@ impl Application for Surface {
             return Ok(c.finish());
         }
         let kit = self.kit.clone();
-        let look = kit.look.tokens.with_types(&kit.look.types);
+        let look = kit.look().tokens.with_types(&kit.look().types);
         // Without the compositor's glass (another compositor), the kit paints the field's
         // own surface from the same frame (D5).
         let fallback = (!f.material).then_some(&self.last);
-        let icons = &mut self.icons;
-        self.state
-            .paint(&mut c, look, &mut |n, size| glyph(icons, n, size), fallback)?;
-        // The user's picture, cut to a circle, in its slot.
-        if let Some(picture) = &kit.picture
-            && let Some(p) = self.state.placed().iter().find(|p| p.key.0 == AVATAR)
-        {
-            let r = Rect {
-                x: p.rect[0] as f32,
-                y: p.rect[1] as f32,
-                width: p.rect[2] as f32,
-                height: p.rect[3] as f32,
-            };
-            c.clip_rounded_rect(r, p.rect[2].min(p.rect[3]) / 2.);
-            c.image(picture, r, ImageFit::Cover);
-            c.pop_clip();
+        match &mut self.glyphs {
+            Some(glyphs) => self
+                .state
+                .paint_with_glyphs(&mut c, look, glyphs, fallback, false)?,
+            None => self.state.paint(&mut c, look, &mut |_, _| None, fallback)?,
         }
         Ok(c.finish())
     }
@@ -772,8 +1071,169 @@ impl Application for Surface {
         if self.closing || self.size.0 == 0 {
             return None;
         }
-        self.kit.look.glass(&self.last)
+        self.kit.look().glass(&self.last)
     }
+}
+
+/// The login screen's bar (#1195): the language it speaks, when there is a choice (L4); the
+/// battery, on a machine that has one; and power. One capsule, each a menu button of the kit,
+/// their menus on a layer of the surface.
+fn bar(shared: &crate::Shared, types: &nk::TypeScale) -> Node {
+    let mut items: Vec<Node> = Vec::new();
+    if shared.languages.len() > 1 {
+        items.push(
+            nk::MenuButton::new(
+                "lock/bar/language",
+                text("lock.language"),
+                LANGUAGE,
+                "nd-globe",
+                shared.languages.iter().map(|l| l.name.clone()).collect(),
+            )
+            .ticked(shared.language)
+            .into(),
+        );
+    }
+    if shared.layouts.len() > 1 {
+        items.push(
+            nk::MenuButton::new(
+                "lock/bar/keyboard",
+                text("lock.keyboard"),
+                LAYOUT,
+                "nd-input-keyboard",
+                shared.layouts.clone(),
+            )
+            .ticked(Some(shared.layout))
+            .into(),
+        );
+    }
+    if let Some(w) = &shared.wifi {
+        // Only the networks saved for everyone: a new one is added in Settings (wifi.rs).
+        let names: Vec<String> = if w.networks.is_empty() {
+            vec![text("lock.wifi-none")]
+        } else {
+            w.networks.iter().map(|n| n.ssid.clone()).collect()
+        };
+        items.push(
+            nk::MenuButton::new("lock/bar/wifi", text("lock.wifi"), WIFI, w.glyph, names)
+                .ticked(w.active)
+                .into(),
+        );
+    }
+    if !shared.access.is_empty() {
+        let on = |row: crate::access::Access| match row {
+            crate::access::Access::LargeText => shared.large_text,
+            crate::access::Access::ScreenReader => shared.screen_reader,
+        };
+        items.push(
+            nk::MenuButton::new(
+                "lock/bar/access",
+                text("lock.accessibility"),
+                ACCESS,
+                "nd-preferences-desktop-accessibility",
+                shared.access.iter().map(|r| text(r.key())).collect(),
+            )
+            .checks(
+                (0..shared.access.len())
+                    .filter(|&n| on(shared.access[n]))
+                    .collect(),
+            )
+            .into(),
+        );
+    }
+    if let Some(b) = shared.battery {
+        let percent = format!("{}%", b.percent.round() as u32);
+        items.push(
+            nk::Row::new(
+                "lock/bar/battery",
+                vec![
+                    nk::Image::new("lock/bar/battery/glyph", "nd-battery", 16.).into(),
+                    nk::Label::new(
+                        "lock/bar/battery/level",
+                        percent,
+                        types.style(Type::Small, Weight::Medium),
+                    )
+                    .into(),
+                ],
+            )
+            .gap(Space::S1)
+            .align(Align::Center)
+            .padding(Padding::symmetric(Space::S1, Space::S2))
+            .into(),
+        );
+    }
+    items.push(
+        nk::MenuButton::new(
+            "lock/bar/power",
+            text("lock.power"),
+            POWER,
+            "nd-system-shutdown",
+            Power::MENU.iter().map(|p| text(p.key())).collect(),
+        )
+        .into(),
+    );
+    nk::Pane::new(
+        "lock/bar",
+        Corner::Pill,
+        nk::Row::new("lock/bar/row", items)
+            .gap(Space::S1)
+            .align(Align::Center)
+            .padding(Padding::all(Space::S1)),
+    )
+    .into()
+}
+
+/// The login screen's other people (L1): one button each, its picture over its name, in the
+/// order of their accounts. Its name to a reader is the person's, and that their session is
+/// open, when it is.
+fn others(shared: &crate::Shared, types: &nk::TypeScale, m: &Measures) -> Node {
+    let buttons = shared
+        .users
+        .iter()
+        .enumerate()
+        .filter(|(i, _)| *i != shared.chosen)
+        .map(|(_, u)| {
+            let key = format!("lock/others/{}", u.login);
+            let open = shared.open.contains(&u.login);
+            let face = nk::Column::new(
+                format!("{key}/face"),
+                vec![
+                    nk::Avatar::new(format!("{key}/avatar"), m.others)
+                        .picture(picture_id(&u.login))
+                        .mark(open)
+                        .into(),
+                    nk::Label::new(
+                        format!("{key}/name"),
+                        u.name.clone(),
+                        types.style(Type::Small, Weight::Regular),
+                    )
+                    .lines(1)
+                    .into(),
+                ],
+            )
+            .gap(Space::S2)
+            .align(Align::Center)
+            .padding(nk::Padding::all(Space::S2))
+            // As wide again as the text is large, so a name fits as it did.
+            .width(
+                m.others_width
+                    * if shared.large_text {
+                        crate::access::LARGE_TEXT
+                    } else {
+                        1.
+                    },
+            );
+            let mut button = nk::Button::with_child(key, u.name.clone(), CHOOSE, face)
+                .value(nk::Value::Text(u.login.clone()));
+            if open {
+                button = button.description(text("lock.session-open"));
+            }
+            button.into()
+        })
+        .collect();
+    nk::Row::new("lock/others", buttons)
+        .gap(Space::S3)
+        .align(Align::Start)
+        .into()
 }
 
 /// What is playing: the title, the artist, and previous / play or pause / next as the kit's
@@ -842,18 +1302,6 @@ fn media_view(now: &crate::media::Now, types: &nk::TypeScale, width: f64) -> Nod
         .align(Align::Center)
         .width(width)
         .into()
-}
-
-/// A themed glyph for the kit, by name and logical size.
-fn glyph(
-    icons: &mut Option<nk_icons::Icons>,
-    name: &str,
-    size: f64,
-) -> Option<Arc<nk_icons::Icon>> {
-    if name.is_empty() {
-        return None;
-    }
-    icons.as_mut()?.get(name, size.round() as u32).ok()
 }
 
 /// The interface glyphs' reference set (the shell's `paths::icon_reference`).

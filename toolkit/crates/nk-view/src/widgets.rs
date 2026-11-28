@@ -274,6 +274,40 @@ impl Image {
     }
 }
 widget!(
+    /// A person's picture, `size` across, cut to a circle (`Adw.Avatar`): the raster supplied
+    /// under `picture`'s identifier when there is one, the default avatar glyph when there is
+    /// not. Decoration to a reader: the name next to it, or the button it is in, says who.
+    Avatar
+);
+impl Avatar {
+    pub fn new(key: impl Into<Key>, size: f64) -> Self {
+        let mut node = Node::icon(key, AVATAR_GLYPH, size).presentational();
+        if let Kind::Icon(icon) = &mut node.kind {
+            icon.round = true;
+        }
+        Self(node)
+    }
+    /// The raster supplied to the surface under `id` (`AppWindow::set_pictures`,
+    /// `Glyphs::set_pictures`); the default glyph while it is missing.
+    pub fn picture(mut self, id: impl Into<String>) -> Self {
+        if let Kind::Icon(icon) = &mut self.0.kind {
+            icon.name = id.into();
+            icon.picture = true;
+            icon.app_fallback = Some(AVATAR_GLYPH.into());
+        }
+        self
+    }
+    /// A dot on its lower right: something about the person shown on their picture (on the
+    /// login screen, that their session is open). Say it to readers too.
+    pub fn mark(mut self, on: bool) -> Self {
+        if let Kind::Icon(icon) = &mut self.0.kind {
+            icon.mark = on;
+        }
+        self
+    }
+}
+const AVATAR_GLYPH: &str = "nd-avatar-default";
+widget!(
     /// Room the app paints in itself, `size` square: a picture, a mark, a gauge. Never a control.
     Slot
 );
@@ -423,6 +457,51 @@ impl DropDown {
                 disabled: false,
             },
         ))
+    }
+    control_setters!();
+}
+widget!(
+    /// A button with a glyph that opens a list of commands (`Gtk.MenuButton`): a bar's power
+    /// menu. Row `n` chosen reports `action` with `Value::Index(n)`, every time; `ticked`
+    /// marks the row that is current, when there is one (the language in use); `checks` the
+    /// rows that are on, in a menu of things each on or off (large text, the screen reader).
+    MenuButton
+);
+impl MenuButton {
+    pub fn new(
+        key: impl Into<Key>,
+        name: impl Into<String>,
+        action: impl Into<String>,
+        glyph: impl Into<String>,
+        options: Vec<String>,
+    ) -> Self {
+        Self(Node::menu_button(
+            key,
+            name,
+            action,
+            crate::components::MenuButton {
+                glyph: glyph.into(),
+                options,
+                ticked: None,
+                checks: Vec::new(),
+            },
+        ))
+    }
+    pub fn ticked(mut self, n: Option<usize>) -> Self {
+        if let Kind::Control(c) = &mut self.0.kind
+            && let Some(Part::MenuButton(b)) = c.part.as_deref_mut()
+        {
+            b.ticked = n;
+        }
+        self
+    }
+    pub fn checks(mut self, rows: Vec<usize>) -> Self {
+        if let Kind::Control(c) = &mut self.0.kind
+            && let Some(Part::MenuButton(b)) = c.part.as_deref_mut()
+        {
+            b.checks = rows;
+        }
+        self
     }
     control_setters!();
 }

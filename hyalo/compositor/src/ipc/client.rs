@@ -34,6 +34,8 @@ nidara-hyalo msg <request>        talk to the running Hyalo (prints JSON)
                                   (every command: hyalo/compositor/src/wm/actions.rs)
   reload                          re-read the configuration
   config                          the configuration in force (the three layers merged)
+  keyboard-layout [N]             the keyboard's layouts and the one in use; with N, use
+                                    layout N (from 0) until the keymap changes; never saved
   settings '<json>'               persist and apply a change in the settings layer, as a
                                     JSON merge patch: '{"input":{"keyboard":{"numlock":true}}}'
                                     (null removes a key; your hyalo.toml still wins)
@@ -141,6 +143,9 @@ fn parse(args: &[String]) -> Result<Option<String>, String> {
         }
         "reload" => Request::ReloadConfig,
         "config" => Request::Config,
+        "keyboard-layout" => Request::KeyboardLayout {
+            set: args.get(1).map(|n| n.parse().map_err(|e| format!("keyboard-layout: {e}"))).transpose()?,
+        },
         "settings" => {
             let text = args.get(1).ok_or("settings needs a JSON object")?;
             let patch: serde_json::Value = serde_json::from_str(text).map_err(|e| format!("settings: {e}"))?;

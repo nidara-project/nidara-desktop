@@ -786,6 +786,10 @@ pub fn layer_paths() -> Vec<PathBuf> {
         v.extend(std::env::var_os("HYALO_SETTINGS").map(PathBuf::from));
         return v;
     }
+    if crate::login_mode() {
+        // No user yet (main::LOGIN).
+        return vec![PathBuf::from(SYSTEM_CONFIG)];
+    }
     vec![PathBuf::from(SYSTEM_CONFIG), settings_config_path(), user_config_path()]
 }
 

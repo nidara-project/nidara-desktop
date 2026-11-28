@@ -243,6 +243,117 @@ strings), then `nidara-hyalo msg lock` and `msg screenshot`. Three traps, each c
   PAM stack and counts against the real account in faillock. The PAM path is checked by the
   owner on the installed system.
 
+### The login manager `nidara-login` and Hyalo's login mode (#1195 D8, step 1)
+
+`session/login` (`nidara-login`, root, `nidara-login.service`, aliased to
+`display-manager.service`) replaces greetd. It ships **not enabled** until step 4 removes
+greetd. The pieces:
+- **The manager** (`daemon.rs`) opens the login screen's own session (PAM `nidara-greeter`,
+  logind class `greeter`, the `greeter` user) on the configured VT, and runs
+  `nidara-hyalo --login -c <client>` in it. It talks to the screen over
+  `/run/nidara-login/greeter.sock` (only the login user may connect; the protocol is in
+  `proto.rs`).
+- **PAM runs in a worker per session** (`nidara-login --worker`, fd 3), as gdm-session-worker
+  does: a module that crashes takes down one worker, never the manager. After `start`, the
+  user's session opens on the same VT once the login screen's Hyalo has exited (the handover
+  #1195 L6 measures). A user with an open session is switched to it with logind's
+  `ActivateSession` (L3).
+- **Switching user (D8, step 3)**: `session/login/src/bus.rs` serves LightDM's
+  `org.freedesktop.DisplayManager.Seat.SwitchToGreeter` at `/org/freedesktop/DisplayManager/Seat0`
+  under `org.nidara.Login` and `org.freedesktop.DisplayManager` (policy:
+  `session/login/org.nidara.Login.conf` → `/usr/share/dbus-1/system.d/`). Only the ACTIVE,
+  local session on seat0 may ask (logind `GetSessionByPID` of the caller), or root. The
+  login screen then starts on the configured VT if no session of ours holds it, else on the
+  first free one (`VT_OPENQRY`), and a login there opens its session on THAT VT
+  (`Manager::greeter_vt`); one already up just comes to the front. The lock screen offers
+  "Switch user" beside Sleep only while `org.nidara.Login` has an owner (`switch.rs`), so
+  under greetd it is not there. Headless check: a private dbus-daemon as
+  `DBUS_SYSTEM_BUS_ADDRESS` with a Gio stand-in owning the name; the manager's side needs
+  root and a real seat.
+- **Hyalo `--login`** (`main::login_mode`): only the system config, the system wallpaper, no
+  autostart and no Xwayland. The `-c` client is held as a LOCK client from the first frame
+  (`lock.rs` → `start_login`). It is started again only once its PROCESS is gone, never after
+  a deadline: a slow first start must not race a second client for the lock. When the client
+  unlocks, Hyalo exits.
+- **The client is `nidara-lock`, for good** (owner, 2026-11-28: the login screen and the lock
+  screen are ONE program with two modes; there is no separate `nidara-greeter` in Rust). With
+  `NIDARA_LOGIN_SOCKET` set it is the login screen: it authenticates through the manager
+  (`login.rs`), lists every person (uid 1000–59999 with a real shell, `user.rs` →
+  `for_login`), chooses the last one (`/var/lib/nidara-login/last-user`), shows the others
+  in a row under the field (L1), marks whose session is open from logind (`sessions.rs`, the
+  manager's own test, L3) and says "Log in". The avatars are the kit's `nk::Avatar`; a
+  surface that is not an `AppWindow` hands it pictures through `nk::Glyphs::set_pictures`
+  and paints with `ViewState::paint_with_glyphs`.
+- **The login screen's bar** (top right, one `nk::Pane` capsule): the language, the keyboard,
+  Wi-Fi, accessibility, the battery
+  (UPower's display device, `power.rs`) and power (Suspend, Restart, Shut down from logind,
+  not interactive). Its buttons are `nk::MenuButton`s, and **their menus open on a layer of
+  the lock surface, `nk::LayerMenu`**: a lock surface cannot have an `xdg_popup`, so the host
+  takes the kit's `HostRequest::OpenList` itself, routes `Event::Layer` and the keys to the
+  menu while it is open, closes it on a press outside (swallowing that press and its
+  release), and paints it before the redraw that stages the layer. The rows, keys, size and
+  glass are `AppWindow`'s popup's (`layer_menu::{measure, step}` are shared by both). A menu
+  worked with the pointer gives the keyboard back to the field; from the keyboard the focus
+  stays on its button.
+  ⚠️ Hyalo hit-tests a lock surface's layers where they are SHOWN (`lock.rs` →
+  `lock_surface_under`, `protocols::layers::under_tree`): Smithay's own walk puts a layer at
+  its subsurface position, (0, 0), so before that fix every click on the menu landed on the
+  surface under it and closed the menu.
+- **The language (L4).** Offered: the generated locales (`locale -a`) that have a catalogue,
+  one per catalogue, each by its own name (`language.name` in every locale file). Choosing one
+  reloads the screen's strings at once (`surface::set_language`). On login the screen sends
+  `start` with it; the MANAGER checks it is a generated locale (the screen is not trusted with
+  it), records it in AccountsService (as GDM), and starts the session with `LANG`, `LANGUAGE`
+  and `NIDARA_LOGIN_LANGUAGE` (`ToWorker::Open { env }`). The session's daemon then writes it
+  as the person's setting through Config1 (`region.language`, #1197) and unsets the variable
+  in the user manager, so its own restart never undoes a later change in Settings. An open
+  session (L3) keeps its own language.
+- **Wi-Fi (owner, 2026-11-28): status, and the networks saved for EVERY user** (no
+  `permissions`), in range, strongest first; choosing one is `ActivateConnection`
+  (`wifi.rs`). Joining a NEW network is deliberately not offered: saved for everyone it is a
+  system connection, which NetworkManager lets only an administrator add, and a local account
+  logs in without a network (GDM's attempt failed for years; Red Hat turns it off). Networks
+  for the login screen are added in Settings, "for all users". The installer's copied Wi-Fi
+  is restricted to the new user, so it connects after login, not on the login screen.
+  Pre-login joining is for domain accounts, if Nidara ever has them.
+- **Accessibility (`access.rs`):** large text (a second `WindowLook` at 1.25× the text scale,
+  `Kit::look()` picks it; the other people's buttons widen with it) and the screen reader
+  (Orca, offered only when installed — an optdepend here, installed by default by nidara-iso's
+  base.json, because a blind person cannot install it without it; started for
+  the login user, stopped when off or when the screen goes). Rows that are each on or off
+  are `nk::MenuButton::checks`. No on-screen keyboard: Hyalo hides the virtual-keyboard
+  protocol while locked, so one must be the kit's own, typing into the field.
+- **The keyboard menu (L4)** changes only what the field types, never anything saved. Its
+  rows are the keymap's layouts as Hyalo has them — the system's (`XkbLayout "es,us"` is two
+  xkb groups), by their xkb names, the names Settings → Keyboard shows — asked and set with
+  Hyalo's `keyboard_layout` request (`keyboard.rs`; `nidara-hyalo msg keyboard-layout [N]`).
+  One layout: no menu. Setting a group writes no file: the next login screen starts from the
+  system's first layout, and the person's session types with what Settings holds. Reading is
+  open; SETTING is `Configure`, and besides Settings and the session Hyalo grants it to the
+  client that holds the session lock, by its pid (`server.rs` → `authorize_request`,
+  `LockState::holder_pid`) — anything else is refused (tested).
+  ⚠️ A surface registers its waker after the lock is confirmed, and an answer that arrives
+  before then (Hyalo's, here) changed the state with nobody to tell: `Msg::Surface` wakes the
+  new surface once, so it rebuilds if the state moved past its first view.
+
+Testing, without root: a cage headless runs `nidara-hyalo --winit --login -c nidara-lock`
+with a stand-in manager on `NIDARA_LOGIN_SOCKET`. 🔴 **Give the nested Hyalo its own
+`XDG_RUNTIME_DIR`** (and an absolute `WAYLAND_DISPLAY` for cage's socket): otherwise
+`nidara-hyalo msg` reaches the LIVE session through the inherited `HYALO_SOCKET`, and a
+"screenshot of the test" is a screenshot of the owner's screen. The manager itself needs
+root, a VT and logind: that is the VM, or the owner.
+- **Several people without creating accounts:** bind a passwd of your own over `/etc/passwd`
+  in a private namespace, `unshare --user --map-root-user --mount bash -c "mount --bind
+  <passwd> /etc/passwd && cage …"` (`--map-current-user` cannot mount: util-linux refuses a
+  non-root uid). The system bus is out of reach in there, so the open-session marks are tested
+  outside it.
+- ⚠️ **Start the client with `-c "sleep 4; exec …/nidara-lock"` under cage.** Hyalo's winit
+  output appears about 5 s after start there; a client started at once gives up waiting for
+  outputs, and the one Hyalo starts in its place, connecting within milliseconds of the output's
+  creation, PAINTS ONCE and never again (no frame callbacks). Killing a running client is
+  restarted fine; only that start race freezes. Open in Hyalo's login mode; a real DRM output
+  exists before the client starts, so it has not been seen there.
+
 **`bin/nidara-greeter` still has no dev branch.** It hardcodes
 `/usr/share/nidara/ui/greeter/build/nidara-greeter` and `exec`s it or dies. Whenever you touch
 `ui/greeter/`, the change is not testable until it is installed:

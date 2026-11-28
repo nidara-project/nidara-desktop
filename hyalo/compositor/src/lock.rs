@@ -85,7 +85,17 @@ const RELAUNCH: &str = "nidara-lock";
 /// 4.61:1 against white.
 pub const VEIL: f32 = 0.54;
 
+/// The login client, in login mode (`main::login_mode`): it is the lock client there.
+static LOGIN_CLIENT: std::sync::OnceLock<String> = std::sync::OnceLock::new();
+
+pub fn set_login_client(cmd: String) {
+    let _ = LOGIN_CLIENT.set(cmd);
+}
+
 pub fn lock_command() -> String {
+    if let Some(cmd) = LOGIN_CLIENT.get() {
+        return cmd.clone();
+    }
     std::env::var("HYALO_LOCK_RELAUNCH").ok().filter(|c| !c.trim().is_empty()).unwrap_or_else(|| RELAUNCH.into())
 }
 /// At most this many relaunches in RELAUNCH_WINDOW: a lock client that crashes on start must
@@ -139,6 +149,9 @@ pub struct LockState {
     /// later one.
     asked: u64,
     awaiting: Option<u64>,
+    /// Login mode: the login client's process, so a client that is still starting is not
+    /// mistaken for one that died (`start_login`).
+    client: Option<std::process::Child>,
 }
 
 /// The generation of the last frame rendered on an output (in its user data).
@@ -157,6 +170,7 @@ impl LockState {
             watch: None,
             asked: 0,
             awaiting: None,
+            client: None,
         }
     }
 
@@ -171,6 +185,15 @@ impl LockState {
     /// Locked, or about to be: nothing of the session may be reached (nor captured).
     pub fn is_locked(&self) -> bool {
         !matches!(self.mode, Mode::Unlocked)
+    }
+
+    /// The process of the client holding the lock (or asking for it), from its lock surfaces.
+    pub fn holder_pid(&self, dh: &smithay::reexports::wayland_server::DisplayHandle) -> Option<i32> {
+        if matches!(self.mode, Mode::Unlocked | Mode::Guard { .. }) {
+            return None;
+        }
+        let surface = self.surfaces.first()?.1.wl_surface().clone();
+        dh.get_client(smithay::reexports::wayland_server::Resource::id(&surface)).ok()?.get_credentials(dh).ok().map(|c| c.pid)
     }
 
     /// Locked by Hyalo itself, with no lock client (the guard).
@@ -250,6 +273,12 @@ impl Hyalo {
                 return Some((hit.0, hit.1.to_f64()));
             }
         }
+        // A layer of the lock surface (the login screen's menus: no popups here) is hit where
+        // it is shown, as a window's or a shell layer's is (protocols/layers.rs).
+        if crate::protocols::layers::tree_has_layer(surface) {
+            let frame = crate::protocols::layers::presentation::shown_frame(output);
+            return crate::protocols::layers::under_tree(surface, pos - loc.to_f64(), (0, 0).into(), frame).map(|(s, p)| (s, p + loc.to_f64()));
+        }
         under_from_surface_tree(surface, pos, loc, WindowSurfaceType::ALL).map(|(s, p)| (s, p.to_f64()))
     }
 
@@ -318,6 +347,41 @@ impl Hyalo {
         });
     }
 
+    /// Login mode (`main::login_mode`): the screens are held from the first frame, as by the
+    /// guard, and the login client is started once. There is no session to show while it
+    /// starts, so it may take as long as it takes; it is started again only once its
+    /// process has gone, not after a deadline (a slow first start must not race a second
+    /// client for the lock).
+    pub fn start_login(&mut self) {
+        self.lock.generation += 1;
+        let waiting: Vec<Output> = crate::backend::physical_outputs(self)
+            .into_iter()
+            .filter(|o| self.backend.output_shows_frames(o))
+            .collect();
+        self.lock.mode = Mode::Guard { waiting };
+        self.lock.flag.store(true, Ordering::Release);
+        self.let_go_of_input();
+        self.spawn_login_client();
+        self.queue_redraw(None);
+    }
+
+    fn spawn_login_client(&mut self) {
+        let cmd = lock_command();
+        tracing::info!(%cmd, "the login client");
+        match std::process::Command::new("sh").arg("-c").arg(&cmd).spawn() {
+            Ok(child) => self.lock.client = Some(child),
+            Err(err) => tracing::warn!(%cmd, ?err, "could not start the login client"),
+        }
+    }
+
+    /// Login mode: is the login client's process gone (and reaped)?
+    fn login_client_exited(&mut self) -> bool {
+        match self.lock.client.as_mut() {
+            Some(child) => !matches!(child.try_wait(), Ok(None)),
+            None => true,
+        }
+    }
+
     /// Locks the session without a lock client: everything is hidden and nothing reachable, as
     /// under a lock whose client died, and the client is started again until one takes over.
     pub fn guard_session(&mut self, why: &str) {
@@ -382,6 +446,7 @@ impl Hyalo {
         let dead = match &self.lock.mode {
             Mode::Locked { lock } => !lock.is_alive(),
             Mode::Pending { locker, .. } => !locker.ext_session_lock().is_alive(),
+            Mode::Guard { .. } if crate::login_mode() => self.login_client_exited(),
             Mode::Guard { .. } => true,
             Mode::Unlocked => return,
         };
@@ -401,16 +466,27 @@ impl Hyalo {
         if self.lock.relaunches.last().is_some_and(|t| now.duration_since(*t) < Duration::from_secs(2)) {
             return; // the last one may still be starting
         }
+        if crate::login_mode() {
+            // Still running (it is starting, or ending): nothing to start yet.
+            if !self.login_client_exited() {
+                return;
+            }
+            self.lock.relaunches.push(now);
+            tracing::warn!("the login client is gone; it starts again");
+            self.spawn_login_client();
+            return;
+        }
+        self.lock.relaunches.push(now);
         let cmd = lock_command();
         tracing::warn!(%cmd, "the lock client is gone; the session stays locked and it starts again");
-        self.lock.relaunches.push(now);
         crate::spawn(&cmd);
     }
 
     /// Is the lock held by a client that is gone (so a key press may bring it back)?
-    pub fn lock_client_gone(&self) -> bool {
+    pub fn lock_client_gone(&mut self) -> bool {
         match &self.lock.mode {
             Mode::Locked { lock } => !lock.is_alive(),
+            Mode::Guard { .. } if crate::login_mode() => self.login_client_exited(),
             Mode::Guard { .. } => true,
             _ => false,
         }
@@ -464,6 +540,15 @@ impl SessionLockHandler for Hyalo {
     }
 
     fn unlock(&mut self) {
+        if crate::login_mode() {
+            // The login is done (nidara-login has the user's session to start): Hyalo leaves
+            // the screens to the user's Hyalo. No fade: there is no session under the lock.
+            tracing::info!("login done: the login screen ends");
+            self.lock.flag.store(false, Ordering::Release);
+            self.loop_signal.stop();
+            self.loop_signal.wakeup();
+            return;
+        }
         tracing::info!("session unlocked");
         // D9: what each output showed goes in a fade over the session (render/unlocking.rs),
         // taken now, while the client's lock surfaces still exist.
