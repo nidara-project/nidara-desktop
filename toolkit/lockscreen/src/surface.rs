@@ -32,6 +32,7 @@ const SECRET: &str = "secret";
 const SUBMIT: &str = "submit";
 const PEEK: &str = "peek";
 const SUSPEND: &str = "suspend";
+const SWITCH_USER: &str = "switch-user";
 const POWER: &str = "power";
 const LANGUAGE: &str = "language";
 const LAYOUT: &str = "layout";
@@ -517,9 +518,30 @@ impl Surface {
             }
             children.push(nk::Spacer::new("lock/below").into());
             if !shared.login {
-                children.push(
-                    nk::Button::new("lock/suspend", text("lock.suspend"), SUSPEND, body).into(),
-                );
+                let suspend: Node =
+                    nk::Button::new("lock/suspend", text("lock.suspend"), SUSPEND, body.clone())
+                        .into();
+                // D8: Switch user beside it, while the login manager can put a login
+                // screen up.
+                children.push(if shared.can_switch {
+                    nk::Row::new(
+                        "lock/actions",
+                        vec![
+                            suspend,
+                            nk::Button::new(
+                                "lock/switch-user",
+                                text("lock.switch-user"),
+                                SWITCH_USER,
+                                body,
+                            )
+                            .into(),
+                        ],
+                    )
+                    .gap(Space::S3)
+                    .into()
+                } else {
+                    suspend
+                });
             }
         } else {
             children.push(nk::Spacer::new("lock/below").into());
@@ -633,6 +655,9 @@ impl Surface {
             }
             SUSPEND => {
                 let _ = self.world.tx.send(Msg::Power(Power::Suspend));
+            }
+            SWITCH_USER => {
+                let _ = self.world.tx.send(Msg::SwitchUser);
             }
             POWER => {
                 if let Some(nk::Value::Index(n)) = a.value

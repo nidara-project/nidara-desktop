@@ -1207,6 +1207,7 @@ export default {
     "lock.accessibility": "Accessibility",
     "lock.large-text": "Large text",
     "lock.screen-reader": "Screen reader",
+    "lock.switch-user": "Switch user",
     "lock.power": "Power",
     "lock.power-off": "Shut down",
     "lock.restart": "Restart",

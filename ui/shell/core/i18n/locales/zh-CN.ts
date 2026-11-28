@@ -946,6 +946,7 @@ export default {
     "lock.accessibility": "辅助功能",
     "lock.large-text": "大号文字",
     "lock.screen-reader": "屏幕阅读器",
+    "lock.switch-user": "切换用户",
     "lock.power": "电源",
     "lock.power-off": "关机",
     "lock.restart": "重启",

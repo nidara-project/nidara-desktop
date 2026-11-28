@@ -946,6 +946,7 @@ export default {
     "lock.accessibility": "アクセシビリティ",
     "lock.large-text": "大きな文字",
     "lock.screen-reader": "スクリーンリーダー",
+    "lock.switch-user": "ユーザーを切り替え",
     "lock.power": "電源",
     "lock.power-off": "シャットダウン",
     "lock.restart": "再起動",

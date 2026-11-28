@@ -953,6 +953,7 @@ export default {
     "lock.accessibility": "Специальные возможности",
     "lock.large-text": "Крупный текст",
     "lock.screen-reader": "Экранный диктор",
+    "lock.switch-user": "Сменить пользователя",
     "lock.power": "Питание",
     "lock.power-off": "Выключить",
     "lock.restart": "Перезагрузить",

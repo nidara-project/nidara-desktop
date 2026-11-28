@@ -946,6 +946,7 @@ export default {
     "lock.accessibility": "Accessibilità",
     "lock.large-text": "Testo grande",
     "lock.screen-reader": "Lettore dello schermo",
+    "lock.switch-user": "Cambia utente",
     "lock.power": "Alimentazione",
     "lock.power-off": "Arresta",
     "lock.restart": "Riavvia",

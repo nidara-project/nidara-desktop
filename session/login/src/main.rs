@@ -2,6 +2,7 @@
 //! greetd. `daemon.rs` is the manager; `worker.rs` is one session's PAM transaction, in a
 //! process of its own (`--worker`).
 
+mod bus;
 mod config;
 mod daemon;
 mod language;

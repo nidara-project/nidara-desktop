@@ -646,6 +646,7 @@ package_nidara-hyalo() {
   # The login manager (#1195 D8), shipped but not enabled while greetd logs in (step 4).
   install -Dm755 session/target/release/nidara-login "$pkgdir/usr/lib/nidara/nidara-login"
   install -Dm644 session/login/nidara-login.service "$pkgdir/usr/lib/systemd/system/nidara-login.service"
+  install -Dm644 session/login/org.nidara.Login.conf "$pkgdir/usr/share/dbus-1/system.d/org.nidara.Login.conf"
   for p in nidara-login nidara-greeter nidara-autologin; do
     install -Dm644 config/pam/$p "$pkgdir/etc/pam.d/$p"
   done

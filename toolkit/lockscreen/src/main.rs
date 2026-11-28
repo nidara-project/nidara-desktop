@@ -19,6 +19,7 @@ mod media;
 mod power;
 mod sessions;
 mod surface;
+mod switch;
 mod user;
 mod wifi;
 
@@ -63,6 +64,8 @@ pub struct Shared {
     pub access: Vec<access::Access>,
     pub large_text: bool,
     pub screen_reader: bool,
+    /// The login manager can put up a login screen: the lock screen offers Switch user (D8).
+    pub can_switch: bool,
     /// What is playing, when the user lets the lock screen show it (D5).
     pub media: Option<media::Now>,
     /// Unlocked: every surface closes.
@@ -96,6 +99,10 @@ pub enum Msg {
     Join(usize),
     /// The accessibility menu: row `n` of `Shared::access`, turned on or off.
     Access(usize),
+    /// Whether the login manager is there to switch user with.
+    CanSwitch(bool),
+    /// The lock screen's Switch user.
+    SwitchUser,
     /// Another person on the login screen's row was chosen, by login.
     Choose(String),
     /// Whose sessions are open now (`sessions.rs`).
@@ -193,6 +200,7 @@ fn run() -> Result<(), String> {
         wifi::watch(tx.clone());
     } else {
         media::watch(tx.clone());
+        switch::ask(tx.clone());
     }
     let first = watch.current().first().map(|o| o.id);
     world.update(|s| s.active = first);
@@ -342,6 +350,8 @@ fn converse(
                 });
             }
             Msg::Power(what) => power::run(what),
+            Msg::CanSwitch(there) => world.update(|s| s.can_switch = there),
+            Msg::SwitchUser => switch::switch(),
             Msg::Language(n) => {
                 let locale = world
                     .shared

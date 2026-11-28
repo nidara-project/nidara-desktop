@@ -258,6 +258,18 @@ greetd. The pieces:
   user's session opens on the same VT once the login screen's Hyalo has exited (the handover
   #1195 L6 measures). A user with an open session is switched to it with logind's
   `ActivateSession` (L3).
+- **Switching user (D8, step 3)**: `session/login/src/bus.rs` serves LightDM's
+  `org.freedesktop.DisplayManager.Seat.SwitchToGreeter` at `/org/freedesktop/DisplayManager/Seat0`
+  under `org.nidara.Login` and `org.freedesktop.DisplayManager` (policy:
+  `session/login/org.nidara.Login.conf` → `/usr/share/dbus-1/system.d/`). Only the ACTIVE,
+  local session on seat0 may ask (logind `GetSessionByPID` of the caller), or root. The
+  login screen then starts on the configured VT if no session of ours holds it, else on the
+  first free one (`VT_OPENQRY`), and a login there opens its session on THAT VT
+  (`Manager::greeter_vt`); one already up just comes to the front. The lock screen offers
+  "Switch user" beside Sleep only while `org.nidara.Login` has an owner (`switch.rs`), so
+  under greetd it is not there. Headless check: a private dbus-daemon as
+  `DBUS_SYSTEM_BUS_ADDRESS` with a Gio stand-in owning the name; the manager's side needs
+  root and a real seat.
 - **Hyalo `--login`** (`main::login_mode`): only the system config, the system wallpaper, no
   autostart and no Xwayland. The `-c` client is held as a LOCK client from the first frame
   (`lock.rs` → `start_login`). It is started again only once its PROCESS is gone, never after

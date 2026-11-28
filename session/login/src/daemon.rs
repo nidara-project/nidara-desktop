@@ -11,6 +11,9 @@
 //!   same VT. That is the handover #1195 L6 measures.
 //! - **A user with an open session** is switched to it through logind instead (L3).
 //! - **When a user's session ends**, the login screen comes back.
+//! - **Switching user** (D8): the active session asks on the system bus (bus.rs); a login
+//!   screen starts on a free VT, the session staying locked on its own, and whoever logs in
+//!   there gets their session on that VT (or is switched to the one they have, L3).
 //! - **Automatic login** (L7) starts the configured user's session at boot, once, without the
 //!   login screen.
 
@@ -44,7 +47,7 @@ const RESTART_PAUSE: Duration = Duration::from_secs(10);
 
 type WorkerId = u64;
 
-enum Event {
+pub enum Event {
     Worker(WorkerId, FromWorker),
     WorkerGone(WorkerId),
     Greeter(FromGreeter),
@@ -54,6 +57,8 @@ enum Event {
     LeaveTimeout(WorkerId),
     /// After RESTART_PAUSE.
     RestartGreeter,
+    /// The active session asked for a login screen (bus.rs).
+    SwitchToGreeter,
 }
 
 struct Worker {
@@ -83,10 +88,13 @@ struct Manager {
     workers: HashMap<WorkerId, Worker>,
     greeter: Option<WorkerId>,
     greeter_uid: u32,
+    /// The VT the login screen runs on, and a login there opens its session on: the
+    /// configured one, or a free one while a session holds it (D8).
+    greeter_vt: u32,
     greeter_out: Option<OwnedWriteHalf>,
     login: Option<Login>,
-    /// Users' sessions this manager started, by worker.
-    sessions: HashMap<WorkerId, String>,
+    /// Users' sessions this manager started, by worker: whose, and on which VT.
+    sessions: HashMap<WorkerId, (String, u32)>,
     greeter_ends: Vec<Instant>,
     bus: Option<zbus::Connection>,
 }
@@ -124,6 +132,12 @@ pub async fn run(config: Config) -> i32 {
             }
         });
     }
+    if let Some(bus) = &bus
+        && let Err(err) = crate::bus::serve(bus, tx.clone()).await
+    {
+        eprintln!("nidara-login: not on the system bus ({err}); switching user is not offered");
+    }
+    let greeter_vt = config.vt;
     let mut m = Manager {
         config,
         tx,
@@ -131,6 +145,7 @@ pub async fn run(config: Config) -> i32 {
         workers: HashMap::new(),
         greeter: None,
         greeter_uid,
+        greeter_vt,
         greeter_out: None,
         login: None,
         sessions: HashMap::new(),
@@ -297,6 +312,7 @@ impl Manager {
                     self.start_greeter();
                 }
             }
+            Event::SwitchToGreeter => self.switch_to_greeter(),
         }
     }
 
@@ -358,7 +374,7 @@ impl Manager {
                     service: self.config.service.clone(),
                     user: user.clone(),
                     class: Class::User,
-                    vt: self.config.vt,
+                    vt: self.greeter_vt,
                     command: self.config.session_command.clone(),
                     authenticate: true,
                     env: Vec::new(),
@@ -502,9 +518,10 @@ impl Manager {
             .await;
             return;
         }
-        if let Some(user) = self.sessions.remove(&id) {
+        if let Some((user, _)) = self.sessions.remove(&id) {
             eprintln!("nidara-login: {user}'s session ended");
             if self.greeter.is_none() && self.login.is_none() {
+                self.greeter_vt = self.pick_vt();
                 self.start_greeter();
             }
         }
@@ -566,7 +583,8 @@ impl Manager {
                 eprintln!("nidara-login: AccountsService did not take the language: {err}");
             }
         }
-        self.sessions.insert(login.worker, login.user);
+        self.sessions
+            .insert(login.worker, (login.user, self.greeter_vt));
         self.send_worker(login.worker, &ToWorker::Open { env })
             .await;
     }
@@ -577,18 +595,50 @@ impl Manager {
         }
     }
 
+    /// Switching user (D8): the login screen, on a VT of its own. One that is already up
+    /// comes to the front instead.
+    fn switch_to_greeter(&mut self) {
+        if self.greeter.is_some() {
+            if let Err(err) = crate::vt::activate(self.greeter_vt) {
+                eprintln!("nidara-login: VT {}: {err}", self.greeter_vt);
+            }
+            return;
+        }
+        if self.login.is_some() {
+            // A login is opening its session: the screen comes back when it has.
+            return;
+        }
+        self.greeter_vt = self.pick_vt();
+        self.greeter_ends.clear();
+        self.start_greeter();
+    }
+
+    /// The configured VT while none of our sessions holds it, the first free one otherwise.
+    fn pick_vt(&self) -> u32 {
+        if !self.sessions.values().any(|(_, vt)| *vt == self.config.vt) {
+            return self.config.vt;
+        }
+        crate::vt::free().unwrap_or_else(|err| {
+            eprintln!(
+                "nidara-login: no free VT ({err}); the login screen goes on VT {}",
+                self.config.vt
+            );
+            self.config.vt
+        })
+    }
+
     fn start_greeter(&mut self) {
         if self.greeter.is_some() {
             return;
         }
-        if let Err(err) = crate::vt::activate(self.config.vt) {
-            eprintln!("nidara-login: VT {}: {err}", self.config.vt);
+        if let Err(err) = crate::vt::activate(self.greeter_vt) {
+            eprintln!("nidara-login: VT {}: {err}", self.greeter_vt);
         }
         let job = Job {
             service: self.config.greeter_service.clone(),
             user: self.config.greeter_user.clone(),
             class: Class::Greeter,
-            vt: self.config.vt,
+            vt: self.greeter_vt,
             command: self.config.greeter_command.clone(),
             authenticate: false,
             env: {
@@ -630,7 +680,7 @@ impl Manager {
         };
         match self.spawn_worker(job) {
             Ok(id) => {
-                self.sessions.insert(id, user.into());
+                self.sessions.insert(id, (user.into(), self.config.vt));
             }
             Err(err) => {
                 eprintln!("nidara-login: automatic login failed ({err}); the login screen instead");
