@@ -345,7 +345,8 @@ package_nidara-desktop() {
   # Installed by bin/nidara-language when the system language needs it (#703),
   # not by pacman for everybody — see the input-method note in depends.
   optdepends=('fcitx5-chinese-addons: typing Chinese (installed with Chinese as the system language)'
-              'polkit-gnome: graphical authentication in the legacy Hyprland session')
+              'polkit-gnome: graphical authentication in the legacy Hyprland session'
+              'orca: the screen reader, offered in the accessibility menu of the login screen')
   # The rename dance, and all three are load-bearing:
   #   replaces  — an existing install migrates on the next `pacman -Syu`, with no
   #               instruction to anybody. This is the only one that touches

@@ -306,7 +306,8 @@ greetd. The pieces:
   Pre-login joining is for domain accounts, if Nidara ever has them.
 - **Accessibility (`access.rs`):** large text (a second `WindowLook` at 1.25× the text scale,
   `Kit::look()` picks it; the other people's buttons widen with it) and the screen reader
-  (Orca, offered only when installed — the package does not depend on it yet; started for
+  (Orca, offered only when installed — an optdepend here, installed by default by nidara-iso's
+  base.json, because a blind person cannot install it without it; started for
   the login user, stopped when off or when the screen goes). Rows that are each on or off
   are `nk::MenuButton::checks`. No on-screen keyboard: Hyalo hides the virtual-keyboard
   protocol while locked, so one must be the kit's own, typing into the field.
