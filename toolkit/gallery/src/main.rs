@@ -248,6 +248,17 @@ impl Gallery {
                     self.model.command = Some(n);
                 }
             }
+            "toggles" => {
+                if let Some(nk::Value::Index(n)) = a.value {
+                    let on = &mut self.model.toggles;
+                    match on.iter().position(|&r| r == n) {
+                        Some(at) => {
+                            on.remove(at);
+                        }
+                        None => on.push(n),
+                    }
+                }
+            }
             "bright" => {
                 if let Some(v) = a.value.as_ref().and_then(nk::Value::number) {
                     self.model.bright = v;

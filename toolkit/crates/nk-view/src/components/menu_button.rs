@@ -4,19 +4,28 @@
 //! `LayerMenu` on a surface without popups); a row chosen reports the button's action with
 //! the row's index, every time, the same row again included: these are commands, not a
 //! choice it keeps. A row may carry the tick (`ticked`), for a menu that also shows what is
-//! current (the language in use).
+//! current (the language in use); or several rows may (`checks`), for a menu of things each
+//! on or off (`Gtk.CheckButton` rows: large text, the screen reader), whose owner flips the
+//! row it hears.
 use super::*;
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub struct MenuButton {
     pub glyph: String,
     pub options: Vec<String>,
     pub ticked: Option<usize>,
+    /// Rows that are on, in a menu of things each on or off.
+    #[serde(default)]
+    pub checks: Vec<usize>,
 }
 #[derive(Default)]
 struct State {
     expanded: bool,
 }
 impl MenuButton {
+    /// Whether row `n` carries the tick.
+    fn on(&self, n: usize) -> bool {
+        self.ticked == Some(n) || self.checks.contains(&n)
+    }
     fn open(&self, cx: &mut Input<'_>) {
         let Some(read) = cx.context else {
             return;
@@ -111,12 +120,7 @@ impl Component for MenuButton {
             .iter()
             .enumerate()
             .map(|(n, name)| {
-                Node::menu_row(
-                    format!("menu/row/{n}"),
-                    name.clone(),
-                    "choose",
-                    self.ticked == Some(n),
-                )
+                Node::menu_row(format!("menu/row/{n}"), name.clone(), "choose", self.on(n))
             })
             .collect();
         Some(ListSpec {
@@ -140,6 +144,7 @@ impl Component for MenuButton {
         for (index, name) in self.options.iter().enumerate() {
             let mut node = nk_a11y::Node::new(0, nk_a11y::Role::Option, name.clone());
             node.states.selected = self.ticked == Some(index);
+            node.states.checked = self.checks.contains(&index);
             node.states.disabled = !cx.interaction.enabled;
             node.states.offscreen = true;
             node.actions = vec![nk_a11y::Action::Activate];

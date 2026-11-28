@@ -35,6 +35,8 @@ const SUSPEND: &str = "suspend";
 const POWER: &str = "power";
 const LANGUAGE: &str = "language";
 const LAYOUT: &str = "layout";
+const WIFI: &str = "wifi";
+const ACCESS: &str = "access";
 const PREVIOUS: &str = "media-previous";
 const PLAY_PAUSE: &str = "media-play-pause";
 const NEXT: &str = "media-next";
@@ -113,9 +115,19 @@ pub fn set_language(locale: &str) -> bool {
     }
 }
 
+static LARGE_TEXT: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
+
+/// The screen's text a quarter larger from now on, or not (the accessibility menu); the
+/// surfaces see it at their next rebuild.
+pub fn set_large_text(on: bool) {
+    LARGE_TEXT.store(on, std::sync::atomic::Ordering::Relaxed);
+}
+
 /// What every surface paints with, loaded once.
 pub struct Kit {
-    pub look: WindowLook,
+    look: WindowLook,
+    /// The same look with the text a quarter larger (the accessibility menu).
+    large: WindowLook,
     pub measures: Measures,
     pub region: Region,
     pub order: Order,
@@ -130,6 +142,14 @@ pub fn picture_id(login: &str) -> String {
 }
 
 impl Kit {
+    /// The look in force: with large text when it is on.
+    pub fn look(&self) -> &WindowLook {
+        if LARGE_TEXT.load(std::sync::atomic::Ordering::Relaxed) {
+            &self.large
+        } else {
+            &self.look
+        }
+    }
     pub fn load(users: &[crate::user::User]) -> Result<Self, String> {
         let exports = Exports::load(&Exports::root())?;
         let appearance = appearance(&exports);
@@ -139,6 +159,13 @@ impl Kit {
             ..appearance
         };
         let look = WindowLook::load(&exports, &skin)?;
+        let large = WindowLook::load(
+            &exports,
+            &nk_platform::portal::Appearance {
+                text_scale: skin.text_scale * crate::access::LARGE_TEXT,
+                ..skin.clone()
+            },
+        )?;
         *EXPORTS.write().unwrap() = Some(exports);
         let measures = Measures::load()?;
         let side = (measures.avatar * 2.).round() as u32;
@@ -152,6 +179,7 @@ impl Kit {
             .collect();
         Ok(Self {
             look,
+            large,
             measures,
             region: region(),
             order: glib::DateTime::from_local(2001, 2, 3, 0, 0, 0.)
@@ -379,7 +407,7 @@ impl Surface {
 
     fn view(&self) -> Node {
         let m = &self.kit.measures;
-        let types = &self.kit.look.types;
+        let types = &self.kit.look().types;
         let shared = self.world.shared.lock().unwrap();
         let (date, time) = self.moment();
         let strut = |k: &str, px: f64| -> Node { nk::Slot::new(k, px).into() };
@@ -544,7 +572,7 @@ impl Surface {
             &view,
             rect,
             self.scale,
-            kit.look.tokens.with_types(&kit.look.types),
+            kit.look().tokens.with_types(&kit.look().types),
             &mut self.text,
             Instant::now(),
         );
@@ -562,12 +590,12 @@ impl Surface {
             return;
         }
         let now = Instant::now();
-        self.last = self.state.frame(&self.kit.look.tokens, now);
+        self.last = self.state.frame(&self.kit.look().tokens, now);
         self.blink_at = self.state.caret_deadline(now);
         w.set_text_input(self.state.text_input());
         if let Some(m) = &mut self.menu {
             let kit = self.kit.clone();
-            if let Err(e) = m.paint(w, &kit.look, &mut self.text, self.glyphs.as_mut()) {
+            if let Err(e) = m.paint(w, kit.look(), &mut self.text, self.glyphs.as_mut()) {
                 eprintln!("nidara-lock: the menu was not painted: {e}");
             }
         }
@@ -623,6 +651,16 @@ impl Surface {
                     let _ = self.world.tx.send(Msg::Layout(n));
                 }
             }
+            WIFI => {
+                if let Some(nk::Value::Index(n)) = a.value {
+                    let _ = self.world.tx.send(Msg::Join(n));
+                }
+            }
+            ACCESS => {
+                if let Some(nk::Value::Index(n)) = a.value {
+                    let _ = self.world.tx.send(Msg::Access(n));
+                }
+            }
             CHOOSE => {
                 if let Some(nk::Value::Text(login)) = a.value {
                     let _ = self.world.tx.send(Msg::Choose(login));
@@ -653,7 +691,7 @@ impl Surface {
                         self.keys,
                         surface,
                         self.scale,
-                        &kit.look,
+                        kit.look(),
                         &mut self.text,
                     ) {
                         Ok(menu) => self.menu = menu,
@@ -822,7 +860,7 @@ impl Application for Surface {
         if self.state.animating() {
             let kit = self.kit.clone();
             let t = self.state.tick(
-                kit.look.tokens.with_types(&kit.look.types),
+                kit.look().tokens.with_types(&kit.look().types),
                 &mut self.text,
                 Instant::now(),
             );
@@ -876,7 +914,7 @@ impl Application for Surface {
                 if self.state.animating() {
                     let kit = self.kit.clone();
                     let t = self.state.tick(
-                        kit.look.tokens.with_types(&kit.look.types),
+                        kit.look().tokens.with_types(&kit.look().types),
                         &mut self.text,
                         Instant::now(),
                     );
@@ -991,7 +1029,7 @@ impl Application for Surface {
             return Ok(c.finish());
         }
         let kit = self.kit.clone();
-        let look = kit.look.tokens.with_types(&kit.look.types);
+        let look = kit.look().tokens.with_types(&kit.look().types);
         // Without the compositor's glass (another compositor), the kit paints the field's
         // own surface from the same frame (D5).
         let fallback = (!f.material).then_some(&self.last);
@@ -1008,7 +1046,7 @@ impl Application for Surface {
         if self.closing || self.size.0 == 0 {
             return None;
         }
-        self.kit.look.glass(&self.last)
+        self.kit.look().glass(&self.last)
     }
 }
 
@@ -1040,6 +1078,40 @@ fn bar(shared: &crate::Shared, types: &nk::TypeScale) -> Node {
                 shared.layouts.clone(),
             )
             .ticked(Some(shared.layout))
+            .into(),
+        );
+    }
+    if let Some(w) = &shared.wifi {
+        // Only the networks saved for everyone: a new one is added in Settings (wifi.rs).
+        let names: Vec<String> = if w.networks.is_empty() {
+            vec![text("lock.wifi-none")]
+        } else {
+            w.networks.iter().map(|n| n.ssid.clone()).collect()
+        };
+        items.push(
+            nk::MenuButton::new("lock/bar/wifi", text("lock.wifi"), WIFI, w.glyph, names)
+                .ticked(w.active)
+                .into(),
+        );
+    }
+    if !shared.access.is_empty() {
+        let on = |row: crate::access::Access| match row {
+            crate::access::Access::LargeText => shared.large_text,
+            crate::access::Access::ScreenReader => shared.screen_reader,
+        };
+        items.push(
+            nk::MenuButton::new(
+                "lock/bar/access",
+                text("lock.accessibility"),
+                ACCESS,
+                "nd-preferences-desktop-accessibility",
+                shared.access.iter().map(|r| text(r.key())).collect(),
+            )
+            .checks(
+                (0..shared.access.len())
+                    .filter(|&n| on(shared.access[n]))
+                    .collect(),
+            )
             .into(),
         );
     }
@@ -1116,7 +1188,15 @@ fn others(shared: &crate::Shared, types: &nk::TypeScale, m: &Measures) -> Node {
             .gap(Space::S2)
             .align(Align::Center)
             .padding(nk::Padding::all(Space::S2))
-            .width(m.others_width);
+            // As wide again as the text is large, so a name fits as it did.
+            .width(
+                m.others_width
+                    * if shared.large_text {
+                        crate::access::LARGE_TEXT
+                    } else {
+                        1.
+                    },
+            );
             let mut button = nk::Button::with_child(key, u.name.clone(), CHOOSE, face)
                 .value(nk::Value::Text(u.login.clone()));
             if open {

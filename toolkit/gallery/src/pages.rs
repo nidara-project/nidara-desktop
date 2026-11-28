@@ -113,6 +113,8 @@ pub struct Model {
     pub speed: usize,
     /// The menu button's last command, and the row it keeps ticked.
     pub command: Option<usize>,
+    /// The toggles menu's rows that are on.
+    pub toggles: Vec<usize>,
     /// The live segmented choice's.
     pub size: usize,
     pub accent: usize,
@@ -155,6 +157,7 @@ impl Default for Model {
             choice: 1,
             speed: 1,
             command: None,
+            toggles: Vec::new(),
             size: 1,
             accent: 0,
             toggle: false,
@@ -1033,6 +1036,8 @@ fn checks(m: &Model, t: &TypeScale) -> Vec<Node> {
 pub const SPEEDS: [&str; 3] = ["Slow", "Normal", "Fast"];
 
 const COMMANDS: [&str; 3] = ["Suspend", "Restart", "Power off"];
+/// The toggles menu's rows: each on or off.
+pub const TOGGLES: [&str; 2] = ["Large text", "Screen reader"];
 fn menu_buttons(m: &Model, t: &TypeScale) -> nk::Column {
     let commands = || COMMANDS.map(String::from).to_vec();
     let one = |k: &str, shown: Option<Shown>, disabled: bool| -> Node {
@@ -1083,6 +1088,15 @@ fn menu_buttons(m: &Model, t: &TypeScale) -> nk::Column {
                     nk::Label::new("mb/live/said", said, t.style(Type::Small, Weight::Regular))
                         .ink(Ink::Secondary)
                         .into(),
+                    nk::MenuButton::new(
+                        "mb/live/toggles",
+                        "Accessibility",
+                        "toggles",
+                        "nd-preferences-desktop-accessibility",
+                        TOGGLES.map(String::from).to_vec(),
+                    )
+                    .checks(m.toggles.clone())
+                    .into(),
                 ],
             )
             .gap(Space::S3)

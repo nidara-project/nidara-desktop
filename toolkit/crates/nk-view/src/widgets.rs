@@ -463,7 +463,8 @@ impl DropDown {
 widget!(
     /// A button with a glyph that opens a list of commands (`Gtk.MenuButton`): a bar's power
     /// menu. Row `n` chosen reports `action` with `Value::Index(n)`, every time; `ticked`
-    /// marks the row that is current, when there is one (the language in use).
+    /// marks the row that is current, when there is one (the language in use); `checks` the
+    /// rows that are on, in a menu of things each on or off (large text, the screen reader).
     MenuButton
 );
 impl MenuButton {
@@ -482,6 +483,7 @@ impl MenuButton {
                 glyph: glyph.into(),
                 options,
                 ticked: None,
+                checks: Vec::new(),
             },
         ))
     }
@@ -490,6 +492,14 @@ impl MenuButton {
             && let Some(Part::MenuButton(b)) = c.part.as_deref_mut()
         {
             b.ticked = n;
+        }
+        self
+    }
+    pub fn checks(mut self, rows: Vec<usize>) -> Self {
+        if let Kind::Control(c) = &mut self.0.kind
+            && let Some(Part::MenuButton(b)) = c.part.as_deref_mut()
+        {
+            b.checks = rows;
         }
         self
     }

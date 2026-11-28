@@ -272,7 +272,8 @@ greetd. The pieces:
   manager's own test, L3) and says "Log in". The avatars are the kit's `nk::Avatar`; a
   surface that is not an `AppWindow` hands it pictures through `nk::Glyphs::set_pictures`
   and paints with `ViewState::paint_with_glyphs`.
-- **The login screen's bar** (top right, one `nk::Pane` capsule): the language, the battery
+- **The login screen's bar** (top right, one `nk::Pane` capsule): the language, the keyboard,
+  Wi-Fi, accessibility, the battery
   (UPower's display device, `power.rs`) and power (Suspend, Restart, Shut down from logind,
   not interactive). Its buttons are `nk::MenuButton`s, and **their menus open on a layer of
   the lock surface, `nk::LayerMenu`**: a lock surface cannot have an `xdg_popup`, so the host
@@ -295,6 +296,20 @@ greetd. The pieces:
   as the person's setting through Config1 (`region.language`, #1197) and unsets the variable
   in the user manager, so its own restart never undoes a later change in Settings. An open
   session (L3) keeps its own language.
+- **Wi-Fi (owner, 2026-11-28): status, and the networks saved for EVERY user** (no
+  `permissions`), in range, strongest first; choosing one is `ActivateConnection`
+  (`wifi.rs`). Joining a NEW network is deliberately not offered: saved for everyone it is a
+  system connection, which NetworkManager lets only an administrator add, and a local account
+  logs in without a network (GDM's attempt failed for years; Red Hat turns it off). Networks
+  for the login screen are added in Settings, "for all users". The installer's copied Wi-Fi
+  is restricted to the new user, so it connects after login, not on the login screen.
+  Pre-login joining is for domain accounts, if Nidara ever has them.
+- **Accessibility (`access.rs`):** large text (a second `WindowLook` at 1.25× the text scale,
+  `Kit::look()` picks it; the other people's buttons widen with it) and the screen reader
+  (Orca, offered only when installed — the package does not depend on it yet; started for
+  the login user, stopped when off or when the screen goes). Rows that are each on or off
+  are `nk::MenuButton::checks`. No on-screen keyboard: Hyalo hides the virtual-keyboard
+  protocol while locked, so one must be the kit's own, typing into the field.
 - **The keyboard menu (L4)** changes only what the field types, never anything saved. Its
   rows are the keymap's layouts as Hyalo has them — the system's (`XkbLayout "es,us"` is two
   xkb groups), by their xkb names, the names Settings → Keyboard shows — asked and set with

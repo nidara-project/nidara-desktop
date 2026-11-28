@@ -10,6 +10,7 @@
 //! Every output gets a lock surface on its own thread (`surface.rs`). The avatar, the name
 //! and the field are on the one the pointer is on, and the clock alone on the others (D6).
 //! This thread holds the lock, the attempt and the shared state they read.
+mod access;
 mod auth;
 mod keyboard;
 mod language;
@@ -19,6 +20,7 @@ mod power;
 mod sessions;
 mod surface;
 mod user;
+mod wifi;
 
 use nk_wayland::{LockStatus, OutputEvent, OutputId, Waker};
 use std::sync::mpsc::{Receiver, Sender, channel};
@@ -55,6 +57,12 @@ pub struct Shared {
     /// The keyboard's layouts as Hyalo has them, and the one the field types with (L4).
     pub layouts: Vec<String>,
     pub layout: usize,
+    /// The Wi-Fi, on a machine that has it.
+    pub wifi: Option<wifi::Wifi>,
+    /// The accessibility menu's rows, and which are on.
+    pub access: Vec<access::Access>,
+    pub large_text: bool,
+    pub screen_reader: bool,
     /// What is playing, when the user lets the lock screen show it (D5).
     pub media: Option<media::Now>,
     /// Unlocked: every surface closes.
@@ -82,6 +90,12 @@ pub enum Msg {
     Layout(usize),
     /// What Hyalo says of the keyboard's layouts: them, and the one in use.
     Layouts((Vec<String>, usize)),
+    /// What NetworkManager now says of the Wi-Fi.
+    Wifi(Option<wifi::Wifi>),
+    /// The Wi-Fi menu: network `n` of `Shared::wifi`.
+    Join(usize),
+    /// The accessibility menu: row `n` of `Shared::access`, turned on or off.
+    Access(usize),
     /// Another person on the login screen's row was chosen, by login.
     Choose(String),
     /// Whose sessions are open now (`sessions.rs`).
@@ -164,6 +178,7 @@ fn run() -> Result<(), String> {
             login,
             languages,
             language,
+            access: if login { access::offered() } else { Vec::new() },
             ..Default::default()
         }),
         tx: tx.clone(),
@@ -175,6 +190,7 @@ fn run() -> Result<(), String> {
         sessions::watch(tx.clone());
         power::watch(tx.clone());
         keyboard::ask(tx.clone(), None);
+        wifi::watch(tx.clone());
     } else {
         media::watch(tx.clone());
     }
@@ -246,6 +262,8 @@ fn converse(
     // When a refusal was shown: it goes after `error_seconds` on a screen nobody touches.
     let mut refused: Option<std::time::Instant> = None;
     let mut early = early.into_iter();
+    // Stopped when this returns: the person's session starts its own.
+    let mut reader = access::ScreenReader::default();
     loop {
         if refused.is_some_and(|t| t.elapsed().as_secs_f64() >= error_seconds) {
             refused = None;
@@ -352,6 +370,33 @@ fn converse(
                         s.layouts = layouts.clone();
                         s.layout = layout;
                     });
+                }
+            }
+            Msg::Wifi(w) => {
+                if world.shared.lock().unwrap().wifi != w {
+                    world.update(|s| s.wifi = w);
+                }
+            }
+            Msg::Join(n) => {
+                let w = world.shared.lock().unwrap().wifi.clone();
+                if let Some(w) = w {
+                    wifi::join(&w, n);
+                }
+            }
+            Msg::Access(n) => {
+                let row = world.shared.lock().unwrap().access.get(n).copied();
+                match row {
+                    Some(access::Access::LargeText) => {
+                        let on = !world.shared.lock().unwrap().large_text;
+                        surface::set_large_text(on);
+                        world.update(|s| s.large_text = on);
+                    }
+                    Some(access::Access::ScreenReader) => {
+                        reader.toggle();
+                        let on = reader.on();
+                        world.update(|s| s.screen_reader = on);
+                    }
+                    None => {}
                 }
             }
             Msg::Battery(b) => {
