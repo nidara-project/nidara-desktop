@@ -197,6 +197,7 @@ fn operation(req: &Request) -> Operation {
         | Request::Idle
         | Request::Xwayland
         | Request::Config
+        | Request::KeyboardLayout { set: None }
         | Request::EventStream { .. } => Operation::Read,
         // The token is the authority: a secret Hyalo made, good once, for 10 s (observe.rs).
         Request::ObserveLaunch { .. } => Operation::Read,
@@ -206,6 +207,8 @@ fn operation(req: &Request) -> Operation {
         Request::NightLight { .. } => Operation::NightLight,
         // A setting of the session's, as the cursor is: the daemon that owns it, and Settings.
         Request::Settings { .. } | Request::Wallpaper { .. } => Operation::Configure,
+        // Settings and the session may; so may the lock client (authorize_request).
+        Request::KeyboardLayout { set: Some(_) } => Operation::Configure,
         Request::ReloadConfig => Operation::Reload,
         Request::MinimizeTargets { .. } => Operation::MinimizeTargets,
         Request::DebugOverlay { .. } => Operation::WindowControl,
@@ -237,6 +240,13 @@ fn authorize(req: &Request, peer: Result<&Peer, &str>, consent: Consent) -> Resu
 /// authenticated native Wayland connection belongs to this exact IPC peer.
 fn authorize_request(state: &Hyalo, req: &Request, peer: Result<&Peer, &str>, consent: Consent) -> Result<(), String> {
     let denied = match authorize(req, peer, consent) { Ok(()) => return Ok(()), Err(e) => e };
+    // The client holding the session lock types into its own field and nothing else can
+    // reach the keyboard while it does: which layout its field types is its to choose.
+    if let (Request::KeyboardLayout { set: Some(_) }, Ok(peer)) = (req, peer)
+        && state.lock.holder_pid(&state.display_handle).and_then(|p| u32::try_from(p).ok()) == Some(peer.pid())
+    {
+        return Ok(());
+    }
     if let (Request::Do { command }, Ok(peer)) = (req, peer)
         && let Ok(crate::wm::actions::Action::FocusWindow(id)) = command.parse()
         && let Some(m) = state.wm.get(id)
@@ -364,6 +374,7 @@ fn handle(state: &mut Hyalo, req: Request) -> Reply {
             Ok(changed) => Reply::Ok(Response::Settings { changed }),
             Err(e) => Reply::Error(e),
         },
+        Request::KeyboardLayout { set } => keyboard_layout(state, set),
         Request::Quit => {
             state.loop_signal.stop();
             Reply::Ok(Response::Handled)
@@ -371,6 +382,27 @@ fn handle(state: &mut Hyalo, req: Request) -> Reply {
         Request::ObserveLaunch { token } => state.observe_launch(&token),
         Request::EventStream { .. } => unreachable!("handled by the connection"),
     }
+}
+
+fn keyboard_layout(state: &mut Hyalo, set: Option<u32>) -> Reply {
+    use smithay::input::keyboard::Layout;
+    let Some(keyboard) = state.seat.get_keyboard() else { return Reply::Error("there is no keyboard".into()) };
+    keyboard.with_xkb_state(state, |mut ctx| {
+        let (count, mut active) = {
+            let xkb = ctx.xkb().lock().unwrap();
+            (xkb.layouts().count() as u32, xkb.active_layout().0)
+        };
+        if let Some(n) = set {
+            if n >= count {
+                return Reply::Error(format!("the keyboard has {count} layouts, not {}", n + 1));
+            }
+            ctx.set_layout(Layout(n));
+            active = n;
+        }
+        let xkb = ctx.xkb().lock().unwrap();
+        let layouts = xkb.layouts().map(|l| xkb.layout_name(l).to_owned()).collect();
+        Reply::Ok(Response::KeyboardLayout { layouts, active })
+    })
 }
 
 /// Sends an event to every subscriber. Never blocks: a subscriber that does not keep up

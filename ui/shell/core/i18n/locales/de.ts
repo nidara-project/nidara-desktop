@@ -940,6 +940,7 @@ export default {
     "lock.session-open": "Sitzung geöffnet",
     "language.name": "Deutsch",
     "lock.language": "Sprache",
+    "lock.keyboard": "Tastatur",
     "lock.power": "Ein/Aus",
     "lock.power-off": "Herunterfahren",
     "lock.restart": "Neu starten",

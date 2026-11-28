@@ -940,6 +940,7 @@ export default {
     "lock.session-open": "セッション使用中",
     "language.name": "日本語",
     "lock.language": "言語",
+    "lock.keyboard": "キーボード",
     "lock.power": "電源",
     "lock.power-off": "シャットダウン",
     "lock.restart": "再起動",

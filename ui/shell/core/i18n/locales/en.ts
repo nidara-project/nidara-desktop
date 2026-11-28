@@ -1201,6 +1201,7 @@ export default {
     "lock.session-open": "Session open",
     "language.name": "English",
     "lock.language": "Language",
+    "lock.keyboard": "Keyboard",
     "lock.power": "Power",
     "lock.power-off": "Shut down",
     "lock.restart": "Restart",

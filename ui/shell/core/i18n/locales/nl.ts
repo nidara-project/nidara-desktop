@@ -940,6 +940,7 @@ export default {
     "lock.session-open": "Sessie geopend",
     "language.name": "Nederlands",
     "lock.language": "Taal",
+    "lock.keyboard": "Toetsenbord",
     "lock.power": "Aan/uit",
     "lock.power-off": "Uitschakelen",
     "lock.restart": "Opnieuw opstarten",

@@ -940,6 +940,7 @@ export default {
     "lock.session-open": "会话已打开",
     "language.name": "简体中文",
     "lock.language": "语言",
+    "lock.keyboard": "键盘",
     "lock.power": "电源",
     "lock.power-off": "关机",
     "lock.restart": "重启",

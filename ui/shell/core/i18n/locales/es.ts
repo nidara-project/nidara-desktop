@@ -1175,6 +1175,7 @@ export default {
     "lock.session-open": "Sesión abierta",
     "language.name": "Español",
     "lock.language": "Idioma",
+    "lock.keyboard": "Teclado",
     "lock.power": "Energía",
     "lock.power-off": "Apagar",
     "lock.restart": "Reiniciar",

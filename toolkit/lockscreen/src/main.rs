@@ -11,6 +11,7 @@
 //! and the field are on the one the pointer is on, and the clock alone on the others (D6).
 //! This thread holds the lock, the attempt and the shared state they read.
 mod auth;
+mod keyboard;
 mod language;
 mod login;
 mod media;
@@ -51,6 +52,9 @@ pub struct Shared {
     /// A language was chosen here: logging in makes it the person's.
     pub language_chosen: bool,
     pub battery: Option<power::Battery>,
+    /// The keyboard's layouts as Hyalo has them, and the one the field types with (L4).
+    pub layouts: Vec<String>,
+    pub layout: usize,
     /// What is playing, when the user lets the lock screen show it (D5).
     pub media: Option<media::Now>,
     /// Unlocked: every surface closes.
@@ -74,6 +78,10 @@ pub enum Msg {
     Language(usize),
     /// What UPower now says of the battery.
     Battery(Option<power::Battery>),
+    /// The keyboard menu: layout `n` of `Shared::layouts`.
+    Layout(usize),
+    /// What Hyalo says of the keyboard's layouts: them, and the one in use.
+    Layouts((Vec<String>, usize)),
     /// Another person on the login screen's row was chosen, by login.
     Choose(String),
     /// Whose sessions are open now (`sessions.rs`).
@@ -166,6 +174,7 @@ fn run() -> Result<(), String> {
     if login {
         sessions::watch(tx.clone());
         power::watch(tx.clone());
+        keyboard::ask(tx.clone(), None);
     } else {
         media::watch(tx.clone());
     }
@@ -333,6 +342,18 @@ fn converse(
                     });
                 }
             }
+            Msg::Layout(n) => keyboard::ask(world.tx.clone(), Some(n)),
+            Msg::Layouts((layouts, layout)) => {
+                let s = world.shared.lock().unwrap();
+                let same = s.layouts == layouts && s.layout == layout;
+                drop(s);
+                if !same {
+                    world.update(|s| {
+                        s.layouts = layouts.clone();
+                        s.layout = layout;
+                    });
+                }
+            }
             Msg::Battery(b) => {
                 if world.shared.lock().unwrap().battery != b {
                     world.update(|s| s.battery = b);
@@ -375,6 +396,9 @@ fn converse(
                 }
             }
             Msg::Surface(id, waker) => {
+                // What changed before it could be told (an answer that came first) is
+                // shown now: woken once, it rebuilds if the state moved past its view.
+                let _ = waker.wake();
                 world.wakers.lock().unwrap().push((id, waker));
                 let missing = world.shared.lock().unwrap().active.is_none();
                 if missing {

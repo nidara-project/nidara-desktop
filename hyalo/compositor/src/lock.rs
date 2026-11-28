@@ -187,6 +187,15 @@ impl LockState {
         !matches!(self.mode, Mode::Unlocked)
     }
 
+    /// The process of the client holding the lock (or asking for it), from its lock surfaces.
+    pub fn holder_pid(&self, dh: &smithay::reexports::wayland_server::DisplayHandle) -> Option<i32> {
+        if matches!(self.mode, Mode::Unlocked | Mode::Guard { .. }) {
+            return None;
+        }
+        let surface = self.surfaces.first()?.1.wl_surface().clone();
+        dh.get_client(smithay::reexports::wayland_server::Resource::id(&surface)).ok()?.get_credentials(dh).ok().map(|c| c.pid)
+    }
+
     /// Locked by Hyalo itself, with no lock client (the guard).
     pub fn is_guarded(&self) -> bool {
         matches!(self.mode, Mode::Guard { .. })

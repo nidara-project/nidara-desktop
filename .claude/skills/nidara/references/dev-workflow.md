@@ -295,8 +295,18 @@ greetd. The pieces:
   as the person's setting through Config1 (`region.language`, #1197) and unsets the variable
   in the user manager, so its own restart never undoes a later change in Settings. An open
   session (L3) keeps its own language.
-- **Not yet: the keyboard menu.** Hyalo has no way to change the layout group from a client;
-  it needs that first.
+- **The keyboard menu (L4)** changes only what the field types, never anything saved. Its
+  rows are the keymap's layouts as Hyalo has them — the system's (`XkbLayout "es,us"` is two
+  xkb groups), by their xkb names, the names Settings → Keyboard shows — asked and set with
+  Hyalo's `keyboard_layout` request (`keyboard.rs`; `nidara-hyalo msg keyboard-layout [N]`).
+  One layout: no menu. Setting a group writes no file: the next login screen starts from the
+  system's first layout, and the person's session types with what Settings holds. Reading is
+  open; SETTING is `Configure`, and besides Settings and the session Hyalo grants it to the
+  client that holds the session lock, by its pid (`server.rs` → `authorize_request`,
+  `LockState::holder_pid`) — anything else is refused (tested).
+  ⚠️ A surface registers its waker after the lock is confirmed, and an answer that arrives
+  before then (Hyalo's, here) changed the state with nobody to tell: `Msg::Surface` wakes the
+  new surface once, so it rebuilds if the state moved past its first view.
 
 Testing, without root: a cage headless runs `nidara-hyalo --winit --login -c nidara-lock`
 with a stand-in manager on `NIDARA_LOGIN_SOCKET`. 🔴 **Give the nested Hyalo its own

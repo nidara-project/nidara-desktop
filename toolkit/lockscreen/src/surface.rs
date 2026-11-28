@@ -34,6 +34,7 @@ const PEEK: &str = "peek";
 const SUSPEND: &str = "suspend";
 const POWER: &str = "power";
 const LANGUAGE: &str = "language";
+const LAYOUT: &str = "layout";
 const PREVIOUS: &str = "media-previous";
 const PLAY_PAUSE: &str = "media-play-pause";
 const NEXT: &str = "media-next";
@@ -617,6 +618,11 @@ impl Surface {
                     let _ = self.world.tx.send(Msg::Language(n));
                 }
             }
+            LAYOUT => {
+                if let Some(nk::Value::Index(n)) = a.value {
+                    let _ = self.world.tx.send(Msg::Layout(n));
+                }
+            }
             CHOOSE => {
                 if let Some(nk::Value::Text(login)) = a.value {
                     let _ = self.world.tx.send(Msg::Choose(login));
@@ -1021,6 +1027,19 @@ fn bar(shared: &crate::Shared, types: &nk::TypeScale) -> Node {
                 shared.languages.iter().map(|l| l.name.clone()).collect(),
             )
             .ticked(shared.language)
+            .into(),
+        );
+    }
+    if shared.layouts.len() > 1 {
+        items.push(
+            nk::MenuButton::new(
+                "lock/bar/keyboard",
+                text("lock.keyboard"),
+                LAYOUT,
+                "nd-input-keyboard",
+                shared.layouts.clone(),
+            )
+            .ticked(Some(shared.layout))
             .into(),
         );
     }

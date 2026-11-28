@@ -947,6 +947,7 @@ export default {
     "lock.session-open": "Сеанс открыт",
     "language.name": "Русский",
     "lock.language": "Язык",
+    "lock.keyboard": "Клавиатура",
     "lock.power": "Питание",
     "lock.power-off": "Выключить",
     "lock.restart": "Перезагрузить",

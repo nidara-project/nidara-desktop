@@ -313,6 +313,15 @@ pub enum Request {
     ReloadConfig,
     /// The configuration in force: the three layers merged.
     Config,
+    /// The keyboard's layouts, the xkb groups of the keymap in force (`XkbLayout "es,us"` is
+    /// two), and the one in use; with `set`, layout `set` becomes the one in use. Never saved:
+    /// a new keymap (the keyboard's configuration changed) starts again from its first. The
+    /// login screen's keyboard menu (#1195 L4) changes what its field types with it, from the
+    /// system's layout every time.
+    KeyboardLayout {
+        #[serde(default)]
+        set: Option<u32>,
+    },
     /// Settings' choices, persisted and applied: a JSON merge patch (a `null` removes a key)
     /// in the configuration's own shape — `{"input": {"keyboard": {"layout": "es"}}}` — that
     /// Hyalo writes into the settings layer, `hyalo-settings.toml`, and reloads once
@@ -360,6 +369,8 @@ pub enum Response {
     Idle { idle_secs: u64, inhibited: bool, config: crate::config::IdleConfig },
     Xwayland { display: Option<String>, ready: bool, scale: f64, overrides: usize },
     Config { config: Box<crate::config::Config> },
+    /// Each layout by its xkb name ("Spanish", "English (US)"), and the index of the one in use.
+    KeyboardLayout { layouts: Vec<String>, active: u32 },
     Settings { changed: bool },
     /// `already`: what became of it, when its token had been used before it was asked about;
     /// otherwise a `launch_outcome` event says so later.
