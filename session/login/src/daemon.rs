@@ -87,10 +87,6 @@ struct Manager {
     sessions: HashMap<WorkerId, String>,
     greeter_ends: Vec<Instant>,
     bus: Option<zbus::Connection>,
-    /// The last login switched to an open session: the login screen that ends now is not
-    /// started again, or it would take the screen back from that session. It comes back when
-    /// a session ends.
-    switched: bool,
 }
 
 pub async fn run(config: Config) -> i32 {
@@ -138,7 +134,6 @@ pub async fn run(config: Config) -> i32 {
         sessions: HashMap::new(),
         greeter_ends: Vec::new(),
         bus,
-        switched: false,
     };
     match m.config.autologin.clone() {
         Some(user) => m.autologin(&user),
@@ -406,22 +401,6 @@ impl Manager {
                     return;
                 };
                 login.starting = true;
-                if let Some(open) = login.open.clone() {
-                    // L3: to the user's open session; this login's worker has nothing to open.
-                    let worker = login.worker;
-                    self.login = None;
-                    self.kill_session(worker);
-                    let switched = match &self.bus {
-                        Some(bus) => crate::logind::activate(bus, &open).await,
-                        None => Err(zbus::Error::Failure("no system bus".into())),
-                    };
-                    match switched {
-                        Ok(()) => self.switched = true,
-                        // The login screen ends and comes back: better than a dead VT.
-                        Err(err) => eprintln!("nidara-login: switching to session {open}: {err}"),
-                    }
-                    return;
-                }
                 if self.greeter.is_none() {
                     self.open_login().await;
                     return;
@@ -494,9 +473,9 @@ impl Manager {
             self.greeter = None;
             self.greeter_out = None;
             if self.login.as_ref().is_some_and(|l| l.starting) {
+                // After a switch to an open session (L3) the login screen stays away: nothing
+                // starts it again until a session ends.
                 self.open_login().await;
-            } else if std::mem::take(&mut self.switched) {
-                // To an open session (L3): the login screen stays away until it is needed.
             } else {
                 self.drop_login();
                 self.greeter_ended();
@@ -514,7 +493,6 @@ impl Manager {
         }
         if let Some(user) = self.sessions.remove(&id) {
             eprintln!("nidara-login: {user}'s session ended");
-            self.switched = false;
             if self.greeter.is_none() && self.login.is_none() {
                 self.start_greeter();
             }
@@ -542,11 +520,32 @@ impl Manager {
         self.start_greeter();
     }
 
+    /// The login screen has let go of the screens: the user's session opens, or (L3) the one
+    /// they already have comes to the front. Never before: a session brought forward while
+    /// the login screen's Hyalo still holds the GPU finds it busy on its first frames (the
+    /// owner's live test, 2026-11-28: the session came back frozen).
     async fn open_login(&mut self) {
         let Some(login) = self.login.take() else {
             return;
         };
         remember(&login.user);
+        if let Some(open) = login.open {
+            // This login's worker has nothing to open.
+            self.kill_session(login.worker);
+            let switched = match &self.bus {
+                Some(bus) => crate::logind::activate(bus, &open).await,
+                None => Err(zbus::Error::Failure("no system bus".into())),
+            };
+            match switched {
+                Ok(()) => {}
+                Err(err) => {
+                    // The login screen comes back: better than a dead VT.
+                    eprintln!("nidara-login: switching to session {open}: {err}");
+                    self.start_greeter();
+                }
+            }
+            return;
+        }
         self.sessions.insert(login.worker, login.user);
         self.send_worker(login.worker, &ToWorker::Open).await;
     }
