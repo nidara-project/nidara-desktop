@@ -62,7 +62,7 @@ pub enum Class {
 }
 
 /// What a worker is for: one session, from the PAM transaction to its end.
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Job {
     pub service: String,
     pub user: String,

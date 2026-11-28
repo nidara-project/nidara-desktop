@@ -201,6 +201,37 @@ fn parse_locale(text: &str) -> Vec<(String, String)> {
         .collect()
 }
 
+/// Starts a worker with its end of a socket pair as fd 3, and gives it its job as the first
+/// line. The job is written while the socket is still blocking, before tokio takes it: a
+/// non-blocking write on a socket tokio has not yet seen as writable reports WouldBlock.
+fn launch(
+    program: &std::path::Path,
+    args: &[&str],
+    job: &Job,
+) -> std::io::Result<(tokio::process::Child, UnixStream)> {
+    use std::io::Write;
+    let (mut ours, theirs) = std::os::unix::net::UnixStream::pair()?;
+    let theirs_fd = theirs.as_raw_fd();
+    let mut cmd = tokio::process::Command::new(program);
+    cmd.args(args).stdin(Stdio::null()).kill_on_drop(false);
+    // Safety: between fork and exec only dup2, which is async-signal-safe.
+    unsafe {
+        cmd.pre_exec(move || {
+            if libc::dup2(theirs_fd, 3) < 0 {
+                return Err(std::io::Error::last_os_error());
+            }
+            Ok(())
+        });
+    }
+    let child = cmd.spawn()?;
+    drop(theirs);
+    let mut text = serde_json::to_string(&ToWorker::Job(job.clone()))?;
+    text.push('\n');
+    ours.write_all(text.as_bytes())?;
+    ours.set_nonblocking(true)?;
+    Ok((child, UnixStream::from_std(ours)?))
+}
+
 /// Who logged in last: the login screen offers them first. World-readable, as a login name
 /// is (the list of users is anyone's to read in /etc/passwd).
 const LAST_USER: &str = "/var/lib/nidara-login/last-user";
@@ -551,7 +582,16 @@ impl Manager {
         };
         match self.spawn_worker(job) {
             Ok(id) => self.greeter = Some(id),
-            Err(err) => eprintln!("nidara-login: the login screen could not start: {err}"),
+            Err(err) => {
+                eprintln!(
+                    "nidara-login: the login screen could not start ({err}); trying again in {RESTART_PAUSE:?}"
+                );
+                let tx = self.tx.clone();
+                tokio::spawn(async move {
+                    tokio::time::sleep(RESTART_PAUSE).await;
+                    let _ = tx.send(Event::RestartGreeter);
+                });
+            }
         }
     }
 
@@ -580,34 +620,11 @@ impl Manager {
     }
 
     fn spawn_worker(&mut self, job: Job) -> std::io::Result<WorkerId> {
-        let (ours, theirs) = std::os::unix::net::UnixStream::pair()?;
-        let theirs_fd = theirs.as_raw_fd();
         let exe = std::env::current_exe()?;
-        let mut cmd = tokio::process::Command::new(exe);
-        cmd.arg("--worker").stdin(Stdio::null()).kill_on_drop(false);
-        // Safety: between fork and exec only dup2, which is async-signal-safe.
-        unsafe {
-            cmd.pre_exec(move || {
-                if libc::dup2(theirs_fd, 3) < 0 {
-                    return Err(std::io::Error::last_os_error());
-                }
-                Ok(())
-            });
-        }
-        let child = cmd.spawn()?;
-        drop(theirs);
-        ours.set_nonblocking(true)?;
-        let stream = UnixStream::from_std(ours)?;
+        let (child, stream) = launch(&exe, &["--worker"], &job)?;
         let (read, write) = stream.into_split();
         let id = self.next_id;
         self.next_id += 1;
-        let mut text = serde_json::to_string(&ToWorker::Job(job))?;
-        text.push('\n');
-        // The job is the first line; the socket buffer holds it until the worker reads.
-        let w = write.as_ref().try_write(text.as_bytes());
-        if !matches!(w, Ok(n) if n == text.len()) {
-            return Err(std::io::Error::other("the job did not fit the socket"));
-        }
         let tx = self.tx.clone();
         tokio::spawn(async move {
             let mut lines = BufReader::new(read).lines();
@@ -659,6 +676,36 @@ impl Manager {
 
 #[cfg(test)]
 mod tests {
+    /// The job reaches the worker on fd 3 as its first line (the live test of 2026-11-28 found
+    /// it never left: a non-blocking write before tokio had polled the socket).
+    #[tokio::test]
+    async fn a_worker_reads_its_job_on_fd_3() {
+        use tokio::io::AsyncBufReadExt;
+        let job = crate::proto::Job {
+            service: "s".into(),
+            user: "u".into(),
+            class: crate::proto::Class::User,
+            vt: 8,
+            command: "true".into(),
+            authenticate: true,
+            env: Vec::new(),
+        };
+        // The "worker" echoes its first line back on fd 3.
+        let (mut child, stream) = super::launch(
+            std::path::Path::new("/bin/sh"),
+            &["-c", "head -n1 <&3 >&3"],
+            &job,
+        )
+        .unwrap();
+        let mut lines = tokio::io::BufReader::new(stream).lines();
+        let line = lines.next_line().await.unwrap().unwrap();
+        assert!(
+            line.contains(r#""type":"job""#) && line.contains(r#""vt":8"#),
+            "{line}"
+        );
+        child.wait().await.unwrap();
+    }
+
     #[test]
     fn locale_conf_gives_the_language_and_formats_only() {
         let env =
