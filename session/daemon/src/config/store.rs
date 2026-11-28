@@ -90,6 +90,26 @@ fn announce(changes: &Changes, name: &'static str) {
     changes.publish();
 }
 
+/// The user manager drops `NIDARA_LOGIN_LANGUAGE`, so services it starts again never see it.
+fn forget_login_language() {
+    let unset = gio::bus_get_sync(gio::BusType::Session, gio::Cancellable::NONE).and_then(|bus| {
+        bus.call_sync(
+            Some("org.freedesktop.systemd1"),
+            "/org/freedesktop/systemd1",
+            "org.freedesktop.systemd1.Manager",
+            "UnsetEnvironment",
+            Some(&(vec!["NIDARA_LOGIN_LANGUAGE"],).to_variant()),
+            None,
+            gio::DBusCallFlags::NONE,
+            2000,
+            gio::Cancellable::NONE,
+        )
+    });
+    if let Err(e) = unset {
+        eprintln!("[config] NIDARA_LOGIN_LANGUAGE stays in the user manager: {e}");
+    }
+}
+
 pub fn spawn(changes: Arc<Changes>) -> Handle {
     let ctx = glib::MainContext::new();
     let thread_ctx = ctx.clone();
@@ -99,6 +119,20 @@ pub fn spawn(changes: Arc<Changes>) -> Handle {
             let ctx = thread_ctx;
             ctx.with_thread_default(|| {
                 let store = Store::new();
+                // #1195 L4: the language chosen on the login screen becomes this person's,
+                // the same setting Settings writes (#1197). The manager checked it is one the
+                // system has; a language whose input engine is missing is refused here as it
+                // is in Settings, and the session runs in it this once.
+                if let Some(lang) = std::env::var("NIDARA_LOGIN_LANGUAGE")
+                    .ok()
+                    .filter(|l| !l.is_empty())
+                {
+                    if let Err(e) = registry::set(&store, registry::LANGUAGE_KEY, &lang) {
+                        eprintln!("[config] the login screen's language was not kept: {e:?}");
+                    }
+                    // Once: a restart of this daemon must not undo what Settings changed since.
+                    forget_login_language();
+                }
                 for key in registry::keys() {
                     for (schema, k) in key.watch {
                         if let Some(settings) =

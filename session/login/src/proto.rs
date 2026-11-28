@@ -9,13 +9,14 @@
 //! screen  → {"type":"answer","text":"…"}
 //! manager → {"type":"info","text":"…"} / {"type":"error","text":"…"}   (as PAM writes them)
 //! manager → {"type":"success","open":false}            or {"type":"failed","reason":"auth",…}
-//! screen  → {"type":"start"}
+//! screen  → {"type":"start","language":"es_ES.UTF-8"}   (language only when chosen there)
 //! ```
 //!
 //! After `success` the screen says `start` and then ends (its Hyalo unlocks and exits); the
 //! manager starts the user's session once the login screen has let go of the screens. `open`
 //! says the user already has a session, which `start` switches to (#1195 L3). `cancel` drops
-//! the login under way at any point before `start`.
+//! the login under way at any point before `start`. A `language` chosen on the screen becomes
+//! the person's when a new session starts (L4, `language.rs`); an open one keeps its own.
 //!
 //! **A worker** (`Job`, `ToWorker`, `FromWorker`) talks over the socket it inherits as fd 3.
 
@@ -24,10 +25,17 @@ use serde::{Deserialize, Serialize};
 #[derive(Debug, Deserialize)]
 #[serde(tag = "type", rename_all = "kebab-case")]
 pub enum FromGreeter {
-    Begin { user: String },
-    Answer { text: String },
+    Begin {
+        user: String,
+    },
+    Answer {
+        text: String,
+    },
     Cancel,
-    Start,
+    Start {
+        #[serde(default)]
+        language: Option<String>,
+    },
 }
 
 #[derive(Debug, Serialize)]
@@ -84,8 +92,11 @@ pub enum ToWorker {
         text: String,
     },
     Cancel,
-    /// Authenticated: open the session now (the screens are free).
-    Open,
+    /// Authenticated: open the session now (the screens are free), with `env` added to it.
+    Open {
+        #[serde(default)]
+        env: Vec<(String, String)>,
+    },
 }
 
 #[derive(Debug, Serialize, Deserialize)]

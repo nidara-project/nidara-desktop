@@ -461,6 +461,41 @@ impl DropDown {
     control_setters!();
 }
 widget!(
+    /// A button with a glyph that opens a list of commands (`Gtk.MenuButton`): a bar's power
+    /// menu. Row `n` chosen reports `action` with `Value::Index(n)`, every time; `ticked`
+    /// marks the row that is current, when there is one (the language in use).
+    MenuButton
+);
+impl MenuButton {
+    pub fn new(
+        key: impl Into<Key>,
+        name: impl Into<String>,
+        action: impl Into<String>,
+        glyph: impl Into<String>,
+        options: Vec<String>,
+    ) -> Self {
+        Self(Node::menu_button(
+            key,
+            name,
+            action,
+            crate::components::MenuButton {
+                glyph: glyph.into(),
+                options,
+                ticked: None,
+            },
+        ))
+    }
+    pub fn ticked(mut self, n: Option<usize>) -> Self {
+        if let Kind::Control(c) = &mut self.0.kind
+            && let Some(Part::MenuButton(b)) = c.part.as_deref_mut()
+        {
+            b.ticked = n;
+        }
+        self
+    }
+    control_setters!();
+}
+widget!(
     /// One choice of a few, all shown side by side, the chosen one in the accent (GTK's linked
     /// toggle buttons). Segment `n` reports `"{action}:{n}"`.
     Segmented

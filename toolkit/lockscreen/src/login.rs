@@ -116,8 +116,13 @@ fn run(user: &str, secret: nk::Secret, said: &Sender<Said>) -> Result<(), String
     }
 }
 
-/// After success: the manager may start the session once this screen ends.
-pub fn start() -> Result<(), String> {
+/// After success: the manager may start the session once this screen ends, in `language`
+/// when one was chosen on this screen (L4: it becomes the person's).
+pub fn start(language: Option<&str>) -> Result<(), String> {
     let mut stream = link()?;
-    send(&mut stream, serde_json::json!({"type": "start"})).map_err(|e| e.to_string())
+    let mut start = serde_json::json!({"type": "start"});
+    if let Some(l) = language {
+        start["language"] = l.into();
+    }
+    send(&mut stream, start).map_err(|e| e.to_string())
 }

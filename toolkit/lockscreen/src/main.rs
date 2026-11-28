@@ -11,8 +11,10 @@
 //! and the field are on the one the pointer is on, and the clock alone on the others (D6).
 //! This thread holds the lock, the attempt and the shared state they read.
 mod auth;
+mod language;
 mod login;
 mod media;
+mod power;
 mod sessions;
 mod surface;
 mod user;
@@ -43,6 +45,12 @@ pub struct Shared {
     pub open: std::collections::BTreeSet<String>,
     /// The login screen (`nidara-login` gave this process its socket).
     pub login: bool,
+    /// The login screen's languages (L4) and the one it speaks now.
+    pub languages: Vec<language::Language>,
+    pub language: Option<usize>,
+    /// A language was chosen here: logging in makes it the person's.
+    pub language_chosen: bool,
+    pub battery: Option<power::Battery>,
     /// What is playing, when the user lets the lock screen show it (D5).
     pub media: Option<media::Now>,
     /// Unlocked: every surface closes.
@@ -60,7 +68,12 @@ pub enum Msg {
     Submit(nk::Secret),
     /// The field changed: what the last attempt said goes (the TS lock screen's rule).
     Typed,
-    Suspend,
+    /// A command of the power menu, Suspend the lock screen's only one (D3).
+    Power(power::Power),
+    /// The login screen's language menu: row `n` of `Shared::languages`.
+    Language(usize),
+    /// What UPower now says of the battery.
+    Battery(Option<power::Battery>),
     /// Another person on the login screen's row was chosen, by login.
     Choose(String),
     /// Whose sessions are open now (`sessions.rs`).
@@ -127,6 +140,12 @@ fn run() -> Result<(), String> {
         (vec![user::User::current()], 0)
     };
     let look = Arc::new(surface::Kit::load(&users)?);
+    let languages = if login {
+        language::available(&nk_platform::exports::Exports::root())
+    } else {
+        Vec::new()
+    };
+    let language = language::current(&languages, std::env::var("LANG").ok().as_deref());
     let watch = nk_wayland::outputs(Duration::from_secs(5))?;
     let mut lock = nk_wayland::lock_session(Duration::from_secs(5))?;
     let (tx, rx) = channel();
@@ -135,6 +154,8 @@ fn run() -> Result<(), String> {
             users,
             chosen,
             login,
+            languages,
+            language,
             ..Default::default()
         }),
         tx: tx.clone(),
@@ -144,6 +165,7 @@ fn run() -> Result<(), String> {
     // The login user has no session of anybody's to play from.
     if login {
         sessions::watch(tx.clone());
+        power::watch(tx.clone());
     } else {
         media::watch(tx.clone());
     }
@@ -181,7 +203,14 @@ fn run() -> Result<(), String> {
     if login {
         // The manager starts the session once this screen's Hyalo has let go of the screens,
         // which it does when the lock goes (login mode).
-        login::start()?;
+        let language = {
+            let s = world.shared.lock().unwrap();
+            s.language
+                .filter(|_| s.language_chosen)
+                .and_then(|n| s.languages.get(n))
+                .map(|l| l.locale.clone())
+        };
+        login::start(language.as_deref())?;
     }
     lock.unlock()?;
     eprintln!("nidara-lock: unlocked");
@@ -285,7 +314,30 @@ fn converse(
                     s.clear += 1;
                 });
             }
-            Msg::Suspend => suspend(),
+            Msg::Power(what) => power::run(what),
+            Msg::Language(n) => {
+                let locale = world
+                    .shared
+                    .lock()
+                    .unwrap()
+                    .languages
+                    .get(n)
+                    .map(|l| l.locale.clone());
+                // The screen speaks it at once; L4: logging in makes it the person's too.
+                if let Some(locale) = locale
+                    && surface::set_language(&locale)
+                {
+                    world.update(|s| {
+                        s.language = Some(n);
+                        s.language_chosen = true;
+                    });
+                }
+            }
+            Msg::Battery(b) => {
+                if world.shared.lock().unwrap().battery != b {
+                    world.update(|s| s.battery = b);
+                }
+            }
             Msg::Choose(name) => {
                 let at = {
                     let s = world.shared.lock().unwrap();
@@ -400,27 +452,6 @@ fn outputs(
             }
         }
     }
-}
-
-/// Suspend only (D3): logind lets the active local session power off without a password, so
-/// what the lock screen offers, anyone at the keyboard can do. Suspending loses nothing.
-fn suspend() {
-    let call = || -> zbus::Result<()> {
-        let bus = zbus::blocking::Connection::system()?;
-        bus.call_method(
-            Some("org.freedesktop.login1"),
-            "/org/freedesktop/login1",
-            Some("org.freedesktop.login1.Manager"),
-            "Suspend",
-            &(false,),
-        )?;
-        Ok(())
-    };
-    std::thread::spawn(move || {
-        if let Err(e) = call() {
-            eprintln!("nidara-lock: could not suspend: {e}");
-        }
-    });
 }
 
 /// An expired password still unlocks (`nidara-auth.h`); the user is told by a notification

@@ -4,6 +4,7 @@
 
 mod config;
 mod daemon;
+mod language;
 mod logind;
 mod pam;
 mod proto;

@@ -30,9 +30,11 @@ mod font_dialog;
 pub use font_dialog::{FontChoice, FontDialog, FontDialogLabels, FontSize};
 pub use nk_text::FontFace;
 mod frame;
+mod layer_menu;
 mod window;
 pub use frame::{BACK, Band, FORWARD, FrameStyle, SIDEBAR, Sidebar, graded_panes};
 pub use host::{Glyphs, Type, TypeScale, Weight};
+pub use layer_menu::{LayerMenu, MenuKey, choose as choose_from_list};
 pub use layout::{Fitted, Placed, Rect, TextCache, What, first_line_centre};
 pub use state::{Activated, BUDGET, Frame, FramePane, KeyInput, ScrollBy, Ticked, ViewState};
 pub use tokens::{
@@ -54,10 +56,10 @@ pub mod node {
 mod widgets;
 pub use widgets::{
     Arrangement, Avatar, Button, CheckButton, Column, DropDown, Entry, Expander, Field, FieldState,
-    FontButton, Grid, Group, Image, Label, ListBox, ListBoxOption, ListRow, ListView, MenuItem,
-    Overlay, Pane, PasswordEntry, Placeholder, Revealer, Row, Scroll, SearchEntry, Segmented,
-    SidebarEntry, SidebarList, Slider, SliderEnd, SliderRange, Slot, Spacer, Swatches, Switch,
-    TimeField, Widget, prelude,
+    FontButton, Grid, Group, Image, Label, ListBox, ListBoxOption, ListRow, ListView, MenuButton,
+    MenuItem, Overlay, Pane, PasswordEntry, Placeholder, Revealer, Row, Scroll, SearchEntry,
+    Segmented, SidebarEntry, SidebarList, Slider, SliderEnd, SliderRange, Slot, Spacer, Swatches,
+    Switch, TimeField, Widget, prelude,
 };
 pub use window::{
     Alert, AlertCountdown, AppWindow, CONTENT, Dialog, DialogAnswer, DialogButton, DialogContent,

@@ -38,6 +38,7 @@
         {"name": "Switch", "nk": ["nk::Switch"], "gtk": "Gtk.Switch", "appkit": "NSSwitch", "status": "both", "users": "Settings, CC details", "page": "switch"},
         {"name": "Slider", "nk": ["nk::Slider", "nk::SliderEnd", "nk::SliderRange"], "gtk": "Gtk.Scale", "appkit": "NSSlider", "status": "both", "users": "Settings, CC", "page": "slider"},
         {"name": "Number field", "nk": [], "gtk": "Gtk.SpinButton", "appkit": "NSStepper + NSTextField", "status": "widgets", "users": "Settings"},
+        {"name": "Menu button", "nk": ["nk::MenuButton"], "gtk": "Gtk.MenuButton", "appkit": "NSPopUpButton (pull-down)", "status": "view", "users": "Login screen's bar (#1195)", "page": "dropdown"},
         {"name": "Dropdown", "nk": ["nk::DropDown"], "gtk": "Gtk.DropDown", "appkit": "NSPopUpButton", "status": "both", "users": "Settings", "page": "dropdown"},
         {"name": "Editable combo", "nk": [], "gtk": "Gtk.ComboBox (entry)", "appkit": "NSComboBox", "status": "missing", "users": ""},
         {"name": "Time of day", "nk": ["nk::TimeField"], "gtk": "two Gtk.SpinButton", "appkit": "NSDatePicker (hour and minute)", "status": "view", "users": "Settings night light (#1103 8c)", "page": "time"},

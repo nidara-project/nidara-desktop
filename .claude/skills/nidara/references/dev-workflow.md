@@ -272,6 +272,31 @@ greetd. The pieces:
   manager's own test, L3) and says "Log in". The avatars are the kit's `nk::Avatar`; a
   surface that is not an `AppWindow` hands it pictures through `nk::Glyphs::set_pictures`
   and paints with `ViewState::paint_with_glyphs`.
+- **The login screen's bar** (top right, one `nk::Pane` capsule): the language, the battery
+  (UPower's display device, `power.rs`) and power (Suspend, Restart, Shut down from logind,
+  not interactive). Its buttons are `nk::MenuButton`s, and **their menus open on a layer of
+  the lock surface, `nk::LayerMenu`**: a lock surface cannot have an `xdg_popup`, so the host
+  takes the kit's `HostRequest::OpenList` itself, routes `Event::Layer` and the keys to the
+  menu while it is open, closes it on a press outside (swallowing that press and its
+  release), and paints it before the redraw that stages the layer. The rows, keys, size and
+  glass are `AppWindow`'s popup's (`layer_menu::{measure, step}` are shared by both). A menu
+  worked with the pointer gives the keyboard back to the field; from the keyboard the focus
+  stays on its button.
+  ⚠️ Hyalo hit-tests a lock surface's layers where they are SHOWN (`lock.rs` →
+  `lock_surface_under`, `protocols::layers::under_tree`): Smithay's own walk puts a layer at
+  its subsurface position, (0, 0), so before that fix every click on the menu landed on the
+  surface under it and closed the menu.
+- **The language (L4).** Offered: the generated locales (`locale -a`) that have a catalogue,
+  one per catalogue, each by its own name (`language.name` in every locale file). Choosing one
+  reloads the screen's strings at once (`surface::set_language`). On login the screen sends
+  `start` with it; the MANAGER checks it is a generated locale (the screen is not trusted with
+  it), records it in AccountsService (as GDM), and starts the session with `LANG`, `LANGUAGE`
+  and `NIDARA_LOGIN_LANGUAGE` (`ToWorker::Open { env }`). The session's daemon then writes it
+  as the person's setting through Config1 (`region.language`, #1197) and unsets the variable
+  in the user manager, so its own restart never undoes a later change in Settings. An open
+  session (L3) keeps its own language.
+- **Not yet: the keyboard menu.** Hyalo has no way to change the layout group from a client;
+  it needs that first.
 
 Testing, without root: a cage headless runs `nidara-hyalo --winit --login -c nidara-lock`
 with a stand-in manager on `NIDARA_LOGIN_SOCKET`. 🔴 **Give the nested Hyalo its own

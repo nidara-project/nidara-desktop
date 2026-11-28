@@ -132,10 +132,12 @@ fn session(job: &Job, line: &std::rc::Rc<std::cell::RefCell<Line>>) -> Result<i3
     if let Err(rc) = pam.account() {
         return Err(refusal(&pam, rc));
     }
+    // What the login screen chose meanwhile (its language, L4) comes with `open`.
+    let mut chosen = Vec::new();
     if job.authenticate {
         line.borrow_mut().send(&FromWorker::Authenticated);
         match line.borrow_mut().recv() {
-            Some(ToWorker::Open) => {}
+            Some(ToWorker::Open { env }) => chosen = env,
             _ => return Err(("error", "cancelled".into())),
         }
     }
@@ -175,6 +177,10 @@ fn session(job: &Job, line: &std::rc::Rc<std::cell::RefCell<Line>>) -> Result<i3
         ("XDG_SESSION_CLASS".into(), class.into()),
     ];
     env.extend(job.env.iter().cloned());
+    for (k, v) in chosen {
+        env.retain(|(k2, _)| *k2 != k);
+        env.push((k, v));
+    }
     for (k, v) in pam.env() {
         env.retain(|(k2, _)| *k2 != k);
         env.push((k, v));

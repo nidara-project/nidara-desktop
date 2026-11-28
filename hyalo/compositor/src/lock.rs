@@ -264,6 +264,12 @@ impl Hyalo {
                 return Some((hit.0, hit.1.to_f64()));
             }
         }
+        // A layer of the lock surface (the login screen's menus: no popups here) is hit where
+        // it is shown, as a window's or a shell layer's is (protocols/layers.rs).
+        if crate::protocols::layers::tree_has_layer(surface) {
+            let frame = crate::protocols::layers::presentation::shown_frame(output);
+            return crate::protocols::layers::under_tree(surface, pos - loc.to_f64(), (0, 0).into(), frame).map(|(s, p)| (s, p + loc.to_f64()));
+        }
         under_from_surface_tree(surface, pos, loc, WindowSurfaceType::ALL).map(|(s, p)| (s, p.to_f64()))
     }
 

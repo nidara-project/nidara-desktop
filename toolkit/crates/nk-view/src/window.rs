@@ -1170,31 +1170,19 @@ impl AppWindow {
         if list.items.is_empty() {
             return Ok(());
         }
-        let edge = list.edge;
-        let width = r[2].max(2. * edge + 1.);
-        let node = list.node.clone();
         let mut view = ViewState::new(MENU_ROOT);
         view.set_reduced_motion(self.reduced);
-        // Laid out first as tall as the window, to learn how tall its rows are.
-        view.layout_in(
-            &node,
-            [edge, edge, width - 2. * edge, self.size.1.max(1.)],
+        // As wide as the owner and its widest row (a menu button is narrower than its
+        // rows), as tall as its rows, never past the window.
+        let (width, height) = crate::layer_menu::measure(
+            &mut view,
+            &list,
+            r[2],
+            (f64::INFINITY, self.size.1),
             self.scale,
-            self.look.tokens.with_types(&self.look.types),
+            &self.look,
             self.text.as_mut(),
-            Instant::now(),
         );
-        let rows = view
-            .placed()
-            .iter()
-            .find_map(|p| match p.what {
-                crate::layout::What::Scroll { content, .. } if p.key == list.scroll => {
-                    Some(content)
-                }
-                _ => None,
-            })
-            .unwrap_or(0.);
-        let height = (rows + 2. * edge).min(self.size.1).max(1.);
         let id = window.open_menu_popup(MenuPopupPlacement {
             placement: PopupPlacement {
                 anchor: [
@@ -1307,14 +1295,7 @@ impl AppWindow {
             .and_then(|key| row_of(&m.list, key))
             .unwrap_or(m.list.selected)
             .min(n.saturating_sub(1));
-        let to = match sym {
-            0xff52 => Some((at + n - 1) % n),
-            0xff54 => Some((at + 1) % n),
-            0xff50 => Some(0),
-            0xff57 => Some(n - 1),
-            _ => None,
-        };
-        if let Some(to) = to {
+        if let Some(to) = crate::layer_menu::step(sym, at, n) {
             // The keyboard takes over from the pointer: only its row is lit.
             m.view.pointer_leave();
             m.view.request(&m.list.items[to].key, false);

@@ -243,6 +243,11 @@ impl Gallery {
                     self.model.speed = v as usize;
                 }
             }
+            "command" => {
+                if let Some(nk::Value::Index(n)) = a.value {
+                    self.model.command = Some(n);
+                }
+            }
             "bright" => {
                 if let Some(v) = a.value.as_ref().and_then(nk::Value::number) {
                     self.model.bright = v;

@@ -13,14 +13,18 @@
 //!
 //! Layout, hover, focus, Tab, the field's editing and input methods and the reader are the
 //! kit's (`nk::ViewState`); this says what the view is and acts on what is activated.
+use crate::power::Power;
 use crate::{Msg, World};
-use nk::{Activated, Align, Ink, Key, Node, Space, Type, ViewState, Weight, Widget, WindowLook};
+use nk::{
+    Activated, Align, Corner, HostRequest, Ink, Key, MenuKey, Node, Padding, Space, Type,
+    ViewState, Weight, Widget, WindowLook,
+};
 use nk_platform::clock::{self, Order, Region};
 use nk_platform::exports::Exports;
 use nk_render::{Canvas, Raster};
 use nk_text::{FontSet, ParleyBackend};
 use nk_wayland::{Application, Event, LockOutput, Material, Options, OutputId, Window};
-use std::sync::{Arc, OnceLock};
+use std::sync::{Arc, RwLock};
 use std::time::Instant;
 
 /// The view's keys and actions.
@@ -28,6 +32,8 @@ const SECRET: &str = "secret";
 const SUBMIT: &str = "submit";
 const PEEK: &str = "peek";
 const SUSPEND: &str = "suspend";
+const POWER: &str = "power";
+const LANGUAGE: &str = "language";
 const PREVIOUS: &str = "media-previous";
 const PLAY_PAUSE: &str = "media-play-pause";
 const NEXT: &str = "media-next";
@@ -78,15 +84,32 @@ impl Measures {
     }
 }
 
-static EXPORTS: OnceLock<Exports> = OnceLock::new();
+static EXPORTS: RwLock<Option<Exports>> = RwLock::new(None);
 
-/// A string of the session's language (LANG, as the shell starts with); the key itself when
-/// there is no catalogue, so the screen still says something.
+/// A string of the screen's language (LANG, as the shell starts with, until the login
+/// screen's language menu changes it); the key itself when there is no catalogue, so the
+/// screen still says something.
 pub fn text(key: &str) -> String {
     EXPORTS
-        .get()
+        .read()
+        .unwrap()
+        .as_ref()
         .and_then(|e| e.text(key).ok())
         .map_or_else(|| key.to_owned(), str::to_owned)
+}
+
+/// The screen speaks `locale` from now on (L4); false when its strings cannot be read.
+pub fn set_language(locale: &str) -> bool {
+    match Exports::load_for(&Exports::root(), Some(locale)) {
+        Ok(e) => {
+            *EXPORTS.write().unwrap() = Some(e);
+            true
+        }
+        Err(e) => {
+            eprintln!("nidara-lock: no strings for {locale}: {e}");
+            false
+        }
+    }
 }
 
 /// What every surface paints with, loaded once.
@@ -115,7 +138,7 @@ impl Kit {
             ..appearance
         };
         let look = WindowLook::load(&exports, &skin)?;
-        let _ = EXPORTS.set(exports);
+        *EXPORTS.write().unwrap() = Some(exports);
         let measures = Measures::load()?;
         let side = (measures.avatar * 2.).round() as u32;
         let pictures = users
@@ -262,6 +285,12 @@ struct Surface {
     revealed: bool,
     clock: String,
     pointer_here: bool,
+    /// The bar's open menu, on a layer of this surface: a lock surface has no popups.
+    menu: Option<nk::LayerMenu>,
+    /// The last input was a key, not the pointer: a menu opens with its row lit.
+    keys: bool,
+    /// A press outside the open menu closed it; its release goes nowhere.
+    swallow: bool,
     a11y: Option<nk_a11y::bridge::Bridge>,
     a11y_revision: u64,
     a11y_stopped: bool,
@@ -303,6 +332,9 @@ impl Surface {
             revealed: false,
             clock: String::new(),
             pointer_here: false,
+            menu: None,
+            keys: false,
+            swallow: false,
             a11y: None,
             a11y_revision: 0,
             a11y_stopped: false,
@@ -455,17 +487,34 @@ impl Surface {
                 children.push(others(&shared, types, m));
             }
             children.push(nk::Spacer::new("lock/below").into());
-            children
-                .push(nk::Button::new("lock/suspend", text("lock.suspend"), SUSPEND, body).into());
+            if !shared.login {
+                children.push(
+                    nk::Button::new("lock/suspend", text("lock.suspend"), SUSPEND, body).into(),
+                );
+            }
         } else {
             children.push(nk::Spacer::new("lock/below").into());
         }
         children.push(strut("lock/bottom", m.power_bottom));
-        nk::Column::new("lock", children)
+        let screen: Node = nk::Column::new("lock", children)
             .align(Align::Center)
             .width(f64::from(self.size.0))
             .height(f64::from(self.size.1))
-            .into()
+            .into();
+        // The login screen's bar (#1195): one capsule of glass at the top right, on the
+        // screen that has the field.
+        if shared.login && self.active {
+            nk::Overlay::new("lock/screen", screen)
+                .layer(
+                    Align::End,
+                    Align::Start,
+                    Padding::all(Space::S4),
+                    bar(&shared, types),
+                )
+                .into()
+        } else {
+            screen
+        }
     }
 
     /// Rebuild from the shared state and lay out across the output.
@@ -515,6 +564,12 @@ impl Surface {
         self.last = self.state.frame(&self.kit.look.tokens, now);
         self.blink_at = self.state.caret_deadline(now);
         w.set_text_input(self.state.text_input());
+        if let Some(m) = &mut self.menu {
+            let kit = self.kit.clone();
+            if let Err(e) = m.paint(w, &kit.look, &mut self.text, self.glyphs.as_mut()) {
+                eprintln!("nidara-lock: the menu was not painted: {e}");
+            }
+        }
         w.redraw();
     }
 
@@ -548,7 +603,19 @@ impl Surface {
                 let _ = self.world.tx.send(Msg::Press("SelectedNext"));
             }
             SUSPEND => {
-                let _ = self.world.tx.send(Msg::Suspend);
+                let _ = self.world.tx.send(Msg::Power(Power::Suspend));
+            }
+            POWER => {
+                if let Some(nk::Value::Index(n)) = a.value
+                    && let Some(&what) = Power::MENU.get(n)
+                {
+                    let _ = self.world.tx.send(Msg::Power(what));
+                }
+            }
+            LANGUAGE => {
+                if let Some(nk::Value::Index(n)) = a.value {
+                    let _ = self.world.tx.send(Msg::Language(n));
+                }
             }
             CHOOSE => {
                 if let Some(nk::Value::Text(login)) = a.value {
@@ -556,6 +623,93 @@ impl Surface {
                 }
             }
             _ => {}
+        }
+    }
+
+    /// What the kit asked of this surface: a menu button's list, opened on a layer (a lock
+    /// surface has no popups); the same button again closes it.
+    fn host(&mut self, w: &mut Window) {
+        for request in self.state.take_host_requests() {
+            match request {
+                HostRequest::OpenList { owner, list } => {
+                    let again = self.menu.as_ref().is_some_and(|m| m.owner() == &owner);
+                    self.close_menu(w);
+                    if again {
+                        continue;
+                    }
+                    let kit = self.kit.clone();
+                    let surface = (f64::from(self.size.0), f64::from(self.size.1));
+                    match nk::LayerMenu::open(
+                        w,
+                        &mut self.state,
+                        owner,
+                        &list,
+                        self.keys,
+                        surface,
+                        self.scale,
+                        &kit.look,
+                        &mut self.text,
+                    ) {
+                        Ok(menu) => self.menu = menu,
+                        Err(e) => eprintln!("nidara-lock: the menu did not open: {e}"),
+                    }
+                }
+                HostRequest::Respond { owner, request } => {
+                    if let Some(a) = self.state.respond(&owner, request) {
+                        self.route(a);
+                    }
+                }
+                _ => {}
+            }
+        }
+    }
+
+    /// Closes the open menu. Worked from the keyboard, the focus stays on its button, ring
+    /// and all; worked with the pointer, the keyboard goes back to the field (D2), so what is
+    /// typed next is the password and not a key on the button.
+    fn close_menu(&mut self, w: &mut Window) {
+        if let Some(m) = self.menu.take() {
+            m.close(w, &mut self.state, self.keys);
+            if !self.keys {
+                let input: Key = format!("{}/input", self.field.0).into();
+                self.state.request(&input, false);
+                self.state.hide_ring();
+            }
+        }
+    }
+
+    /// Row `n` of the open menu chosen: its owner hears it, and the menu closes.
+    fn choose(&mut self, n: usize, w: &mut Window) {
+        let Some(owner) = self.menu.as_ref().map(|m| m.owner().clone()) else {
+            return;
+        };
+        let a = nk::choose_from_list(&mut self.state, &owner, n);
+        self.close_menu(w);
+        if let Some(a) = a {
+            self.route(a);
+        }
+    }
+
+    /// A key while a menu is open is the menu's.
+    fn menu_key(&mut self, sym: u32, w: &mut Window) {
+        let Some(m) = &mut self.menu else {
+            return;
+        };
+        match m.key(sym) {
+            MenuKey::Ignored | MenuKey::Moved => {}
+            MenuKey::Choose(n) => self.choose(n, w),
+            MenuKey::Close => self.close_menu(w),
+            MenuKey::Tab(back) => {
+                self.close_menu(w);
+                let key = if back {
+                    nk::KeyInput::ShiftTab
+                } else {
+                    nk::KeyInput::Tab
+                };
+                if let Some(a) = self.state.key(key) {
+                    self.route(a);
+                }
+            }
         }
     }
 
@@ -627,7 +781,7 @@ impl Surface {
 
 impl Application for Surface {
     fn poll_interval_ms(&self) -> u32 {
-        if self.state.animating() {
+        if self.state.animating() || self.menu.as_ref().is_some_and(|m| m.animating()) {
             return 16;
         }
         // The cursor blinks on time; the clock's own wake can be a minute away.
@@ -669,6 +823,8 @@ impl Application for Surface {
             for a in t.activated {
                 self.route(a);
             }
+            self.refresh(w);
+        } else if self.menu.as_ref().is_some_and(|m| m.animating()) {
             self.refresh(w);
         }
         if self.blink_at.is_some_and(|at| Instant::now() >= at) {
@@ -745,12 +901,40 @@ impl Application for Surface {
                 pressed,
                 ..
             } => {
-                if let Some(a) = self.state.button(pressed, Instant::now()) {
-                    self.route(a);
+                self.keys = false;
+                // A press outside the open menu closes it and presses nothing (a popup's
+                // grab); the menu button pressed again closes it the same way.
+                if pressed && self.menu.is_some() {
+                    self.close_menu(w);
+                    self.swallow = true;
+                } else if !pressed && std::mem::take(&mut self.swallow) {
+                } else {
+                    if let Some(a) = self.state.button(pressed, Instant::now()) {
+                        self.route(a);
+                    }
+                    self.host(w);
                 }
                 self.refresh(w);
             }
+            Event::Layer { id, event } => {
+                if self.menu.as_ref().is_some_and(|m| m.layer() == id) {
+                    if matches!(event, nk_wayland::LayerEvent::Button { .. }) {
+                        self.keys = false;
+                    }
+                    let chosen = self.menu.as_mut().and_then(|m| m.event(event));
+                    if let Some(n) = chosen {
+                        self.choose(n, w);
+                    }
+                    self.refresh(w);
+                }
+            }
+            Event::Key(k) if self.menu.is_some() => {
+                self.keys = true;
+                self.menu_key(k.sym, w);
+                self.refresh(w);
+            }
             Event::Key(k) => {
+                self.keys = true;
                 let input: Key = format!("{}/input", self.field.0).into();
                 if k.serial.is_some()
                     && matches!(k.sym, ENTER | KP_ENTER)
@@ -765,6 +949,7 @@ impl Application for Surface {
                 } else if let (_, Some(a)) = self.state.key_event(&k) {
                     self.route(a);
                 }
+                self.host(w);
                 // What a key changed (the field's dots) is laid out anew,
                 // as the kit's window host does after every key it handles.
                 self.relayout();
@@ -819,6 +1004,66 @@ impl Application for Surface {
         }
         self.kit.look.glass(&self.last)
     }
+}
+
+/// The login screen's bar (#1195): the language it speaks, when there is a choice (L4); the
+/// battery, on a machine that has one; and power. One capsule, each a menu button of the kit,
+/// their menus on a layer of the surface.
+fn bar(shared: &crate::Shared, types: &nk::TypeScale) -> Node {
+    let mut items: Vec<Node> = Vec::new();
+    if shared.languages.len() > 1 {
+        items.push(
+            nk::MenuButton::new(
+                "lock/bar/language",
+                text("lock.language"),
+                LANGUAGE,
+                "nd-globe",
+                shared.languages.iter().map(|l| l.name.clone()).collect(),
+            )
+            .ticked(shared.language)
+            .into(),
+        );
+    }
+    if let Some(b) = shared.battery {
+        let percent = format!("{}%", b.percent.round() as u32);
+        items.push(
+            nk::Row::new(
+                "lock/bar/battery",
+                vec![
+                    nk::Image::new("lock/bar/battery/glyph", "nd-battery", 16.).into(),
+                    nk::Label::new(
+                        "lock/bar/battery/level",
+                        percent,
+                        types.style(Type::Small, Weight::Medium),
+                    )
+                    .into(),
+                ],
+            )
+            .gap(Space::S1)
+            .align(Align::Center)
+            .padding(Padding::symmetric(Space::S1, Space::S2))
+            .into(),
+        );
+    }
+    items.push(
+        nk::MenuButton::new(
+            "lock/bar/power",
+            text("lock.power"),
+            POWER,
+            "nd-system-shutdown",
+            Power::MENU.iter().map(|p| text(p.key())).collect(),
+        )
+        .into(),
+    );
+    nk::Pane::new(
+        "lock/bar",
+        Corner::Pill,
+        nk::Row::new("lock/bar/row", items)
+            .gap(Space::S1)
+            .align(Align::Center)
+            .padding(Padding::all(Space::S1)),
+    )
+    .into()
 }
 
 /// The login screen's other people (L1): one button each, its picture over its name, in the

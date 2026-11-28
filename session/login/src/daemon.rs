@@ -72,6 +72,8 @@ struct Login {
     open: Option<String>,
     /// The screen said `start`: open the session once the login screen has ended.
     starting: bool,
+    /// The language chosen on the screen, checked (L4).
+    language: Option<String>,
 }
 
 struct Manager {
@@ -370,6 +372,7 @@ impl Manager {
                             authenticated: false,
                             open: None,
                             starting: false,
+                            language: None,
                         })
                     }
                     Err(err) => {
@@ -396,11 +399,19 @@ impl Manager {
                 crate::pam::wipe(&mut text);
             }
             FromGreeter::Cancel => self.drop_login(),
-            FromGreeter::Start => {
+            FromGreeter::Start { language } => {
                 let Some(login) = self.login.as_mut().filter(|l| l.authenticated) else {
                     return;
                 };
                 login.starting = true;
+                // The screen is not trusted with what it names: only a locale the system has.
+                login.language = language.as_deref().and_then(|l| {
+                    let ok = crate::language::checked(l);
+                    if ok.is_none() {
+                        eprintln!("nidara-login: the login screen named an unknown language {l:?}");
+                    }
+                    ok
+                });
                 if self.greeter.is_none() {
                     self.open_login().await;
                     return;
@@ -546,8 +557,18 @@ impl Manager {
             }
             return;
         }
+        let mut env = Vec::new();
+        if let Some(lang) = &login.language {
+            env = crate::language::env(lang);
+            if let Some(bus) = &self.bus
+                && let Err(err) = crate::language::record(bus, &login.user, lang).await
+            {
+                eprintln!("nidara-login: AccountsService did not take the language: {err}");
+            }
+        }
         self.sessions.insert(login.worker, login.user);
-        self.send_worker(login.worker, &ToWorker::Open).await;
+        self.send_worker(login.worker, &ToWorker::Open { env })
+            .await;
     }
 
     fn drop_login(&mut self) {
