@@ -22,23 +22,12 @@ impl User {
         Self::from_entry(unsafe { libc::getpwuid(libc::getuid()) })
     }
 
-    /// The person the login screen offers (#1195, step 1): whoever logged in last on this
-    /// machine (`nidara-login` keeps the name, world-readable), else the first person's
-    /// account. The list of users comes with the login screen itself (L1).
-    pub fn for_login() -> Self {
-        let last = std::fs::read_to_string(LAST_USER)
-            .ok()
-            .map(|s| s.trim().to_owned());
-        if let Some(name) = last.filter(|n| !n.is_empty())
-            && let Ok(c) = std::ffi::CString::new(name)
-        {
-            // SAFETY: as in `current`.
-            let pw = unsafe { libc::getpwnam(c.as_ptr()) };
-            if !pw.is_null() {
-                return Self::from_entry(pw);
-            }
-        }
-        // SAFETY: the passwd walk, on this thread only, entries read before the next.
+    /// The people the login screen offers (#1195 L1), in the order of their accounts, and
+    /// which of them is chosen: whoever logged in last on this machine (`nidara-login` keeps
+    /// the name, world-readable), else the first.
+    pub fn for_login() -> (Vec<Self>, usize) {
+        let mut people = Vec::new();
+        // SAFETY: the passwd walk, on this thread only, each entry copied before the next.
         unsafe {
             libc::setpwent();
             loop {
@@ -47,14 +36,24 @@ impl User {
                     break;
                 }
                 if is_person(&*pw) {
-                    let user = Self::from_entry(pw);
-                    libc::endpwent();
-                    return user;
+                    people.push(((*pw).pw_uid, Self::from_entry(pw)));
                 }
             }
             libc::endpwent();
         }
-        Self::default()
+        people.sort_by_key(|(uid, _)| *uid);
+        let mut people: Vec<Self> = people.into_iter().map(|(_, u)| u).collect();
+        let last = std::fs::read_to_string(LAST_USER)
+            .ok()
+            .map(|s| s.trim().to_owned())
+            .filter(|n| !n.is_empty());
+        let chosen = last
+            .as_ref()
+            .and_then(|name| people.iter().position(|u| &u.login == name));
+        if people.is_empty() {
+            people.push(Self::default());
+        }
+        (people, chosen.unwrap_or(0))
     }
 
     fn from_entry(pw: *mut libc::passwd) -> Self {

@@ -937,6 +937,7 @@ export default {
     "lock.password": "パスワード",
     "lock.unlock": "ロック解除",
     "lock.log-in": "ログイン",
+    "lock.session-open": "セッション使用中",
     "lock.show-password": "パスワードを表示",
     "lock.hide-password": "パスワードを隠す",
     "lock.wrong-password": "パスワードが違います",

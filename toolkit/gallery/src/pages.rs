@@ -1730,6 +1730,34 @@ fn icons(t: &TypeScale) -> Vec<Node> {
             nk::Column::new("i/sizes", rows).gap(Space::S3).into(),
         ),
         section("i-inks", "Inks", t, inks),
+        section(
+            "i-avatars",
+            "Avatar: without a picture, and with the mark",
+            t,
+            row(
+                "i/avatars",
+                vec![
+                    sample(
+                        "i/avatar/plain",
+                        "80 px",
+                        t,
+                        nk::Avatar::new("i/avatar/80", 80.).into(),
+                    ),
+                    sample(
+                        "i/avatar/small",
+                        "48 px",
+                        t,
+                        nk::Avatar::new("i/avatar/48", 48.).into(),
+                    ),
+                    sample(
+                        "i/avatar/mark",
+                        "Marked",
+                        t,
+                        nk::Avatar::new("i/avatar/marked", 48.).mark(true).into(),
+                    ),
+                ],
+            ),
+        ),
     ]
 }
 

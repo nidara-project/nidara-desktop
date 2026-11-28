@@ -13,6 +13,7 @@
 mod auth;
 mod login;
 mod media;
+mod sessions;
 mod surface;
 mod user;
 
@@ -34,11 +35,24 @@ pub struct Shared {
     pub lines: Vec<String>,
     /// A new attempt starts with an empty field.
     pub clear: u64,
-    pub user: user::User,
+    /// Whose screen this is: the session's user on the lock screen; on the login screen every
+    /// person with an account (L1), `chosen` the one the field is for.
+    pub users: Vec<user::User>,
+    pub chosen: usize,
+    /// The logins whose session is open (L3), marked on their avatars on the login screen.
+    pub open: std::collections::BTreeSet<String>,
+    /// The login screen (`nidara-login` gave this process its socket).
+    pub login: bool,
     /// What is playing, when the user lets the lock screen show it (D5).
     pub media: Option<media::Now>,
     /// Unlocked: every surface closes.
     pub done: bool,
+}
+
+impl Shared {
+    pub fn user(&self) -> &user::User {
+        &self.users[self.chosen.min(self.users.len() - 1)]
+    }
 }
 
 /// To this thread, from the surfaces, the attempt and the output watch.
@@ -47,6 +61,10 @@ pub enum Msg {
     /// The field changed: what the last attempt said goes (the TS lock screen's rule).
     Typed,
     Suspend,
+    /// Another person on the login screen's row was chosen, by login.
+    Choose(String),
+    /// Whose sessions are open now (`sessions.rs`).
+    Open(std::collections::BTreeSet<String>),
     /// What the session's media service now says is playing.
     Media(Option<media::Now>),
     /// A transport button: Media1's `SelectedPrevious`, `SelectedPlayPause`, `SelectedNext`.
@@ -103,18 +121,20 @@ fn main() {
 fn run() -> Result<(), String> {
     // The login screen (#1195): Hyalo in login mode runs this same screen for nidara-login.
     let login = login::socket().is_some();
-    let user = if login {
+    let (users, chosen) = if login {
         user::User::for_login()
     } else {
-        user::User::current()
+        (vec![user::User::current()], 0)
     };
-    let look = Arc::new(surface::Kit::load(&user)?);
+    let look = Arc::new(surface::Kit::load(&users)?);
     let watch = nk_wayland::outputs(Duration::from_secs(5))?;
     let mut lock = nk_wayland::lock_session(Duration::from_secs(5))?;
     let (tx, rx) = channel();
     let world = Arc::new(World {
         shared: Mutex::new(Shared {
-            user,
+            users,
+            chosen,
+            login,
             ..Default::default()
         }),
         tx: tx.clone(),
@@ -122,7 +142,9 @@ fn run() -> Result<(), String> {
         threads: Mutex::new(Vec::new()),
     });
     // The login user has no session of anybody's to play from.
-    if !login {
+    if login {
+        sessions::watch(tx.clone());
+    } else {
         media::watch(tx.clone());
     }
     let first = watch.current().first().map(|o| o.id);
@@ -211,7 +233,7 @@ fn converse(
                 if world.shared.lock().unwrap().checking {
                     continue;
                 }
-                let login = world.shared.lock().unwrap().user.login.clone();
+                let login = world.shared.lock().unwrap().user().login.clone();
                 refused = None;
                 world.update(|s| {
                     s.checking = true;
@@ -264,6 +286,31 @@ fn converse(
                 });
             }
             Msg::Suspend => suspend(),
+            Msg::Choose(name) => {
+                let at = {
+                    let s = world.shared.lock().unwrap();
+                    if s.checking {
+                        None
+                    } else {
+                        s.users.iter().position(|u| u.login == name)
+                    }
+                };
+                // A new person: what was said to the last one goes, and their field starts
+                // empty with the keyboard in it (the new field key does both).
+                if let Some(at) = at {
+                    refused = None;
+                    world.update(|s| {
+                        s.chosen = at;
+                        s.lines.clear();
+                        s.clear += 1;
+                    });
+                }
+            }
+            Msg::Open(open) => {
+                if world.shared.lock().unwrap().open != open {
+                    world.update(|s| s.open = open);
+                }
+            }
             Msg::Media(now) => {
                 if world.shared.lock().unwrap().media != now {
                     world.update(|s| s.media = now);

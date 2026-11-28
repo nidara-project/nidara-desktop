@@ -57,6 +57,7 @@
         {"name": "Link", "nk": [], "gtk": "Gtk.LinkButton", "appkit": "NSTextField (link)", "status": "missing", "users": ""},
         {"name": "Icon", "nk": ["nk::Image"], "gtk": "Gtk.Image", "appkit": "NSImageView (symbol)", "status": "both", "users": "everything", "page": "icons"},
         {"name": "Picture", "nk": ["nk::Image"], "gtk": "Gtk.Picture", "appkit": "NSImageView", "status": "view", "users": "File chooser preview and icon grid; NC artwork and dock by hand"},
+        {"name": "Avatar", "nk": ["nk::Avatar"], "gtk": "Adw.Avatar", "appkit": "NSImageView (circular)", "status": "view", "users": "Lock and login screens (#1195)", "page": "icons"},
         {"name": "Shortcut hint", "nk": [], "gtk": "Gtk.ShortcutLabel", "appkit": "menu key equivalent", "status": "missing", "users": ""}
       ]
     },

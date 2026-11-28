@@ -53,7 +53,7 @@ pub mod node {
 }
 mod widgets;
 pub use widgets::{
-    Arrangement, Button, CheckButton, Column, DropDown, Entry, Expander, Field, FieldState,
+    Arrangement, Avatar, Button, CheckButton, Column, DropDown, Entry, Expander, Field, FieldState,
     FontButton, Grid, Group, Image, Label, ListBox, ListBoxOption, ListRow, ListView, MenuItem,
     Overlay, Pane, PasswordEntry, Placeholder, Revealer, Row, Scroll, SearchEntry, Segmented,
     SidebarEntry, SidebarList, Slider, SliderEnd, SliderRange, Slot, Spacer, Swatches, Switch,

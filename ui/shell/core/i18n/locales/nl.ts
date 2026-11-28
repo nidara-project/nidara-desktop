@@ -937,6 +937,7 @@ export default {
     "lock.password": "Wachtwoord",
     "lock.unlock": "Ontgrendelen",
     "lock.log-in": "Aanmelden",
+    "lock.session-open": "Sessie geopend",
     "lock.show-password": "Wachtwoord tonen",
     "lock.hide-password": "Wachtwoord verbergen",
     "lock.wrong-password": "Onjuist wachtwoord",

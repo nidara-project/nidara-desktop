@@ -348,6 +348,12 @@ pub struct Icon {
     /// Its ink's opacity on top of the ink's own (a slider's flanking glyphs).
     #[serde(default = "opaque")]
     pub alpha: f64,
+    /// A person's picture (`nk::Avatar`): cut to a circle and filled, never letterboxed.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub round: bool,
+    /// A dot on its lower right: the avatar's mark (a session already open, #1195 L3).
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub mark: bool,
 }
 fn opaque() -> f64 {
     1.
@@ -653,6 +659,8 @@ impl Node {
                 name: name.into(),
                 app_fallback: None,
                 picture: false,
+                round: false,
+                mark: false,
                 size,
                 ink: Ink::Primary,
                 alpha: 1.,

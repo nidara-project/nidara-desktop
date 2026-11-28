@@ -2256,7 +2256,9 @@ impl ViewState {
     ) -> Result<(), String> {
         self.paint_part(canvas, look, icons, None, true, None)
     }
-    pub(crate) fn paint_with_glyphs(
+    /// `paint`, with the pictures and application icons `glyphs` holds as well as its
+    /// interface glyphs.
+    pub fn paint_with_glyphs(
         &self,
         canvas: &mut Canvas,
         look: ComponentLook<'_>,
@@ -2525,30 +2527,45 @@ impl ViewState {
                             None
                         }
                     });
+                    let c = self
+                        .component_ink(i, look, interaction(p), true)
+                        .unwrap_or_else(|| tokens.look.ink(icon.ink));
+                    let c = c.with_alpha(c.components[3] * icon.alpha as f32);
                     if let Some(art) = art {
                         canvas.clip(rect(&visible));
                         let alpha = p.alpha * icon.alpha;
                         if alpha < 1. {
                             canvas.push_opacity(alpha);
                         }
-                        canvas.image(&art, rect(&p.rect), nk_render::ImageFit::Contain);
+                        if icon.round {
+                            // A person's picture fills its circle, as every avatar does.
+                            canvas.clip_rounded_rect(rect(&p.rect), p.rect[2].min(p.rect[3]) / 2.);
+                            canvas.image(&art, rect(&p.rect), nk_render::ImageFit::Cover);
+                            canvas.pop_clip();
+                        } else {
+                            canvas.image(&art, rect(&p.rect), nk_render::ImageFit::Contain);
+                        }
                         if alpha < 1. {
                             canvas.pop_opacity();
+                        }
+                        if icon.mark {
+                            avatar_mark(canvas, &p.rect, content(c), content(tokens.look.surface));
                         }
                         canvas.pop_clip();
                         continue;
                     }
-                    if icon.picture {
+                    // A picture with no glyph to stand in for it draws nothing; an avatar
+                    // without its picture draws the default one (`app_fallback`).
+                    if icon.picture && icon.app_fallback.is_none() {
                         continue;
                     }
                     let name = icon.app_fallback.as_deref().unwrap_or(&icon.name);
                     if let Some(glyph) = icons(name, icon.size) {
                         canvas.clip(rect(&visible));
-                        let c = self
-                            .component_ink(i, look, interaction(p), true)
-                            .unwrap_or_else(|| tokens.look.ink(icon.ink));
-                        let c = c.with_alpha(c.components[3] * icon.alpha as f32);
                         canvas.icon(&glyph, rect(&p.rect), content(c));
+                        if icon.mark {
+                            avatar_mark(canvas, &p.rect, content(c), content(tokens.look.surface));
+                        }
                         canvas.pop_clip();
                     }
                 }
@@ -2662,3 +2679,21 @@ mod focus_tests;
 const CARET_BLINK: Duration = Duration::from_millis(1200);
 /// GTK's `gtk-cursor-blink-timeout`: after this long without a key the cursor stays.
 const CARET_BLINK_FOR: Duration = Duration::from_secs(10);
+
+/// The avatar's mark: a dot in the ink on its circle's lower right, at 45°, in a ring of the
+/// surface's well so it reads on any photograph.
+fn avatar_mark(canvas: &mut Canvas, r: &Rect, ink: nk_render::Color, well: nk_render::Color) {
+    let side = r[2].min(r[3]);
+    let radius = (side * 0.11).max(3.);
+    let gap = (side * 0.035).max(1.5);
+    let d = std::f64::consts::FRAC_1_SQRT_2 * side / 2.;
+    let (cx, cy) = (r[0] + r[2] / 2. + d, r[1] + r[3] / 2. + d);
+    let at = |rad: f64| nk_text::Rect {
+        x: (cx - rad) as f32,
+        y: (cy - rad) as f32,
+        width: (2. * rad) as f32,
+        height: (2. * rad) as f32,
+    };
+    canvas.rounded_rect(at(radius + gap), radius + gap, well);
+    canvas.rounded_rect(at(radius), radius, ink);
+}

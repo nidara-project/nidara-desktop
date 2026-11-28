@@ -263,9 +263,15 @@ greetd. The pieces:
   (`lock.rs` → `start_login`). It is started again only once its PROCESS is gone, never after
   a deadline: a slow first start must not race a second client for the lock. When the client
   unlocks, Hyalo exits.
-- **The client**, until step 2 brings `nidara-greeter`, is `nidara-lock`: with
-  `NIDARA_LOGIN_SOCKET` set it authenticates through the manager (`login.rs`), offers the
-  last user (`/var/lib/nidara-login/last-user`) and says "Log in".
+- **The client is `nidara-lock`, for good** (owner, 2026-11-28: the login screen and the lock
+  screen are ONE program with two modes; there is no separate `nidara-greeter` in Rust). With
+  `NIDARA_LOGIN_SOCKET` set it is the login screen: it authenticates through the manager
+  (`login.rs`), lists every person (uid 1000–59999 with a real shell, `user.rs` →
+  `for_login`), chooses the last one (`/var/lib/nidara-login/last-user`), shows the others
+  in a row under the field (L1), marks whose session is open from logind (`sessions.rs`, the
+  manager's own test, L3) and says "Log in". The avatars are the kit's `nk::Avatar`; a
+  surface that is not an `AppWindow` hands it pictures through `nk::Glyphs::set_pictures`
+  and paints with `ViewState::paint_with_glyphs`.
 
 Testing, without root: a cage headless runs `nidara-hyalo --winit --login -c nidara-lock`
 with a stand-in manager on `NIDARA_LOGIN_SOCKET`. 🔴 **Give the nested Hyalo its own
@@ -273,6 +279,17 @@ with a stand-in manager on `NIDARA_LOGIN_SOCKET`. 🔴 **Give the nested Hyalo i
 `nidara-hyalo msg` reaches the LIVE session through the inherited `HYALO_SOCKET`, and a
 "screenshot of the test" is a screenshot of the owner's screen. The manager itself needs
 root, a VT and logind: that is the VM, or the owner.
+- **Several people without creating accounts:** bind a passwd of your own over `/etc/passwd`
+  in a private namespace, `unshare --user --map-root-user --mount bash -c "mount --bind
+  <passwd> /etc/passwd && cage …"` (`--map-current-user` cannot mount: util-linux refuses a
+  non-root uid). The system bus is out of reach in there, so the open-session marks are tested
+  outside it.
+- ⚠️ **Start the client with `-c "sleep 4; exec …/nidara-lock"` under cage.** Hyalo's winit
+  output appears about 5 s after start there; a client started at once gives up waiting for
+  outputs, and the one Hyalo starts in its place, connecting within milliseconds of the output's
+  creation, PAINTS ONCE and never again (no frame callbacks). Killing a running client is
+  restarted fine; only that start race freezes. Open in Hyalo's login mode; a real DRM output
+  exists before the client starts, so it has not been seen there.
 
 **`bin/nidara-greeter` still has no dev branch.** It hardcodes
 `/usr/share/nidara/ui/greeter/build/nidara-greeter` and `exec`s it or dies. Whenever you touch

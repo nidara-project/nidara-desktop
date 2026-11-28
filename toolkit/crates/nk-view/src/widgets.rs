@@ -274,6 +274,40 @@ impl Image {
     }
 }
 widget!(
+    /// A person's picture, `size` across, cut to a circle (`Adw.Avatar`): the raster supplied
+    /// under `picture`'s identifier when there is one, the default avatar glyph when there is
+    /// not. Decoration to a reader: the name next to it, or the button it is in, says who.
+    Avatar
+);
+impl Avatar {
+    pub fn new(key: impl Into<Key>, size: f64) -> Self {
+        let mut node = Node::icon(key, AVATAR_GLYPH, size).presentational();
+        if let Kind::Icon(icon) = &mut node.kind {
+            icon.round = true;
+        }
+        Self(node)
+    }
+    /// The raster supplied to the surface under `id` (`AppWindow::set_pictures`,
+    /// `Glyphs::set_pictures`); the default glyph while it is missing.
+    pub fn picture(mut self, id: impl Into<String>) -> Self {
+        if let Kind::Icon(icon) = &mut self.0.kind {
+            icon.name = id.into();
+            icon.picture = true;
+            icon.app_fallback = Some(AVATAR_GLYPH.into());
+        }
+        self
+    }
+    /// A dot on its lower right: something about the person shown on their picture (on the
+    /// login screen, that their session is open). Say it to readers too.
+    pub fn mark(mut self, on: bool) -> Self {
+        if let Kind::Icon(icon) = &mut self.0.kind {
+            icon.mark = on;
+        }
+        self
+    }
+}
+const AVATAR_GLYPH: &str = "nd-avatar-default";
+widget!(
     /// Room the app paints in itself, `size` square: a picture, a mark, a gauge. Never a control.
     Slot
 );

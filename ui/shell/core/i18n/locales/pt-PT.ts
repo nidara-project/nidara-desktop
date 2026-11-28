@@ -937,6 +937,7 @@ export default {
     "lock.password": "Palavra-passe",
     "lock.unlock": "Desbloquear",
     "lock.log-in": "Iniciar sessão",
+    "lock.session-open": "Sessão aberta",
     "lock.show-password": "Mostrar palavra-passe",
     "lock.hide-password": "Ocultar palavra-passe",
     "lock.wrong-password": "Palavra-passe incorreta",

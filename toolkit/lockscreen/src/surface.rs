@@ -7,14 +7,18 @@
 //! and Suspend at the bottom (D3). There is no card and no glass but the field's (D7): the
 //! text sits straight on the veil Hyalo draws over the wallpaper, in the shell's white ink.
 //!
+//! On the login screen (#1195 L1, L3) the same view is for the chosen person, whose session
+//! may be open (a mark on the avatar, and said under the name), with the other people in a
+//! row under the field, each a button that chooses them.
+//!
 //! Layout, hover, focus, Tab, the field's editing and input methods and the reader are the
 //! kit's (`nk::ViewState`); this says what the view is and acts on what is activated.
 use crate::{Msg, World};
 use nk::{Activated, Align, Ink, Key, Node, Space, Type, ViewState, Weight, Widget, WindowLook};
 use nk_platform::clock::{self, Order, Region};
 use nk_platform::exports::Exports;
-use nk_render::{Canvas, ImageFit, Raster};
-use nk_text::{FontSet, ParleyBackend, Rect};
+use nk_render::{Canvas, Raster};
+use nk_text::{FontSet, ParleyBackend};
 use nk_wayland::{Application, Event, LockOutput, Material, Options, OutputId, Window};
 use std::sync::{Arc, OnceLock};
 use std::time::Instant;
@@ -27,6 +31,7 @@ const SUSPEND: &str = "suspend";
 const PREVIOUS: &str = "media-previous";
 const PLAY_PAUSE: &str = "media-play-pause";
 const NEXT: &str = "media-next";
+const CHOOSE: &str = "choose";
 const AVATAR: &str = "lock/avatar";
 const ROOT: nk_a11y::NodeId = 1;
 const ENTER: u32 = 0xff0d;
@@ -44,6 +49,9 @@ pub struct Measures {
     pub line_gap: f64,
     pub power_bottom: f64,
     pub error_seconds: f64,
+    pub others: f64,
+    pub others_width: f64,
+    pub others_gap: f64,
 }
 impl Measures {
     fn load() -> Result<Self, String> {
@@ -63,6 +71,9 @@ impl Measures {
             line_gap: n("lineGap")?,
             power_bottom: n("powerBottom")?,
             error_seconds: n("errorSeconds")?,
+            others: n("others")?,
+            others_width: n("othersWidth")?,
+            others_gap: n("othersGap")?,
         })
     }
 }
@@ -85,12 +96,17 @@ pub struct Kit {
     pub region: Region,
     pub order: Order,
     pub fonts: Arc<FontSet>,
-    /// The user's picture, read once and shared.
-    pub picture: Option<Arc<Raster>>,
+    /// Each person's picture by its identifier (`picture_id`), read once and shared.
+    pub pictures: std::collections::HashMap<String, Arc<Raster>>,
+}
+
+/// What a person's picture is supplied to the view under.
+pub fn picture_id(login: &str) -> String {
+    format!("avatar/{login}")
 }
 
 impl Kit {
-    pub fn load(user: &crate::user::User) -> Result<Self, String> {
+    pub fn load(users: &[crate::user::User]) -> Result<Self, String> {
         let exports = Exports::load(&Exports::root())?;
         let appearance = appearance(&exports);
         // The shell's skin: always dark, white ink (owner's decision), over Hyalo's veil.
@@ -102,12 +118,14 @@ impl Kit {
         let _ = EXPORTS.set(exports);
         let measures = Measures::load()?;
         let side = (measures.avatar * 2.).round() as u32;
-        let picture = user.picture.as_ref().and_then(|p| {
-            let (w, h, rgba) = nk_icons::read_app_icon(p, side)?;
-            Raster::from_rgba(w as u16, h as u16, rgba)
-                .ok()
-                .map(Arc::new)
-        });
+        let pictures = users
+            .iter()
+            .filter_map(|u| {
+                let (w, h, rgba) = nk_icons::read_app_icon(u.picture.as_ref()?, side)?;
+                let raster = Raster::from_rgba(w as u16, h as u16, rgba).ok()?;
+                Some((picture_id(&u.login), Arc::new(raster)))
+            })
+            .collect();
         Ok(Self {
             look,
             measures,
@@ -117,7 +135,7 @@ impl Kit {
                 .and_then(|d| d.format("%x").ok())
                 .map_or(Order::DayFirst, |s| clock::order_of(&s)),
             fonts: Arc::new(FontSet::discover_required()?),
-            picture,
+            pictures,
         })
     }
 }
@@ -225,7 +243,8 @@ struct Surface {
     world: Arc<World>,
     kit: Arc<Kit>,
     text: ParleyBackend,
-    icons: Option<nk_icons::Icons>,
+    /// The interface glyphs and the people's pictures.
+    glyphs: Option<nk::Glyphs>,
     state: ViewState,
     last: nk::Frame,
     size: (u32, u32),
@@ -254,9 +273,14 @@ struct Surface {
 impl Surface {
     fn new(id: OutputId, world: Arc<World>, kit: Arc<Kit>) -> Result<Self, String> {
         let text = ParleyBackend::new(kit.fonts.clone())?;
-        let icons = nk_icons::Icons::new("", &[], &icon_reference())
+        let glyphs = nk_icons::Icons::new("", &[], &icon_reference())
             .map_err(|e| eprintln!("nidara-lock: no interface glyphs: {e}"))
-            .ok();
+            .ok()
+            .map(|icons| {
+                let mut g = nk::Glyphs::new(icons);
+                g.set_pictures(kit.pictures.clone());
+                g
+            });
         let mut state = ViewState::new(1);
         state.set_reduced_motion(false);
         state.set_caret_blink(true);
@@ -265,7 +289,7 @@ impl Surface {
             world,
             kit,
             text,
-            icons,
+            glyphs,
             state,
             last: nk::Frame::default(),
             size: (0, 0),
@@ -344,21 +368,36 @@ impl Surface {
         }
         children.push(nk::Spacer::new("lock/above").into());
         if self.active {
-            let avatar: Node = if self.kit.picture.is_some() {
-                nk::Slot::new(AVATAR, m.avatar).into()
-            } else {
-                nk::Image::new(AVATAR, "nd-avatar-default-symbolic", m.avatar).into()
-            };
-            children.push(avatar.presentational());
+            let user = shared.user();
+            // L3: on the login screen, a person whose session is open says so, on the
+            // picture and in words under the name.
+            let open = shared.login && shared.open.contains(&user.login);
+            children.push(
+                nk::Avatar::new(AVATAR, m.avatar)
+                    .picture(picture_id(&user.login))
+                    .mark(open)
+                    .into(),
+            );
             children.push(strut("lock/name-gap", m.name_gap));
             children.push(
                 nk::Label::new(
                     "lock/name",
-                    shared.user.name.clone(),
+                    user.name.clone(),
                     types.style(Type::Title3, Weight::Semibold),
                 )
                 .into(),
             );
+            if open {
+                children.push(
+                    nk::Label::new(
+                        "lock/open",
+                        text("lock.session-open"),
+                        types.style(Type::Body, Weight::Regular),
+                    )
+                    .ink(Ink::Secondary)
+                    .into(),
+                );
+            }
             children.push(strut("lock/field-gap", m.field_gap));
             // D7: the one thing of glass here is the field, made of glass in its own shape
             // (`.glass()`), so its glass, its button's washes and its focus ring share one
@@ -367,7 +406,7 @@ impl Surface {
                 nk::PasswordEntry::new(self.field.clone(), text("lock.password"), SECRET)
                     .enabled(!shared.checking)
                     .submit(
-                        text(if crate::login::socket().is_some() {
+                        text(if shared.login {
                             "lock.log-in"
                         } else {
                             "lock.unlock"
@@ -410,6 +449,11 @@ impl Surface {
                     .width(m.field)
                     .into(),
             );
+            // L1: the other people under the field, each their picture and name, a press away.
+            if shared.login && shared.users.len() > 1 {
+                children.push(strut("lock/others-gap", m.others_gap));
+                children.push(others(&shared, types, m));
+            }
             children.push(nk::Spacer::new("lock/below").into());
             children
                 .push(nk::Button::new("lock/suspend", text("lock.suspend"), SUSPEND, body).into());
@@ -505,6 +549,11 @@ impl Surface {
             }
             SUSPEND => {
                 let _ = self.world.tx.send(Msg::Suspend);
+            }
+            CHOOSE => {
+                if let Some(nk::Value::Text(login)) = a.value {
+                    let _ = self.world.tx.send(Msg::Choose(login));
+                }
             }
             _ => {}
         }
@@ -755,22 +804,11 @@ impl Application for Surface {
         // Without the compositor's glass (another compositor), the kit paints the field's
         // own surface from the same frame (D5).
         let fallback = (!f.material).then_some(&self.last);
-        let icons = &mut self.icons;
-        self.state
-            .paint(&mut c, look, &mut |n, size| glyph(icons, n, size), fallback)?;
-        // The user's picture, cut to a circle, in its slot.
-        if let Some(picture) = &kit.picture
-            && let Some(p) = self.state.placed().iter().find(|p| p.key.0 == AVATAR)
-        {
-            let r = Rect {
-                x: p.rect[0] as f32,
-                y: p.rect[1] as f32,
-                width: p.rect[2] as f32,
-                height: p.rect[3] as f32,
-            };
-            c.clip_rounded_rect(r, p.rect[2].min(p.rect[3]) / 2.);
-            c.image(picture, r, ImageFit::Cover);
-            c.pop_clip();
+        match &mut self.glyphs {
+            Some(glyphs) => self
+                .state
+                .paint_with_glyphs(&mut c, look, glyphs, fallback, false)?,
+            None => self.state.paint(&mut c, look, &mut |_, _| None, fallback)?,
         }
         Ok(c.finish())
     }
@@ -781,6 +819,52 @@ impl Application for Surface {
         }
         self.kit.look.glass(&self.last)
     }
+}
+
+/// The login screen's other people (L1): one button each, its picture over its name, in the
+/// order of their accounts. Its name to a reader is the person's, and that their session is
+/// open, when it is.
+fn others(shared: &crate::Shared, types: &nk::TypeScale, m: &Measures) -> Node {
+    let buttons = shared
+        .users
+        .iter()
+        .enumerate()
+        .filter(|(i, _)| *i != shared.chosen)
+        .map(|(_, u)| {
+            let key = format!("lock/others/{}", u.login);
+            let open = shared.open.contains(&u.login);
+            let face = nk::Column::new(
+                format!("{key}/face"),
+                vec![
+                    nk::Avatar::new(format!("{key}/avatar"), m.others)
+                        .picture(picture_id(&u.login))
+                        .mark(open)
+                        .into(),
+                    nk::Label::new(
+                        format!("{key}/name"),
+                        u.name.clone(),
+                        types.style(Type::Small, Weight::Regular),
+                    )
+                    .lines(1)
+                    .into(),
+                ],
+            )
+            .gap(Space::S2)
+            .align(Align::Center)
+            .padding(nk::Padding::all(Space::S2))
+            .width(m.others_width);
+            let mut button = nk::Button::with_child(key, u.name.clone(), CHOOSE, face)
+                .value(nk::Value::Text(u.login.clone()));
+            if open {
+                button = button.description(text("lock.session-open"));
+            }
+            button.into()
+        })
+        .collect();
+    nk::Row::new("lock/others", buttons)
+        .gap(Space::S3)
+        .align(Align::Start)
+        .into()
 }
 
 /// What is playing: the title, the artist, and previous / play or pause / next as the kit's
@@ -849,18 +933,6 @@ fn media_view(now: &crate::media::Now, types: &nk::TypeScale, width: f64) -> Nod
         .align(Align::Center)
         .width(width)
         .into()
-}
-
-/// A themed glyph for the kit, by name and logical size.
-fn glyph(
-    icons: &mut Option<nk_icons::Icons>,
-    name: &str,
-    size: f64,
-) -> Option<Arc<nk_icons::Icon>> {
-    if name.is_empty() {
-        return None;
-    }
-    icons.as_mut()?.get(name, size.round() as u32).ok()
 }
 
 /// The interface glyphs' reference set (the shell's `paths::icon_reference`).
